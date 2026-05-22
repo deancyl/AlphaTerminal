@@ -10,6 +10,7 @@ Debug Cycles:
 4. Momentum regime detection (RSI)
 5. Overall regime classification
 """
+
 import logging
 import numpy as np
 import pandas as pd
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 class RegimeResult:
     """
     Market regime detection result
-    
+
     Attributes:
         trend_regime: 'bull', 'bear', or 'sideways'
         volatility_regime: 'high', 'medium', or 'low'
@@ -33,6 +34,7 @@ class RegimeResult:
         indicators: Dictionary of indicator values used
         timestamp: Detection timestamp
     """
+
     trend_regime: str
     volatility_regime: str
     momentum_regime: str
@@ -50,20 +52,20 @@ class RegimeResult:
             "overall_regime": self.overall_regime,
             "confidence": self.confidence,
             "indicators": self.indicators,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
 
 class MarketRegimeDetector:
     """
     Market Regime Detector with 5 debug cycles
-    
+
     Detects market states using:
     - Moving average trends (SMA 20/50/200)
     - ADX for trend strength
     - ATR for volatility
     - RSI for momentum
-    
+
     Debug Cycles:
     1. Input validation - validate price data
     2. Trend regime detection - MA crossovers, ADX
@@ -86,12 +88,18 @@ class MarketRegimeDetector:
 
     MIN_DATA_POINTS = 50  # Minimum data points required
 
-    def __init__(self, lookback_short: int = 20, lookback_medium: int = 50,
-                 lookback_long: int = 200, atr_period: int = 14,
-                 rsi_period: int = 14, adx_period: int = 14):
+    def __init__(
+        self,
+        lookback_short: int = 20,
+        lookback_medium: int = 50,
+        lookback_long: int = 200,
+        atr_period: int = 14,
+        rsi_period: int = 14,
+        adx_period: int = 14,
+    ):
         """
         Initialize MarketRegimeDetector
-        
+
         Args:
             lookback_short: Short-term MA period (default: 20)
             lookback_medium: Medium-term MA period (default: 50)
@@ -115,14 +123,16 @@ class MarketRegimeDetector:
 
     # ==================== Cycle 1: Input Validation ====================
 
-    def _validate_inputs(self, prices: pd.Series, lookback: int) -> Tuple[bool, str, pd.Series]:
+    def _validate_inputs(
+        self, prices: pd.Series, lookback: int
+    ) -> Tuple[bool, str, pd.Series]:
         """
         Debug Cycle 1: Input validation
-        
+
         Args:
             prices: Series of price values (close prices)
             lookback: Required lookback period
-            
+
         Returns:
             Tuple of (is_valid, error_message, cleaned_prices)
         """
@@ -186,15 +196,15 @@ class MarketRegimeDetector:
     def detect_trend_regime(self, prices: pd.Series) -> str:
         """
         Debug Cycle 2: Trend regime detection
-        
+
         Detects trend regime using:
         - Moving average crossovers (SMA 20/50/200)
         - Price position relative to MAs
         - ADX for trend strength
-        
+
         Args:
             prices: Series of price values
-            
+
         Returns:
             'bull', 'bear', or 'sideways'
         """
@@ -270,12 +280,16 @@ class MarketRegimeDetector:
                 bull_signals += 1
             elif bear_signals > bull_signals:
                 bear_signals += 1
-            logger.debug(f"[Cycle 2] Strong trend confirmed by ADX ({adx:.2f} > {self.ADX_STRONG_THRESHOLD})")
+            logger.debug(
+                f"[Cycle 2] Strong trend confirmed by ADX ({adx:.2f} > {self.ADX_STRONG_THRESHOLD})"
+            )
         elif adx < self.ADX_WEAK_THRESHOLD:
             # Weak trend - reduce confidence
             bull_signals = max(0, bull_signals - 1)
             bear_signals = max(0, bear_signals - 1)
-            logger.debug(f"[Cycle 2] Weak trend indicated by ADX ({adx:.2f} < {self.ADX_WEAK_THRESHOLD})")
+            logger.debug(
+                f"[Cycle 2] Weak trend indicated by ADX ({adx:.2f} < {self.ADX_WEAK_THRESHOLD})"
+            )
 
         # Determine final regime
         if bull_signals >= 3 and bull_signals > bear_signals + 1:
@@ -295,17 +309,17 @@ class MarketRegimeDetector:
     def _calculate_adx(self, prices: pd.Series) -> float:
         """
         Calculate Average Directional Index (ADX)
-        
+
         ADX measures trend strength regardless of direction.
         Values: 0-100
         - < 20: Weak/no trend
         - 20-25: Developing trend
         - > 25: Strong trend
         - > 50: Very strong trend
-        
+
         Args:
             prices: Series of price values
-            
+
         Returns:
             ADX value (float)
         """
@@ -346,18 +360,20 @@ class MarketRegimeDetector:
     def detect_volatility_regime(self, returns: pd.Series) -> str:
         """
         Debug Cycle 3: Volatility regime detection
-        
+
         Detects volatility regime using:
         - ATR (Average True Range) percentiles
         - Historical volatility comparison
-        
+
         Args:
             returns: Series of daily returns
-            
+
         Returns:
             'high', 'medium', or 'low'
         """
-        logger.debug("[Cycle 3 - Volatility Regime] Starting volatility regime detection")
+        logger.debug(
+            "[Cycle 3 - Volatility Regime] Starting volatility regime detection"
+        )
 
         # Calculate rolling volatility (standard deviation of returns)
         vol_short = returns.rolling(window=20).std() * np.sqrt(252)  # Annualized
@@ -376,7 +392,9 @@ class MarketRegimeDetector:
         vol_series = vol_short.dropna()
 
         if len(vol_series) < 20:
-            logger.warning("[Cycle 3] Insufficient volatility history, defaulting to medium")
+            logger.warning(
+                "[Cycle 3] Insufficient volatility history, defaulting to medium"
+            )
             return "medium"
 
         # Calculate percentiles
@@ -401,7 +419,9 @@ class MarketRegimeDetector:
         # Additional check: recent volatility spike
         recent_vol = returns.tail(5).std() * np.sqrt(252)
         if recent_vol > current_vol * 1.5:
-            logger.debug(f"[Cycle 3] Recent volatility spike detected: {recent_vol*100:.2f}%")
+            logger.debug(
+                f"[Cycle 3] Recent volatility spike detected: {recent_vol*100:.2f}%"
+            )
             if regime == "low":
                 regime = "medium"
             elif regime == "medium":
@@ -414,13 +434,13 @@ class MarketRegimeDetector:
     def calculate_atr(self, prices: pd.Series, period: int = 14) -> float:
         """
         Calculate Average True Range (ATR)
-        
+
         ATR measures market volatility.
-        
+
         Args:
             prices: Series of price values
             period: ATR period (default: 14)
-            
+
         Returns:
             ATR value (float)
         """
@@ -439,14 +459,14 @@ class MarketRegimeDetector:
     def detect_momentum_regime(self, prices: pd.Series) -> str:
         """
         Debug Cycle 4: Momentum regime detection
-        
+
         Detects momentum regime using:
         - RSI (Relative Strength Index)
         - Price rate of change
-        
+
         Args:
             prices: Series of price values
-            
+
         Returns:
             'strong', 'weak', or 'neutral'
         """
@@ -463,7 +483,11 @@ class MarketRegimeDetector:
 
         for period in roc_periods:
             if len(prices) > period:
-                roc = (prices.iloc[-1] - prices.iloc[-period-1]) / prices.iloc[-period-1] * 100
+                roc = (
+                    (prices.iloc[-1] - prices.iloc[-period - 1])
+                    / prices.iloc[-period - 1]
+                    * 100
+                )
                 roc_values.append(roc)
                 logger.debug(f"[Cycle 4] ROC({period}): {roc:.2f}%")
 
@@ -474,9 +498,13 @@ class MarketRegimeDetector:
         # RSI analysis
         if rsi > self.RSI_OVERBOUGHT:
             strong_signals += 2  # Strong bullish momentum
-            logger.debug(f"[Cycle 4] RSI overbought ({rsi:.2f} > {self.RSI_OVERBOUGHT})")
+            logger.debug(
+                f"[Cycle 4] RSI overbought ({rsi:.2f} > {self.RSI_OVERBOUGHT})"
+            )
         elif rsi < self.RSI_OVERSOLD:
-            strong_signals += 2  # Strong bearish momentum (oversold = potential reversal)
+            strong_signals += (
+                2  # Strong bearish momentum (oversold = potential reversal)
+            )
             logger.debug(f"[Cycle 4] RSI oversold ({rsi:.2f} < {self.RSI_OVERSOLD})")
         elif 40 <= rsi <= 60:
             weak_signals += 1  # Neutral zone
@@ -510,16 +538,16 @@ class MarketRegimeDetector:
     def _calculate_rsi(self, prices: pd.Series) -> float:
         """
         Calculate Relative Strength Index (RSI)
-        
+
         RSI measures momentum and overbought/oversold conditions.
         Values: 0-100
         - > 70: Overbought
         - < 30: Oversold
         - 40-60: Neutral
-        
+
         Args:
             prices: Series of price values
-            
+
         Returns:
             RSI value (float)
         """
@@ -547,17 +575,19 @@ class MarketRegimeDetector:
     def detect_regime(self, prices: pd.Series, lookback: int = 252) -> RegimeResult:
         """
         Debug Cycle 5: Overall regime classification
-        
+
         Combines all regime signals to determine overall market regime.
-        
+
         Args:
             prices: Series of price values
             lookback: Lookback period for analysis (default: 252 = 1 year)
-            
+
         Returns:
             RegimeResult with all regime classifications
         """
-        logger.debug("[Cycle 5 - Overall Regime] Starting overall regime classification")
+        logger.debug(
+            "[Cycle 5 - Overall Regime] Starting overall regime classification"
+        )
 
         # Cycle 1: Input validation
         is_valid, error_msg, prices_clean = self._validate_inputs(prices, lookback)
@@ -602,7 +632,7 @@ class MarketRegimeDetector:
             overall_regime=overall_regime,
             confidence=confidence,
             indicators=indicators,
-            timestamp=pd.Timestamp.now().isoformat()
+            timestamp=pd.Timestamp.now().isoformat(),
         )
 
         logger.debug(
@@ -613,21 +643,27 @@ class MarketRegimeDetector:
 
         return result
 
-    def _calculate_all_indicators(self, prices: pd.Series, returns: pd.Series) -> Dict[str, float]:
+    def _calculate_all_indicators(
+        self, prices: pd.Series, returns: pd.Series
+    ) -> Dict[str, float]:
         """
         Calculate all technical indicators
-        
+
         Args:
             prices: Series of price values
             returns: Series of daily returns
-            
+
         Returns:
             Dictionary of indicator values
         """
         # Moving averages
         sma_20 = prices.rolling(window=20).mean().iloc[-1]
         sma_50 = prices.rolling(window=50).mean().iloc[-1]
-        sma_200 = prices.rolling(window=200).mean().iloc[-1] if len(prices) >= 200 else prices.mean()
+        sma_200 = (
+            prices.rolling(window=200).mean().iloc[-1]
+            if len(prices) >= 200
+            else prices.mean()
+        )
 
         current_price = prices.iloc[-1]
 
@@ -645,8 +681,16 @@ class MarketRegimeDetector:
         volatility = returns.std() * np.sqrt(252)
 
         # Price momentum
-        roc_5 = (current_price - prices.iloc[-6]) / prices.iloc[-6] * 100 if len(prices) > 5 else 0
-        roc_20 = (current_price - prices.iloc[-21]) / prices.iloc[-21] * 100 if len(prices) > 20 else 0
+        roc_5 = (
+            (current_price - prices.iloc[-6]) / prices.iloc[-6] * 100
+            if len(prices) > 5
+            else 0
+        )
+        roc_20 = (
+            (current_price - prices.iloc[-21]) / prices.iloc[-21] * 100
+            if len(prices) > 20
+            else 0
+        )
 
         return {
             "price": float(current_price),
@@ -662,7 +706,7 @@ class MarketRegimeDetector:
             "atr_pct": float(atr_pct),
             "volatility_annual": float(volatility),
             "roc_5d_pct": float(roc_5),
-            "roc_20d_pct": float(roc_20)
+            "roc_20d_pct": float(roc_20),
         }
 
     def _classify_overall_regime(
@@ -670,17 +714,17 @@ class MarketRegimeDetector:
         trend_regime: str,
         volatility_regime: str,
         momentum_regime: str,
-        indicators: Dict[str, float]
+        indicators: Dict[str, float],
     ) -> Tuple[str, float]:
         """
         Classify overall market regime
-        
+
         Args:
             trend_regime: Trend regime ('bull', 'bear', 'sideways')
             volatility_regime: Volatility regime ('high', 'medium', 'low')
             momentum_regime: Momentum regime ('strong', 'weak', 'neutral')
             indicators: Dictionary of indicator values
-            
+
         Returns:
             Tuple of (overall_regime, confidence)
         """
@@ -785,19 +829,19 @@ class MarketRegimeDetector:
         trend_regime: str,
         volatility_regime: str,
         momentum_regime: str,
-        overall_regime: str
+        overall_regime: str,
     ) -> float:
         """
         Calculate regime agreement factor
-        
+
         Higher agreement = higher confidence
-        
+
         Args:
             trend_regime: Trend regime
             volatility_regime: Volatility regime
             momentum_regime: Momentum regime
             overall_regime: Overall regime
-            
+
         Returns:
             Agreement factor (0.5 to 1.0)
         """
@@ -822,14 +866,14 @@ class MarketRegimeDetector:
     def get_regime_score(self, prices: pd.Series) -> float:
         """
         Get numerical regime score (-1 to 1)
-        
+
         -1: Strong bear market
          0: Sideways/neutral
         +1: Strong bull market
-        
+
         Args:
             prices: Series of price values
-            
+
         Returns:
             Regime score (float between -1 and 1)
         """
@@ -873,10 +917,10 @@ class MarketRegimeDetector:
     def _empty_result(self, error_msg: str) -> RegimeResult:
         """
         Return empty result with error
-        
+
         Args:
             error_msg: Error message
-            
+
         Returns:
             Empty RegimeResult
         """
@@ -887,7 +931,7 @@ class MarketRegimeDetector:
             overall_regime="unknown",
             confidence=0.0,
             indicators={"error": error_msg},
-            timestamp=pd.Timestamp.now().isoformat()
+            timestamp=pd.Timestamp.now().isoformat(),
         )
 
     # ==================== Utility Methods ====================
@@ -895,10 +939,10 @@ class MarketRegimeDetector:
     def get_regime_description(self, regime: str) -> str:
         """
         Get human-readable regime description
-        
+
         Args:
             regime: Regime string
-            
+
         Returns:
             Description string
         """
@@ -912,31 +956,37 @@ class MarketRegimeDetector:
             "strong": "Strong momentum - significant price movement in trend direction",
             "weak": "Weak momentum - minimal price movement, potential trend exhaustion",
             "neutral": "Neutral momentum - balanced buying and selling pressure",
-            "unknown": "Unknown regime - insufficient data or error"
+            "unknown": "Unknown regime - insufficient data or error",
         }
         return descriptions.get(regime, f"Unknown regime: {regime}")
 
-    def analyze_regime_transitions(self, prices: pd.Series, window: int = 63) -> List[Dict[str, Any]]:
+    def analyze_regime_transitions(
+        self, prices: pd.Series, window: int = 63
+    ) -> List[Dict[str, Any]]:
         """
         Analyze regime transitions over time
-        
+
         Args:
             prices: Series of price values
             window: Rolling window for analysis (default: 63 = 3 months)
-            
+
         Returns:
             List of regime snapshots over time
         """
         logger.debug(f"[Regime Transitions] Analyzing transitions with window={window}")
 
         if len(prices) < window + self.MIN_DATA_POINTS:
-            logger.warning("[Regime Transitions] Insufficient data for transition analysis")
+            logger.warning(
+                "[Regime Transitions] Insufficient data for transition analysis"
+            )
             return []
 
         transitions = []
 
         # Analyze regime at each window
-        for i in range(window, len(prices), window // 2):  # Overlap for smoother analysis
+        for i in range(
+            window, len(prices), window // 2
+        ):  # Overlap for smoother analysis
             window_prices = prices.iloc[:i]
 
             if len(window_prices) < self.MIN_DATA_POINTS:
@@ -944,16 +994,24 @@ class MarketRegimeDetector:
 
             result = self.detect_regime(window_prices)
 
-            transitions.append({
-                "date": prices.index[i-1].isoformat() if hasattr(prices.index[i-1], 'isoformat') else str(prices.index[i-1]),
-                "overall_regime": result.overall_regime,
-                "trend_regime": result.trend_regime,
-                "volatility_regime": result.volatility_regime,
-                "momentum_regime": result.momentum_regime,
-                "confidence": result.confidence,
-                "price": float(prices.iloc[i-1])
-            })
+            transitions.append(
+                {
+                    "date": (
+                        prices.index[i - 1].isoformat()
+                        if hasattr(prices.index[i - 1], "isoformat")
+                        else str(prices.index[i - 1])
+                    ),
+                    "overall_regime": result.overall_regime,
+                    "trend_regime": result.trend_regime,
+                    "volatility_regime": result.volatility_regime,
+                    "momentum_regime": result.momentum_regime,
+                    "confidence": result.confidence,
+                    "price": float(prices.iloc[i - 1]),
+                }
+            )
 
-        logger.debug(f"[Regime Transitions] Analyzed {len(transitions)} regime snapshots")
+        logger.debug(
+            f"[Regime Transitions] Analyzed {len(transitions)} regime snapshots"
+        )
 
         return transitions

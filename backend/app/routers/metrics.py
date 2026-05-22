@@ -16,13 +16,12 @@ router = APIRouter(prefix="/metrics", tags=["monitoring"])
 async def get_metrics():
     """
     Get Prometheus-formatted metrics.
-    
+
     Returns cache hit rates, data source latencies, and error rates.
     """
     metrics = get_cache_metrics()
     prometheus_output = metrics.to_prometheus()
 
     return Response(
-        content=prometheus_output,
-        media_type="text/plain; version=0.0.4; charset=utf-8"
+        content=prometheus_output, media_type="text/plain; version=0.0.4; charset=utf-8"
     )

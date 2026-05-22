@@ -1,6 +1,7 @@
 """
 研报平台 API 路由
 """
+
 import asyncio
 import logging
 from typing import Optional, Dict, Any
@@ -110,7 +111,18 @@ RESEARCH_CATEGORIES = ["macro", "industry", "stock", "fixed_income"]
 
 # 分类关键词映射
 CATEGORY_KEYWORDS = {
-    "macro": ["宏观", "经济", "GDP", "CPI", "PMI", "货币政策", "财政政策", "利率", "汇率", "通胀"],
+    "macro": [
+        "宏观",
+        "经济",
+        "GDP",
+        "CPI",
+        "PMI",
+        "货币政策",
+        "财政政策",
+        "利率",
+        "汇率",
+        "通胀",
+    ],
     "industry": ["行业", "板块", "产业链", "竞争格局", "市场规模", "行业趋势"],
     "stock": ["公司", "个股", "业绩", "估值", "盈利", "财报", "分红", "增持", "减持"],
     "fixed_income": ["债券", "信用", "利率债", "信用债", "国债", "收益率曲线", "利差"],
@@ -119,6 +131,7 @@ CATEGORY_KEYWORDS = {
 
 class SummarizeRequest(BaseModel):
     """研报总结请求"""
+
     report_id: str = Field(..., description="研报ID")
     title: str = Field(..., description="研报标题")
     institution: str = Field(..., description="机构名称")
@@ -135,7 +148,14 @@ def _classify_report(title: str) -> str:
     return "stock"
 
 
-def _fetch_reports_sync(symbol: str, page: int = 1, page_size: int = 20, keyword: str = "", institution: str = "", category: str = "") -> Dict[str, Any]:
+def _fetch_reports_sync(
+    symbol: str,
+    page: int = 1,
+    page_size: int = 20,
+    keyword: str = "",
+    institution: str = "",
+    category: str = "",
+) -> Dict[str, Any]:
     """同步获取研报数据"""
     try:
         # 使用 akshare 获取研报数据
@@ -153,7 +173,9 @@ def _fetch_reports_sync(symbol: str, page: int = 1, page_size: int = 20, keyword
                 "institution": str(row.get("机构", "")),
                 "date": str(row.get("日期", "")),
                 "rating": str(row.get("东财评级", "")),
-                "url": str(row.get("报告PDF链接", "")) if row.get("报告PDF链接") else None,
+                "url": (
+                    str(row.get("报告PDF链接", "")) if row.get("报告PDF链接") else None
+                ),
                 "category": _classify_report(str(row.get("报告名称", ""))),
             }
 
@@ -187,8 +209,14 @@ def _fetch_reports_sync(symbol: str, page: int = 1, page_size: int = 20, keyword
         logger.error(f"Error fetching research data for {symbol}: {e}", exc_info=True)
         filtered_fallback = FALLBACK_RESEARCH_DATA
         if category:
-            filtered_fallback = [r for r in filtered_fallback if r.get("category") == category]
-        return {"total": len(filtered_fallback), "items": filtered_fallback, "is_fallback": True}
+            filtered_fallback = [
+                r for r in filtered_fallback if r.get("category") == category
+            ]
+        return {
+            "total": len(filtered_fallback),
+            "items": filtered_fallback,
+            "is_fallback": True,
+        }
 
 
 @router.get("/reports")
@@ -199,7 +227,9 @@ async def get_reports(
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     keyword: str = Query("", description="关键词搜索"),
     institution: str = Query("", description="机构筛选"),
-    category: str = Query("", description="分类筛选 (macro/industry/stock/fixed_income)"),
+    category: str = Query(
+        "", description="分类筛选 (macro/industry/stock/fixed_income)"
+    ),
 ):
     """获取研报列表"""
     cache_key = f"{NAMESPACE}{symbol}_{keyword}_{institution}_{category}"
@@ -217,11 +247,13 @@ async def get_reports(
                 "total": total,
                 "items": data["items"][start:end],
                 "is_fallback": data.get("is_fallback", False),
-            }
+            },
         }
 
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(None, _fetch_reports_sync, symbol, 1, 1000, keyword, institution, category)
+    data = await loop.run_in_executor(
+        None, _fetch_reports_sync, symbol, 1, 1000, keyword, institution, category
+    )
 
     _cache.set(cache_key, data, ttl=TTL)
 
@@ -237,7 +269,7 @@ async def get_reports(
             "total": total,
             "items": items,
             "is_fallback": data.get("is_fallback", False),
-        }
+        },
     }
 
 
@@ -247,7 +279,9 @@ async def get_statistics(symbol: str = Query(..., description="股票代码")):
     """获取研报统计信息"""
     # 获取所有研报
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(None, _fetch_reports_sync, symbol, 1, 1000, "", "")
+    data = await loop.run_in_executor(
+        None, _fetch_reports_sync, symbol, 1, 1000, "", ""
+    )
 
     if data.get("is_fallback"):
         return {
@@ -257,7 +291,7 @@ async def get_statistics(symbol: str = Query(..., description="股票代码")):
                 "total": len(FALLBACK_RESEARCH_DATA),
                 "institutions": {"中信证券": 2, "国泰君安": 2, "华泰证券": 2},
                 "ratings": {"买入": 5, "增持": 3, "推荐": 2},
-            }
+            },
         }
 
     items = data["items"]
@@ -280,7 +314,7 @@ async def get_statistics(symbol: str = Query(..., description="股票代码")):
             "total": len(items),
             "institutions": institutions,
             "ratings": ratings,
-        }
+        },
     }
 
 
@@ -295,7 +329,7 @@ async def get_status():
         "data": {
             "cache_ready": stats["entry_count"] > 0,
             "cache_stats": stats,
-        }
+        },
     }
 
 
@@ -315,7 +349,9 @@ async def proxy_pdf(url: str = Query(..., description="PDF URL")):
             )
 
             if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Failed to fetch PDF")
+                raise HTTPException(
+                    status_code=response.status_code, detail="Failed to fetch PDF"
+                )
 
             return StreamingResponse(
                 iter([response.content]),
@@ -323,7 +359,7 @@ async def proxy_pdf(url: str = Query(..., description="PDF URL")):
                 headers={
                     "Content-Disposition": "inline; filename=research_report.pdf",
                     "Cache-Control": "no-cache",
-                }
+                },
             )
     except Exception as e:
         logger.error(f"Error proxying PDF: {e}", exc_info=True)
@@ -344,8 +380,8 @@ async def get_categories():
                 "industry": "行业研究",
                 "stock": "个股分析",
                 "fixed_income": "固定收益",
-            }
-        }
+            },
+        },
     }
 
 
@@ -360,7 +396,7 @@ async def summarize_report(request: SummarizeRequest):
         return {
             "code": 1,
             "message": "LLM服务未配置，请检查API Key设置",
-            "data": {"summary": None}
+            "data": {"summary": None},
         }
 
     base_url = (model.base_url or "https://api.openai.com/v1").rstrip("/")
@@ -379,7 +415,7 @@ async def summarize_report(request: SummarizeRequest):
     chunks = []
     if len(content) > MAX_CHUNK_SIZE:
         # Split by paragraphs/sections for better context preservation
-        paragraphs = content.split('\n\n')
+        paragraphs = content.split("\n\n")
         current_chunk = ""
         for para in paragraphs:
             if len(current_chunk) + len(para) + 2 <= MAX_CHUNK_SIZE:
@@ -406,12 +442,15 @@ async def summarize_report(request: SummarizeRequest):
                 json={
                     "model": model.model_id,
                     "messages": [
-                        {"role": "system", "content": "你是一位专业的金融分析师，擅长提炼研报核心观点。"},
-                        {"role": "user", "content": prompt_text}
+                        {
+                            "role": "system",
+                            "content": "你是一位专业的金融分析师，擅长提炼研报核心观点。",
+                        },
+                        {"role": "user", "content": prompt_text},
                     ],
                     "max_tokens": max_tokens,
                     "temperature": 0.7,
-                }
+                },
             )
 
             if response.status_code != 200:
@@ -480,7 +519,7 @@ async def summarize_report(request: SummarizeRequest):
                 "model": model.model_id,
                 "provider": model.provider,
                 "chunks_processed": len(chunk_summaries),
-            }
+            },
         }
 
     except httpx.TimeoutException:
@@ -488,12 +527,8 @@ async def summarize_report(request: SummarizeRequest):
         return {
             "code": 1,
             "message": "LLM服务超时，请稍后重试",
-            "data": {"summary": None}
+            "data": {"summary": None},
         }
     except Exception as e:
         logger.error(f"Error calling LLM: {e}", exc_info=True)
-        return {
-            "code": 1,
-            "message": "总结服务暂时不可用",
-            "data": {"summary": None}
-        }
+        return {"code": 1, "message": "总结服务暂时不可用", "data": {"summary": None}}

@@ -7,6 +7,7 @@
 
 缓存策略：5分钟 TTL
 """
+
 import logging
 import asyncio
 from datetime import datetime
@@ -26,7 +27,7 @@ async def get_cffex_chain(
 ):
     """
     获取CFFEX股指期权链
-    
+
     返回:
       - symbol: 品种代码
       - name: 品种名称
@@ -38,20 +39,21 @@ async def get_cffex_chain(
     """
     try:
         result = await asyncio.wait_for(
-            options_fetcher.get_cffex_chain(symbol),
-            timeout=30.0
+            options_fetcher.get_cffex_chain(symbol), timeout=30.0
         )
 
-        return success_response({
-            "symbol": result.get("symbol", symbol),
-            "name": result.get("name", ""),
-            "underlying_spot": result.get("underlying_spot"),
-            "expiry_date": result.get("expiry_date"),
-            "calls": result.get("calls", []),
-            "puts": result.get("puts", []),
-            "update_time": result.get("update_time", ""),
-            "source": result.get("source", "unknown"),
-        })
+        return success_response(
+            {
+                "symbol": result.get("symbol", symbol),
+                "name": result.get("name", ""),
+                "underlying_spot": result.get("underlying_spot"),
+                "expiry_date": result.get("expiry_date"),
+                "calls": result.get("calls", []),
+                "puts": result.get("puts", []),
+                "update_time": result.get("update_time", ""),
+                "source": result.get("source", "unknown"),
+            }
+        )
 
     except asyncio.TimeoutError:
         logger.warning(f"[Options] CFFEX chain timeout: {symbol}", exc_info=True)
@@ -63,12 +65,10 @@ async def get_cffex_chain(
 
 @router.get("/options/greeks")
 @handle_errors(module="options")
-async def get_greeks(
-    code: str = Query(..., description="合约代码，如 10004023")
-):
+async def get_greeks(code: str = Query(..., description="合约代码，如 10004023")):
     """
     获取期权Greeks数据
-    
+
     返回:
       - code: 合约代码
       - name: 合约名称
@@ -83,24 +83,25 @@ async def get_greeks(
     """
     try:
         result = await asyncio.wait_for(
-            options_fetcher.get_sse_greeks(code),
-            timeout=30.0
+            options_fetcher.get_sse_greeks(code), timeout=30.0
         )
 
-        return success_response({
-            "code": result.get("code", code),
-            "name": result.get("name", ""),
-            "delta": result.get("delta"),
-            "gamma": result.get("gamma"),
-            "theta": result.get("theta"),
-            "vega": result.get("vega"),
-            "iv": result.get("iv"),
-            "price": result.get("price"),
-            "strike": result.get("strike"),
-            "expiry": result.get("expiry", ""),
-            "update_time": result.get("update_time", ""),
-            "source": result.get("source", "unknown"),
-        })
+        return success_response(
+            {
+                "code": result.get("code", code),
+                "name": result.get("name", ""),
+                "delta": result.get("delta"),
+                "gamma": result.get("gamma"),
+                "theta": result.get("theta"),
+                "vega": result.get("vega"),
+                "iv": result.get("iv"),
+                "price": result.get("price"),
+                "strike": result.get("strike"),
+                "expiry": result.get("expiry", ""),
+                "update_time": result.get("update_time", ""),
+                "source": result.get("source", "unknown"),
+            }
+        )
 
     except asyncio.TimeoutError:
         logger.warning(f"[Options] Greeks timeout: {code}", exc_info=True)
@@ -117,7 +118,7 @@ async def get_contracts(
 ):
     """
     获取期权合约列表
-    
+
     返回:
       - exchange: 交易所
       - contracts: 合约列表 [{code, name, type, underlying}]
@@ -125,11 +126,13 @@ async def get_contracts(
     try:
         result = await options_fetcher.get_contract_list(exchange)
 
-        return success_response({
-            "exchange": result.get("exchange", exchange),
-            "contracts": result.get("contracts", []),
-            "update_time": result.get("update_time", ""),
-        })
+        return success_response(
+            {
+                "exchange": result.get("exchange", exchange),
+                "contracts": result.get("contracts", []),
+                "update_time": result.get("update_time", ""),
+            }
+        )
 
     except Exception as e:
         logger.error(f"[Options] Contracts error: {exchange} - {e}", exc_info=True)
@@ -142,14 +145,16 @@ async def options_health():
     """期权数据源健康检查"""
     try:
         is_healthy = options_fetcher.is_healthy()
-        return success_response({
-            "healthy": is_healthy,
-            "circuit_breaker": {
-                "is_open": not is_healthy,
-                "is_available": is_healthy,
-            },
-            "update_time": datetime.now().strftime("%H:%M:%S"),
-        })
+        return success_response(
+            {
+                "healthy": is_healthy,
+                "circuit_breaker": {
+                    "is_open": not is_healthy,
+                    "is_available": is_healthy,
+                },
+                "update_time": datetime.now().strftime("%H:%M:%S"),
+            }
+        )
     except Exception as e:
         return error_response(ErrorCode.INTERNAL_ERROR, f"健康检查失败: {str(e)}")
 
@@ -161,15 +166,17 @@ async def reset_options_circuit_breaker():
     try:
         options_fetcher.cb.reset()
         is_healthy = options_fetcher.is_healthy()
-        return success_response({
-            "success": True,
-            "healthy": is_healthy,
-            "circuit_breaker": {
-                "is_open": not is_healthy,
-                "is_available": is_healthy,
-            },
-            "message": "熔断器已重置",
-        })
+        return success_response(
+            {
+                "success": True,
+                "healthy": is_healthy,
+                "circuit_breaker": {
+                    "is_open": not is_healthy,
+                    "is_available": is_healthy,
+                },
+                "message": "熔断器已重置",
+            }
+        )
     except Exception as e:
         logger.error(f"[Options] Circuit breaker reset error: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"重置熔断器失败: {str(e)}")

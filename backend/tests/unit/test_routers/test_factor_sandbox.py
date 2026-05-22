@@ -36,10 +36,10 @@ from app.services.factor_sandbox.screener import (
     ScreeningFactor,
 )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def app():
@@ -109,6 +109,7 @@ def mock_kline_data():
 # ─────────────────────────────────────────────────────────────────────────────
 # Cache Tests - ThreadSafeCache (screener level)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestThreadSafeCache:
     """Tests for ThreadSafeCache class"""
@@ -207,6 +208,7 @@ class TestThreadSafeCache:
 # Cache Tests - ThreadSafeFactorCache (router level)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestThreadSafeFactorCache:
     """Tests for ThreadSafeFactorCache class"""
 
@@ -261,6 +263,7 @@ class TestThreadSafeFactorCache:
 # Screener Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestStockScreener:
     """Tests for StockScreener class"""
 
@@ -270,10 +273,12 @@ class TestStockScreener:
         screener = StockScreener()
 
         # Mock akshare response
-        mock_df = pd.DataFrame({
-            "成分券代码": ["600519", "600036"],
-            "成分券名称": ["贵州茅台", "招商银行"],
-        })
+        mock_df = pd.DataFrame(
+            {
+                "成分券代码": ["600519", "600036"],
+                "成分券名称": ["贵州茅台", "招商银行"],
+            }
+        )
         mock_akshare.index_stock_cons_weight_csindex.return_value = mock_df
         screener._akshare = mock_akshare
 
@@ -288,10 +293,12 @@ class TestStockScreener:
         """Test getting ZZ500 universe stocks"""
         screener = StockScreener()
 
-        mock_df = pd.DataFrame({
-            "成分券代码": ["000001", "000002"],
-            "成分券名称": ["平安银行", "万科A"],
-        })
+        mock_df = pd.DataFrame(
+            {
+                "成分券代码": ["000001", "000002"],
+                "成分券名称": ["平安银行", "万科A"],
+            }
+        )
         mock_akshare.index_stock_cons_weight_csindex.return_value = mock_df
         screener._akshare = mock_akshare
 
@@ -301,7 +308,9 @@ class TestStockScreener:
         mock_akshare.index_stock_cons_weight_csindex.assert_called_with(symbol="000905")
 
     @pytest.mark.asyncio
-    async def test_screener_factor_macd_golden_cross(self, mock_akshare, mock_kline_data):
+    async def test_screener_factor_macd_golden_cross(
+        self, mock_akshare, mock_kline_data
+    ):
         """Test MACD golden cross factor calculation"""
         screener = StockScreener()
 
@@ -359,13 +368,17 @@ class TestStockScreener:
         screener = StockScreener()
 
         # Create data with volume surge
-        volumes = np.random.uniform(1000000, 2000000, 59).tolist() + [10000000]  # Last day surge
+        volumes = np.random.uniform(1000000, 2000000, 59).tolist() + [
+            10000000
+        ]  # Last day surge
         mock_kline_data["volume"] = volumes
 
         mock_akshare.stock_zh_a_hist.return_value = mock_kline_data
         screener._akshare = mock_akshare
 
-        value = screener._check_volume_surge("600519", {"multiplier": 2.0, "period": 20})
+        value = screener._check_volume_surge(
+            "600519", {"multiplier": 2.0, "period": 20}
+        )
 
         # Volume surge should be detected
         assert value is not None
@@ -393,6 +406,7 @@ class TestStockScreener:
 # ─────────────────────────────────────────────────────────────────────────────
 # API Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestFactorSandboxAPI:
     """Tests for Factor Sandbox API endpoints"""
@@ -427,24 +441,36 @@ class TestFactorSandboxAPI:
         assert "categories" in data["data"]
 
     @patch("app.routers.factor_sandbox.get_stock_screener")
-    def test_screen_stocks_endpoint(self, mock_get_screener, client, mock_universe_data):
+    def test_screen_stocks_endpoint(
+        self, mock_get_screener, client, mock_universe_data
+    ):
         """Test screen stocks endpoint"""
         # Mock screener
         mock_screener = MagicMock()
-        mock_screener.screen_stocks = AsyncMock(return_value={
-            "stocks": [
-                {"symbol": "600519", "name": "贵州茅台", "score": 0.85, "factor_values": {}},
-            ],
-            "total": 1,
-            "progress": {"total_stocks": 300, "screened_stocks": 300},
-        })
+        mock_screener.screen_stocks = AsyncMock(
+            return_value={
+                "stocks": [
+                    {
+                        "symbol": "600519",
+                        "name": "贵州茅台",
+                        "score": 0.85,
+                        "factor_values": {},
+                    },
+                ],
+                "total": 1,
+                "progress": {"total_stocks": 300, "screened_stocks": 300},
+            }
+        )
         mock_get_screener.return_value = mock_screener
 
-        response = client.post("/factor_sandbox/screen", json={
-            "factors": [{"id": "macd_golden_cross", "params": {}}],
-            "universe": "hs300",
-            "limit": 50,
-        })
+        response = client.post(
+            "/factor_sandbox/screen",
+            json={
+                "factors": [{"id": "macd_golden_cross", "params": {}}],
+                "universe": "hs300",
+                "limit": 50,
+            },
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -454,21 +480,27 @@ class TestFactorSandboxAPI:
 
     def test_screen_stocks_validation_invalid_universe(self, client):
         """Test screen stocks validation with invalid universe"""
-        response = client.post("/factor_sandbox/screen", json={
-            "factors": [{"id": "macd_golden_cross", "params": {}}],
-            "universe": "invalid_universe",
-            "limit": 50,
-        })
+        response = client.post(
+            "/factor_sandbox/screen",
+            json={
+                "factors": [{"id": "macd_golden_cross", "params": {}}],
+                "universe": "invalid_universe",
+                "limit": 50,
+            },
+        )
 
         assert response.status_code == 422  # Validation error
 
     def test_screen_stocks_validation_empty_factors(self, client):
         """Test screen stocks validation with empty factors"""
-        response = client.post("/factor_sandbox/screen", json={
-            "factors": [],
-            "universe": "hs300",
-            "limit": 50,
-        })
+        response = client.post(
+            "/factor_sandbox/screen",
+            json={
+                "factors": [],
+                "universe": "hs300",
+                "limit": 50,
+            },
+        )
 
         assert response.status_code == 422  # Validation error
 
@@ -489,17 +521,21 @@ class TestFactorSandboxAPI:
         # Mock executor to run synchronously
         def run_sync(func):
             return func()
-        mock_executor.submit = lambda f: type('Future', (), {'result': f})()
+
+        mock_executor.submit = lambda f: type("Future", (), {"result": f})()
 
         # Use asyncio to run the endpoint
 
         # This test verifies the endpoint exists and accepts valid input
-        response = client.post("/factor_sandbox/backtest_preview", json={
-            "symbols": ["sh600519"],
-            "start_date": "2024-01-01",
-            "end_date": "2024-01-31",
-            "initial_capital": 100000,
-        })
+        response = client.post(
+            "/factor_sandbox/backtest_preview",
+            json={
+                "symbols": ["sh600519"],
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-31",
+                "initial_capital": 100000,
+            },
+        )
 
         # Endpoint should exist (may fail due to mocking complexity)
         assert response.status_code in [200, 500]
@@ -528,6 +564,7 @@ class TestFactorSandboxAPI:
 # Error Handling Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestErrorHandling:
     """Tests for error handling"""
 
@@ -544,8 +581,7 @@ class TestErrorHandling:
         with patch.object(screener, "screen_stocks", slow_screen):
             with pytest.raises(asyncio.TimeoutError):
                 await asyncio.wait_for(
-                    screener.screen_stocks([], Universe.HS300),
-                    timeout=30.0
+                    screener.screen_stocks([], Universe.HS300), timeout=30.0
                 )
 
     def test_invalid_universe(self):
@@ -574,7 +610,9 @@ class TestErrorHandling:
 
     def test_error_message_sanitization_traceback(self):
         """Test that traceback is redacted"""
-        error = Exception('Traceback (most recent call last):\n  File "app.py", line 10')
+        error = Exception(
+            'Traceback (most recent call last):\n  File "app.py", line 10'
+        )
         sanitized = sanitize_error_message(error)
 
         assert "Traceback" not in sanitized
@@ -608,6 +646,7 @@ class TestErrorHandling:
 # ─────────────────────────────────────────────────────────────────────────────
 # Request Model Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestRequestModels:
     """Tests for request model validation"""
@@ -688,6 +727,7 @@ class TestRequestModels:
 # K-line Fallback Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestKlineFallback:
     """Tests for K-line data fallback mechanism"""
 
@@ -715,15 +755,17 @@ class TestKlineFallback:
         mock_akshare.stock_zh_a_hist.side_effect = Exception("Connection refused")
 
         # Mock successful fallback
-        sina_df = pd.DataFrame({
-            "date": pd.date_range(start="2024-01-01", periods=30, freq="D"),
-            "open": np.random.uniform(100, 110, 30),
-            "high": np.random.uniform(105, 115, 30),
-            "low": np.random.uniform(95, 105, 30),
-            "close": np.random.uniform(100, 110, 30),
-            "volume": np.random.uniform(1000000, 5000000, 30),
-            "amount": np.random.uniform(100000000, 500000000, 30),
-        })
+        sina_df = pd.DataFrame(
+            {
+                "date": pd.date_range(start="2024-01-01", periods=30, freq="D"),
+                "open": np.random.uniform(100, 110, 30),
+                "high": np.random.uniform(105, 115, 30),
+                "low": np.random.uniform(95, 105, 30),
+                "close": np.random.uniform(100, 110, 30),
+                "volume": np.random.uniform(1000000, 5000000, 30),
+                "amount": np.random.uniform(100000000, 500000000, 30),
+            }
+        )
         mock_akshare.stock_zh_a_daily.return_value = sina_df
 
         df, source = screener._get_kline_data("sh600519", 30)
@@ -757,22 +799,24 @@ class TestKlineFallback:
         mock_akshare.stock_zh_a_hist.side_effect = Exception("Primary failed")
 
         # Mock Sina data with original column names
-        sina_df = pd.DataFrame({
-            "date": pd.date_range(start="2024-01-01", periods=30, freq="D"),
-            "open": [100.0] * 30,
-            "high": [105.0] * 30,
-            "low": [95.0] * 30,
-            "close": [102.0] * 30,
-            "volume": [1000000] * 30,
-            "amount": [100000000] * 30,
-        })
+        sina_df = pd.DataFrame(
+            {
+                "date": pd.date_range(start="2024-01-01", periods=30, freq="D"),
+                "open": [100.0] * 30,
+                "high": [105.0] * 30,
+                "low": [95.0] * 30,
+                "close": [102.0] * 30,
+                "volume": [1000000] * 30,
+                "amount": [100000000] * 30,
+            }
+        )
         mock_akshare.stock_zh_a_daily.return_value = sina_df
 
         df, source = screener._get_kline_data("sh600519", 30)
 
         assert df is not None
         # Check that expected columns exist
-        expected_cols = ['date', 'open', 'high', 'low', 'close', 'volume', 'turnover']
+        expected_cols = ["date", "open", "high", "low", "close", "volume", "turnover"]
         for col in expected_cols:
             assert col in df.columns, f"Missing column: {col}"
 
@@ -804,19 +848,20 @@ class TestKlineFallback:
 
         # Test all factor check methods
         methods = [
-            ('_check_macd_golden_cross', {}),
-            ('_check_rsi_oversold', {"threshold": 30}),
-            ('_check_breakout_ma', {"period": 20}),
-            ('_check_volume_surge', {"multiplier": 2.0}),
-            ('_check_new_high', {"period": 60}),
+            ("_check_macd_golden_cross", {}),
+            ("_check_rsi_oversold", {"threshold": 30}),
+            ("_check_breakout_ma", {"period": 20}),
+            ("_check_volume_surge", {"multiplier": 2.0}),
+            ("_check_new_high", {"period": 60}),
         ]
 
         for method_name, params in methods:
             method = getattr(screener, method_name)
             result = method("sh600519", params)
             # Should return a float or None, not a tuple
-            assert result is None or isinstance(result, float), \
-                f"{method_name} should return float or None, got {type(result)}"
+            assert result is None or isinstance(
+                result, float
+            ), f"{method_name} should return float or None, got {type(result)}"
 
     def test_check_methods_with_fallback_data(self, mock_akshare):
         """Test that _check_* methods work with Sina fallback data"""
@@ -827,15 +872,17 @@ class TestKlineFallback:
         mock_akshare.stock_zh_a_hist.side_effect = Exception("Primary failed")
 
         # Create Sina-style data
-        sina_df = pd.DataFrame({
-            "date": pd.date_range(start="2024-01-01", periods=60, freq="D"),
-            "open": np.linspace(100, 110, 60),
-            "high": np.linspace(105, 115, 60),
-            "low": np.linspace(95, 105, 60),
-            "close": np.linspace(100, 110, 60),
-            "volume": np.random.uniform(1000000, 5000000, 60),
-            "amount": np.random.uniform(100000000, 500000000, 60),
-        })
+        sina_df = pd.DataFrame(
+            {
+                "date": pd.date_range(start="2024-01-01", periods=60, freq="D"),
+                "open": np.linspace(100, 110, 60),
+                "high": np.linspace(105, 115, 60),
+                "low": np.linspace(95, 105, 60),
+                "close": np.linspace(100, 110, 60),
+                "volume": np.random.uniform(1000000, 5000000, 60),
+                "amount": np.random.uniform(100000000, 500000000, 60),
+            }
+        )
         mock_akshare.stock_zh_a_daily.return_value = sina_df
 
         # Test MACD golden cross
@@ -853,6 +900,7 @@ class TestKlineFallback:
 # Integration Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestIntegration:
     """Integration tests for factor sandbox"""
 
@@ -862,10 +910,12 @@ class TestIntegration:
         screener = StockScreener()
 
         # Mock universe data
-        mock_universe_df = pd.DataFrame({
-            "成分券代码": ["600519", "600036"],
-            "成分券名称": ["贵州茅台", "招商银行"],
-        })
+        mock_universe_df = pd.DataFrame(
+            {
+                "成分券代码": ["600519", "600036"],
+                "成分券名称": ["贵州茅台", "招商银行"],
+            }
+        )
         mock_akshare.index_stock_cons_weight_csindex.return_value = mock_universe_df
 
         # Mock K-line data

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class TaskStatus(str, Enum):
     """任务状态枚举"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -27,6 +28,7 @@ class TaskStatus(str, Enum):
 @dataclass
 class BackgroundTask:
     """后台任务数据类"""
+
     task_id: str
     task_type: str
     status: TaskStatus = TaskStatus.PENDING
@@ -50,14 +52,16 @@ class BackgroundTask:
             "error": self.error,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
         }
 
 
 class BackgroundTaskManager:
     """
     后台任务管理器
-    
+
     功能:
     - 创建和管理后台任务
     - 追踪任务进度
@@ -65,7 +69,7 @@ class BackgroundTaskManager:
     - 任务状态查询
     """
 
-    _instance: Optional['BackgroundTaskManager'] = None
+    _instance: Optional["BackgroundTaskManager"] = None
     _lock = threading.Lock()
 
     def __init__(self):
@@ -74,7 +78,7 @@ class BackgroundTaskManager:
         self._cleanup_interval = 3600
         self._last_cleanup = time.time()
 
-    def __new__(cls) -> 'BackgroundTaskManager':
+    def __new__(cls) -> "BackgroundTaskManager":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -84,10 +88,10 @@ class BackgroundTaskManager:
     def create_task(self, task_type: str) -> str:
         """
         创建新任务
-        
+
         Args:
             task_type: 任务类型（如 'vacuum', 'backup' 等）
-            
+
         Returns:
             任务 ID
         """
@@ -96,7 +100,7 @@ class BackgroundTaskManager:
             task_id=task_id,
             task_type=task_type,
             status=TaskStatus.PENDING,
-            message="任务已创建，等待执行"
+            message="任务已创建，等待执行",
         )
         self._tasks[task_id] = task
         logger.info(f"[BackgroundTask] Created task: {task_id}")
@@ -121,12 +125,12 @@ class BackgroundTaskManager:
     def update_progress(self, task_id: str, progress: int, message: str = "") -> bool:
         """
         更新任务进度
-        
+
         Args:
             task_id: 任务 ID
             progress: 进度百分比 (0-100)
             message: 进度消息
-            
+
         Returns:
             是否更新成功
         """
@@ -139,10 +143,14 @@ class BackgroundTaskManager:
             task.message = message
 
         self._broadcast_update(task)
-        logger.debug(f"[BackgroundTask] Progress update: {task_id} - {progress}% - {message}")
+        logger.debug(
+            f"[BackgroundTask] Progress update: {task_id} - {progress}% - {message}"
+        )
         return True
 
-    def complete_task(self, task_id: str, result: Optional[Dict[str, Any]] = None) -> bool:
+    def complete_task(
+        self, task_id: str, result: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """标记任务完成"""
         task = self._tasks.get(task_id)
         if not task:
@@ -194,7 +202,7 @@ class BackgroundTaskManager:
     def set_ws_broadcast(self, callback: Callable[[Dict[str, Any]], None]) -> None:
         """
         设置 WebSocket 广播回调
-        
+
         Args:
             callback: 回调函数，接收任务更新字典
         """
@@ -205,20 +213,17 @@ class BackgroundTaskManager:
         """广播任务更新"""
         if self._ws_broadcast:
             try:
-                self._ws_broadcast({
-                    "type": "task_update",
-                    "data": task.to_dict()
-                })
+                self._ws_broadcast({"type": "task_update", "data": task.to_dict()})
             except Exception as e:
                 logger.error(f"[BackgroundTask] Broadcast failed: {e}", exc_info=True)
 
     def cleanup_completed_tasks(self, max_age_hours: int = 24) -> int:
         """
         清理已完成的旧任务
-        
+
         Args:
             max_age_hours: 最大保留时间（小时）
-            
+
         Returns:
             清理的任务数量
         """
@@ -227,7 +232,11 @@ class BackgroundTaskManager:
 
         to_remove = []
         for task_id, task in self._tasks.items():
-            if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+            if task.status in (
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.CANCELLED,
+            ):
                 if task.completed_at and task.completed_at.timestamp() < cutoff:
                     to_remove.append(task_id)
 
@@ -242,10 +251,10 @@ class BackgroundTaskManager:
     def get_all_tasks(self, task_type: Optional[str] = None) -> list[BackgroundTask]:
         """
         获取所有任务
-        
+
         Args:
             task_type: 可选，筛选特定类型的任务
-            
+
         Returns:
             任务列表
         """

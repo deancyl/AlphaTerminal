@@ -31,9 +31,11 @@ logger = logging.getLogger(__name__)
 # 数据结构定义
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class MacroDataResult:
     """宏观数据结果"""
+
     indicators: Dict[str, Any]  # {gdp: {...}, cpi: {...}, ...}
     overview: Optional[Dict[str, Any]] = None
     calendar: Optional[List[Dict[str, Any]]] = None
@@ -49,10 +51,11 @@ class MacroDataResult:
 # MacroFetcher 类
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class MacroFetcher:
     """
     宏观数据获取器
-    
+
     特性:
     - 使用 BFF 端点 get_macro_dashboard() 高效获取数据
     - 直接调用路由函数（非 HTTP 调用）
@@ -63,8 +66,16 @@ class MacroFetcher:
     DEFAULT_TIMEOUT = 15.0  # 默认超时时间
 
     # 支持的指标列表
-    SUPPORTED_INDICATORS = ['gdp', 'cpi', 'ppi', 'pmi', 'm2', 'social_financing',
-                           'industrial_production', 'unemployment']
+    SUPPORTED_INDICATORS = [
+        "gdp",
+        "cpi",
+        "ppi",
+        "pmi",
+        "m2",
+        "social_financing",
+        "industrial_production",
+        "unemployment",
+    ]
 
     def __init__(self):
         """初始化获取器"""
@@ -75,16 +86,16 @@ class MacroFetcher:
         self,
         indicators: Optional[List[str]] = None,
         use_bff: bool = True,
-        timeout: Optional[float] = None
+        timeout: Optional[float] = None,
     ) -> MacroDataResult:
         """
         获取宏观数据
-        
+
         Args:
             indicators: 指标列表，None 表示获取所有指标
             use_bff: 是否使用 BFF 端点（默认 True，推荐）
             timeout: 超时时间（秒），None 使用默认值
-            
+
         Returns:
             MacroDataResult 对象
         """
@@ -110,21 +121,15 @@ class MacroFetcher:
 
         except asyncio.TimeoutError:
             logger.error(f"[MacroFetcher] 获取超时 ({timeout}s)", exc_info=True)
-            return MacroDataResult(
-                indicators={},
-                error=f"数据获取超时 ({timeout}秒)"
-            )
+            return MacroDataResult(indicators={}, error=f"数据获取超时 ({timeout}秒)")
         except Exception as e:
             logger.error(f"[MacroFetcher] 获取失败: {e}", exc_info=True)
-            return MacroDataResult(
-                indicators={},
-                error=f"数据获取失败: {str(e)}"
-            )
+            return MacroDataResult(indicators={}, error=f"数据获取失败: {str(e)}")
 
     async def _fetch_bff(self, timeout: float) -> MacroDataResult:
         """
         使用 BFF 端点获取所有数据
-        
+
         直接调用路由函数 get_macro_dashboard()
         """
         cache_key = "copilot:macro:bff"
@@ -134,25 +139,25 @@ class MacroFetcher:
         if cached:
             logger.debug("[MacroFetcher] 缓存命中: BFF")
             return MacroDataResult(
-                indicators=cached.get('indicators', {}),
-                overview=cached.get('overview'),
-                calendar=cached.get('calendar'),
-                fetched_at=datetime.now()
+                indicators=cached.get("indicators", {}),
+                overview=cached.get("overview"),
+                calendar=cached.get("calendar"),
+                fetched_at=datetime.now(),
             )
 
         # 调用路由函数（直接调用，非 HTTP）
         try:
             # 使用 asyncio.wait_for 添加超时保护
             response = await asyncio.wait_for(
-                macro_router.get_macro_dashboard(),
-                timeout=timeout
+                macro_router.get_macro_dashboard(), timeout=timeout
             )
 
             # 解析响应
-            response_body = getattr(response, 'body', None)
+            response_body = getattr(response, "body", None)
             if response_body is not None:
                 # FastAPI Response 对象
                 import json
+
                 data = json.loads(response_body.decode())
             elif isinstance(response, dict):
                 data = response
@@ -160,29 +165,31 @@ class MacroFetcher:
                 data = response
 
             # 提取数据
-            result_data = data.get('data', data)
+            result_data = data.get("data", data)
 
             result = MacroDataResult(
                 indicators={
-                    'gdp': result_data.get('gdp', {}),
-                    'cpi': result_data.get('cpi', {}),
-                    'ppi': result_data.get('ppi', {}),
-                    'pmi': result_data.get('pmi', {}),
-                    'm2': result_data.get('m2', {}),
-                    'social_financing': result_data.get('social_financing', {}),
-                    'industrial_production': result_data.get('industrial_production', {}),
-                    'unemployment': result_data.get('unemployment', {}),
+                    "gdp": result_data.get("gdp", {}),
+                    "cpi": result_data.get("cpi", {}),
+                    "ppi": result_data.get("ppi", {}),
+                    "pmi": result_data.get("pmi", {}),
+                    "m2": result_data.get("m2", {}),
+                    "social_financing": result_data.get("social_financing", {}),
+                    "industrial_production": result_data.get(
+                        "industrial_production", {}
+                    ),
+                    "unemployment": result_data.get("unemployment", {}),
                 },
-                overview=result_data.get('overview'),
-                calendar=result_data.get('calendar', []),
-                fetched_at=datetime.now()
+                overview=result_data.get("overview"),
+                calendar=result_data.get("calendar", []),
+                fetched_at=datetime.now(),
             )
 
             # 缓存结果
             cache_data = {
-                'indicators': result.indicators,
-                'overview': result.overview,
-                'calendar': result.calendar,
+                "indicators": result.indicators,
+                "overview": result.overview,
+                "calendar": result.calendar,
             }
             self._cache.set(cache_key, cache_data, ttl=self.CACHE_TTL)
 
@@ -196,24 +203,22 @@ class MacroFetcher:
             raise
 
     async def _fetch_individual(
-        self,
-        indicators: List[str],
-        timeout: float
+        self, indicators: List[str], timeout: float
     ) -> MacroDataResult:
         """
         按需获取单个指标
-        
+
         直接调用对应的路由函数
         """
         result_data = {}
 
         # 指标到路由函数的映射
         indicator_funcs = {
-            'gdp': lambda: macro_router.get_gdp_data(limit=12),
-            'cpi': lambda: macro_router.get_cpi_data(limit=12),
-            'ppi': lambda: macro_router.get_ppi_data(limit=12),
-            'pmi': lambda: macro_router.get_pmi_data(limit=12),
-            'm2': lambda: macro_router.get_m2_data(limit=12),
+            "gdp": lambda: macro_router.get_gdp_data(limit=12),
+            "cpi": lambda: macro_router.get_cpi_data(limit=12),
+            "ppi": lambda: macro_router.get_ppi_data(limit=12),
+            "pmi": lambda: macro_router.get_pmi_data(limit=12),
+            "m2": lambda: macro_router.get_m2_data(limit=12),
         }
 
         for indicator in indicators:
@@ -232,21 +237,21 @@ class MacroFetcher:
             try:
                 # 调用路由函数
                 response = await asyncio.wait_for(
-                    indicator_funcs[indicator](),
-                    timeout=timeout
+                    indicator_funcs[indicator](), timeout=timeout
                 )
 
                 # 解析响应
-                response_body = getattr(response, 'body', None)
+                response_body = getattr(response, "body", None)
                 if response_body is not None:
                     import json
+
                     data = json.loads(response_body.decode())
                 elif isinstance(response, dict):
                     data = response
                 else:
                     data = response
 
-                indicator_data = data.get('data', data)
+                indicator_data = data.get("data", data)
                 result_data[indicator] = indicator_data
 
                 # 缓存
@@ -256,15 +261,14 @@ class MacroFetcher:
 
             except asyncio.TimeoutError:
                 logger.warning(f"[MacroFetcher] 超时: {indicator}", exc_info=True)
-                result_data[indicator] = {'error': 'timeout'}
+                result_data[indicator] = {"error": "timeout"}
             except Exception as e:
-                logger.warning(f"[MacroFetcher] 获取失败: {indicator}, {e}", exc_info=True)
-                result_data[indicator] = {'error': str(e)}
+                logger.warning(
+                    f"[MacroFetcher] 获取失败: {indicator}, {e}", exc_info=True
+                )
+                result_data[indicator] = {"error": str(e)}
 
-        return MacroDataResult(
-            indicators=result_data,
-            fetched_at=datetime.now()
-        )
+        return MacroDataResult(indicators=result_data, fetched_at=datetime.now())
 
     def get_supported_indicators(self) -> List[str]:
         """获取支持的指标列表"""
@@ -289,7 +293,7 @@ _macro_fetcher_lock = threading.Lock()
 def get_macro_fetcher() -> MacroFetcher:
     """
     获取 MacroFetcher 单例实例
-    
+
     使用双重检查锁定模式确保线程安全
     """
     global _macro_fetcher_instance

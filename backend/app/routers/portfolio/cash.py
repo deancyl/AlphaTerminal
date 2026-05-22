@@ -40,12 +40,15 @@ router = APIRouter(tags=["portfolio"])
 PORTFOLIO_TIMEOUT = 30  # seconds
 
 # Shared thread pool for non-blocking SQLite operations
-_portfolio_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="portfolio_")
+_portfolio_executor = ThreadPoolExecutor(
+    max_workers=20, thread_name_prefix="portfolio_"
+)
 
 
 # ══════════════════════════════════════════════════════════════
 #  Phase 1 扩展：资金流水 + 现金余额管理
 # ══════════════════════════════════════════════════════════════
+
 
 @router.post("/transfer")
 @handle_errors(module="portfolio_cash")
@@ -55,13 +58,16 @@ async def transfer(body: TransactionIn, _: None = Depends(require_api_key)):
     body.type = 'transfer_out' / 'transfer_in'（通常前端只传一方）
     为简化操作，提供 /transfer 接口：from_pid / to_pid / amount
     """
-    raise HTTPException(400, "transfer 需要明确 from_pid 和 to_pid，请使用 /transfer/direct 接口")
+    raise HTTPException(
+        400, "transfer 需要明确 from_pid 和 to_pid，请使用 /transfer/direct 接口"
+    )
 
 
 @router.post("/transfer/direct")
 @handle_errors(module="portfolio_cash")
 async def transfer_direct(body: TransferIn, _: None = Depends(require_api_key)):
     """直接划转：原子操作，同时更新两个账户的 cash_balance 并写流水"""
+
     def _sync_work():
         if body.amount <= 0:
             raise HTTPException(400, "划转金额必须为正数")
@@ -80,7 +86,9 @@ async def transfer_direct(body: TransferIn, _: None = Depends(require_api_key)):
         result = await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
         return success_response(result)
     except asyncio.TimeoutError:
-        logger.warning("[cash] transfer_direct timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[cash] transfer_direct timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True
+        )
         raise HTTPException(504, "Transfer direct timeout")
     except ValueError as e:
         logger.warning("[cash] transfer_direct value error: %s", e, exc_info=True)
@@ -100,6 +108,7 @@ async def transfer_direct(body: TransferIn, _: None = Depends(require_api_key)):
 @handle_errors(module="portfolio_cash")
 async def get_cash(portfolio_id: int):
     """查询账户现金余额"""
+
     def _sync_work():
         conn = _get_conn()
         try:
@@ -121,14 +130,19 @@ async def get_cash(portfolio_id: int):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[cash] get_cash timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[cash] get_cash timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True
+        )
         raise HTTPException(504, "Get cash timeout")
 
 
 @router.post("/{portfolio_id}/cash/deposit")
 @handle_errors(module="portfolio_cash")
-async def cash_deposit(portfolio_id: int, body: CashOpIn, _: None = Depends(require_api_key)):
+async def cash_deposit(
+    portfolio_id: int, body: CashOpIn, _: None = Depends(require_api_key)
+):
     """充值：账户现金增加 + 写 deposit 流水"""
+
     def _sync_work():
         if body.amount <= 0:
             raise HTTPException(400, "充值金额必须为正数")
@@ -147,9 +161,15 @@ async def cash_deposit(portfolio_id: int, body: CashOpIn, _: None = Depends(requ
                     "UPDATE portfolios SET cash_balance=? WHERE id=?",
                     (new_balance, portfolio_id),
                 )
-                _insert_transaction(conn, portfolio_id, "deposit",
-                                    body.amount, new_balance, operator=body.operator,
-                                    note=body.note or "充值")
+                _insert_transaction(
+                    conn,
+                    portfolio_id,
+                    "deposit",
+                    body.amount,
+                    new_balance,
+                    operator=body.operator,
+                    note=body.note or "充值",
+                )
                 conn.commit()
                 return {"portfolio_id": portfolio_id, "cash_balance": new_balance}
             finally:
@@ -163,14 +183,19 @@ async def cash_deposit(portfolio_id: int, body: CashOpIn, _: None = Depends(requ
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[cash] cash_deposit timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[cash] cash_deposit timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True
+        )
         raise HTTPException(504, "Cash deposit timeout")
 
 
 @router.post("/{portfolio_id}/cash/withdraw")
 @handle_errors(module="portfolio_cash")
-async def cash_withdraw(portfolio_id: int, body: CashOpIn, _: None = Depends(require_api_key)):
+async def cash_withdraw(
+    portfolio_id: int, body: CashOpIn, _: None = Depends(require_api_key)
+):
     """提现：账户现金减少 + 写 withdraw 流水"""
+
     def _sync_work():
         if body.amount <= 0:
             raise HTTPException(400, "提现金额必须为正数")
@@ -185,16 +210,24 @@ async def cash_withdraw(portfolio_id: int, body: CashOpIn, _: None = Depends(req
                     raise HTTPException(404, "账户不存在")
 
                 if (row[1] or 0.0) < body.amount:
-                    raise HTTPException(400, f"现金余额不足（当前: {row[1]}，需: {body.amount}）")
+                    raise HTTPException(
+                        400, f"现金余额不足（当前: {row[1]}，需: {body.amount}）"
+                    )
 
                 new_balance = (row[1] or 0.0) - body.amount
                 conn.execute(
                     "UPDATE portfolios SET cash_balance=? WHERE id=?",
                     (new_balance, portfolio_id),
                 )
-                _insert_transaction(conn, portfolio_id, "withdraw",
-                                    body.amount, new_balance, operator=body.operator,
-                                    note=body.note or "提现")
+                _insert_transaction(
+                    conn,
+                    portfolio_id,
+                    "withdraw",
+                    body.amount,
+                    new_balance,
+                    operator=body.operator,
+                    note=body.note or "提现",
+                )
                 conn.commit()
                 return {"portfolio_id": portfolio_id, "cash_balance": new_balance}
             finally:
@@ -208,7 +241,9 @@ async def cash_withdraw(portfolio_id: int, body: CashOpIn, _: None = Depends(req
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[cash] cash_withdraw timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[cash] cash_withdraw timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True
+        )
         raise HTTPException(504, "Cash withdraw timeout")
 
 
@@ -218,9 +253,13 @@ async def list_transactions(
     portfolio_id: int,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    txn_type: Optional[str] = Query(None, description="过滤类型: deposit/withdraw/transfer_in/transfer_out/dividend/fee"),
+    txn_type: Optional[str] = Query(
+        None,
+        description="过滤类型: deposit/withdraw/transfer_in/transfer_out/dividend/fee",
+    ),
 ):
     """资金流水记录查询"""
+
     def _sync_work():
         conn = _get_conn()
         try:
@@ -232,8 +271,18 @@ async def list_transactions(
             sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
             params.extend([limit, offset])
             rows = conn.execute(sql, params).fetchall()
-            cols = ["id", "portfolio_id", "type", "amount", "balance_after",
-                    "counterparty_id", "related_symbol", "note", "created_at", "operator"]
+            cols = [
+                "id",
+                "portfolio_id",
+                "type",
+                "amount",
+                "balance_after",
+                "counterparty_id",
+                "related_symbol",
+                "note",
+                "created_at",
+                "operator",
+            ]
         finally:
             conn.close()
         return {"transactions": _row2dict(rows, cols), "total": len(rows)}
@@ -246,5 +295,9 @@ async def list_transactions(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[cash] list_transactions timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[cash] list_transactions timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "List transactions timeout")

@@ -1,6 +1,7 @@
 """
 Pytest configuration and shared fixtures for AlphaTerminal backend tests.
 """
+
 import pytest
 import asyncio
 from unittest.mock import Mock
@@ -12,7 +13,7 @@ import tempfile
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 
 # Add app directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Proxy availability check
 PROXY_AVAILABLE = bool(os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY"))
@@ -26,7 +27,9 @@ def proxy_available():
 
 def pytest_collection_modifyitems(config, items):
     """Auto-skip proxy-dependent tests when proxy unavailable."""
-    skip_proxy = pytest.mark.skip(reason="Proxy required but not available (set HTTP_PROXY or HTTPS_PROXY)")
+    skip_proxy = pytest.mark.skip(
+        reason="Proxy required but not available (set HTTP_PROXY or HTTPS_PROXY)"
+    )
 
     for item in items:
         if "proxy" in item.keywords and not PROXY_AVAILABLE:
@@ -45,7 +48,7 @@ def event_loop():
 def test_db_path():
     """Create a temporary test database."""
     # Create temp database file
-    fd, path = tempfile.mkstemp(suffix='.db')
+    fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
 
     # Initialize tables
@@ -73,10 +76,11 @@ def test_db_path():
 def mock_db_connection():
     """Mock database connection fixture."""
     conn = Mock()
-    conn.execute = Mock(return_value=Mock(
-        fetchone=Mock(return_value=None),
-        fetchall=Mock(return_value=[])
-    ))
+    conn.execute = Mock(
+        return_value=Mock(
+            fetchone=Mock(return_value=None), fetchall=Mock(return_value=[])
+        )
+    )
     conn.close = Mock()
     return conn
 
@@ -101,7 +105,7 @@ def sample_stock_data():
         "price": 10.5,
         "change_pct": 2.5,
         "volume": 1000000,
-        "market_cap": 2000000000
+        "market_cap": 2000000000,
     }
 
 
@@ -113,7 +117,7 @@ def sample_portfolio_data():
         "name": "测试组合",
         "description": "用于测试的组合",
         "initial_capital": 100000.0,
-        "created_at": "2024-01-01T00:00:00"
+        "created_at": "2024-01-01T00:00:00",
     }
 
 
@@ -209,17 +213,19 @@ def mock_llm_config():
 def mock_model_config_service():
     """Mock ModelConfigService for testing."""
     service = Mock()
-    service.get_model = Mock(return_value=Mock(
-        provider="openai",
-        model_id="gpt-4",
-        api_key="test-api-key",
-        base_url="https://api.openai.com/v1",
-        enabled=True,
-        is_default=True,
-        max_concurrent=5,
-        context_length=8192,
-        metadata={},
-    ))
+    service.get_model = Mock(
+        return_value=Mock(
+            provider="openai",
+            model_id="gpt-4",
+            api_key="test-api-key",
+            base_url="https://api.openai.com/v1",
+            enabled=True,
+            is_default=True,
+            max_concurrent=5,
+            context_length=8192,
+            metadata={},
+        )
+    )
     service.get_all_providers = Mock(return_value=["openai", "deepseek", "qianwen"])
     service.get_models_for_provider = Mock(return_value=["gpt-4", "gpt-3.5-turbo"])
     return service

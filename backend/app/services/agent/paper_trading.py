@@ -1,4 +1,5 @@
 """Paper Trading Service - 模拟交易引擎"""
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -46,13 +47,15 @@ class PaperTradingService:
         return cls._instance
 
     def __init__(self):
-        if hasattr(self, '_initialized') and self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
         self._orders: Dict[str, Order] = {}
         self._order_lock = threading.Lock()
         self._initialized = True
 
-    def submit_order(self, symbol: str, side: str, quantity: float, price: float) -> Order:
+    def submit_order(
+        self, symbol: str, side: str, quantity: float, price: float
+    ) -> Order:
         """提交订单"""
         with self._order_lock:
             order_id = str(uuid.uuid4())

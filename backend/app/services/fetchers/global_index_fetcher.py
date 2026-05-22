@@ -33,42 +33,140 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="global_index_")
 
 _GLOBAL_INDEX_CB = CircuitBreaker(
-    CircuitBreakerConfig(
-        failure_threshold=5,
-        success_threshold=2,
-        timeout=60.0
-    )
+    CircuitBreakerConfig(failure_threshold=5, success_threshold=2, timeout=60.0)
 )
 
 # Global index configuration
 GLOBAL_INDEX_SYMBOLS = {
     "Americas": ["SPX", "IXIC", "DJI", "RUT", "VIX", "TSX", "IBOV"],
     "Europe": ["UKX", "DAX", "CAC", "SMI", "IBEX"],
-    "Asia-Pacific": ["N225", "HSI", "KS11", "AXJO", "NSEI"]
+    "Asia-Pacific": ["N225", "HSI", "KS11", "AXJO", "NSEI"],
 }
 
 # Index metadata
 INDEX_METADATA = {
     # Americas
-    "SPX": {"name": "标普500", "name_en": "S&P 500", "flag": "🇺🇸", "market": "US", "currency": "USD"},
-    "IXIC": {"name": "纳斯达克", "name_en": "NASDAQ", "flag": "🇺🇸", "market": "US", "currency": "USD"},
-    "DJI": {"name": "道琼斯", "name_en": "Dow Jones", "flag": "🇺🇸", "market": "US", "currency": "USD"},
-    "RUT": {"name": "罗素2000", "name_en": "Russell 2000", "flag": "🇺🇸", "market": "US", "currency": "USD"},
-    "VIX": {"name": "波动率指数", "name_en": "VIX", "flag": "🇺🇸", "market": "US", "currency": "USD"},
-    "TSX": {"name": "多伦多综指", "name_en": "S&P/TSX", "flag": "🇨🇦", "market": "CA", "currency": "CAD"},
-    "IBOV": {"name": "巴西博维斯帕", "name_en": "Bovespa", "flag": "🇧🇷", "market": "BR", "currency": "BRL"},
+    "SPX": {
+        "name": "标普500",
+        "name_en": "S&P 500",
+        "flag": "🇺🇸",
+        "market": "US",
+        "currency": "USD",
+    },
+    "IXIC": {
+        "name": "纳斯达克",
+        "name_en": "NASDAQ",
+        "flag": "🇺🇸",
+        "market": "US",
+        "currency": "USD",
+    },
+    "DJI": {
+        "name": "道琼斯",
+        "name_en": "Dow Jones",
+        "flag": "🇺🇸",
+        "market": "US",
+        "currency": "USD",
+    },
+    "RUT": {
+        "name": "罗素2000",
+        "name_en": "Russell 2000",
+        "flag": "🇺🇸",
+        "market": "US",
+        "currency": "USD",
+    },
+    "VIX": {
+        "name": "波动率指数",
+        "name_en": "VIX",
+        "flag": "🇺🇸",
+        "market": "US",
+        "currency": "USD",
+    },
+    "TSX": {
+        "name": "多伦多综指",
+        "name_en": "S&P/TSX",
+        "flag": "🇨🇦",
+        "market": "CA",
+        "currency": "CAD",
+    },
+    "IBOV": {
+        "name": "巴西博维斯帕",
+        "name_en": "Bovespa",
+        "flag": "🇧🇷",
+        "market": "BR",
+        "currency": "BRL",
+    },
     # Europe
-    "UKX": {"name": "富时100", "name_en": "FTSE 100", "flag": "🇬🇧", "market": "UK", "currency": "GBP"},
-    "DAX": {"name": "德国DAX", "name_en": "DAX", "flag": "🇩🇪", "market": "DE", "currency": "EUR"},
-    "CAC": {"name": "法国CAC40", "name_en": "CAC 40", "flag": "🇫🇷", "market": "FR", "currency": "EUR"},
-    "SMI": {"name": "瑞士SMI", "name_en": "SMI", "flag": "🇨🇭", "market": "CH", "currency": "CHF"},
-    "IBEX": {"name": "西班牙IBEX35", "name_en": "IBEX 35", "flag": "🇪🇸", "market": "ES", "currency": "EUR"},
+    "UKX": {
+        "name": "富时100",
+        "name_en": "FTSE 100",
+        "flag": "🇬🇧",
+        "market": "UK",
+        "currency": "GBP",
+    },
+    "DAX": {
+        "name": "德国DAX",
+        "name_en": "DAX",
+        "flag": "🇩🇪",
+        "market": "DE",
+        "currency": "EUR",
+    },
+    "CAC": {
+        "name": "法国CAC40",
+        "name_en": "CAC 40",
+        "flag": "🇫🇷",
+        "market": "FR",
+        "currency": "EUR",
+    },
+    "SMI": {
+        "name": "瑞士SMI",
+        "name_en": "SMI",
+        "flag": "🇨🇭",
+        "market": "CH",
+        "currency": "CHF",
+    },
+    "IBEX": {
+        "name": "西班牙IBEX35",
+        "name_en": "IBEX 35",
+        "flag": "🇪🇸",
+        "market": "ES",
+        "currency": "EUR",
+    },
     # Asia-Pacific
-    "N225": {"name": "日经225", "name_en": "Nikkei 225", "flag": "🇯🇵", "market": "JP", "currency": "JPY"},
-    "HSI": {"name": "恒生指数", "name_en": "Hang Seng", "flag": "🇭🇰", "market": "HK", "currency": "HKD"},
-    "KS11": {"name": "韩国KOSPI", "name_en": "KOSPI", "flag": "🇰🇷", "market": "KR", "currency": "KRW"},
-    "AXJO": {"name": "澳洲标普200", "name_en": "S&P/ASX 200", "flag": "🇦🇺", "market": "AU", "currency": "AUD"},
-    "NSEI": {"name": "印度NIFTY50", "name_en": "NIFTY 50", "flag": "🇮🇳", "market": "IN", "currency": "INR"},
+    "N225": {
+        "name": "日经225",
+        "name_en": "Nikkei 225",
+        "flag": "🇯🇵",
+        "market": "JP",
+        "currency": "JPY",
+    },
+    "HSI": {
+        "name": "恒生指数",
+        "name_en": "Hang Seng",
+        "flag": "🇭🇰",
+        "market": "HK",
+        "currency": "HKD",
+    },
+    "KS11": {
+        "name": "韩国KOSPI",
+        "name_en": "KOSPI",
+        "flag": "🇰🇷",
+        "market": "KR",
+        "currency": "KRW",
+    },
+    "AXJO": {
+        "name": "澳洲标普200",
+        "name_en": "S&P/ASX 200",
+        "flag": "🇦🇺",
+        "market": "AU",
+        "currency": "AUD",
+    },
+    "NSEI": {
+        "name": "印度NIFTY50",
+        "name_en": "NIFTY 50",
+        "flag": "🇮🇳",
+        "market": "IN",
+        "currency": "INR",
+    },
 }
 
 # Yahoo Finance symbol mapping (Tencent uses different symbols)
@@ -107,6 +205,7 @@ TENCENT_SYMBOL_MAP = {
 @dataclass
 class IndexQuote:
     """Index quote data"""
+
     symbol: str
     name: str
     name_en: str
@@ -143,6 +242,7 @@ class GlobalIndexFetcher:
         # Proxy configuration from environment
         self._proxy = None
         import os
+
         http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
         if http_proxy:
             self._proxy = http_proxy
@@ -314,19 +414,16 @@ class GlobalIndexFetcher:
             )
 
     async def fetch_kline_history(
-        self,
-        symbol: str,
-        period: str = "daily",
-        limit: int = 100
+        self, symbol: str, period: str = "daily", limit: int = 100
     ) -> List[Dict]:
         """
         Fetch K-line history for an index
-        
+
         Args:
             symbol: Index symbol (e.g., "HSI", "SPX")
             period: "daily" or "weekly"
             limit: Number of bars to fetch (1-500)
-        
+
         Returns:
             List of OHLCV dicts
         """
@@ -377,15 +474,21 @@ class GlobalIndexFetcher:
                     continue
 
                 dt = datetime.fromtimestamp(timestamps[i])
-                klines.append({
-                    "date": dt.strftime("%Y-%m-%d"),
-                    "open": round(opens[i], 2) if opens[i] else 0,
-                    "high": round(highs[i], 2) if highs[i] else 0,
-                    "low": round(lows[i], 2) if lows[i] else 0,
-                    "close": round(closes[i], 2),
-                    "volume": int(volumes[i]) if volumes[i] else 0,
-                    "change_pct": round((closes[i] - closes[i-1]) / closes[i-1] * 100, 2) if i > 0 and closes[i-1] else 0,
-                })
+                klines.append(
+                    {
+                        "date": dt.strftime("%Y-%m-%d"),
+                        "open": round(opens[i], 2) if opens[i] else 0,
+                        "high": round(highs[i], 2) if highs[i] else 0,
+                        "low": round(lows[i], 2) if lows[i] else 0,
+                        "close": round(closes[i], 2),
+                        "volume": int(volumes[i]) if volumes[i] else 0,
+                        "change_pct": (
+                            round((closes[i] - closes[i - 1]) / closes[i - 1] * 100, 2)
+                            if i > 0 and closes[i - 1]
+                            else 0
+                        ),
+                    }
+                )
 
             # Return last N bars
             return klines[-limit:]
@@ -393,11 +496,11 @@ class GlobalIndexFetcher:
     async def fetch_sparkline(self, symbol: str, days: int = 20) -> List[float]:
         """
         Fetch sparkline data (last N close prices)
-        
+
         Args:
             symbol: Index symbol
             days: Number of days (default 20)
-        
+
         Returns:
             List of close prices
         """
@@ -448,24 +551,41 @@ class GlobalIndexFetcher:
 
     def _create_mock_quote(self, symbol: str) -> IndexQuote:
         """Create mock quote for fallback"""
-        meta = INDEX_METADATA.get(symbol, {
-            "name": symbol,
-            "name_en": symbol,
-            "flag": "🌍",
-            "market": "XX",
-            "currency": "USD"
-        })
+        meta = INDEX_METADATA.get(
+            symbol,
+            {
+                "name": symbol,
+                "name_en": symbol,
+                "flag": "🌍",
+                "market": "XX",
+                "currency": "USD",
+            },
+        )
 
         # Generate realistic mock price based on symbol
         mock_prices = {
-            "SPX": 4200, "IXIC": 14500, "DJI": 33500, "RUT": 1980, "VIX": 18.5,
-            "TSX": 21500, "IBOV": 125000, "UKX": 7800, "DAX": 16500, "CAC": 7400,
-            "SMI": 11200, "IBEX": 11500, "N225": 32500, "HSI": 18500, "KS11": 2650,
-            "AXJO": 7600, "NSEI": 22500,
+            "SPX": 4200,
+            "IXIC": 14500,
+            "DJI": 33500,
+            "RUT": 1980,
+            "VIX": 18.5,
+            "TSX": 21500,
+            "IBOV": 125000,
+            "UKX": 7800,
+            "DAX": 16500,
+            "CAC": 7400,
+            "SMI": 11200,
+            "IBEX": 11500,
+            "N225": 32500,
+            "HSI": 18500,
+            "KS11": 2650,
+            "AXJO": 7600,
+            "NSEI": 22500,
         }
 
         base_price = mock_prices.get(symbol, 1000)
         import random
+
         change_pct = round(random.uniform(-2, 2), 2)
         price = round(base_price * (1 + change_pct / 100), 2)
 

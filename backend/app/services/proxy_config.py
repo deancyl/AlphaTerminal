@@ -3,63 +3,88 @@ proxy_config.py — 统一代理配置 + 智能分流
 所有 HTTP/HTTPS 代理统一从环境变量读取，禁止硬编码 IP。
 国内数据源直连，海外数据源走代理。
 """
+
 import os
 import logging
 
 logger = logging.getLogger(__name__)
 
 # ── 国内数据源（直连，不走代理）───────────────────────────────────────
-DOMESTIC_HOSTS = frozenset([
-    # 东方财富
-    "eastmoney.com", "emoney.cn", "followfund.cn",
-    "18.push2.eastmoney.com", "80.push2.eastmoney.com",
-    "push2.eastmoney.com", "push3.eastmoney.com",
-    # 新浪财经
-    "sina.com.cn", "sinajs.cn", "hq.sinajs.cn", "finance.sina.com.cn",
-    # 腾讯财经
-    "gtimg.cn", "qt.gtimg.cn", "web.ifzq.gtimg.cn",
-    # 网易财经
-    "126.com", "money.126.com", "quotes.money.163.com",
-    # 百度/Alibaba/京东财经
-    "baidu.com", "alibaba.com", "jd.com",
-    # 上海黄金交易所
-    "sge.com", "sge.com.cn",
-    # 中国外汇交易中心
-    "chinamoney.com", "chinamoney.com.cn",
-    # 财新
-    "caixin.com",
-    # 同花顺
-    "10jqka.com", "data.10jqka.com",
-    # 雪球
-    "xueqiu.com",
-    # Wind
-    "wind.com", "wind.com.cn",
-    # 北向数据
-    "hbstock.com",
-    # 其他国内金融节点
-    "legulegu.com",
-    "morningstar.com",
-    # AkShare 常用域名（备用）
-    "akshare.com",
-])
+DOMESTIC_HOSTS = frozenset(
+    [
+        # 东方财富
+        "eastmoney.com",
+        "emoney.cn",
+        "followfund.cn",
+        "18.push2.eastmoney.com",
+        "80.push2.eastmoney.com",
+        "push2.eastmoney.com",
+        "push3.eastmoney.com",
+        # 新浪财经
+        "sina.com.cn",
+        "sinajs.cn",
+        "hq.sinajs.cn",
+        "finance.sina.com.cn",
+        # 腾讯财经
+        "gtimg.cn",
+        "qt.gtimg.cn",
+        "web.ifzq.gtimg.cn",
+        # 网易财经
+        "126.com",
+        "money.126.com",
+        "quotes.money.163.com",
+        # 百度/Alibaba/京东财经
+        "baidu.com",
+        "alibaba.com",
+        "jd.com",
+        # 上海黄金交易所
+        "sge.com",
+        "sge.com.cn",
+        # 中国外汇交易中心
+        "chinamoney.com",
+        "chinamoney.com.cn",
+        # 财新
+        "caixin.com",
+        # 同花顺
+        "10jqka.com",
+        "data.10jqka.com",
+        # 雪球
+        "xueqiu.com",
+        # Wind
+        "wind.com",
+        "wind.com.cn",
+        # 北向数据
+        "hbstock.com",
+        # 其他国内金融节点
+        "legulegu.com",
+        "morningstar.com",
+        # AkShare 常用域名（备用）
+        "akshare.com",
+    ]
+)
 
 # ── 海外数据源（走代理）───────────────────────────────────────────────
-OVERSEAS_HOSTS = frozenset([
-    "alphavantage.co", "alphavantage.com",
-    "finnhub.com",
-    "twelvedata.com",
-    "polygon.io",
-    "yahoo.com", "yahooapis.com",
-    "fred.stlouisfed.org",
-    "api.nasdaq.com",
-    "stooq.com",
-])
+OVERSEAS_HOSTS = frozenset(
+    [
+        "alphavantage.co",
+        "alphavantage.com",
+        "finnhub.com",
+        "twelvedata.com",
+        "polygon.io",
+        "yahoo.com",
+        "yahooapis.com",
+        "fred.stlouisfed.org",
+        "api.nasdaq.com",
+        "stooq.com",
+    ]
+)
 
 
 def _is_domestic(url: str) -> bool:
     """判断 URL 是否为国内数据源（直连）"""
     try:
         from urllib.parse import urlparse
+
         host = urlparse(url).netloc.lower()
         # 去掉端口
         host = host.split(":")[0]
@@ -79,6 +104,7 @@ def _is_overseas(url: str) -> bool:
     """判断 URL 是否为海外数据源（走代理）"""
     try:
         from urllib.parse import urlparse
+
         host = urlparse(url).netloc.lower().split(":")[0]
         for overseas in OVERSEAS_HOSTS:
             if host == overseas or host.endswith("." + overseas):
@@ -150,7 +176,7 @@ def setup_environ() -> None:
     """
     proxy = get_proxy_url()
     if proxy:
-        os.environ.setdefault("HTTP_PROXY",  proxy)
+        os.environ.setdefault("HTTP_PROXY", proxy)
         os.environ.setdefault("HTTPS_PROXY", proxy)
-        os.environ.setdefault("http_proxy",  proxy)
+        os.environ.setdefault("http_proxy", proxy)
         os.environ.setdefault("https_proxy", proxy)

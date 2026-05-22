@@ -38,27 +38,26 @@ logger = logging.getLogger(__name__)
 
 KLINE_TTL_CONFIG = {
     # 分钟级K线（盘中变化快）
-    "1min": 60,      # 1分钟
-    "5min": 180,     # 3分钟
-    "15min": 300,    # 5分钟
-    "30min": 300,    # 5分钟
-    "60min": 600,    # 10分钟
-
+    "1min": 60,  # 1分钟
+    "5min": 180,  # 3分钟
+    "15min": 300,  # 5分钟
+    "30min": 300,  # 5分钟
+    "60min": 600,  # 10分钟
     # 日级及以上（变化慢）
-    "daily": 900,    # 15分钟（盘中）/ 3600（盘后）
+    "daily": 900,  # 15分钟（盘中）/ 3600（盘后）
     "weekly": 3600,  # 1小时
-    "monthly": 7200, # 2小时
+    "monthly": 7200,  # 2小时
 }
 
 
 def get_kline_ttl(period: str, is_trading_hours: bool = True) -> int:
     """
     获取K线数据的推荐TTL
-    
+
     Args:
         period: K线周期 (1min, 5min, daily, etc.)
         is_trading_hours: 是否在交易时段
-    
+
     Returns:
         TTL 秒数
     """
@@ -74,6 +73,7 @@ def get_kline_ttl(period: str, is_trading_hours: bool = True) -> int:
 @dataclass
 class CacheEntry:
     """缓存条目数据结构"""
+
     key: str
     value: Any
     created_at: float
@@ -89,7 +89,7 @@ class CacheEntry:
 class DataCache:
     """
     高性能数据缓存
-    
+
     特性:
     - TTL 过期自动清理
     - LRU 驱逐策略
@@ -101,7 +101,7 @@ class DataCache:
     def __init__(self, max_size_mb: int = 100, default_ttl: int = 300):
         """
         初始化缓存
-        
+
         Args:
             max_size_mb: 最大内存使用量 (MB)
             default_ttl: 默认过期时间 (秒)
@@ -117,7 +117,7 @@ class DataCache:
         self._key_locks: Dict[str, threading.Lock] = {}
         self._key_locks_lock = threading.Lock()  # protects _key_locks dict
 
-# In-flight requests tracking (for async get_or_set)
+        # In-flight requests tracking (for async get_or_set)
         self._inflight: Dict[str, Any] = {}  # key -> future/result placeholder
         self._inflight_lock = threading.Lock()
 
@@ -149,15 +149,17 @@ class DataCache:
         # Debug Cycle 1: 缓存初始化
         self._debug_cycle_1_init()
 
-        logger.info(f"[DataCache] 初始化完成: max_size={max_size_mb}MB, default_ttl={default_ttl}s")
+        logger.info(
+            f"[DataCache] 初始化完成: max_size={max_size_mb}MB, default_ttl={default_ttl}s"
+        )
 
     def get(self, key: str) -> Optional[Any]:
         """
         获取缓存值
-        
+
         Args:
             key: 缓存键
-            
+
         Returns:
             缓存值，不存在或过期返回 None
         """
@@ -168,21 +170,23 @@ class DataCache:
             # Debug Cycle 4: Cache get (miss)
             return self._get_internal(key)
 
-    def get_with_stale(self, key: str, fresh_ttl: int = 60, stale_ttl: int = 600) -> tuple:
+    def get_with_stale(
+        self, key: str, fresh_ttl: int = 60, stale_ttl: int = 600
+    ) -> tuple:
         """
         获取缓存值，支持 stale-while-revalidate 模式
-        
+
         Args:
             key: 缓存键
             fresh_ttl: 数据新鲜阈值（秒），小于此值为新鲜数据
             stale_ttl: 数据过期阈值（秒），小于此值为过期数据
-            
+
         Returns:
             tuple: (data, is_stale)
             - (data, False): 数据新鲜（age < fresh_ttl）
             - (data, True): 数据过期但可用（fresh_ttl <= age < stale_ttl）
             - (None, False): 数据不存在或完全过期（age >= stale_ttl）
-        
+
         Example:
             >>> data, is_stale = cache.get_with_stale("forex:spot", fresh_ttl=60, stale_ttl=600)
             >>> if data:
@@ -223,7 +227,9 @@ class DataCache:
             is_stale = age >= fresh_ttl
 
             if is_stale:
-                logger.debug(f"[DataCache] 返回过期数据: {key}, age={age:.0f}s, fresh_ttl={fresh_ttl}s")
+                logger.debug(
+                    f"[DataCache] 返回过期数据: {key}, age={age:.0f}s, fresh_ttl={fresh_ttl}s"
+                )
             else:
                 self._debug_cycle_3_get_hit(key, entry)
 
@@ -260,12 +266,12 @@ class DataCache:
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """
         设置缓存值
-        
+
         Args:
             key: 缓存键
             value: 缓存值
             ttl: 过过时间（秒），None 使用默认值
-            
+
         Returns:
             是否成功
         """
@@ -275,7 +281,9 @@ class DataCache:
 
             # 检查单个值是否超过限制
             if size_bytes > self.max_size_bytes * 0.5:
-                logger.warning(f"[DataCache] 值过大，拒绝缓存: {key} ({size_bytes} bytes)")
+                logger.warning(
+                    f"[DataCache] 值过大，拒绝缓存: {key} ({size_bytes} bytes)"
+                )
                 return False
 
             # 清理空间
@@ -317,10 +325,10 @@ class DataCache:
     def delete(self, key: str) -> bool:
         """
         删除缓存值
-        
+
         Args:
             key: 缓存键
-            
+
         Returns:
             是否成功删除
         """
@@ -332,10 +340,7 @@ class DataCache:
             return False
 
     def get_or_set(
-        self,
-        key: str,
-        fetch_fn: Callable[[], Any],
-        ttl: Optional[int] = None
+        self, key: str, fetch_fn: Callable[[], Any], ttl: Optional[int] = None
     ) -> Any:
         cached = self.get(key)
         if cached is not None:
@@ -392,7 +397,7 @@ class DataCache:
         self,
         key: str,
         fetch_fn: Callable[[], Awaitable[Any]],
-        ttl: Optional[int] = None
+        ttl: Optional[int] = None,
     ) -> Any:
         cached = self.get(key)
         if cached is not None:
@@ -451,7 +456,7 @@ class DataCache:
         self,
         key: str,
         fetch_fn: Callable[[], Awaitable[Any]],
-        ttl: Optional[int] = None
+        ttl: Optional[int] = None,
     ) -> Any:
         cached = self.get(key)
         if cached is not None:
@@ -514,7 +519,7 @@ class DataCache:
     def get_stats(self) -> Dict[str, Any]:
         """
         获取缓存统计信息
-        
+
         Returns:
             统计信息字典
         """
@@ -550,15 +555,14 @@ class DataCache:
     def cleanup_expired(self) -> int:
         """
         清理过期条目
-        
+
         Returns:
             清理的条目数量
         """
         with self._lock:
             now = time.time()
             expired_keys = [
-                key for key, entry in self._cache.items()
-                if entry.expires_at <= now
+                key for key, entry in self._cache.items() if entry.expires_at <= now
             ]
 
             for key in expired_keys:
@@ -586,7 +590,9 @@ class DataCache:
             # Debug Cycle 7: Memory management
             self._debug_cycle_7_memory_evict(oldest_key, oldest_entry)
 
-            logger.debug(f"[DataCache] LRU 驱逐: {oldest_key} ({oldest_entry.size_bytes} bytes)")
+            logger.debug(
+                f"[DataCache] LRU 驱逐: {oldest_key} ({oldest_entry.size_bytes} bytes)"
+            )
 
     def _estimate_size(self, value: Any) -> int:
         """估算对象大小（字节）"""
@@ -631,7 +637,9 @@ class DataCache:
         logger.debug(f"  - 命中次数: {entry.hit_count}")
         logger.debug(f"  - 存活时间: {time.time() - entry.created_at:.2f} 秒")
         logger.debug(f"  - 剩余 TTL: {entry.expires_at - time.time():.2f} 秒")
-        logger.debug(f"  - 总命中率: {self._stats['hits']}/{self._stats['total_requests']}")
+        logger.debug(
+            f"  - 总命中率: {self._stats['hits']}/{self._stats['total_requests']}"
+        )
         logger.debug(f"{'='*60}\n")
 
     def _debug_cycle_4_get_miss(self, key: str):
@@ -715,16 +723,21 @@ class DataCache:
         logger.info("[Debug Cycle 10] Performance Summary")
         logger.info(f"  - 总 Debug 周期: {self._debug_cycle}")
         logger.info(f"  - 命中率: {stats['hit_rate']}%")
-        logger.info(f"  - 内存效率: {stats['memory_usage_mb']}/{self.max_size_bytes/1024/1024:.2f} MB")
-        logger.info(f"  - 平均条目大小: {stats['memory_usage_bytes']/max(stats['entry_count'],1):.0f} bytes")
-        logger.info(f"  - 驱逐率: {stats['evictions']/max(stats['total_requests'],1)*100:.2f}%")
-        logger.info(f"  - 过期率: {stats['expired_removals']/max(stats['total_requests'],1)*100:.2f}%")
+        logger.info(
+            f"  - 内存效率: {stats['memory_usage_mb']}/{self.max_size_bytes/1024/1024:.2f} MB"
+        )
+        logger.info(
+            f"  - 平均条目大小: {stats['memory_usage_bytes']/max(stats['entry_count'],1):.0f} bytes"
+        )
+        logger.info(
+            f"  - 驱逐率: {stats['evictions']/max(stats['total_requests'],1)*100:.2f}%"
+        )
+        logger.info(
+            f"  - 过期率: {stats['expired_removals']/max(stats['total_requests'],1)*100:.2f}%"
+        )
         logger.info(f"{'='*60}\n")
 
-        return {
-            "debug_cycles": self._debug_cycle,
-            "performance": stats
-        }
+        return {"debug_cycles": self._debug_cycle, "performance": stats}
 
     # ═══════════════════════════════════════════════════════════════
     # SQLite 持久化支持（高可用缓存层）
@@ -733,16 +746,16 @@ class DataCache:
     def get_with_sqlite_fallback(self, key: str, source: str = "") -> Optional[Any]:
         """
         获取缓存值，支持 SQLite 降级
-        
+
         流程：
         1. 先查内存缓存（快速路径）
         2. 内存未命中时查 SQLite（降级路径）
         3. SQLite 命中时提升到内存
-        
+
         Args:
             key: 缓存键
             source: 数据源标识（如 'akshare', 'sina'）
-            
+
         Returns:
             缓存值或 None
         """
@@ -757,8 +770,8 @@ class DataCache:
         # 2. SQLite 降级路径（锁外执行，避免阻塞）
         sqlite_result = self._query_sqlite_cache(key)
         if sqlite_result is not None:
-            value = sqlite_result['value']
-            ttl_remaining = int(sqlite_result['expires_at'] - time.time())
+            value = sqlite_result["value"]
+            ttl_remaining = int(sqlite_result["expires_at"] - time.time())
 
             if ttl_remaining > 0:
                 # 3. 提升到内存缓存
@@ -766,15 +779,19 @@ class DataCache:
                     self.set(key, value, ttl=ttl_remaining)
                     self._stats["hits"] += 1  # 计为命中（从 SQLite）
 
-                logger.debug(f"[DataCache] SQLite fallback hit: {key}, ttl_remaining={ttl_remaining}s")
+                logger.debug(
+                    f"[DataCache] SQLite fallback hit: {key}, ttl_remaining={ttl_remaining}s"
+                )
                 return value
 
         return None
 
-    def set_with_sqlite_persist(self, key: str, value: Any, ttl: Optional[int] = None, source: str = ""):
+    def set_with_sqlite_persist(
+        self, key: str, value: Any, ttl: Optional[int] = None, source: str = ""
+    ):
         """
         设置缓存值，同时持久化到 SQLite
-        
+
         Args:
             key: 缓存键
             value: 缓存值
@@ -790,34 +807,41 @@ class DataCache:
         # 2. 异步写入 SQLite（通过 db_writer 队列）
         now = time.time()
         value_json = json.dumps(value) if not isinstance(value, str) else value
-        enqueue({
-            "type": T_CACHE_PERSIST,
-            "rows": [{
-                "key": key,
-                "value": value_json,
-                "created_at": now,
-                "expires_at": now + ttl,
-                "size_bytes": len(value_json),
-                "source": source
-            }]
-        })
+        enqueue(
+            {
+                "type": T_CACHE_PERSIST,
+                "rows": [
+                    {
+                        "key": key,
+                        "value": value_json,
+                        "created_at": now,
+                        "expires_at": now + ttl,
+                        "size_bytes": len(value_json),
+                        "source": source,
+                    }
+                ],
+            }
+        )
 
         logger.debug(f"[DataCache] Set + persist: {key}, ttl={ttl}s, source={source}")
 
     def _query_sqlite_cache(self, key: str) -> Optional[Dict]:
         """
         从 SQLite 查询缓存（内部方法）
-        
+
         Args:
             key: 缓存键
-            
+
         Returns:
             {'value': Any, 'expires_at': float} 或 None
         """
         import os
+
         db_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-            'database.db'
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            ),
+            "database.db",
         )
 
         try:
@@ -825,8 +849,7 @@ class DataCache:
             conn.row_factory = sqlite3.Row
 
             row = conn.execute(
-                "SELECT value, expires_at FROM cache_persistence WHERE key = ?",
-                (key,)
+                "SELECT value, expires_at FROM cache_persistence WHERE key = ?", (key,)
             ).fetchone()
 
             if row is None:
@@ -834,33 +857,38 @@ class DataCache:
                 return None
 
             # 检查是否过期
-            if time.time() > row['expires_at']:
+            if time.time() > row["expires_at"]:
                 conn.execute("DELETE FROM cache_persistence WHERE key = ?", (key,))
                 conn.commit()
                 conn.close()
                 return None
 
             # 解析 JSON
-            value = json.loads(row['value'])
+            value = json.loads(row["value"])
             conn.close()
 
-            return {'value': value, 'expires_at': row['expires_at']}
+            return {"value": value, "expires_at": row["expires_at"]}
 
         except Exception as e:
-            logger.warning(f"[DataCache] SQLite query failed: {key}, error={e}", exc_info=True)
+            logger.warning(
+                f"[DataCache] SQLite query failed: {key}, error={e}", exc_info=True
+            )
             return None
 
     def restore_from_sqlite(self, limit: int = 100):
         """
         启动时从 SQLite 恢复缓存（预热）
-        
+
         Args:
             limit: 最大恢复条目数
         """
         import os
+
         db_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-            'database.db'
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            ),
+            "database.db",
         )
 
         try:
@@ -871,18 +899,18 @@ class DataCache:
             rows = conn.execute(
                 "SELECT key, value, expires_at FROM cache_persistence "
                 "WHERE expires_at > ? ORDER BY expires_at DESC LIMIT ?",
-                (now, limit)
+                (now, limit),
             ).fetchall()
 
             restored = 0
             for row in rows:
                 try:
-                    value = json.loads(row['value'])
-                    ttl_remaining = int(row['expires_at'] - now)
+                    value = json.loads(row["value"])
+                    ttl_remaining = int(row["expires_at"] - now)
 
                     if ttl_remaining > 0:
                         with self._lock:
-                            self.set(row['key'], value, ttl=ttl_remaining)
+                            self.set(row["key"], value, ttl=ttl_remaining)
                         restored += 1
                 except (json.JSONDecodeError, ValueError, TypeError, KeyError):
                     continue
@@ -896,14 +924,17 @@ class DataCache:
     def cleanup_sqlite_expired(self) -> int:
         """
         清理 SQLite 中的过期缓存
-        
+
         Returns:
             清理的条目数
         """
         import os
+
         db_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-            'database.db'
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            ),
+            "database.db",
         )
 
         try:
@@ -911,8 +942,7 @@ class DataCache:
             now = time.time()
 
             result = conn.execute(
-                "DELETE FROM cache_persistence WHERE expires_at < ?",
-                (now,)
+                "DELETE FROM cache_persistence WHERE expires_at < ?", (now,)
             )
             deleted = result.rowcount
             conn.commit()
@@ -930,14 +960,14 @@ class DataCache:
     def warmup_cache(self, keys: list, fetch_fns: dict) -> int:
         """
         缓存预热：启动时预加载关键数据
-        
+
         Args:
             keys: 需要预热的缓存键列表
             fetch_fns: 键到获取函数的映射 {key: callable}
-        
+
         Returns:
             成功预热的条目数
-        
+
         Example:
             >>> cache.warmup_cache(
             ...     keys=['kline:sh600519:daily', 'macro:overview'],
@@ -970,10 +1000,14 @@ class DataCache:
                     warmed += 1
                     logger.info(f"[DataCache] Warmup success: {key}")
                 else:
-                    logger.debug(f"[DataCache] Warmup skipped: {key} (fetch returned None)")
+                    logger.debug(
+                        f"[DataCache] Warmup skipped: {key} (fetch returned None)"
+                    )
 
             except Exception as e:
-                logger.warning(f"[DataCache] Warmup failed for {key}: {e}", exc_info=True)
+                logger.warning(
+                    f"[DataCache] Warmup failed for {key}: {e}", exc_info=True
+                )
 
         logger.info(f"[DataCache] Warmup complete: {warmed}/{len(keys)} entries")
         return warmed
@@ -981,11 +1015,11 @@ class DataCache:
     async def warmup_cache_async(self, keys: list, fetch_fns: dict) -> int:
         """
         异步缓存预热：启动时预加载关键数据
-        
+
         Args:
             keys: 需要预热的缓存键列表
             fetch_fns: 键到异步获取函数的映射 {key: async_callable}
-        
+
         Returns:
             成功预热的条目数
         """
@@ -993,14 +1027,18 @@ class DataCache:
 
         for key in keys:
             if key not in fetch_fns:
-                logger.debug(f"[DataCache] Async warmup skipped: {key} (no fetch function)")
+                logger.debug(
+                    f"[DataCache] Async warmup skipped: {key} (no fetch function)"
+                )
                 continue
 
             # 检查是否已缓存
             with self._lock:
                 existing = self._get_internal(key)
                 if existing is not None:
-                    logger.debug(f"[DataCache] Async warmup skipped: {key} (already cached)")
+                    logger.debug(
+                        f"[DataCache] Async warmup skipped: {key} (already cached)"
+                    )
                     continue
 
             try:
@@ -1012,10 +1050,14 @@ class DataCache:
                     warmed += 1
                     logger.info(f"[DataCache] Async warmup success: {key}")
                 else:
-                    logger.debug(f"[DataCache] Async warmup skipped: {key} (fetch returned None)")
+                    logger.debug(
+                        f"[DataCache] Async warmup skipped: {key} (fetch returned None)"
+                    )
 
             except Exception as e:
-                logger.warning(f"[DataCache] Async warmup failed for {key}: {e}", exc_info=True)
+                logger.warning(
+                    f"[DataCache] Async warmup failed for {key}: {e}", exc_info=True
+                )
 
         logger.info(f"[DataCache] Async warmup complete: {warmed}/{len(keys)} entries")
         return warmed
@@ -1047,18 +1089,17 @@ from typing import Callable, Optional, Any, Dict
 # TTL Configuration by data type (from audit requirements)
 TTL_CONFIG = {
     # L1 (Memory) TTL - Fast tier for hot data
-    "quotes_l1": 10,        # Real-time quotes: 10s
-    "macro_l1": 300,        # Macro data: 5min
-    "kline_l1": 300,        # K-line data: 5min
-    "f9_l1": 300,           # F9 deep data: 5min
-    "static_l1": 3600,      # Static data: 1h
-
+    "quotes_l1": 10,  # Real-time quotes: 10s
+    "macro_l1": 300,  # Macro data: 5min
+    "kline_l1": 300,  # K-line data: 5min
+    "f9_l1": 300,  # F9 deep data: 5min
+    "static_l1": 3600,  # Static data: 1h
     # L2 (SQLite) TTL - Persistent tier for warm data
-    "quotes_l2": 3600,      # Quotes: 1h
-    "macro_l2": 86400,      # Macro: 24h
-    "kline_l2": 86400,      # K-line: 24h
-    "f9_l2": 86400,         # F9: 24h
-    "static_l2": 604800,    # Static: 7 days
+    "quotes_l2": 3600,  # Quotes: 1h
+    "macro_l2": 86400,  # Macro: 24h
+    "kline_l2": 86400,  # K-line: 24h
+    "f9_l2": 86400,  # F9: 24h
+    "static_l2": 604800,  # Static: 7 days
 }
 
 # Decorator-level metrics tracking
@@ -1100,14 +1141,14 @@ def smart_cache(
 ):
     """
     Unified multi-level caching decorator with circuit breaker integration.
-    
+
     Features:
     - L1 (Memory): OrderedDict-based LRU with TTL, thread-safe, request coalescing
     - L2 (SQLite): Persistent cache with WAL mode, auto-promotion on hit
     - Key generation: Template-based with namespace prefix for isolation
     - Circuit breaker: Returns stale data when circuit is OPEN
     - Metrics tracking: Per-namespace hit/miss/eviction statistics
-    
+
     Args:
         key_template: Cache key template with placeholders, e.g., "kline:{symbol}:{period}"
         level: Cache level (1=memory only, 2=memory+SQLite)
@@ -1117,13 +1158,13 @@ def smart_cache(
         source: Data source identifier for debugging
         circuit_breaker: Optional CircuitBreaker instance for stale-while-revalidate
         stale_ttl_multiplier: Multiplier for stale TTL (default 10x of fresh TTL)
-    
+
     Usage:
         # Basic usage
         @smart_cache("kline:{symbol}:{period}", level=2, ttl_type="kline_l1")
         def get_kline(symbol: str, period: str):
             return fetch_kline_data(symbol, period)
-        
+
         # With namespace and circuit breaker
         @smart_cache(
             key_template="spot:{symbol}",
@@ -1134,12 +1175,12 @@ def smart_cache(
         )
         async def get_forex_quote(symbol: str):
             return await fetch_forex_quote(symbol)
-        
+
         # L1 only (memory cache)
         @smart_cache("quote:{symbol}", level=1, ttl=10, namespace="realtime")
         async def get_quote(symbol: str):
             return await fetch_quote(symbol)
-    
+
     Flow:
         1. Check L1 cache (memory) - fast path
         2. If miss and level=2, check L2 cache (SQLite)
@@ -1147,6 +1188,7 @@ def smart_cache(
         4. Store result in L1 (and L2 if level=2)
         5. If circuit breaker is OPEN, return stale data if available
     """
+
     def decorator(func: Callable) -> Callable:
         # Determine TTL
         actual_ttl = ttl
@@ -1163,7 +1205,9 @@ def smart_cache(
             cache = get_cache()
 
             # Build cache key from template
-            cache_key = _build_cache_key(key_template, func, args, kwargs, actual_namespace)
+            cache_key = _build_cache_key(
+                key_template, func, args, kwargs, actual_namespace
+            )
 
             # Check circuit breaker state
             cb_is_open = False
@@ -1193,11 +1237,15 @@ def smart_cache(
 
             # If circuit breaker is open, try to return stale data
             if cb_is_open:
-                stale_result = _get_stale_data(cache, cache_key, actual_ttl * stale_ttl_multiplier)
+                stale_result = _get_stale_data(
+                    cache, cache_key, actual_ttl * stale_ttl_multiplier
+                )
                 if stale_result is not None:
                     _record_metric(actual_namespace, "stale_returns")
                     _record_metric(actual_namespace, "circuit_breaker_fallbacks")
-                    logger.warning(f"[smart_cache] Circuit breaker OPEN, returning stale: {cache_key}")
+                    logger.warning(
+                        f"[smart_cache] Circuit breaker OPEN, returning stale: {cache_key}"
+                    )
                     return stale_result
 
             # Cache miss - call function
@@ -1210,7 +1258,9 @@ def smart_cache(
                 cache.set(cache_key, result, ttl=actual_ttl)
 
                 if level >= 2:
-                    cache.set_with_sqlite_persist(cache_key, result, ttl=actual_ttl, source=source)
+                    cache.set_with_sqlite_persist(
+                        cache_key, result, ttl=actual_ttl, source=source
+                    )
 
             return result
 
@@ -1219,7 +1269,9 @@ def smart_cache(
             cache = get_cache()
 
             # Build cache key from template
-            cache_key = _build_cache_key(key_template, func, args, kwargs, actual_namespace)
+            cache_key = _build_cache_key(
+                key_template, func, args, kwargs, actual_namespace
+            )
 
             # Check circuit breaker state
             cb_is_open = False
@@ -1249,14 +1301,19 @@ def smart_cache(
 
             # If circuit breaker is open, try to return stale data
             if cb_is_open:
-                stale_result = _get_stale_data(cache, cache_key, actual_ttl * stale_ttl_multiplier)
+                stale_result = _get_stale_data(
+                    cache, cache_key, actual_ttl * stale_ttl_multiplier
+                )
                 if stale_result is not None:
                     _record_metric(actual_namespace, "stale_returns")
                     _record_metric(actual_namespace, "circuit_breaker_fallbacks")
-                    logger.warning(f"[smart_cache] Circuit breaker OPEN, returning stale: {cache_key}")
+                    logger.warning(
+                        f"[smart_cache] Circuit breaker OPEN, returning stale: {cache_key}"
+                    )
                     return stale_result
                 # CB is open and no stale data - raise error
                 from app.services.circuit_breaker import CircuitBreakerOpen
+
                 cb_name = circuit_breaker.name if circuit_breaker else "unknown"
                 cb_timeout = circuit_breaker.config.timeout if circuit_breaker else 30
                 raise CircuitBreakerOpen(cb_name, cb_timeout)
@@ -1272,7 +1329,9 @@ def smart_cache(
 
             # Store in L2 if level=2
             if result is not None and level >= 2:
-                cache.set_with_sqlite_persist(cache_key, result, ttl=actual_ttl, source=source)
+                cache.set_with_sqlite_persist(
+                    cache_key, result, ttl=actual_ttl, source=source
+                )
 
             return result
 
@@ -1286,25 +1345,21 @@ def smart_cache(
 
 
 def _build_cache_key(
-    template: str,
-    func: Callable,
-    args: tuple,
-    kwargs: dict,
-    namespace: str = ""
+    template: str, func: Callable, args: tuple, kwargs: dict, namespace: str = ""
 ) -> str:
     """
     Build cache key from template and function arguments.
-    
+
     Template format: "prefix:{arg1}:{arg2}"
     Named placeholders are replaced with argument values.
-    
+
     Args:
         template: Key template with placeholders
         func: The decorated function
         args: Positional arguments
         kwargs: Keyword arguments
         namespace: Optional namespace prefix
-    
+
     Returns:
         Fully resolved cache key
     """
@@ -1338,19 +1393,21 @@ def _build_cache_key(
 def _get_stale_data(cache: DataCache, key: str, stale_ttl: float) -> Optional[Any]:
     """
     Get stale data from cache when circuit breaker is open.
-    
+
     Uses get_with_stale() to allow returning expired but usable data.
-    
+
     Args:
         cache: DataCache instance
         key: Cache key
         stale_ttl: Maximum age for stale data (seconds)
-    
+
     Returns:
         Stale data or None
     """
     try:
-        data, is_stale = cache.get_with_stale(key, fresh_ttl=0, stale_ttl=int(stale_ttl))
+        data, is_stale = cache.get_with_stale(
+            key, fresh_ttl=0, stale_ttl=int(stale_ttl)
+        )
         return data
     except Exception as e:
         logger.debug(f"[smart_cache] Failed to get stale data for {key}: {e}")
@@ -1365,7 +1422,7 @@ def cache_quotes(func: Callable) -> Callable:
         level=2,
         ttl_type="quotes_l1",
         namespace="quotes",
-        source="quotes"
+        source="quotes",
     )(func)
 
 
@@ -1376,7 +1433,7 @@ def cache_macro(func: Callable) -> Callable:
         level=2,
         ttl_type="macro_l1",
         namespace="macro",
-        source="macro"
+        source="macro",
     )(func)
 
 
@@ -1387,7 +1444,7 @@ def cache_kline(func: Callable) -> Callable:
         level=2,
         ttl_type="kline_l1",
         namespace="kline",
-        source="kline"
+        source="kline",
     )(func)
 
 
@@ -1398,7 +1455,7 @@ def cache_f9(func: Callable) -> Callable:
         level=2,
         ttl_type="f9_l1",
         namespace="f9",
-        source="f9"
+        source="f9",
     )(func)
 
 
@@ -1409,36 +1466,34 @@ def cache_static(func: Callable) -> Callable:
         level=2,
         ttl_type="static_l1",
         namespace="static",
-        source="static"
+        source="static",
     )(func)
 
 
 # Factory function for creating circuit-breaker-aware decorators
 def create_cached_fetcher(
-    namespace: str,
-    ttl_type: str,
-    circuit_breaker: Optional[Any] = None,
-    level: int = 2
+    namespace: str, ttl_type: str, circuit_breaker: Optional[Any] = None, level: int = 2
 ):
     """
     Factory function to create a cached fetcher with circuit breaker.
-    
+
     Usage:
         forex_cb = CircuitBreaker("forex", failure_threshold=5, timeout=60)
-        
+
         @create_cached_fetcher("forex", "quotes_l1", forex_cb)
         async def fetch_forex_quote(symbol: str):
             return await fetch_from_api(symbol)
-    
+
     Args:
         namespace: Cache namespace
         ttl_type: TTL type from TTL_CONFIG
         circuit_breaker: Optional CircuitBreaker instance
         level: Cache level (1 or 2)
-    
+
     Returns:
         Decorator function
     """
+
     def decorator(func: Callable) -> Callable:
         # Infer key template from function signature
         sig = inspect.signature(func)
@@ -1455,7 +1510,7 @@ def create_cached_fetcher(
             level=level,
             ttl_type=ttl_type,
             namespace=namespace,
-            circuit_breaker=circuit_breaker
+            circuit_breaker=circuit_breaker,
         )(func)
 
     return decorator

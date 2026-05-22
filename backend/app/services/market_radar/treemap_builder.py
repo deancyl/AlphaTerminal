@@ -17,8 +17,15 @@ from typing import Dict, List, Any
 from datetime import datetime
 from http.client import RemoteDisconnected
 
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState
-from app.services.market_radar.sina_fallback import fetch_all_stocks_sina, fetch_sectors_sina
+from app.services.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitState,
+)
+from app.services.market_radar.sina_fallback import (
+    fetch_all_stocks_sina,
+    fetch_sectors_sina,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +33,7 @@ _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="treemap_")
 
 # Module-level CircuitBreaker for Eastmoney API
 _EASTMONEY_CB = CircuitBreaker(
-    "eastmoney_treemap",
-    CircuitBreakerConfig(failure_threshold=5, timeout=60.0)
+    "eastmoney_treemap", CircuitBreakerConfig(failure_threshold=5, timeout=60.0)
 )
 
 DATA_SOURCE_AKSHARE = "akshare"
@@ -36,29 +42,39 @@ DATA_SOURCE_CACHE = "cache"
 DATA_SOURCE_FALLBACK = "fallback"
 
 
-
 def _fetch_sectors_sync() -> List[Dict]:
     """Fetch all sector names from akshare."""
     if _EASTMONEY_CB.state == CircuitState.OPEN:
         logger.info("[Treemap] CB OPEN, using static sector fallback")
         from app.services.market_radar.sina_fallback import fetch_sectors_sina_sync
+
         return fetch_sectors_sina_sync()
 
     try:
         import akshare as ak
+
         df = ak.stock_board_industry_name_em()
         sectors = []
         for _, row in df.iterrows():
-            sectors.append({
-                "name": row["板块名称"],
-                "code": row["板块代码"],
-            })
+            sectors.append(
+                {
+                    "name": row["板块名称"],
+                    "code": row["板块代码"],
+                }
+            )
         _EASTMONEY_CB.record_success()
         return sectors
-    except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected) as e:
+    except (
+        httpx.HTTPError,
+        asyncio.TimeoutError,
+        RequestsConnectionError,
+        ProxyError,
+        RemoteDisconnected,
+    ) as e:
         logger.error(f"[HTTP] sectors: {type(e).__name__}: {e}", exc_info=True)
         _EASTMONEY_CB.record_failure()
         from app.services.market_radar.sina_fallback import fetch_sectors_sina_sync
+
         return fetch_sectors_sina_sync()
 
 
@@ -66,21 +82,32 @@ def _fetch_sector_stocks_sync(sector_name: str) -> tuple:
     """Fetch stocks in a specific sector. Returns (sector_name, stocks_list) for parallel processing."""
     try:
         import akshare as ak
+
         df = ak.stock_board_industry_cons_em(symbol=sector_name)
         stocks = []
         for _, row in df.iterrows():
-            stocks.append({
-                "symbol": row.get("代码", ""),
-                "name": row.get("名称", ""),
-                "price": float(row.get("最新价", 0) or 0),
-                "change_pct": float(row.get("涨跌幅", 0) or 0),
-                "volume": float(row.get("成交量", 0) or 0),
-                "amount": float(row.get("成交额", 0) or 0),
-                "market_cap": float(row.get("总市值", 0) or 0),
-            })
+            stocks.append(
+                {
+                    "symbol": row.get("代码", ""),
+                    "name": row.get("名称", ""),
+                    "price": float(row.get("最新价", 0) or 0),
+                    "change_pct": float(row.get("涨跌幅", 0) or 0),
+                    "volume": float(row.get("成交量", 0) or 0),
+                    "amount": float(row.get("成交额", 0) or 0),
+                    "market_cap": float(row.get("总市值", 0) or 0),
+                }
+            )
         return (sector_name, stocks)
-    except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected) as e:
-        logger.warning(f"[HTTP] stocks for {sector_name}: {type(e).__name__}: {e}", exc_info=True)
+    except (
+        httpx.HTTPError,
+        asyncio.TimeoutError,
+        RequestsConnectionError,
+        ProxyError,
+        RemoteDisconnected,
+    ) as e:
+        logger.warning(
+            f"[HTTP] stocks for {sector_name}: {type(e).__name__}: {e}", exc_info=True
+        )
         return (sector_name, [])
 
 
@@ -89,34 +116,45 @@ def _fetch_all_stocks_sync() -> List[Dict]:
     if _EASTMONEY_CB.state == CircuitState.OPEN:
         logger.info("[Treemap] CB OPEN, using Sina fallback")
         from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
+
         return fetch_all_stocks_sina_sync()
 
     try:
         import akshare as ak
+
         df = ak.stock_zh_a_spot_em()
         stocks = []
         for _, row in df.iterrows():
             try:
-                stocks.append({
-                    "symbol": row.get("代码", ""),
-                    "name": row.get("名称", ""),
-                    "price": float(row.get("最新价", 0) or 0),
-                    "change_pct": float(row.get("涨跌幅", 0) or 0),
-                    "volume": float(row.get("成交量", 0) or 0),
-                    "amount": float(row.get("成交额", 0) or 0),
-                    "market_cap": float(row.get("总市值", 0) or 0),
-                    "high": float(row.get("最高", 0) or 0),
-                    "low": float(row.get("最低", 0) or 0),
-                    "pre_close": float(row.get("昨收", 0) or 0),
-                })
+                stocks.append(
+                    {
+                        "symbol": row.get("代码", ""),
+                        "name": row.get("名称", ""),
+                        "price": float(row.get("最新价", 0) or 0),
+                        "change_pct": float(row.get("涨跌幅", 0) or 0),
+                        "volume": float(row.get("成交量", 0) or 0),
+                        "amount": float(row.get("成交额", 0) or 0),
+                        "market_cap": float(row.get("总市值", 0) or 0),
+                        "high": float(row.get("最高", 0) or 0),
+                        "low": float(row.get("最低", 0) or 0),
+                        "pre_close": float(row.get("昨收", 0) or 0),
+                    }
+                )
             except (ValueError, TypeError):
                 continue
         _EASTMONEY_CB.record_success()
         return stocks
-    except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected) as e:
+    except (
+        httpx.HTTPError,
+        asyncio.TimeoutError,
+        RequestsConnectionError,
+        ProxyError,
+        RemoteDisconnected,
+    ) as e:
         logger.error(f"[HTTP] all stocks: {type(e).__name__}: {e}", exc_info=True)
         _EASTMONEY_CB.record_failure()
         from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
+
         return fetch_all_stocks_sina_sync()
 
 
@@ -129,13 +167,13 @@ async def _fetch_sectors() -> List[Dict]:
 async def _fetch_sector_stocks_batch(sector_names: List[str]) -> Dict[str, List[Dict]]:
     """
     Batch fetch stocks for multiple sectors using asyncio.gather().
-    
+
     OPTIMIZATION: Instead of N sequential API calls, use parallel fetching.
     This reduces total time from N * T to max(T) where T is single API call time.
-    
+
     Args:
         sector_names: List of sector names to fetch
-        
+
     Returns:
         Dictionary mapping sector_name to list of stocks
     """
@@ -173,11 +211,11 @@ async def _fetch_all_stocks() -> List[Dict]:
 async def get_sector_stocks(sector_name: str, timeout: float = 15.0) -> List[Dict]:
     """
     Get stocks in a specific sector.
-    
+
     Args:
         sector_name: Sector name (e.g., "白酒")
         timeout: Request timeout in seconds
-        
+
     Returns:
         List of stock dictionaries
     """
@@ -185,21 +223,22 @@ async def get_sector_stocks(sector_name: str, timeout: float = 15.0) -> List[Dic
         result = await _fetch_sector_stocks_batch([sector_name])
         return result.get(sector_name, [])
     except asyncio.TimeoutError:
-        logger.warning(f"[Treemap] Timeout fetching stocks for {sector_name}", exc_info=True)
+        logger.warning(
+            f"[Treemap] Timeout fetching stocks for {sector_name}", exc_info=True
+        )
         return []
 
 
 async def build_treemap_data(
-    level: str = "sector",
-    timeout: float = 15.0
+    level: str = "sector", timeout: float = 15.0
 ) -> Dict[str, Any]:
     """
     Build treemap data for ECharts visualization.
-    
+
     Args:
         level: "sector" for sector aggregation, "stock" for individual stocks
         timeout: Request timeout in seconds
-        
+
     Returns:
         Dictionary with treemap data and metadata including data_source info
     """
@@ -214,26 +253,23 @@ async def build_treemap_data(
             "data": [],
             "last_update": datetime.now().isoformat(),
             "data_source": DATA_SOURCE_FALLBACK,
-            "error": "timeout"
+            "error": "timeout",
         }
 
 
 async def _build_sector_treemap() -> Dict[str, Any]:
     """
     Build treemap with sector aggregation.
-    
+
     OPTIMIZED: Uses asyncio.gather() for parallel sector stock fetching.
     """
-    sectors, all_stocks = await asyncio.gather(
-        _fetch_sectors(),
-        _fetch_all_stocks()
-    )
+    sectors, all_stocks = await asyncio.gather(_fetch_sectors(), _fetch_all_stocks())
 
     data_source = DATA_SOURCE_AKSHARE
     source_detail = {
         "name": "东方财富",
         "type": "实时",
-        "api": "akshare.stock_board_industry_name_em"
+        "api": "akshare.stock_board_industry_name_em",
     }
 
     if not all_stocks:
@@ -243,7 +279,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
         source_detail = {
             "name": "新浪财经",
             "type": "实时",
-            "api": "sina.Market_Center.getHQNodeData"
+            "api": "sina.Market_Center.getHQNodeData",
         }
 
     if not sectors:
@@ -254,7 +290,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
             source_detail = {
                 "name": "新浪财经 + 预定义板块",
                 "type": "实时",
-                "api": "sina.Market_Center.getHQNodeData + static_sectors"
+                "api": "sina.Market_Center.getHQNodeData + static_sectors",
             }
 
     if not all_stocks:
@@ -262,7 +298,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
         return {
             "data": [],
             "last_update": datetime.now().isoformat(),
-            "data_source": DATA_SOURCE_FALLBACK
+            "data_source": DATA_SOURCE_FALLBACK,
         }
 
     stock_by_symbol = {s["symbol"]: s for s in all_stocks}
@@ -277,12 +313,14 @@ async def _build_sector_treemap() -> Dict[str, Any]:
 
     # If sector stocks fetch failed completely, use top stocks by market cap as fallback
     if total_sector_stocks == 0 and all_stocks:
-        logger.warning("[Treemap] All sector stocks fetch failed, using top stocks by market cap")
+        logger.warning(
+            "[Treemap] All sector stocks fetch failed, using top stocks by market cap"
+        )
         # Sort all stocks by market cap and take top 100
         sorted_stocks = sorted(
             [s for s in all_stocks if s.get("market_cap", 0) > 0],
             key=lambda x: x.get("market_cap", 0),
-            reverse=True
+            reverse=True,
         )[:100]
 
         # Create a single "热门股票" sector
@@ -292,7 +330,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
         source_detail = {
             "name": "热门股票 (市值排名)",
             "type": "实时",
-            "api": "top_stocks_by_market_cap"
+            "api": "top_stocks_by_market_cap",
         }
 
     treemap_data = []
@@ -320,24 +358,28 @@ async def _build_sector_treemap() -> Dict[str, Any]:
             change_pct = market_stock.get("change_pct", 0) or stock.get("change_pct", 0)
 
             if market_cap > 0:
-                children.append({
-                    "name": stock.get("name", symbol),
-                    "value": round(market_cap / 1e8, 2),
-                    "change_pct": round(change_pct, 2),
-                    "symbol": full_symbol,
-                })
+                children.append(
+                    {
+                        "name": stock.get("name", symbol),
+                        "value": round(market_cap / 1e8, 2),
+                        "change_pct": round(change_pct, 2),
+                        "symbol": full_symbol,
+                    }
+                )
                 sector_market_cap += market_cap
                 sector_change_sum += change_pct
                 valid_stocks += 1
 
         if valid_stocks > 0 and sector_market_cap > 0:
             avg_change = sector_change_sum / valid_stocks
-            treemap_data.append({
-                "name": sector_name,
-                "value": round(sector_market_cap / 1e8, 2),
-                "change_pct": round(avg_change, 2),
-                "children": children,
-            })
+            treemap_data.append(
+                {
+                    "name": sector_name,
+                    "value": round(sector_market_cap / 1e8, 2),
+                    "change_pct": round(avg_change, 2),
+                    "children": children,
+                }
+            )
 
     treemap_data.sort(key=lambda x: x["value"], reverse=True)
 
@@ -345,7 +387,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
         "data": treemap_data,
         "last_update": datetime.now().isoformat(),
         "data_source": data_source,
-        "source_detail": source_detail
+        "source_detail": source_detail,
     }
 
 
@@ -356,7 +398,7 @@ async def _build_stock_treemap() -> Dict[str, Any]:
     source_detail = {
         "name": "东方财富",
         "type": "实时",
-        "api": "akshare.stock_zh_a_spot_em"
+        "api": "akshare.stock_zh_a_spot_em",
     }
 
     if not all_stocks:
@@ -366,7 +408,7 @@ async def _build_stock_treemap() -> Dict[str, Any]:
         source_detail = {
             "name": "新浪财经",
             "type": "实时",
-            "api": "sina.Market_Center.getHQNodeData"
+            "api": "sina.Market_Center.getHQNodeData",
         }
 
     if not all_stocks:
@@ -374,7 +416,7 @@ async def _build_stock_treemap() -> Dict[str, Any]:
         return {
             "data": [],
             "last_update": datetime.now().isoformat(),
-            "data_source": DATA_SOURCE_FALLBACK
+            "data_source": DATA_SOURCE_FALLBACK,
         }
 
     treemap_data = []
@@ -393,12 +435,14 @@ async def _build_stock_treemap() -> Dict[str, Any]:
         else:
             full_symbol = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
 
-        treemap_data.append({
-            "name": stock.get("name", symbol),
-            "value": round(market_cap / 1e8, 2),
-            "change_pct": round(stock.get("change_pct", 0) or 0, 2),
-            "symbol": full_symbol,
-        })
+        treemap_data.append(
+            {
+                "name": stock.get("name", symbol),
+                "value": round(market_cap / 1e8, 2),
+                "change_pct": round(stock.get("change_pct", 0) or 0, 2),
+                "symbol": full_symbol,
+            }
+        )
 
     treemap_data.sort(key=lambda x: x["value"], reverse=True)
 
@@ -406,7 +450,7 @@ async def _build_stock_treemap() -> Dict[str, Any]:
         "data": treemap_data,
         "last_update": datetime.now().isoformat(),
         "data_source": data_source,
-        "source_detail": source_detail
+        "source_detail": source_detail,
     }
 
 

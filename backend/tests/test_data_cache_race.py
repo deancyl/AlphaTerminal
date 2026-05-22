@@ -139,6 +139,7 @@ class TestGetOrSetRaceCondition:
         fetch_count = 0
 
         results = []
+
         def worker():
             results.append(cache.get_or_set("cached_key", fetch))
 
@@ -190,6 +191,7 @@ class TestGetOrSetRaceCondition:
             return f"result_{current}"
 
         results = []
+
         def worker():
             result = cache.get_or_set("avalanche_key", fetch)
             results.append(result)

@@ -1,6 +1,7 @@
 """
 Quote-related endpoints extracted from market.py
 """
+
 import logging
 import re
 import time
@@ -18,16 +19,16 @@ from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
 from app.routers.market.dependencies import _normalize_symbol, _unprefix
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Cache TTL constants
-CACHE_TTL_QUOTE = 5          # 5 seconds for real-time quote
+CACHE_TTL_QUOTE = 5  # 5 seconds for real-time quote
 CACHE_TTL_QUOTE_DETAIL = 30  # 30 seconds for detailed quote
 
 # Cache helper
 _cache = None
+
 
 def _get_cache():
     global _cache
@@ -38,13 +39,13 @@ def _get_cache():
 
 # ── Symbol Validation ─────────────────────────────────────────────────────────
 
-SYMBOL_PATTERN = re.compile(r'^(sh|sz|hk|us|jp)?[0-9A-Za-z]{1,10}$')
+SYMBOL_PATTERN = re.compile(r"^(sh|sz|hk|us|jp)?[0-9A-Za-z]{1,10}$")
 
 
 def _validate_symbol(symbol: str) -> str:
     """
     Validate and normalize symbol format.
-    
+
     Valid formats:
     - 6-digit codes: '000001', '600519'
     - With prefix: 'sh000001', 'sz399001'
@@ -57,18 +58,21 @@ def _validate_symbol(symbol: str) -> str:
     s = symbol.strip()
 
     if len(s) > 20:
-        raise HTTPException(status_code=400, detail=f"Symbol too long: {len(s)} chars (max 20)")
+        raise HTTPException(
+            status_code=400, detail=f"Symbol too long: {len(s)} chars (max 20)"
+        )
 
     if not SYMBOL_PATTERN.match(s):
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid symbol format: '{symbol}'. Expected format: [sh|sz|hk|us|jp][0-9A-Z]{{1,10}}"
+            detail=f"Invalid symbol format: '{symbol}'. Expected format: [sh|sz|hk|us|jp][0-9A-Z]{{1,10}}",
         )
 
     return _normalize_symbol(s)
 
 
 # ── Helper functions (copied from market.py) ─────────────────────────────────
+
 
 def _safe_divide(numerator: float, denominator: float, default: float = 0.0) -> float:
     """Safe division with zero-division protection."""
@@ -83,8 +87,8 @@ def _calc_amplitude(latest: dict, prev_close: float) -> float:
     """Calculate amplitude with zero-division protection."""
     if not prev_close or prev_close == 0:
         return 0.0
-    high = float(latest.get('high') or 0)
-    low = float(latest.get('low') or 0)
+    high = float(latest.get("high") or 0)
+    low = float(latest.get("low") or 0)
     if high == 0 or low == 0:
         return 0.0
     return round((high - low) / prev_close * 100, 2)
@@ -96,7 +100,7 @@ def _calculate_freshness_seconds(timestamp_str: str) -> int:
         return -1  # Unknown
 
     try:
-        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y-%m-%dT%H:%M:%S']:
+        for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]:
             try:
                 dt = datetime.strptime(str(timestamp_str)[:19], fmt)
                 return int((datetime.now() - dt).total_seconds())
@@ -114,21 +118,26 @@ async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
     Sorted DESC (newest first).
     """
     if not akshare_breaker.is_available():
-        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fallback for {symbol}")
+        logger.warning(
+            f"[AkShare] Circuit breaker OPEN, skipping fallback for {symbol}"
+        )
         return []
 
     # Map symbol to AkShare format
     ak_symbol_map = {
-        "000001": "sh000001", "000300": "sh000300", "399001": "sz399001",
-        "399006": "sz399006", "000688": "sh000688",
+        "000001": "sh000001",
+        "000300": "sh000300",
+        "399001": "sz399001",
+        "399006": "sz399006",
+        "000688": "sh000688",
         "600519": "sh600519",  # 个股示例
     }
     ak_sym = ak_symbol_map.get(symbol)
     if not ak_sym:
         # Try to construct AkShare symbol from prefix
-        if symbol.startswith('6'):
+        if symbol.startswith("6"):
             ak_sym = f"sh{symbol}"
-        elif symbol.startswith(('0', '3')):
+        elif symbol.startswith(("0", "3")):
             ak_sym = f"sz{symbol}"
         else:
             logger.warning(f"[AkShare] No mapping for symbol: {symbol}")
@@ -136,8 +145,13 @@ async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
 
     try:
         import akshare as ak
+
         with akshare_breaker:
-            df = ak.stock_zh_index_daily(symbol=ak_sym) if symbol in ak_symbol_map else ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+            df = (
+                ak.stock_zh_index_daily(symbol=ak_sym)
+                if symbol in ak_symbol_map
+                else ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+            )
 
         if df is None or df.empty:
             return []
@@ -147,14 +161,18 @@ async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
         rows = []
         for i in range(len(df) - 1, max(-1, len(df) - limit - 1), -1):  # DESC order
             try:
-                rows.append({
-                    'date': str(df.iloc[i][date_col])[:10],
-                    'open': float(df.iloc[i]['open']),
-                    'high': float(df.iloc[i]['high']),
-                    'low': float(df.iloc[i]['low']),
-                    'close': float(df.iloc[i]['close']),
-                    'volume': int(df.iloc[i]['volume']) if 'volume' in df.columns else 0,
-                })
+                rows.append(
+                    {
+                        "date": str(df.iloc[i][date_col])[:10],
+                        "open": float(df.iloc[i]["open"]),
+                        "high": float(df.iloc[i]["high"]),
+                        "low": float(df.iloc[i]["low"]),
+                        "close": float(df.iloc[i]["close"]),
+                        "volume": (
+                            int(df.iloc[i]["volume"]) if "volume" in df.columns else 0
+                        ),
+                    }
+                )
             except (ValueError, TypeError, KeyError, IndexError):
                 continue
         logger.info(f"[AkShare] Fetched {len(rows)} historical bars for {symbol}")
@@ -167,6 +185,7 @@ async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
 # ═════════════════════════════════════════════════════════════════════════════
 # Endpoint 1: Basic Quote (lines 758-785)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/market/quote/{symbol}")
 @handle_errors(module="market_quotes")
@@ -186,27 +205,29 @@ async def market_quote(symbol: str):
 
     rows = get_price_history(_unprefix(norm), limit=2)
     if not rows:
-        return success_response(None, 'no data')
+        return success_response(None, "no data")
     latest = rows[0]
-    prev   = rows[1] if len(rows) > 1 else latest
-    close  = float(latest.get('close') or 0)
-    prev_c = float(prev.get('close') or close)
-    chg    = close - prev_c
+    prev = rows[1] if len(rows) > 1 else latest
+    close = float(latest.get("close") or 0)
+    prev_c = float(prev.get("close") or close)
+    chg = close - prev_c
     chg_pct = _safe_divide(chg, prev_c) * 100 if prev_c else 0.0
 
-    data_timestamp = latest.get('timestamp') or latest.get('updated_at') or latest.get('date')
+    data_timestamp = (
+        latest.get("timestamp") or latest.get("updated_at") or latest.get("date")
+    )
 
     result = {
-        'symbol': norm,
-        'price': close,
-        'change': round(chg, 3),
-        'change_pct': round(chg_pct, 2),
-        'volume': float(latest.get('volume') or 0),
-        'amount': float(latest.get('amount') or 0),
-        'amplitude': _calc_amplitude(latest, prev_c),
-        'turnover_rate': float(latest.get('turnover_rate') or 0),
-        'timestamp': data_timestamp,
-        'response_time': datetime.now().isoformat(),
+        "symbol": norm,
+        "price": close,
+        "change": round(chg, 3),
+        "change_pct": round(chg_pct, 2),
+        "volume": float(latest.get("volume") or 0),
+        "amount": float(latest.get("amount") or 0),
+        "amplitude": _calc_amplitude(latest, prev_c),
+        "turnover_rate": float(latest.get("turnover_rate") or 0),
+        "timestamp": data_timestamp,
+        "response_time": datetime.now().isoformat(),
     }
 
     cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE)
@@ -217,6 +238,7 @@ async def market_quote(symbol: str):
 # ═════════════════════════════════════════════════════════════════════════════
 # Endpoint 2: Detailed Quote (lines 1341-1521)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/market/quote_detail/{symbol}")
 @handle_errors(module="market_quotes")
@@ -260,66 +282,93 @@ async def market_quote_detail(symbol: str):
         return success_response(cached)
 
     # ── 基础实时行情（market_data_realtime 存无前缀 symbol，用 _unprefix 查）──
-    db_sym = _unprefix(norm)   # 'sh000001' → '000001'
+    db_sym = _unprefix(norm)  # 'sh000001' → '000001'
     rows_latest = get_latest_prices([db_sym]) if callable(get_latest_prices) else []
     w = rows_latest[0] if rows_latest else {}
 
     # 修复：market_data_realtime 表的 price 字段即为当前价（不是 'index'）
-    price      = float(w.get('price') or 0.0)
-    change_pct = float(w.get('change_pct') or 0.0)
+    price = float(w.get("price") or 0.0)
+    change_pct = float(w.get("change_pct") or 0.0)
     change_val = round(price * change_pct / 100, 3) if price and change_pct else 0.0
-    volume     = float(w.get('volume') or 0.0) or None
-    status     = w.get('status') or ''
-    market     = w.get('market') or 'AShare'
+    volume = float(w.get("volume") or 0.0) or None
+    status = w.get("status") or ""
+    market = w.get("market") or "AShare"
 
     # ── 历史 K 线（单次查询，复用于 OHLC/振幅/收益率/52周高低）──────────────────
     _HIST_LIMIT = 400
-    hist_all = get_daily_history(db_sym, limit=_HIST_LIMIT, offset=0) if callable(get_daily_history) else []
+    hist_all = (
+        get_daily_history(db_sym, limit=_HIST_LIMIT, offset=0)
+        if callable(get_daily_history)
+        else []
+    )
 
     if not hist_all:
         hist_all = await _fetch_history_fallback(db_sym, limit=_HIST_LIMIT)
 
     # 实时快照：从 hist_all 前2条获取（最新 + 前一日）
     latest_row = hist_all[0] if hist_all else {}
-    prev_row   = hist_all[1] if len(hist_all) > 1 else latest_row
+    prev_row = hist_all[1] if len(hist_all) > 1 else latest_row
 
-    open_  = float(latest_row.get('open')  or price)
-    high_  = float(latest_row.get('high')  or price)
-    low_   = float(latest_row.get('low')   or price)
-    close_ = float(latest_row.get('close') or price)
+    open_ = float(latest_row.get("open") or price)
+    high_ = float(latest_row.get("high") or price)
+    low_ = float(latest_row.get("low") or price)
+    close_ = float(latest_row.get("close") or price)
     # 指数的 amount/turnover_rate 字段在 DB 中常为 0（AkShare 不提供），视为无数据
-    amount = float(latest_row.get('amount') or 0.0) or None
-    turnover_rate = round(float(latest_row.get('turnover_rate') or 0.0), 4) or None
+    amount = float(latest_row.get("amount") or 0.0) or None
+    turnover_rate = round(float(latest_row.get("turnover_rate") or 0.0), 4) or None
     # 振幅 = (最高-最低)/昨收 × 100；当日仅一价时用 (现价-昨收)/昨收
-    prev_close = float(prev_row.get('close') or 0.0)
+    prev_close = float(prev_row.get("close") or 0.0)
     if low_ and low_ > 0 and high_ != low_:
-        amplitude = round(_safe_divide(high_ - low_, prev_close) * 100, 2) if prev_close else None
+        amplitude = (
+            round(_safe_divide(high_ - low_, prev_close) * 100, 2)
+            if prev_close
+            else None
+        )
     else:
-        amplitude = round(_safe_divide(abs(price - prev_close), prev_close) * 100, 2) if prev_close and prev_close > 0 else None
+        amplitude = (
+            round(_safe_divide(abs(price - prev_close), prev_close) * 100, 2)
+            if prev_close and prev_close > 0
+            else None
+        )
 
     def _period_return(hist, n):
         """最近 n 日收益率（DESC 排序：最新在前）"""
-        if len(hist) < n + 1: return None
-        cur  = float(hist[0].get('close', 0))   # 最新 = 第一条
-        prev = float(hist[n].get('close', 0))   # n 日前 = 第 n+1 条
-        if not prev: return None
+        if len(hist) < n + 1:
+            return None
+        cur = float(hist[0].get("close", 0))  # 最新 = 第一条
+        prev = float(hist[n].get("close", 0))  # n 日前 = 第 n+1 条
+        if not prev:
+            return None
         return round((cur / prev - 1) * 100, 4)
 
     def _52w_bounds(hist):
         """52 周最高/最低（最近 252 个交易日）。hist 为 DESC 排序（最新在前）。"""
-        if not hist: return None, None, None, None
+        if not hist:
+            return None, None, None, None
         recent = hist[:252] if len(hist) >= 252 else hist
         # O(n) 扫描替代 O(n log n) 排序
-        max_close = max((float(r.get('close', 0) or 0), r.get('date', '')) for r in recent if r.get('close'))
-        min_close = min((float(r.get('close', 0) or 0), r.get('date', '')) for r in recent if r.get('close'))
+        max_close = max(
+            (float(r.get("close", 0) or 0), r.get("date", ""))
+            for r in recent
+            if r.get("close")
+        )
+        min_close = min(
+            (float(r.get("close", 0) or 0), r.get("date", ""))
+            for r in recent
+            if r.get("close")
+        )
         return max_close[0], max_close[1], min_close[0], min_close[1]
 
-    ret_5d  = _period_return(hist_all, 5)
+    ret_5d = _period_return(hist_all, 5)
     ret_20d = _period_return(hist_all, 20)
     ret_60d = _period_return(hist_all, 60)
     # 今年以来（累计收益率，粗略用年初至今交易日）
-    ytd_start = [r for r in hist_all if str(r.get('date', ''))[:4] == str(datetime.now().year)]
-    ret_ytd  = _period_return(ytd_start, len(ytd_start) - 1) if len(ytd_start) >= 2 else None
+    ytd_start = [
+        r for r in hist_all if str(r.get("date", ""))[:4] == str(datetime.now().year)
+    ]
+    ret_ytd = (
+        _period_return(ytd_start, len(ytd_start) - 1) if len(ytd_start) >= 2 else None
+    )
     high_52w, h52w_date, low_52w, l52w_date = _52w_bounds(hist_all)
 
     # ── 涨跌家数（来自 SpotCache 的 Sina HQ 实时全市场数据）───
@@ -327,29 +376,33 @@ async def market_quote_detail(symbol: str):
     _hist = SpotCache.get_histogram()
     _ready = SpotCache.is_ready()
     if _ready and _hist.get("total", 0) > 0:
-        advance_count   = _hist.get("advance", 0)
-        decline_count   = _hist.get("decline", 0)
+        advance_count = _hist.get("advance", 0)
+        decline_count = _hist.get("decline", 0)
         unchanged_count = _hist.get("unchanged", 0)
-        advance_rate    = _hist.get("up_ratio", 0)   # 上涨比例 0~1
+        advance_rate = _hist.get("up_ratio", 0)  # 上涨比例 0~1
     else:
-        advance_count   = None
-        decline_count   = None
+        advance_count = None
+        decline_count = None
         unchanged_count = None
-        advance_rate    = None
+        advance_rate = None
 
     # ── 资金流向（暂无数据源→返回 null）────────────────────────
-    fund_main_net   = None
-    fund_main_in    = None
-    fund_main_out   = None
-    fund_huge_in    = None; fund_huge_out   = None
-    fund_big_in     = None; fund_big_out    = None
-    fund_medium_in  = None; fund_medium_out = None
-    fund_small_in   = None; fund_small_out  = None
+    fund_main_net = None
+    fund_main_in = None
+    fund_main_out = None
+    fund_huge_in = None
+    fund_huge_out = None
+    fund_big_in = None
+    fund_big_out = None
+    fund_medium_in = None
+    fund_medium_out = None
+    fund_small_in = None
+    fund_small_out = None
 
     # ── 板块联动（暂无数据源→返回 null）────────────────────────
-    industry        = None
+    industry = None
     industry_change_pct = None
-    concepts        = []
+    concepts = []
 
     # ── 估值 ── 调用多源fallback获取PE/PB
     quote_data = await get_quote_with_fallback_async(norm)
@@ -359,55 +412,61 @@ async def market_quote_detail(symbol: str):
 
     result = {
         # ── Module 1: 基础行情 ──
-        "name":             w.get('name') or norm,
-        "symbol":           norm,
-        "price":            round(price, 3),
-        "change":           change_val,
-        "change_pct":       round(change_pct, 2),
-        "open":             round(open_,  3),
-        "high":             round(high_,  3),
-        "low":              round(low_,   3),
-        "close":            round(close_, 3),
-        "volume":           volume,
-        "amount":           round(amount, 2) if amount is not None else None,
-        "amplitude":        amplitude,
-        "turnover_rate":    round(turnover_rate, 4) if turnover_rate is not None else None,
-        "status":           status,
-        "market":           market,
+        "name": w.get("name") or norm,
+        "symbol": norm,
+        "price": round(price, 3),
+        "change": change_val,
+        "change_pct": round(change_pct, 2),
+        "open": round(open_, 3),
+        "high": round(high_, 3),
+        "low": round(low_, 3),
+        "close": round(close_, 3),
+        "volume": volume,
+        "amount": round(amount, 2) if amount is not None else None,
+        "amplitude": amplitude,
+        "turnover_rate": round(turnover_rate, 4) if turnover_rate is not None else None,
+        "status": status,
+        "market": market,
         # ── 估值 ──
-        "pe_ttm":           pe_ttm_val,   # 从腾讯/东财/新浪获取
-        "pb":               pb_val,       # 从腾讯/东财/新浪获取
+        "pe_ttm": pe_ttm_val,  # 从腾讯/东财/新浪获取
+        "pb": pb_val,  # 从腾讯/东财/新浪获取
         # ── 周期收益 ──
-        "returns_5d":       ret_5d,
-        "returns_20d":      ret_20d,
-        "returns_60d":      ret_60d,
-        "returns_ytd":      ret_ytd,
+        "returns_5d": ret_5d,
+        "returns_20d": ret_20d,
+        "returns_60d": ret_60d,
+        "returns_ytd": ret_ytd,
         # ── 52 周高低 ──
-        "high_52w":         round(high_52w, 3) if high_52w else None,
-        "low_52w":          round(low_52w,  3) if low_52w  else None,
-        "high_52w_date":    h52w_date,
-        "low_52w_date":    l52w_date,
+        "high_52w": round(high_52w, 3) if high_52w else None,
+        "low_52w": round(low_52w, 3) if low_52w else None,
+        "high_52w_date": h52w_date,
+        "low_52w_date": l52w_date,
         # ── Module 2: 市场情绪 ──
-        "advance_count":    advance_count,
-        "decline_count":    decline_count,
+        "advance_count": advance_count,
+        "decline_count": decline_count,
         "unchanged_count": unchanged_count,
-        "advance_rate":     advance_rate,
+        "advance_rate": advance_rate,
         # ── Module 3: 资金流向 ──
-        "fund_main_net":    fund_main_net,
-        "fund_main_in":     fund_main_in,
-        "fund_main_out":   fund_main_out,
-        "fund_huge_in":    fund_huge_in,  "fund_huge_out":  fund_huge_out,
-        "fund_big_in":     fund_big_in,   "fund_big_out":   fund_big_out,
-        "fund_medium_in":  fund_medium_in,"fund_medium_out": fund_medium_out,
-        "fund_small_in":   fund_small_in, "fund_small_out": fund_small_out,
+        "fund_main_net": fund_main_net,
+        "fund_main_in": fund_main_in,
+        "fund_main_out": fund_main_out,
+        "fund_huge_in": fund_huge_in,
+        "fund_huge_out": fund_huge_out,
+        "fund_big_in": fund_big_in,
+        "fund_big_out": fund_big_out,
+        "fund_medium_in": fund_medium_in,
+        "fund_medium_out": fund_medium_out,
+        "fund_small_in": fund_small_in,
+        "fund_small_out": fund_small_out,
         # ── Module 4: 板块联动 ──
-        "industry":               industry,
-        "industry_change_pct":   industry_change_pct,
-        "concepts":              concepts,
+        "industry": industry,
+        "industry_change_pct": industry_change_pct,
+        "concepts": concepts,
         # ── Timestamps ──
-        "timestamp": latest_row.get('date') or latest_row.get('timestamp'),
+        "timestamp": latest_row.get("date") or latest_row.get("timestamp"),
         "response_time": datetime.now().isoformat(),
-        "data_freshness_seconds": _calculate_freshness_seconds(latest_row.get('date') or ''),
+        "data_freshness_seconds": _calculate_freshness_seconds(
+            latest_row.get("date") or ""
+        ),
     }
 
     cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE_DETAIL)
@@ -418,6 +477,7 @@ async def market_quote_detail(symbol: str):
 # ═════════════════════════════════════════════════════════════════════════════
 # Endpoint 3: Quote V2 (lines 1835-1869)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/market/quote_v2/{symbol}")
 @handle_errors(module="market_quotes")
@@ -439,20 +499,22 @@ async def market_quote_v2(symbol: str):
         if not data:
             return error_response(404, f"获取 {validated} 数据失败")
 
-        return success_response({
-            "symbol": data.get("symbol", symbol),
-            "name": data.get("name", symbol),
-            "price": data.get("price", 0),
-            "change": round(data.get("price", 0) - data.get("prev_close", 0), 3),
-            "change_pct": data.get("change_pct", 0),
-            "open": data.get("open", 0),
-            "high": data.get("high", 0),
-            "low": data.get("low", 0),
-            "prev_close": data.get("prev_close", 0),
-            "volume": data.get("volume", 0),
-            "source": data.get("source", "sina"),
-            "timestamp": int(time.time() * 1000),
-        })
+        return success_response(
+            {
+                "symbol": data.get("symbol", symbol),
+                "name": data.get("name", symbol),
+                "price": data.get("price", 0),
+                "change": round(data.get("price", 0) - data.get("prev_close", 0), 3),
+                "change_pct": data.get("change_pct", 0),
+                "open": data.get("open", 0),
+                "high": data.get("high", 0),
+                "low": data.get("low", 0),
+                "prev_close": data.get("prev_close", 0),
+                "volume": data.get("volume", 0),
+                "source": data.get("source", "sina"),
+                "timestamp": int(time.time() * 1000),
+            }
+        )
     except Exception as e:
         logger.error(f"quote_v2 error: {e}", exc_info=True)
         return error_response(500, str(e))
@@ -461,6 +523,7 @@ async def market_quote_v2(symbol: str):
 # ═════════════════════════════════════════════════════════════════════════════
 # Endpoint 4: Order Book (lines 1736-1828)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/market/order_book/{symbol}")
 @handle_errors(module="market_quotes")
@@ -484,19 +547,21 @@ async def get_order_book(symbol: str):
 
     if is_index:
         # 指数没有Level 2数据，返回说明
-        return success_response({
-            "symbol": symbol,
-            "note": "指数暂无Level 2数据",
-            "asks": [],
-            "bids": [],
-            "source": "N/A"
-        })
+        return success_response(
+            {
+                "symbol": symbol,
+                "note": "指数暂无Level 2数据",
+                "asks": [],
+                "bids": [],
+                "source": "N/A",
+            }
+        )
 
     # 个股: 正常获取Level 2数据
-    if norm.startswith('sh'):
-        sina_code = f'sh{norm[2:]}'
-    elif norm.startswith('sz'):
-        sina_code = f'sz{norm[2:]}'
+    if norm.startswith("sh"):
+        sina_code = f"sh{norm[2:]}"
+    elif norm.startswith("sz"):
+        sina_code = f"sz{norm[2:]}"
     else:
         sina_code = norm
 
@@ -509,14 +574,16 @@ async def get_order_book(symbol: str):
             text = resp.text
 
             # DEBUG
-            logger.info(f"[order_book] symbol={symbol}, norm={norm}, sina_code={sina_code}, text_len={len(text)}")
+            logger.info(
+                f"[order_book] symbol={symbol}, norm={norm}, sina_code={sina_code}, text_len={len(text)}"
+            )
 
             # 解析数据
             match = re.search(r'="(.+)"', text)
             if not match:
                 return error_response(ErrorCode.NOT_FOUND, "无数据")
 
-            fields = match.group(1).split(',')
+            fields = match.group(1).split(",")
             if len(fields) < 30:
                 return error_response(ErrorCode.NOT_FOUND, "数据不足")
 
@@ -528,30 +595,36 @@ async def get_order_book(symbol: str):
             # 卖盘: 字段10-19 (卖5到卖1)
             for i in range(10, 20, 2):
                 vol = int(fields[i]) if fields[i] and fields[i].isdigit() else 0
-                price = float(fields[i+1]) if fields[i+1] else 0
-                asks.append({
-                    "position": (20 - i) // 2,  # 10→5,12→4,14→3,16→2,18→1
-                    "price": price,
-                    "volume": vol
-                })
+                price = float(fields[i + 1]) if fields[i + 1] else 0
+                asks.append(
+                    {
+                        "position": (20 - i) // 2,  # 10→5,12→4,14→3,16→2,18→1
+                        "price": price,
+                        "volume": vol,
+                    }
+                )
 
             bids = []
             for i in range(20, 30, 2):
                 vol = int(fields[i]) if fields[i] and fields[i].isdigit() else 0
-                price = float(fields[i+1]) if fields[i+1] else 0
-                bids.append({
-                    "position": (i - 20) // 2 + 1,  # 1,2,3,4,5
-                    "price": price,
-                    "volume": vol
-                })
+                price = float(fields[i + 1]) if fields[i + 1] else 0
+                bids.append(
+                    {
+                        "position": (i - 20) // 2 + 1,  # 1,2,3,4,5
+                        "price": price,
+                        "volume": vol,
+                    }
+                )
 
-            return success_response({
-                "symbol": symbol,
-                "timestamp": int(time.time() * 1000),
-                "asks": asks,
-                "bids": bids,
-                "source": "Sina HQ Level2"
-            })
+            return success_response(
+                {
+                    "symbol": symbol,
+                    "timestamp": int(time.time() * 1000),
+                    "asks": asks,
+                    "bids": bids,
+                    "source": "Sina HQ Level2",
+                }
+            )
     except Exception as e:
         logger.error(f"order_book error: {e}", exc_info=True)
         return error_response(500, str(e))
@@ -560,6 +633,7 @@ async def get_order_book(symbol: str):
 # ═════════════════════════════════════════════════════════════════════════════
 # Cache Stats Endpoint
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/market/cache/stats")
 @handle_errors(module="market_quotes")
@@ -574,12 +648,13 @@ async def cache_stats():
 # Endpoint: Stock Fund Flow (Individual)
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 @router.get("/market/fund_flow/{symbol}")
 @handle_errors(module="market_quotes")
 async def get_stock_fund_flow(symbol: str):
     """
     个股资金流向（近30日）
-    
+
     返回: 主力/超大单/大单/中单/小单净流入数据
     数据源: akshare.stock_individual_fund_flow (东方财富)
     """
@@ -591,11 +666,9 @@ async def get_stock_fund_flow(symbol: str):
     # 检查熔断器状态
     if not akshare_breaker.is_available():
         logger.warning(f"[StockFundFlow] Circuit breaker OPEN, skipping for {norm}")
-        return success_response({
-            "items": [],
-            "total": 0,
-            "source": "circuit_breaker_open"
-        })
+        return success_response(
+            {"items": [], "total": 0, "source": "circuit_breaker_open"}
+        )
 
     # 转换为 akshare 格式 (去掉 sh/sz 前缀)
     ak_symbol = _unprefix(norm)
@@ -605,16 +678,12 @@ async def get_stock_fund_flow(symbol: str):
         with akshare_breaker:
             df = await asyncio.wait_for(
                 asyncio.to_thread(ak.stock_individual_fund_flow, stock=ak_symbol),
-                timeout=10.0
+                timeout=10.0,
             )
 
         if df is None or df.empty:
             logger.warning(f"[StockFundFlow] Empty data for {ak_symbol}")
-            return success_response({
-                "items": [],
-                "total": 0,
-                "source": "akshare"
-            })
+            return success_response({"items": [], "total": 0, "source": "akshare"})
 
         # 取最近30条数据
         df = df.tail(30)
@@ -623,51 +692,79 @@ async def get_stock_fund_flow(symbol: str):
         df_work = df.copy()
 
         # 列名映射 (东方财富格式)
-        df_work['date'] = df_work['日期'].astype(str)
-        df_work['close'] = df_work['收盘价'].apply(lambda x: float(x) if x else 0)
-        df_work['change_pct'] = df_work['涨跌幅'].apply(lambda x: float(x) if x else 0)
+        df_work["date"] = df_work["日期"].astype(str)
+        df_work["close"] = df_work["收盘价"].apply(lambda x: float(x) if x else 0)
+        df_work["change_pct"] = df_work["涨跌幅"].apply(lambda x: float(x) if x else 0)
 
         # 主力资金
-        df_work['main_net_in'] = df_work['主力净流入-净额'].apply(lambda x: float(x) if x else 0)
-        df_work['main_net_out'] = df_work['主力净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        df_work["main_net_in"] = df_work["主力净流入-净额"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["main_net_out"] = df_work["主力净流入-净占比"].apply(
+            lambda x: float(x) if x else 0
+        )
 
         # 超大单
-        df_work['huge_net_in'] = df_work['超大单净流入-净额'].apply(lambda x: float(x) if x else 0)
-        df_work['huge_net_out'] = df_work['超大单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        df_work["huge_net_in"] = df_work["超大单净流入-净额"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["huge_net_out"] = df_work["超大单净流入-净占比"].apply(
+            lambda x: float(x) if x else 0
+        )
 
         # 大单
-        df_work['big_net_in'] = df_work['大单净流入-净额'].apply(lambda x: float(x) if x else 0)
-        df_work['big_net_out'] = df_work['大单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        df_work["big_net_in"] = df_work["大单净流入-净额"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["big_net_out"] = df_work["大单净流入-净占比"].apply(
+            lambda x: float(x) if x else 0
+        )
 
         # 中单
-        df_work['medium_net_in'] = df_work['中单净流入-净额'].apply(lambda x: float(x) if x else 0)
-        df_work['medium_net_out'] = df_work['中单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        df_work["medium_net_in"] = df_work["中单净流入-净额"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["medium_net_out"] = df_work["中单净流入-净占比"].apply(
+            lambda x: float(x) if x else 0
+        )
 
         # 小单
-        df_work['small_net_in'] = df_work['小单净流入-净额'].apply(lambda x: float(x) if x else 0)
-        df_work['small_net_out'] = df_work['小单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        df_work["small_net_in"] = df_work["小单净流入-净额"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["small_net_out"] = df_work["小单净流入-净占比"].apply(
+            lambda x: float(x) if x else 0
+        )
 
         # 选择输出列
-        result = df_work[[
-            'date', 'close', 'change_pct',
-            'main_net_in', 'main_net_out',
-            'huge_net_in', 'huge_net_out',
-            'big_net_in', 'big_net_out',
-            'medium_net_in', 'medium_net_out',
-            'small_net_in', 'small_net_out'
-        ]].to_dict('records')
+        result = df_work[
+            [
+                "date",
+                "close",
+                "change_pct",
+                "main_net_in",
+                "main_net_out",
+                "huge_net_in",
+                "huge_net_out",
+                "big_net_in",
+                "big_net_out",
+                "medium_net_in",
+                "medium_net_out",
+                "small_net_in",
+                "small_net_out",
+            ]
+        ].to_dict("records")
 
         logger.info(f"[StockFundFlow] Fetched {len(result)} records for {ak_symbol}")
 
-        return success_response({
-            "items": result,
-            "total": len(result),
-            "symbol": norm,
-            "source": "akshare"
-        })
+        return success_response(
+            {"items": result, "total": len(result), "symbol": norm, "source": "akshare"}
+        )
 
     except asyncio.TimeoutError:
-        logger.error(f"[StockFundFlow] Timeout after 10s for {ak_symbol}", exc_info=True)
+        logger.error(
+            f"[StockFundFlow] Timeout after 10s for {ak_symbol}", exc_info=True
+        )
         return error_response(504, "数据获取超时，请稍后重试")
     except Exception as e:
         logger.error(f"[StockFundFlow] Error for {ak_symbol}: {e}", exc_info=True)

@@ -9,6 +9,7 @@ Tests:
 - test_remove_model_deletes_entry
 - test_hot_reload_reads_from_db
 """
+
 import pytest
 from unittest.mock import patch
 
@@ -24,7 +25,7 @@ class TestModelConfigService:
     @pytest.fixture
     def mock_model_config_db(self):
         """Mock model_config_db module."""
-        with patch('app.services.model_config_service.model_config_db') as mock:
+        with patch("app.services.model_config_service.model_config_db") as mock:
             yield mock
 
     @pytest.fixture
@@ -39,6 +40,7 @@ class TestModelConfigService:
         """Singleton should return same instance across calls."""
         # Reset the singleton
         import app.services.model_config_service as module
+
         module._service_instance = None
 
         instance1 = get_model_config_service()
@@ -63,9 +65,9 @@ class TestModelConfigService:
                     "enabled": True,
                     "max_concurrent": 5,
                     "context_length": 8192,
-                    "metadata": {"description": "GPT-4"}
+                    "metadata": {"description": "GPT-4"},
                 }
-            }
+            },
         }
 
         result = service.get_model("openai", "gpt-4")
@@ -94,8 +96,8 @@ class TestModelConfigService:
                 "enabled": True,
                 "max_concurrent": 10,
                 "context_length": 128000,
-                "metadata": {"description": "GPT-4 Turbo"}
-            }
+                "metadata": {"description": "GPT-4 Turbo"},
+            },
         )
 
         assert result is True
@@ -115,10 +117,7 @@ class TestModelConfigService:
         result = service.update_model(
             provider="openai",
             model_id="gpt-4",
-            updates={
-                "max_concurrent": 20,
-                "enabled": False
-            }
+            updates={"max_concurrent": 20, "enabled": False},
         )
 
         assert result is True
@@ -150,9 +149,7 @@ class TestModelConfigService:
             "api_key": "key1",
             "base_url": "url1",
             "default_model": "model1",
-            "models": {
-                "model1": {"enabled": True}
-            }
+            "models": {"model1": {"enabled": True}},
         }
 
         result1 = service.get_model("openai")
@@ -162,9 +159,7 @@ class TestModelConfigService:
             "api_key": "key2",
             "base_url": "url2",
             "default_model": "model2",
-            "models": {
-                "model2": {"enabled": True}
-            }
+            "models": {"model2": {"enabled": True}},
         }
 
         result2 = service.get_model("openai")
@@ -183,7 +178,7 @@ class TestModelConfigServiceEdgeCases:
     @pytest.fixture
     def mock_model_config_db(self):
         """Mock model_config_db module."""
-        with patch('app.services.model_config_service.model_config_db') as mock:
+        with patch("app.services.model_config_service.model_config_db") as mock:
             yield mock
 
     @pytest.fixture
@@ -191,12 +186,14 @@ class TestModelConfigServiceEdgeCases:
         """Create a fresh service instance."""
         return ModelConfigService()
 
-    def test_get_model_returns_none_for_missing_provider(self, service, mock_model_config_db):
+    def test_get_model_returns_none_for_missing_provider(
+        self, service, mock_model_config_db
+    ):
         """get_model should return None for non-existent provider."""
         mock_model_config_db.get_model_config.return_value = None
 
         # Without env fallback
-        with patch.dict('os.environ', {}, clear=True):
+        with patch.dict("os.environ", {}, clear=True):
             result = service.get_model("nonexistent_provider")
 
         assert result is None
@@ -205,7 +202,7 @@ class TestModelConfigServiceEdgeCases:
         """get_all_providers should handle empty DB."""
         mock_model_config_db.get_all_model_configs.return_value = {}
 
-        with patch.dict('os.environ', {}, clear=True):
+        with patch.dict("os.environ", {}, clear=True):
             result = service.get_all_providers()
 
         assert isinstance(result, dict)
@@ -224,7 +221,10 @@ class TestModelConfigServiceEdgeCases:
 
     def test_get_enabled_models(self, service, mock_model_config_db):
         """get_enabled_models should return list of enabled models."""
-        mock_model_config_db.get_enabled_models.return_value = ["gpt-4", "gpt-3.5-turbo"]
+        mock_model_config_db.get_enabled_models.return_value = [
+            "gpt-4",
+            "gpt-3.5-turbo",
+        ]
 
         result = service.get_enabled_models("openai")
 

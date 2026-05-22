@@ -126,9 +126,7 @@ class TestExtractClientIp:
     def test_trusted_proxy_single_hop(self):
         """Single trusted proxy should extract original client IP."""
         result = extract_client_ip(
-            x_forwarded_for="1.1.1.1",
-            x_real_ip=None,
-            remote_addr="10.0.0.1"
+            x_forwarded_for="1.1.1.1", x_real_ip=None, remote_addr="10.0.0.1"
         )
         assert result == "1.1.1.1"
 
@@ -137,16 +135,14 @@ class TestExtractClientIp:
         result = extract_client_ip(
             x_forwarded_for="1.1.1.1, 10.0.0.1, 192.168.1.1",
             x_real_ip=None,
-            remote_addr="10.0.0.1"
+            remote_addr="10.0.0.1",
         )
         assert result == "1.1.1.1"
 
     def test_untrusted_source_ignores_header(self):
         """Untrusted source should ignore X-Forwarded-For (spoofing prevention)."""
         result = extract_client_ip(
-            x_forwarded_for="1.1.1.1",
-            x_real_ip=None,
-            remote_addr="203.0.113.1"
+            x_forwarded_for="1.1.1.1", x_real_ip=None, remote_addr="203.0.113.1"
         )
         assert result == "203.0.113.1"
 
@@ -155,7 +151,7 @@ class TestExtractClientIp:
         result = extract_client_ip(
             x_forwarded_for="8.8.8.8, 1.1.1.1, 10.0.0.1",
             x_real_ip=None,
-            remote_addr="93.184.216.34"
+            remote_addr="93.184.216.34",
         )
         assert result == "93.184.216.34"
 
@@ -164,52 +160,42 @@ class TestExtractClientIp:
         result = extract_client_ip(
             x_forwarded_for="10.0.0.1, 192.168.1.1, 172.16.0.1",
             x_real_ip=None,
-            remote_addr="10.0.0.1"
+            remote_addr="10.0.0.1",
         )
         assert result == "10.0.0.1"
 
     def test_fallback_to_x_real_ip(self):
         """Should fall back to X-Real-IP if X-Forwarded-For is empty."""
         result = extract_client_ip(
-            x_forwarded_for=None,
-            x_real_ip="1.1.1.1",
-            remote_addr="10.0.0.1"
+            x_forwarded_for=None, x_real_ip="1.1.1.1", remote_addr="10.0.0.1"
         )
         assert result == "1.1.1.1"
 
     def test_fallback_to_remote_addr(self):
         """Should fall back to remote_addr if no headers."""
         result = extract_client_ip(
-            x_forwarded_for=None,
-            x_real_ip=None,
-            remote_addr="10.0.0.1"
+            x_forwarded_for=None, x_real_ip=None, remote_addr="10.0.0.1"
         )
         assert result == "10.0.0.1"
 
     def test_no_remote_addr_with_forwarded_for(self):
         """Should use first IP from X-Forwarded-For if no remote_addr."""
         result = extract_client_ip(
-            x_forwarded_for="1.1.1.1, 10.0.0.1",
-            x_real_ip=None,
-            remote_addr=None
+            x_forwarded_for="1.1.1.1, 10.0.0.1", x_real_ip=None, remote_addr=None
         )
         assert result == "1.1.1.1"
 
     def test_all_none(self):
         """Should return 'unknown' if all inputs are None."""
         result = extract_client_ip(
-            x_forwarded_for=None,
-            x_real_ip=None,
-            remote_addr=None
+            x_forwarded_for=None, x_real_ip=None, remote_addr=None
         )
         assert result == "unknown"
 
     def test_empty_forwarded_for(self):
         """Should handle empty X-Forwarded-For string."""
         result = extract_client_ip(
-            x_forwarded_for="",
-            x_real_ip="1.1.1.1",
-            remote_addr="10.0.0.1"
+            x_forwarded_for="", x_real_ip="1.1.1.1", remote_addr="10.0.0.1"
         )
         assert result == "1.1.1.1"
 
@@ -218,25 +204,21 @@ class TestExtractClientIp:
         result = extract_client_ip(
             x_forwarded_for="1.1.1.1, invalid-ip, 10.0.0.1",
             x_real_ip=None,
-            remote_addr="10.0.0.1"
+            remote_addr="10.0.0.1",
         )
         assert result == "1.1.1.1"
 
     def test_ipv6_client(self):
         """Should handle IPv6 client addresses."""
         result = extract_client_ip(
-            x_forwarded_for="2001:db8::1",
-            x_real_ip=None,
-            remote_addr="10.0.0.1"
+            x_forwarded_for="2001:db8::1", x_real_ip=None, remote_addr="10.0.0.1"
         )
         assert result == "2001:db8::1"
 
     def test_ipv6_trusted_proxy(self):
         """Should handle IPv6 trusted proxy addresses."""
         result = extract_client_ip(
-            x_forwarded_for="1.1.1.1",
-            x_real_ip=None,
-            remote_addr="::1"
+            x_forwarded_for="1.1.1.1", x_real_ip=None, remote_addr="::1"
         )
         assert result == "1.1.1.1"
 
@@ -251,18 +233,14 @@ class TestGetClientIpSafe:
     def test_basic_usage(self):
         """Basic usage should work correctly."""
         result = get_client_ip_safe(
-            x_forwarded_for="1.1.1.1",
-            x_real_ip=None,
-            remote_addr="10.0.0.1"
+            x_forwarded_for="1.1.1.1", x_real_ip=None, remote_addr="10.0.0.1"
         )
         assert result == "1.1.1.1"
 
     def test_spoofing_prevention(self):
         """Should prevent spoofing from untrusted source."""
         result = get_client_ip_safe(
-            x_forwarded_for="8.8.8.8",
-            x_real_ip=None,
-            remote_addr="203.0.113.1"
+            x_forwarded_for="8.8.8.8", x_real_ip=None, remote_addr="203.0.113.1"
         )
         assert result == "203.0.113.1"
 

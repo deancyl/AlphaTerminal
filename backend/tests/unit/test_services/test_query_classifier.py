@@ -1,6 +1,7 @@
 """
 Tests for QueryClassifier service
 """
+
 import pytest
 from app.services.copilot.query_classifier import (
     get_query_classifier,

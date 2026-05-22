@@ -7,6 +7,7 @@ Timeout Behavior:
     All akshare calls wrapped with asyncio.wait_for() timeout protection.
     Returns 504 Gateway Timeout when external data source is slow.
 """
+
 import logging
 import asyncio
 import httpx
@@ -35,10 +36,10 @@ TTL = 300
 def normalize_f9_symbol(symbol: str) -> str:
     """
     标准化股票代码，去除前缀
-    
+
     Args:
         symbol: 股票代码，可能带前缀（如 sh600519, sz000001, hk00700, usAAPL）
-    
+
     Returns:
         纯股票代码（如 600519, 000001, 00700, AAPL）
     """
@@ -49,12 +50,12 @@ def normalize_f9_symbol(symbol: str) -> str:
     symbol_lower = symbol.lower()
 
     # 常见前缀列表
-    prefixes = ['sh', 'sz', 'hk', 'us']
+    prefixes = ["sh", "sz", "hk", "us"]
 
     for prefix in prefixes:
         if symbol_lower.startswith(prefix):
             # 返回去除前缀后的原始大小写（保留数字部分）
-            return symbol[len(prefix):]
+            return symbol[len(prefix) :]
 
     # 无前缀，直接返回
     return symbol
@@ -78,7 +79,7 @@ def check_akshare_circuit() -> bool:
 async def run_with_timeout(coro, timeout: float = AKSHARE_TIMEOUT):
     """
     Execute coroutine with timeout protection.
-    
+
     Raises:
         asyncio.TimeoutError: When timeout is exceeded
     """
@@ -86,6 +87,7 @@ async def run_with_timeout(coro, timeout: float = AKSHARE_TIMEOUT):
 
 
 # ── API 端点 ─────────────────────────────────────────────────────
+
 
 # ── 健康检查端点 ─────────────────────────────────────────────────
 @router.get("/health")
@@ -134,56 +136,89 @@ async def get_shareholder_data(symbol: str):
                     with akshare_breaker:
                         df = ak.stock_circulate_stock_holder(symbol=symbol)
                     # 获取最新一期数据
-                    latest_date = df['截止日期'].max()
-                    latest_df = df[df['截止日期'] == latest_date].head(10)
+                    latest_date = df["截止日期"].max()
+                    latest_df = df[df["截止日期"] == latest_date].head(10)
                     return {
-                        'date': str(latest_date),
-                        'holders': latest_df[['股东名称', '持股数量', '占流通股比例', '股本性质']].to_dict('records')
+                        "date": str(latest_date),
+                        "holders": latest_df[
+                            ["股东名称", "持股数量", "占流通股比例", "股本性质"]
+                        ].to_dict("records"),
                     }
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True)
+                    logger.warning(
+                        f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True
+                    )
                     return None
                 except (KeyError, ValueError, TypeError) as e:
-                    logger.warning(f"[shareholder] Data processing error in circulate holders: {e}", exc_info=True)
+                    logger.warning(
+                        f"[shareholder] Data processing error in circulate holders: {e}",
+                        exc_info=True,
+                    )
                     return None
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                     logger.warning(f"[HTTP] circulate holders: {e}", exc_info=True)
                     return None
+
             return await loop.run_in_executor(_executor, _fetch)
 
         # 2. 获取股本变动记录（最近365天）
         async def fetch_share_changes():
             def _fetch():
                 try:
-                    end_date = datetime.now().strftime('%Y%m%d')
-                    start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
+                    end_date = datetime.now().strftime("%Y%m%d")
+                    start_date = (datetime.now() - timedelta(days=365)).strftime(
+                        "%Y%m%d"
+                    )
                     with akshare_breaker:
-                        df = ak.stock_share_change_cninfo(symbol=symbol, start_date=start_date, end_date=end_date)
+                        df = ak.stock_share_change_cninfo(
+                            symbol=symbol, start_date=start_date, end_date=end_date
+                        )
 
                     changes = []
                     for _, row in df.iterrows():
                         change = {
-                            'date': str(row.get('变动日期', '')),
-                            'reason': str(row.get('变动原因', '')),
-                            'totalShares': float(row.get('总股本', 0)) if pd.notna(row.get('总股本')) else 0,
-                            'circulateShares': float(row.get('已流通股份', 0)) if pd.notna(row.get('已流通股份')) else 0,
-                            'restrictedShares': float(row.get('流通受限股份', 0)) if pd.notna(row.get('流通受限股份')) else 0,
+                            "date": str(row.get("变动日期", "")),
+                            "reason": str(row.get("变动原因", "")),
+                            "totalShares": (
+                                float(row.get("总股本", 0))
+                                if pd.notna(row.get("总股本"))
+                                else 0
+                            ),
+                            "circulateShares": (
+                                float(row.get("已流通股份", 0))
+                                if pd.notna(row.get("已流通股份"))
+                                else 0
+                            ),
+                            "restrictedShares": (
+                                float(row.get("流通受限股份", 0))
+                                if pd.notna(row.get("流通受限股份"))
+                                else 0
+                            ),
                         }
                         changes.append(change)
 
                     return changes
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True)
+                    logger.warning(
+                        f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True
+                    )
                     return []
                 except (KeyError, ValueError, TypeError, AttributeError) as e:
-                    logger.warning(f"[shareholder] Data processing error in share changes: {e}", exc_info=True)
+                    logger.warning(
+                        f"[shareholder] Data processing error in share changes: {e}",
+                        exc_info=True,
+                    )
                     return []
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                     logger.warning(f"[HTTP] share changes: {e}", exc_info=True)
                     return []
                 except Exception as e:
-                    logger.warning(f"[shareholder] Unexpected error in share changes: {e}", exc_info=True)
+                    logger.warning(
+                        f"[shareholder] Unexpected error in share changes: {e}",
+                        exc_info=True,
+                    )
                     return []
+
             return await loop.run_in_executor(_executor, _fetch)
 
         # 3. 获取股东变动记录
@@ -195,45 +230,53 @@ async def get_shareholder_data(symbol: str):
                     changes = []
                     for _, row in df.iterrows():
                         change = {
-                            'date': str(row.get('公告日期', '')),
-                            'holder': str(row.get('变动股东', '')),
-                            'changeAmount': str(row.get('变动数量', '')),
-                            'avgPrice': str(row.get('交易均价', '')),
-                            'remainingShares': str(row.get('剩余股份总数', '')),
-                            'period': str(row.get('变动期间', '')),
-                            'channel': str(row.get('变动途径', '')),
+                            "date": str(row.get("公告日期", "")),
+                            "holder": str(row.get("变动股东", "")),
+                            "changeAmount": str(row.get("变动数量", "")),
+                            "avgPrice": str(row.get("交易均价", "")),
+                            "remainingShares": str(row.get("剩余股份总数", "")),
+                            "period": str(row.get("变动期间", "")),
+                            "channel": str(row.get("变动途径", "")),
                         }
                         changes.append(change)
                     return changes[:20]  # 最近20条
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True)
+                    logger.warning(
+                        f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True
+                    )
                     return []
                 except (KeyError, ValueError, TypeError, AttributeError) as e:
-                    logger.warning(f"[shareholder] Data processing error in holder changes: {e}", exc_info=True)
+                    logger.warning(
+                        f"[shareholder] Data processing error in holder changes: {e}",
+                        exc_info=True,
+                    )
                     return []
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                     logger.warning(f"[HTTP] holder changes: {e}", exc_info=True)
                     return []
                 except Exception as e:
-                    logger.warning(f"[shareholder] Unexpected error in holder changes: {e}", exc_info=True)
+                    logger.warning(
+                        f"[shareholder] Unexpected error in holder changes: {e}",
+                        exc_info=True,
+                    )
                     return []
+
             return await loop.run_in_executor(_executor, _fetch)
 
         # 并行获取数据（带超时保护）
         import pandas as pd
+
         circulate_holders, share_changes, holder_changes = await asyncio.wait_for(
             asyncio.gather(
-                fetch_circulate_holders(),
-                fetch_share_changes(),
-                fetch_holder_changes()
+                fetch_circulate_holders(), fetch_share_changes(), fetch_holder_changes()
             ),
-            timeout=AKSHARE_TIMEOUT
+            timeout=AKSHARE_TIMEOUT,
         )
 
         result = {
-            'circulateHolders': circulate_holders,
-            'shareChanges': share_changes,
-            'holderChanges': holder_changes
+            "circulateHolders": circulate_holders,
+            "shareChanges": share_changes,
+            "holderChanges": holder_changes,
         }
 
         await set_cached(cache_key, result)
@@ -244,7 +287,9 @@ async def get_shareholder_data(symbol: str):
         logger.warning(f"[shareholder] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[shareholder] Data processing error for {symbol}: {e}", exc_info=True)
+        logger.error(
+            f"[shareholder] Data processing error for {symbol}: {e}", exc_info=True
+        )
         return error_response(f"数据处理失败: {str(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing data for {symbol}: {e}", exc_info=True)
@@ -334,7 +379,9 @@ async def get_margin_data(symbol: str):
                 logger.warning(f"[Margin] Circuit breaker OPEN: {e}", exc_info=True)
                 break
             except (KeyError, ValueError, TypeError) as e:
-                logger.debug(f"[Margin] Data processing error for {symbol} on {date}: {e}")
+                logger.debug(
+                    f"[Margin] Data processing error for {symbol} on {date}: {e}"
+                )
                 continue
             except Exception as e:
                 logger.debug(f"[Margin] No data for {symbol} on {date}: {e}")
@@ -345,8 +392,7 @@ async def get_margin_data(symbol: str):
     try:
         loop = asyncio.get_event_loop()
         trend_data = await asyncio.wait_for(
-            loop.run_in_executor(_executor, fetch_margin_data),
-            timeout=AKSHARE_TIMEOUT
+            loop.run_in_executor(_executor, fetch_margin_data), timeout=AKSHARE_TIMEOUT
         )
 
         if not trend_data:
@@ -357,12 +403,14 @@ async def get_margin_data(symbol: str):
 
         result = {
             "current": trend_data[-1] if trend_data else None,
-            "trend": trend_data
+            "trend": trend_data,
         }
 
         await set_cached(cache_key, result)
 
-        logger.info(f"[Margin] Successfully fetched {len(trend_data)} days data for {symbol}")
+        logger.info(
+            f"[Margin] Successfully fetched {len(trend_data)} days data for {symbol}"
+        )
         return success_response(result)
 
     except asyncio.TimeoutError:
@@ -410,16 +458,18 @@ async def get_financial_data(symbol: str):
 
             # 获取财务指标数据
             with akshare_breaker:
-                df = ak.stock_financial_analysis_indicator(symbol=symbol, start_year="2020")
+                df = ak.stock_financial_analysis_indicator(
+                    symbol=symbol, start_year="2020"
+                )
 
             if df.empty:
                 return None
 
             # 按日期排序（最新的在前）
-            df = df.sort_values('日期', ascending=False)
+            df = df.sort_values("日期", ascending=False)
 
             # 转换为字典列表
-            indicators = df.to_dict('records')
+            indicators = df.to_dict("records")
 
             # 处理 NaN 值
             for item in indicators:
@@ -433,14 +483,14 @@ async def get_financial_data(symbol: str):
             # 提取最近8个季度的关键指标趋势
             trend_data = []
             key_metrics = [
-                '日期',
-                '摊薄每股收益(元)',
-                '净资产收益率(%)',
-                '主营业务收入增长率(%)',
-                '净利润增长率(%)',
-                '销售毛利率(%)',
-                '销售净利率(%)',
-                '每股净资产_调整后(元)'
+                "日期",
+                "摊薄每股收益(元)",
+                "净资产收益率(%)",
+                "主营业务收入增长率(%)",
+                "净利润增长率(%)",
+                "销售毛利率(%)",
+                "销售净利率(%)",
+                "每股净资产_调整后(元)",
             ]
 
             for i, item in enumerate(indicators[:8]):
@@ -449,15 +499,10 @@ async def get_financial_data(symbol: str):
                     trend_item[metric] = item.get(metric)
                 trend_data.append(trend_item)
 
-            return {
-                "indicators": indicators,
-                "latest": latest,
-                "trend": trend_data
-            }
+            return {"indicators": indicators, "latest": latest, "trend": trend_data}
 
         result = await asyncio.wait_for(
-            loop.run_in_executor(_executor, fetch_financial),
-            timeout=AKSHARE_TIMEOUT
+            loop.run_in_executor(_executor, fetch_financial), timeout=AKSHARE_TIMEOUT
         )
 
         if not result:
@@ -465,29 +510,28 @@ async def get_financial_data(symbol: str):
 
         await set_cached(cache_key, result)
 
-        logger.info(f"[F9] Fetched financial data for {symbol}, quarters: {len(result['indicators'])}")
+        logger.info(
+            f"[F9] Fetched financial data for {symbol}, quarters: {len(result['indicators'])}"
+        )
         return success_response(result)
 
     except asyncio.TimeoutError:
         logger.warning(f"[F9] Timeout for financial {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except CircuitBreakerOpen as e:
-        logger.warning(f"[F9] Circuit breaker OPEN for financial {symbol}: {e}", exc_info=True)
+        logger.warning(
+            f"[F9] Circuit breaker OPEN for financial {symbol}: {e}", exc_info=True
+        )
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[F9] Data processing error for financial data {symbol}: {e}", exc_info=True)
-        return success_response({
-            "indicators": [],
-            "latest": {},
-            "trend": []
-        })
+        logger.error(
+            f"[F9] Data processing error for financial data {symbol}: {e}",
+            exc_info=True,
+        )
+        return success_response({"indicators": [], "latest": {}, "trend": []})
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing financial data for {symbol}: {e}", exc_info=True)
-        return success_response({
-            "indicators": [],
-            "latest": {},
-            "trend": []
-        })
+        return success_response({"indicators": [], "latest": {}, "trend": []})
 
 
 # ── 盈利预测端点 ─────────────────────────────────────────────────
@@ -522,34 +566,36 @@ async def get_profit_forecast(symbol: str):
 
         def fetch_eps():
             with akshare_breaker:
-                return ak.stock_profit_forecast_ths(symbol=symbol, indicator="预测年报每股收益")
+                return ak.stock_profit_forecast_ths(
+                    symbol=symbol, indicator="预测年报每股收益"
+                )
 
         def fetch_institutions():
             with akshare_breaker:
-                return ak.stock_profit_forecast_ths(symbol=symbol, indicator="业绩预测详表-机构")
+                return ak.stock_profit_forecast_ths(
+                    symbol=symbol, indicator="业绩预测详表-机构"
+                )
 
         eps_task = loop.run_in_executor(_executor, fetch_eps)
         institution_task = loop.run_in_executor(_executor, fetch_institutions)
         eps_df, institution_df = await asyncio.wait_for(
-            asyncio.gather(eps_task, institution_task),
-            timeout=AKSHARE_TIMEOUT
+            asyncio.gather(eps_task, institution_task), timeout=AKSHARE_TIMEOUT
         )
 
         eps_forecast = []
         if eps_df is not None and not eps_df.empty:
-            eps_forecast = eps_df.to_dict('records')
+            eps_forecast = eps_df.to_dict("records")
 
         institutions = []
         if institution_df is not None and not institution_df.empty:
-            institutions = institution_df.to_dict('records')
+            institutions = institution_df.to_dict("records")
 
-        result = {
-            "eps_forecast": eps_forecast,
-            "institutions": institutions
-        }
+        result = {"eps_forecast": eps_forecast, "institutions": institutions}
 
         await set_cached(cache_key, result)
-        logger.info(f"[F9] Fetched forecast data for {symbol}: {len(eps_forecast)} EPS records, {len(institutions)} institution records")
+        logger.info(
+            f"[F9] Fetched forecast data for {symbol}: {len(eps_forecast)} EPS records, {len(institutions)} institution records"
+        )
 
         return success_response(result)
 
@@ -557,10 +603,14 @@ async def get_profit_forecast(symbol: str):
         logger.warning(f"[F9] Timeout for forecast {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except CircuitBreakerOpen as e:
-        logger.warning(f"[F9] Circuit breaker OPEN for forecast {symbol}: {e}", exc_info=True)
+        logger.warning(
+            f"[F9] Circuit breaker OPEN for forecast {symbol}: {e}", exc_info=True
+        )
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[F9] Data processing error for forecast {symbol}: {e}", exc_info=True)
+        logger.error(
+            f"[F9] Data processing error for forecast {symbol}: {e}", exc_info=True
+        )
         return error_response(f"数据处理失败: {str(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing forecast for {symbol}: {e}", exc_info=True)
@@ -573,10 +623,10 @@ async def get_profit_forecast(symbol: str):
 async def get_institution_holdings(symbol: str):
     """
     获取机构持股数据
-    
+
     Args:
         symbol: 股票代码（如 600519）
-    
+
     Returns:
         {
             "code": 0,
@@ -609,7 +659,7 @@ async def get_institution_holdings(symbol: str):
         current_quarter = (now.month - 1) // 3 + 1
         current_quarter_str = f"{current_year}{current_quarter}"
 
-# 获取当前季度数据（尝试最近4个季度）
+        # 获取当前季度数据（尝试最近4个季度）
         def fetch_current():
             for q_offset in range(4):
                 q = current_quarter - q_offset
@@ -621,15 +671,23 @@ async def get_institution_holdings(symbol: str):
 
                 try:
                     with akshare_breaker:
-                        df = ak.stock_institute_hold_detail(stock=symbol, quarter=quarter_str)
+                        df = ak.stock_institute_hold_detail(
+                            stock=symbol, quarter=quarter_str
+                        )
                     if df is not None and not df.empty:
-                        logger.info(f"[Institution] Found data for quarter {quarter_str}")
-                        return df.to_dict('records'), quarter_str
+                        logger.info(
+                            f"[Institution] Found data for quarter {quarter_str}"
+                        )
+                        return df.to_dict("records"), quarter_str
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[Institution] Circuit breaker OPEN: {e}", exc_info=True)
+                    logger.warning(
+                        f"[Institution] Circuit breaker OPEN: {e}", exc_info=True
+                    )
                     return [], current_quarter_str
                 except (KeyError, ValueError, TypeError) as e:
-                    logger.debug(f"[Institution] Data processing error for {quarter_str}: {e}")
+                    logger.debug(
+                        f"[Institution] Data processing error for {quarter_str}: {e}"
+                    )
                     continue
                 except Exception as e:
                     logger.debug(f"[Institution] No data for {quarter_str}: {e}")
@@ -651,12 +709,14 @@ async def get_institution_holdings(symbol: str):
 
                 try:
                     with akshare_breaker:
-                        df = ak.stock_institute_hold_detail(stock=symbol, quarter=quarter_str)
+                        df = ak.stock_institute_hold_detail(
+                            stock=symbol, quarter=quarter_str
+                        )
                     if df is not None and not df.empty:
                         count = len(df)
                         pct_col = None
                         for col in df.columns:
-                            if '持股比例' in col or '占比' in col:
+                            if "持股比例" in col or "占比" in col:
                                 pct_col = col
                                 break
 
@@ -664,18 +724,24 @@ async def get_institution_holdings(symbol: str):
                         if pct_col:
                             total_pct = df[pct_col].sum()
 
-                        trend_data.append({
-                            "quarter": quarter_str,
-                            "year": y,
-                            "quarter_num": q,
-                            "count": count,
-                            "total_pct": round(total_pct, 2)
-                        })
+                        trend_data.append(
+                            {
+                                "quarter": quarter_str,
+                                "year": y,
+                                "quarter_num": q,
+                                "count": count,
+                                "total_pct": round(total_pct, 2),
+                            }
+                        )
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[Institution] Circuit breaker OPEN: {e}", exc_info=True)
+                    logger.warning(
+                        f"[Institution] Circuit breaker OPEN: {e}", exc_info=True
+                    )
                     break
                 except (KeyError, ValueError, TypeError) as e:
-                    logger.debug(f"[Institution] Data processing error for {quarter_str}: {e}")
+                    logger.debug(
+                        f"[Institution] Data processing error for {quarter_str}: {e}"
+                    )
                     continue
                 except Exception as e:
                     logger.debug(f"[Institution] No data for {quarter_str}: {e}")
@@ -690,15 +756,14 @@ async def get_institution_holdings(symbol: str):
         trend_task = loop.run_in_executor(_executor, fetch_trend)
 
         current_result, trend_data = await asyncio.wait_for(
-            asyncio.gather(current_task, trend_task),
-            timeout=AKSHARE_TIMEOUT
+            asyncio.gather(current_task, trend_task), timeout=AKSHARE_TIMEOUT
         )
         current_data, actual_quarter = current_result
 
         result = {
             "current": current_data,
             "trend": trend_data,
-            "quarter": actual_quarter
+            "quarter": actual_quarter,
         }
 
         await set_cached(cache_key, result)
@@ -709,10 +774,14 @@ async def get_institution_holdings(symbol: str):
         logger.warning(f"[Institution] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except CircuitBreakerOpen as e:
-        logger.warning(f"[Institution] Circuit breaker OPEN for {symbol}: {e}", exc_info=True)
+        logger.warning(
+            f"[Institution] Circuit breaker OPEN for {symbol}: {e}", exc_info=True
+        )
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[Institution] Data processing error for {symbol}: {e}", exc_info=True)
+        logger.error(
+            f"[Institution] Data processing error for {symbol}: {e}", exc_info=True
+        )
         return error_response(f"数据处理失败: {str(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing data for {symbol}: {e}", exc_info=True)
@@ -725,10 +794,10 @@ async def get_institution_holdings(symbol: str):
 async def get_peer_comparison(symbol: str):
     """
     获取同业比较数据
-    
+
     Args:
         symbol: 股票代码（如 600519）
-    
+
     Returns:
         {
             "code": 0,
@@ -776,29 +845,39 @@ async def get_peer_comparison(symbol: str):
                     df = ak.stock_profile_cninfo(symbol=symbol)
                 if df is not None and not df.empty:
                     row = df.iloc[0]
-                    info_dict['行业'] = row.get('所属行业', '')
-                    info_dict['主营业务'] = row.get('主营业务', '')
+                    info_dict["行业"] = row.get("所属行业", "")
+                    info_dict["主营业务"] = row.get("主营业务", "")
             except CircuitBreakerOpen as e:
                 logger.warning(f"[Peers] Circuit breaker OPEN: {e}", exc_info=True)
             except (KeyError, ValueError, TypeError) as e:
-                logger.debug(f"[Peers] Data processing error in stock_profile_cninfo: {e}")
+                logger.debug(
+                    f"[Peers] Data processing error in stock_profile_cninfo: {e}"
+                )
             except Exception as e:
                 logger.debug(f"[Peers] stock_profile_cninfo failed: {e}")
 
-            if not info_dict.get('行业'):
+            if not info_dict.get("行业"):
                 try:
                     with akshare_breaker:
                         df = ak.stock_individual_info_em(symbol=symbol)
                     if df is not None and not df.empty:
                         for _, row in df.iterrows():
-                            if row['item'] not in info_dict or not info_dict[row['item']]:
-                                info_dict[row['item']] = row['value']
+                            if (
+                                row["item"] not in info_dict
+                                or not info_dict[row["item"]]
+                            ):
+                                info_dict[row["item"]] = row["value"]
                 except CircuitBreakerOpen as e:
                     logger.warning(f"[Peers] Circuit breaker OPEN: {e}", exc_info=True)
                 except (KeyError, ValueError, TypeError) as e:
-                    logger.warning(f"[Peers] Data processing error in stock_individual_info_em: {e}", exc_info=True)
+                    logger.warning(
+                        f"[Peers] Data processing error in stock_individual_info_em: {e}",
+                        exc_info=True,
+                    )
                 except Exception as e:
-                    logger.warning(f"[Peers] stock_individual_info_em failed: {e}", exc_info=True)
+                    logger.warning(
+                        f"[Peers] stock_individual_info_em failed: {e}", exc_info=True
+                    )
 
             return info_dict
 
@@ -808,46 +887,56 @@ async def get_peer_comparison(symbol: str):
                 import pandas as pd
 
                 lg = bs.login()
-                if lg.error_code != '0':
+                if lg.error_code != "0":
                     logger.warning(f"[Peers] BaoStock login failed: {lg.error_msg}")
                     return []
 
                 rs = bs.query_stock_industry()
                 data_list = []
-                while (rs.error_code == '0') & rs.next():
+                while (rs.error_code == "0") & rs.next():
                     data_list.append(rs.get_row_data())
 
                 df = pd.DataFrame(data_list, columns=rs.fields)
                 bs.logout()
 
-                baostock_code = f"sh.{symbol_code}" if symbol_code.startswith('6') else f"sz.{symbol_code}"
-                row = df[df['code'] == baostock_code]
+                baostock_code = (
+                    f"sh.{symbol_code}"
+                    if symbol_code.startswith("6")
+                    else f"sz.{symbol_code}"
+                )
+                row = df[df["code"] == baostock_code]
 
                 if len(row) == 0:
                     logger.warning(f"[Peers] Stock {symbol_code} not found in BaoStock")
                     return []
 
-                industry = row.iloc[0]['industry']
+                industry = row.iloc[0]["industry"]
                 logger.info(f"[Peers] Found industry for {symbol_code}: {industry}")
 
-                peers_df = df[df['industry'] == industry]
+                peers_df = df[df["industry"] == industry]
 
                 result = []
                 for _, peer_row in peers_df.iterrows():
-                    code = peer_row['code']
-                    bare_code = code.replace('sh.', '').replace('sz.', '')
-                    result.append({
-                        '代码': bare_code,
-                        '股票代码': bare_code,
-                        '名称': peer_row['code_name'],
-                        '股票名称': peer_row['code_name']
-                    })
+                    code = peer_row["code"]
+                    bare_code = code.replace("sh.", "").replace("sz.", "")
+                    result.append(
+                        {
+                            "代码": bare_code,
+                            "股票代码": bare_code,
+                            "名称": peer_row["code_name"],
+                            "股票名称": peer_row["code_name"],
+                        }
+                    )
 
-                logger.info(f"[Peers] Found {len(result)} stocks in industry {industry}")
+                logger.info(
+                    f"[Peers] Found {len(result)} stocks in industry {industry}"
+                )
                 return result
 
             except (KeyError, ValueError, TypeError, AttributeError) as e:
-                logger.warning(f"[Peers] Data processing error in BaoStock: {e}", exc_info=True)
+                logger.warning(
+                    f"[Peers] Data processing error in BaoStock: {e}", exc_info=True
+                )
                 return []
             except Exception as e:
                 logger.warning(f"[Peers] BaoStock failed: {e}", exc_info=True)
@@ -856,69 +945,82 @@ async def get_peer_comparison(symbol: str):
         def fetch_financial_indicator(stock_symbol):
             try:
                 with akshare_breaker:
-                    df = ak.stock_financial_analysis_indicator(symbol=stock_symbol, start_year="2023")
+                    df = ak.stock_financial_analysis_indicator(
+                        symbol=stock_symbol, start_year="2023"
+                    )
                 if df is not None and not df.empty:
                     latest = df.iloc[0]
                     return {
-                        'roe': latest.get('净资产收益率(%)'),
-                        'pe': latest.get('市盈率'),
-                        'pb': latest.get('市净率'),
-                        'revenue_growth': latest.get('主营业务收入增长率(%)')
+                        "roe": latest.get("净资产收益率(%)"),
+                        "pe": latest.get("市盈率"),
+                        "pb": latest.get("市净率"),
+                        "revenue_growth": latest.get("主营业务收入增长率(%)"),
                     }
                 return None
             except CircuitBreakerOpen as e:
-                logger.warning(f"[Peers] Circuit breaker OPEN for {stock_symbol}: {e}", exc_info=True)
+                logger.warning(
+                    f"[Peers] Circuit breaker OPEN for {stock_symbol}: {e}",
+                    exc_info=True,
+                )
                 return None
             except (KeyError, ValueError, TypeError) as e:
-                logger.debug(f"[Peers] Data processing error for financial {stock_symbol}: {e}")
+                logger.debug(
+                    f"[Peers] Data processing error for financial {stock_symbol}: {e}"
+                )
                 return None
             except Exception as e:
-                logger.debug(f"[Peers] Failed to fetch financial for {stock_symbol}: {e}")
+                logger.debug(
+                    f"[Peers] Failed to fetch financial for {stock_symbol}: {e}"
+                )
                 return None
 
         stock_info = await asyncio.wait_for(
-            loop.run_in_executor(_executor, fetch_stock_info),
-            timeout=AKSHARE_TIMEOUT
+            loop.run_in_executor(_executor, fetch_stock_info), timeout=AKSHARE_TIMEOUT
         )
 
-        industry_name = stock_info.get('行业') if stock_info else None
+        industry_name = stock_info.get("行业") if stock_info else None
 
         if not industry_name:
-            logger.info("[Peers] No industry from stock_info, using financial data fallback")
+            logger.info(
+                "[Peers] No industry from stock_info, using financial data fallback"
+            )
 
             financial_result = await asyncio.wait_for(
-                loop.run_in_executor(_executor, lambda: fetch_financial_indicator(symbol)),
-                timeout=AKSHARE_TIMEOUT
+                loop.run_in_executor(
+                    _executor, lambda: fetch_financial_indicator(symbol)
+                ),
+                timeout=AKSHARE_TIMEOUT,
             )
 
             if not financial_result:
                 logger.warning(f"[Peers] No financial data for {symbol}")
                 return error_response("未找到股票数据")
 
-            logger.info(f"[Peers] Using demo data for {symbol} (network issue fallback)")
+            logger.info(
+                f"[Peers] Using demo data for {symbol} (network issue fallback)"
+            )
 
             demo_peers = [
                 {
-                    'symbol': symbol,
-                    'name': '当前股票',
-                    'roe': financial_result.get('roe'),
-                    'pe': financial_result.get('pe'),
-                    'pb': financial_result.get('pb'),
-                    'revenue_growth': financial_result.get('revenue_growth')
+                    "symbol": symbol,
+                    "name": "当前股票",
+                    "roe": financial_result.get("roe"),
+                    "pe": financial_result.get("pe"),
+                    "pb": financial_result.get("pb"),
+                    "revenue_growth": financial_result.get("revenue_growth"),
                 }
             ]
 
-            for key in ['roe', 'pe', 'pb', 'revenue_growth']:
+            for key in ["roe", "pe", "pb", "revenue_growth"]:
                 val = demo_peers[0][key]
                 if val is not None and pd.notna(val):
-                    demo_peers[0][key] = round(float(val), 2) if isinstance(val, (int, float)) else val
+                    demo_peers[0][key] = (
+                        round(float(val), 2) if isinstance(val, (int, float)) else val
+                    )
                 else:
                     demo_peers[0][key] = None
 
-            result = {
-                'industry': '未知行业',
-                'peers': demo_peers
-            }
+            result = {"industry": "未知行业", "peers": demo_peers}
 
             await set_cached(cache_key, result)
             return success_response(result)
@@ -927,7 +1029,7 @@ async def get_peer_comparison(symbol: str):
 
         industry_stocks = await asyncio.wait_for(
             loop.run_in_executor(_executor, lambda: fetch_industry_stocks(symbol)),
-            timeout=AKSHARE_TIMEOUT
+            timeout=AKSHARE_TIMEOUT,
         )
 
         if not industry_stocks:
@@ -940,18 +1042,19 @@ async def get_peer_comparison(symbol: str):
         peer_symbols = []
 
         for stock in industry_stocks[:10]:
-            peer_symbol = stock.get('代码', stock.get('股票代码'))
-            peer_name = stock.get('名称', stock.get('股票名称'))
+            peer_symbol = stock.get("代码", stock.get("股票代码"))
+            peer_name = stock.get("名称", stock.get("股票名称"))
 
             if peer_symbol:
                 peer_symbols.append((peer_symbol, peer_name))
                 peer_tasks.append(
-                    loop.run_in_executor(_executor, lambda s=peer_symbol: fetch_financial_indicator(s))
+                    loop.run_in_executor(
+                        _executor, lambda s=peer_symbol: fetch_financial_indicator(s)
+                    )
                 )
 
         financial_results = await asyncio.wait_for(
-            asyncio.gather(*peer_tasks),
-            timeout=AKSHARE_TIMEOUT
+            asyncio.gather(*peer_tasks), timeout=AKSHARE_TIMEOUT
         )
 
         peers = []
@@ -959,31 +1062,34 @@ async def get_peer_comparison(symbol: str):
             financial = financial_results[i]
 
             peer_data = {
-                'symbol': peer_symbol,
-                'name': peer_name,
-                'roe': financial.get('roe') if financial else None,
-                'pe': financial.get('pe') if financial else None,
-                'pb': financial.get('pb') if financial else None,
-                'revenue_growth': financial.get('revenue_growth') if financial else None
+                "symbol": peer_symbol,
+                "name": peer_name,
+                "roe": financial.get("roe") if financial else None,
+                "pe": financial.get("pe") if financial else None,
+                "pb": financial.get("pb") if financial else None,
+                "revenue_growth": (
+                    financial.get("revenue_growth") if financial else None
+                ),
             }
 
-            for key in ['roe', 'pe', 'pb', 'revenue_growth']:
+            for key in ["roe", "pe", "pb", "revenue_growth"]:
                 val = peer_data[key]
                 if val is not None and pd.notna(val):
-                    peer_data[key] = round(float(val), 2) if isinstance(val, (int, float)) else val
+                    peer_data[key] = (
+                        round(float(val), 2) if isinstance(val, (int, float)) else val
+                    )
                 else:
                     peer_data[key] = None
 
             peers.append(peer_data)
 
-        result = {
-            'industry': industry_name,
-            'peers': peers
-        }
+        result = {"industry": industry_name, "peers": peers}
 
         await set_cached(cache_key, result)
 
-        logger.info(f"[Peers] Successfully fetched {len(peers)} peer stocks for {symbol}")
+        logger.info(
+            f"[Peers] Successfully fetched {len(peers)} peer stocks for {symbol}"
+        )
         return success_response(result)
 
     except asyncio.TimeoutError:
@@ -993,7 +1099,9 @@ async def get_peer_comparison(symbol: str):
         logger.warning(f"[Peers] Circuit breaker OPEN for {symbol}: {e}", exc_info=True)
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[Peers] Data processing error for peer data {symbol}: {e}", exc_info=True)
+        logger.error(
+            f"[Peers] Data processing error for peer data {symbol}: {e}", exc_info=True
+        )
         return error_response(f"数据处理失败: {str(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing peer data for {symbol}: {e}", exc_info=True)
@@ -1052,10 +1160,15 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
 
                 return all_announcements
             except CircuitBreakerOpen as e:
-                logger.warning(f"[Announcements] Circuit breaker OPEN: {e}", exc_info=True)
+                logger.warning(
+                    f"[Announcements] Circuit breaker OPEN: {e}", exc_info=True
+                )
                 return []
             except (KeyError, ValueError, TypeError) as e:
-                logger.warning(f"[Announcements] Data processing error for {symbol}: {e}", exc_info=True)
+                logger.warning(
+                    f"[Announcements] Data processing error for {symbol}: {e}",
+                    exc_info=True,
+                )
                 return []
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.warning(f"[HTTP] for {symbol}: {e}", exc_info=True)
@@ -1064,7 +1177,7 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
         loop = asyncio.get_event_loop()
         all_data = await asyncio.wait_for(
             loop.run_in_executor(_executor, fetch_announcements),
-            timeout=AKSHARE_TIMEOUT
+            timeout=AKSHARE_TIMEOUT,
         )
 
         total = len(all_data)
@@ -1076,22 +1189,28 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
             "announcements": paginated_data,
             "total": total,
             "page": page,
-            "page_size": page_size
+            "page_size": page_size,
         }
 
         await set_cached(cache_key, result)
 
-        logger.info(f"[Announcements] Successfully fetched {total} announcements for {symbol}, returning page {page}")
+        logger.info(
+            f"[Announcements] Successfully fetched {total} announcements for {symbol}, returning page {page}"
+        )
         return success_response(result)
 
     except asyncio.TimeoutError:
         logger.warning(f"[Announcements] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except CircuitBreakerOpen as e:
-        logger.warning(f"[Announcements] Circuit breaker OPEN for {symbol}: {e}", exc_info=True)
+        logger.warning(
+            f"[Announcements] Circuit breaker OPEN for {symbol}: {e}", exc_info=True
+        )
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[Announcements] Data processing error for {symbol}: {e}", exc_info=True)
+        logger.error(
+            f"[Announcements] Data processing error for {symbol}: {e}", exc_info=True
+        )
         return error_response(f"数据处理失败: {str(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing data for {symbol}: {e}", exc_info=True)
@@ -1102,22 +1221,25 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
 # 熔断器管理端点
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.get("/circuit_breaker/status")
 @handle_errors(module="f9_deep")
 async def get_circuit_breaker_status():
     """获取 akshare 熔断器状态"""
 
     stats = akshare_breaker.get_stats()
-    return success_response({
-        "name": "akshare",
-        "state": stats.get("state", "unknown"),
-        "total_calls": stats.get("total_calls", 0),
-        "successful_calls": stats.get("successful_calls", 0),
-        "failed_calls": stats.get("failed_calls", 0),
-        "consecutive_failures": stats.get("consecutive_failures", 0),
-        "last_failure_time": stats.get("last_failure_time"),
-        "is_available": akshare_breaker.is_available()
-    })
+    return success_response(
+        {
+            "name": "akshare",
+            "state": stats.get("state", "unknown"),
+            "total_calls": stats.get("total_calls", 0),
+            "successful_calls": stats.get("successful_calls", 0),
+            "failed_calls": stats.get("failed_calls", 0),
+            "consecutive_failures": stats.get("consecutive_failures", 0),
+            "last_failure_time": stats.get("last_failure_time"),
+            "is_available": akshare_breaker.is_available(),
+        }
+    )
 
 
 @router.post("/circuit_breaker/reset")
@@ -1127,11 +1249,9 @@ async def reset_circuit_breaker():
     try:
         akshare_breaker.reset()
         logger.info("[F9] Akshare circuit breaker reset successfully")
-        return success_response({
-            "name": "akshare",
-            "state": "closed",
-            "message": "熔断器已重置"
-        })
+        return success_response(
+            {"name": "akshare", "state": "closed", "message": "熔断器已重置"}
+        )
     except Exception as e:
         logger.error(f"[F9] Failed to reset circuit breaker: {e}", exc_info=True)
         return error_response(f"重置熔断器失败: {str(e)}")

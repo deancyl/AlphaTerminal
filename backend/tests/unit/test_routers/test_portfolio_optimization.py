@@ -13,16 +13,21 @@ This module tests the 10 fixes implemented for the portfolio module:
 9. API key authentication
 10. Response format standardization
 """
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.main import app
 from app.routers.portfolio.schemas import (
-    TransactionIn, CashOpIn, TransferIn, BuyIn, SellIn,
-    PortfolioIn, PositionIn
+    TransactionIn,
+    CashOpIn,
+    TransferIn,
+    BuyIn,
+    SellIn,
+    PortfolioIn,
+    PositionIn,
 )
-
 
 client = TestClient(app)
 
@@ -30,6 +35,7 @@ client = TestClient(app)
 # ══════════════════════════════════════════════════════════════════════════
 #  Fix 1: Timeout Protection Tests
 # ══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.asyncio
 async def test_pnl_endpoint_timeout():
@@ -47,6 +53,7 @@ async def test_list_positions_timeout():
 
     # Check that the function exists and is async
     import inspect
+
     assert inspect.iscoroutinefunction(list_positions), "list_positions should be async"
 
 
@@ -71,27 +78,18 @@ async def test_sell_lot_timeout():
 #  Fix 2: Input Validation Tests
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def test_transaction_in_rejects_negative_amount():
     """Test that TransactionIn rejects negative amounts"""
     with pytest.raises(ValidationError) as exc:
-        TransactionIn(
-            portfolio_id=1,
-            type="deposit",
-            amount=-100.0,
-            balance_after=0.0
-        )
+        TransactionIn(portfolio_id=1, type="deposit", amount=-100.0, balance_after=0.0)
     assert "greater than or equal to 0" in str(exc.value)
 
 
 def test_transaction_in_rejects_negative_balance():
     """Test that TransactionIn rejects negative balance_after"""
     with pytest.raises(ValidationError) as exc:
-        TransactionIn(
-            portfolio_id=1,
-            type="deposit",
-            amount=100.0,
-            balance_after=-50.0
-        )
+        TransactionIn(portfolio_id=1, type="deposit", amount=100.0, balance_after=-50.0)
     assert "greater than or equal to 0" in str(exc.value)
 
 
@@ -105,11 +103,7 @@ def test_cash_op_in_rejects_negative_amount():
 def test_transfer_in_rejects_negative_amount():
     """Test that TransferIn rejects negative amounts"""
     with pytest.raises(ValidationError) as exc:
-        TransferIn(
-            from_portfolio_id=1,
-            to_portfolio_id=2,
-            amount=-100.0
-        )
+        TransferIn(from_portfolio_id=1, to_portfolio_id=2, amount=-100.0)
     # TransferIn uses gt=0, so it should reject <= 0
     assert "greater than 0" in str(exc.value)
 
@@ -117,44 +111,28 @@ def test_transfer_in_rejects_negative_amount():
 def test_transfer_in_rejects_same_accounts():
     """Test that TransferIn rejects same source and destination accounts"""
     with pytest.raises(ValidationError) as exc:
-        TransferIn(
-            from_portfolio_id=1,
-            to_portfolio_id=1,
-            amount=100.0
-        )
+        TransferIn(from_portfolio_id=1, to_portfolio_id=1, amount=100.0)
     assert "不能相同" in str(exc.value)
 
 
 def test_buy_in_rejects_zero_shares():
     """Test that BuyIn rejects zero shares"""
     with pytest.raises(ValidationError) as exc:
-        BuyIn(
-            symbol="600519",
-            shares=0,
-            buy_price=100.0
-        )
+        BuyIn(symbol="600519", shares=0, buy_price=100.0)
     assert "greater than 0" in str(exc.value)
 
 
 def test_buy_in_rejects_zero_price():
     """Test that BuyIn rejects zero price"""
     with pytest.raises(ValidationError) as exc:
-        BuyIn(
-            symbol="600519",
-            shares=100,
-            buy_price=0.0
-        )
+        BuyIn(symbol="600519", shares=100, buy_price=0.0)
     assert "greater than 0" in str(exc.value)
 
 
 def test_sell_in_rejects_zero_shares():
     """Test that SellIn rejects zero shares"""
     with pytest.raises(ValidationError) as exc:
-        SellIn(
-            symbol="600519",
-            shares=0,
-            sell_price=100.0
-        )
+        SellIn(symbol="600519", shares=0, sell_price=100.0)
     assert "greater than 0" in str(exc.value)
 
 
@@ -168,40 +146,28 @@ def test_portfolio_in_rejects_empty_name():
 def test_portfolio_in_rejects_negative_capital():
     """Test that PortfolioIn rejects negative initial_capital"""
     with pytest.raises(ValidationError) as exc:
-        PortfolioIn(
-            name="Test Portfolio",
-            initial_capital=-1000.0
-        )
+        PortfolioIn(name="Test Portfolio", initial_capital=-1000.0)
     assert "greater than or equal to 0" in str(exc.value)
 
 
 def test_position_in_rejects_negative_shares():
     """Test that PositionIn rejects negative shares"""
     with pytest.raises(ValidationError) as exc:
-        PositionIn(
-            portfolio_id=1,
-            symbol="600519",
-            shares=-100,
-            avg_cost=10.0
-        )
+        PositionIn(portfolio_id=1, symbol="600519", shares=-100, avg_cost=10.0)
     assert "greater than or equal to 0" in str(exc.value)
 
 
 def test_position_in_rejects_negative_cost():
     """Test that PositionIn rejects negative avg_cost"""
     with pytest.raises(ValidationError) as exc:
-        PositionIn(
-            portfolio_id=1,
-            symbol="600519",
-            shares=100,
-            avg_cost=-10.0
-        )
+        PositionIn(portfolio_id=1, symbol="600519", shares=100, avg_cost=-10.0)
     assert "greater than or equal to 0" in str(exc.value)
 
 
 # ══════════════════════════════════════════════════════════════════════════
 #  Fix 3: Pagination Tests
 # ══════════════════════════════════════════════════════════════════════════
+
 
 def test_list_positions_pagination_params():
     """Test that list_positions accepts pagination parameters"""
@@ -237,11 +203,13 @@ def test_list_lots_with_summary_pagination():
 #  Fix 4: N+1 Query Optimization Tests
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def test_tree_endpoint_uses_recursive_cte():
     """Test that tree endpoint uses recursive CTE (not N+1 queries)"""
     # Read the source code to verify CTE usage
     from app.routers.portfolio.lots import get_portfolio_tree
     import inspect
+
     source = inspect.getsource(get_portfolio_tree)
 
     # Check for recursive CTE pattern
@@ -253,6 +221,7 @@ def test_get_all_descendants_prevents_infinite_recursion():
     """Test that _get_all_descendants uses visited set to prevent cycles"""
     from app.routers.portfolio.positions import _get_all_descendants
     import inspect
+
     source = inspect.getsource(_get_all_descendants)
 
     # Check for visited set pattern
@@ -264,12 +233,14 @@ def test_get_all_descendants_prevents_infinite_recursion():
 #  Fix 5: Error Handling Tests
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def test_timeout_returns_504():
     """Test that timeout errors return 504 Gateway Timeout"""
     from app.routers.portfolio.positions import list_positions
 
     # Check source code for proper error handling
     import inspect
+
     source = inspect.getsource(list_positions)
 
     assert "asyncio.TimeoutError" in source, "Should catch TimeoutError"
@@ -281,6 +252,7 @@ def test_database_errors_return_500():
     from app.routers.portfolio.lots import buy_lot
 
     import inspect
+
     source = inspect.getsource(buy_lot)
 
     assert "sqlite3.OperationalError" in source, "Should catch OperationalError"
@@ -292,6 +264,7 @@ def test_value_errors_return_400():
     from app.routers.portfolio.lots import buy_lot
 
     import inspect
+
     source = inspect.getsource(buy_lot)
 
     assert "ValueError" in source, "Should catch ValueError"
@@ -302,16 +275,19 @@ def test_value_errors_return_400():
 #  Fix 6: Safe Math Operations Tests
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def test_pnl_calculation_handles_zero_cost():
     """Test that PnL percentage calculation handles zero cost"""
     from app.routers.portfolio.positions import portfolio_pnl
 
     import inspect
+
     source = inspect.getsource(portfolio_pnl)
 
     # Check for division by zero protection
-    assert "if cost_total > 0" in source or "if total_cost" in source, \
-        "Should check for zero before division"
+    assert (
+        "if cost_total > 0" in source or "if total_cost" in source
+    ), "Should check for zero before division"
 
 
 def test_weight_calculation_handles_zero_total():
@@ -319,21 +295,25 @@ def test_weight_calculation_handles_zero_total():
     from app.routers.portfolio.positions import portfolio_pnl
 
     import inspect
+
     source = inspect.getsource(portfolio_pnl)
 
     # Check for division by zero protection in weight calculation
-    assert "if total_value > 0" in source, \
-        "Should check for zero before weight division"
+    assert (
+        "if total_value > 0" in source
+    ), "Should check for zero before weight division"
 
 
 # ══════════════════════════════════════════════════════════════════════════
 #  Fix 7: Rate Limiting Tests
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def test_rate_limit_config_exists():
     """Test that rate limit configuration exists for portfolio endpoints"""
     try:
         from app.config.rate_limit import ENDPOINT_LIMITS, get_endpoint_category
+
         # Check that default limit is configured
         assert "default" in ENDPOINT_LIMITS
         # Portfolio endpoints use default category
@@ -347,11 +327,13 @@ def test_rate_limit_config_exists():
 #  Fix 8: Database Connection Cleanup Tests
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def test_list_positions_closes_connection():
     """Test that list_positions closes database connection"""
     from app.routers.portfolio.positions import list_positions
 
     import inspect
+
     source = inspect.getsource(list_positions)
 
     # Check for try/finally pattern with conn.close()
@@ -364,6 +346,7 @@ def test_portfolio_pnl_closes_connection():
     from app.routers.portfolio.positions import portfolio_pnl
 
     import inspect
+
     source = inspect.getsource(portfolio_pnl)
 
     assert "finally:" in source, "Should have finally block"
@@ -375,6 +358,7 @@ def test_tree_endpoint_closes_connection():
     from app.routers.portfolio.lots import get_portfolio_tree
 
     import inspect
+
     source = inspect.getsource(get_portfolio_tree)
 
     assert "finally:" in source, "Should have finally block"
@@ -385,11 +369,13 @@ def test_tree_endpoint_closes_connection():
 #  Fix 9: API Key Authentication Tests
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def test_buy_lot_requires_api_key():
     """Test that buy_lot endpoint requires API key"""
     from app.routers.portfolio.lots import buy_lot
 
     import inspect
+
     source = inspect.getsource(buy_lot)
 
     assert "require_api_key" in source, "Should require API key"
@@ -400,6 +386,7 @@ def test_sell_lot_requires_api_key():
     from app.routers.portfolio.lots import sell_lot
 
     import inspect
+
     source = inspect.getsource(sell_lot)
 
     assert "require_api_key" in source, "Should require API key"
@@ -410,6 +397,7 @@ def test_upsert_position_requires_api_key():
     from app.routers.portfolio.positions import upsert_position
 
     import inspect
+
     source = inspect.getsource(upsert_position)
 
     assert "require_api_key" in source, "Should require API key"
@@ -420,6 +408,7 @@ def test_delete_position_requires_api_key():
     from app.routers.portfolio.positions import delete_position
 
     import inspect
+
     source = inspect.getsource(delete_position)
 
     assert "require_api_key" in source, "Should require API key"
@@ -429,11 +418,13 @@ def test_delete_position_requires_api_key():
 #  Fix 10: Response Format Standardization Tests
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def test_list_positions_uses_success_response():
     """Test that list_positions uses success_response wrapper"""
     from app.routers.portfolio.positions import list_positions
 
     import inspect
+
     source = inspect.getsource(list_positions)
 
     assert "success_response" in source, "Should use success_response wrapper"
@@ -444,6 +435,7 @@ def test_portfolio_pnl_uses_success_response():
     from app.routers.portfolio.positions import portfolio_pnl
 
     import inspect
+
     source = inspect.getsource(portfolio_pnl)
 
     assert "success_response" in source, "Should use success_response wrapper"
@@ -454,6 +446,7 @@ def test_buy_lot_uses_success_response():
     from app.routers.portfolio.lots import buy_lot
 
     import inspect
+
     source = inspect.getsource(buy_lot)
 
     assert "success_response" in source, "Should use success_response wrapper"
@@ -464,6 +457,7 @@ def test_list_lots_uses_success_response():
     from app.routers.portfolio.lots import list_lots
 
     import inspect
+
     source = inspect.getsource(list_lots)
 
     assert "success_response" in source, "Should use success_response wrapper"
@@ -472,6 +466,7 @@ def test_list_lots_uses_success_response():
 # ══════════════════════════════════════════════════════════════════════════
 #  Integration Tests
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestPortfolioEndpoints:
     """Integration tests for portfolio endpoints."""
@@ -516,15 +511,11 @@ class TestPortfolioEndpoints:
 #  Edge Case Tests
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def test_buy_in_validates_date_format():
     """Test that BuyIn validates date format as YYYY-MM-DD"""
     # Valid date
-    buy = BuyIn(
-        symbol="600519",
-        shares=100,
-        buy_price=100.0,
-        buy_date="2024-01-15"
-    )
+    buy = BuyIn(symbol="600519", shares=100, buy_price=100.0, buy_date="2024-01-15")
     assert buy.buy_date == "2024-01-15"
 
     # Invalid date format
@@ -533,7 +524,7 @@ def test_buy_in_validates_date_format():
             symbol="600519",
             shares=100,
             buy_price=100.0,
-            buy_date="2024/01/15"  # Wrong format
+            buy_date="2024/01/15",  # Wrong format
         )
     assert "Invalid date format" in str(exc.value)
 
@@ -577,20 +568,21 @@ def test_portfolio_in_validates_status():
 def test_transaction_in_validates_type():
     """Test that TransactionIn validates type field"""
     # Valid types
-    for valid_type in ["deposit", "withdraw", "transfer_in", "transfer_out", "dividend", "fee"]:
+    for valid_type in [
+        "deposit",
+        "withdraw",
+        "transfer_in",
+        "transfer_out",
+        "dividend",
+        "fee",
+    ]:
         t = TransactionIn(
-            portfolio_id=1,
-            type=valid_type,
-            amount=100.0,
-            balance_after=100.0
+            portfolio_id=1, type=valid_type, amount=100.0, balance_after=100.0
         )
         assert t.type == valid_type
 
     # Invalid type
     with pytest.raises(ValidationError):
         TransactionIn(
-            portfolio_id=1,
-            type="invalid_type",
-            amount=100.0,
-            balance_after=100.0
+            portfolio_id=1, type="invalid_type", amount=100.0, balance_after=100.0
         )

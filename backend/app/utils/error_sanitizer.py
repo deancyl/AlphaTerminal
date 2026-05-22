@@ -8,6 +8,7 @@ Sanitizes error messages before sending to frontend users.
 
 Security: This module is critical for preventing information disclosure.
 """
+
 import re
 import logging
 
@@ -19,43 +20,37 @@ logger = logging.getLogger(__name__)
 
 SENSITIVE_PATTERNS = [
     # API Keys and tokens
-    r'sk-[a-zA-Z0-9]{20,}',                    # OpenAI-style keys
-    r'sk-[a-zA-Z0-9_-]{48}',                   # OpenAI full keys
+    r"sk-[a-zA-Z0-9]{20,}",  # OpenAI-style keys
+    r"sk-[a-zA-Z0-9_-]{48}",  # OpenAI full keys
     r'api[_-]?key["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',  # api_key=xxx
-    r'api[_-]?key["\']?\s*[:=]\s*["\']?sk-[a-zA-Z0-9_-]+',   # api_key: sk-xxx
-    r'Bearer\s+[a-zA-Z0-9_-]{20,}',           # Bearer tokens
-    r'token["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',        # token=xxx
-    r'access_token["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}', # access_token
-
+    r'api[_-]?key["\']?\s*[:=]\s*["\']?sk-[a-zA-Z0-9_-]+',  # api_key: sk-xxx
+    r"Bearer\s+[a-zA-Z0-9_-]{20,}",  # Bearer tokens
+    r'token["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',  # token=xxx
+    r'access_token["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',  # access_token
     # Passwords and secrets
     r'password["\']?\s*[:=]\s*["\']?[^\s"\']{3,}',  # password=xxx
-    r'secret["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',    # secret=xxx
+    r'secret["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',  # secret=xxx
     r'credential[s]?["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',
-
     # File paths (user info disclosure)
-    r'/home/[a-zA-Z0-9_-]+',                   # Linux home paths
-    r'/Users/[a-zA-Z0-9_-]+',                  # macOS user paths
-    r'C:\\\\Users\\\\[a-zA-Z0-9_-]+',          # Windows user paths
-    r'/var/www/[a-zA-Z0-9_-]+',                # Web server paths
-    r'/etc/passwd',                            # Sensitive system files
-    r'/etc/shadow',                            # Password files
-
+    r"/home/[a-zA-Z0-9_-]+",  # Linux home paths
+    r"/Users/[a-zA-Z0-9_-]+",  # macOS user paths
+    r"C:\\\\Users\\\\[a-zA-Z0-9_-]+",  # Windows user paths
+    r"/var/www/[a-zA-Z0-9_-]+",  # Web server paths
+    r"/etc/passwd",  # Sensitive system files
+    r"/etc/shadow",  # Password files
     # IP addresses (internal network disclosure)
-    r'192\.168\.\d{1,3}\.\d{1,3}',             # Private IPv4
-    r'10\.\d{1,3}\.\d{1,3}\.\d{1,3}',          # Private IPv4
-    r'172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}',  # Private IPv4
-
+    r"192\.168\.\d{1,3}\.\d{1,3}",  # Private IPv4
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # Private IPv4
+    r"172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}",  # Private IPv4
     # Database connection strings
-    r'postgres(?:ql)?://[^\s]+',               # PostgreSQL connection
-    r'mysql://[^\s]+',                         # MySQL connection
-    r'sqlite://[^\s]+',                        # SQLite connection
-    r'mongodb://[^\s]+',                       # MongoDB connection
-
+    r"postgres(?:ql)?://[^\s]+",  # PostgreSQL connection
+    r"mysql://[^\s]+",  # MySQL connection
+    r"sqlite://[^\s]+",  # SQLite connection
+    r"mongodb://[^\s]+",  # MongoDB connection
     # Email addresses
-    r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-
+    r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
     # URLs with credentials
-    r'https?://[^:]+:[^@]+@[^\s]+',            # URL with embedded credentials
+    r"https?://[^:]+:[^@]+@[^\s]+",  # URL with embedded credentials
 ]
 
 # Compile patterns for performance
@@ -74,39 +69,32 @@ ERROR_MAP = {
     "TimeoutError": "请求超时，请稍后重试",
     "ReadTimeout": "读取数据超时，请稍后重试",
     "WriteTimeout": "写入数据超时，请稍后重试",
-
     # HTTP errors
     "HTTPStatusError": "服务暂时不可用，请稍后重试",
     "HTTPError": "服务暂时不可用，请稍后重试",
-
     # Rate limiting
     "RateLimitError": "请求过于频繁，请稍后重试",
     "RateLimitExceededError": "请求过于频繁，请稍后重试",
     "TooManyRequestsError": "请求过于频繁，请稍后重试",
-
     # Authentication errors
     "AuthenticationError": "API 认证失败，请检查配置",
     "UnauthorizedError": "API 认证失败，请检查配置",
     "PermissionError": "权限不足，无法执行此操作",
     "ForbiddenError": "访问被拒绝，请检查权限",
-
     # API errors
     "InvalidRequestError": "请求参数无效，请检查输入",
     "BadRequestError": "请求格式错误，请检查输入",
     "NotFoundError": "请求的资源不存在",
     "APIError": "服务暂时不可用，请稍后重试",
-
     # Server errors
     "InternalServerError": "服务器内部错误，请稍后重试",
     "ServiceUnavailableError": "服务暂时不可用，请稍后重试",
     "BadGatewayError": "网关错误，请稍后重试",
     "GatewayTimeoutError": "网关超时，请稍后重试",
-
     # Data errors
     "JSONDecodeError": "数据解析失败，请稍后重试",
     "ValueError": "数据格式错误，请检查输入",
     "KeyError": "数据字段缺失，请联系管理员",
-
     # Generic errors
     "Exception": "服务暂时不可用，请稍后重试",
     "RuntimeError": "运行时错误，请稍后重试",
@@ -130,28 +118,25 @@ PROVIDER_CONTEXT = {
 def _redact_sensitive(msg: str) -> str:
     """Redact sensitive patterns from message."""
     for pattern in _COMPILED_PATTERNS:
-        msg = pattern.sub('[REDACTED]', msg)
+        msg = pattern.sub("[REDACTED]", msg)
     return msg
 
 
 def sanitize_error(
-    error: Exception,
-    context: str = "",
-    provider: str = "",
-    log_full_error: bool = True
+    error: Exception, context: str = "", provider: str = "", log_full_error: bool = True
 ) -> str:
     """
     Sanitize error message for frontend display.
-    
+
     Args:
         error: The exception that occurred
         context: Additional context about the operation
         provider: LLM provider name (for context prefix)
         log_full_error: Whether to log the full error (default: True)
-    
+
     Returns:
         Sanitized, user-friendly error message
-    
+
     Example:
         >>> try:
         ...     raise ConnectionError("Failed to connect to api.openai.com with key sk-abc123")
@@ -164,7 +149,9 @@ def sanitize_error(
     lower_msg = raw_message.lower()
 
     if log_full_error:
-        provider_name = PROVIDER_CONTEXT.get(provider, provider.upper() if provider else "API")
+        provider_name = PROVIDER_CONTEXT.get(
+            provider, provider.upper() if provider else "API"
+        )
         logger.error(f"[{provider_name}] {error_type}: {raw_message}")
 
     user_message = None
@@ -202,27 +189,27 @@ def sanitize_error(
 
 
 def sanitize_error_message(
-    message: str,
-    provider: str = "",
-    log_full_message: bool = True
+    message: str, provider: str = "", log_full_message: bool = True
 ) -> str:
     """
     Sanitize a raw error message string (not an exception object).
-    
+
     Args:
         message: Raw error message string
         provider: LLM provider name
         log_full_message: Whether to log the full message
-    
+
     Returns:
         Sanitized message
-    
+
     Example:
         >>> sanitize_error_message("HTTP 401 Unauthorized - Invalid API key sk-abc123")
         'HTTP 401 Unauthorized - Invalid API key [REDACTED]'
     """
     if log_full_message:
-        provider_name = PROVIDER_CONTEXT.get(provider, provider.upper() if provider else "API")
+        provider_name = PROVIDER_CONTEXT.get(
+            provider, provider.upper() if provider else "API"
+        )
         logger.error(f"[{provider_name}] {message}")
 
     return _redact_sensitive(message)
@@ -231,6 +218,7 @@ def sanitize_error_message(
 # ═══════════════════════════════════════════════════════════════
 # Convenience functions for common use cases
 # ═══════════════════════════════════════════════════════════════
+
 
 def sanitize_openai_error(error: Exception) -> str:
     """Sanitize OpenAI API error."""

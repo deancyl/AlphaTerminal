@@ -7,10 +7,10 @@ from ..http_client import get_shared_client
 class TencentFetcher(BaseMarketFetcher):
     """
     Tencent Finance data fetcher.
-    
+
     Supports: A-shares, indices, HK stocks, US stocks.
     Does NOT support: Order book (Level 2), futures.
-    
+
     Uses shared HTTP client for connection pooling.
     """
 
@@ -64,7 +64,7 @@ class TencentFetcher(BaseMarketFetcher):
                 return None
 
             data_str = text.split('="')[1].rstrip('";')
-            fields = data_str.split('~')
+            fields = data_str.split("~")
 
             if len(fields) < 40:
                 return None
@@ -90,11 +90,20 @@ class TencentFetcher(BaseMarketFetcher):
                 "prev_close": prev_close,
                 "change_pct": round(change_pct, 2),
                 "volume": volume,
-                "source": "tencent"
+                "source": "tencent",
             }
 
-        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError, IndexError) as e:
-            logger.debug(f"[Tencent] get_quote error for {symbol}: {type(e).__name__}: {e}")
+        except (
+            httpx.HTTPError,
+            asyncio.TimeoutError,
+            ConnectionError,
+            ValueError,
+            KeyError,
+            IndexError,
+        ) as e:
+            logger.debug(
+                f"[Tencent] get_quote error for {symbol}: {type(e).__name__}: {e}"
+            )
             return None
 
     async def get_kline(self, symbol: str, period: str = "day") -> Optional[List[Dict]]:
@@ -104,12 +113,7 @@ class TencentFetcher(BaseMarketFetcher):
             tencent_code = self._normalize_symbol(symbol)
 
             # Map period to Tencent format
-            period_map = {
-                "minute": "1",
-                "day": "day",
-                "week": "week",
-                "month": "month"
-            }
+            period_map = {"minute": "1", "day": "day", "week": "week", "month": "month"}
             tencent_period = period_map.get(period, "day")
 
             url = f"{self.KLINE_URL}?_var=kline_dayqfq&param={tencent_code},{tencent_period},,,,320,qfq"
@@ -124,6 +128,7 @@ class TencentFetcher(BaseMarketFetcher):
                 return None
 
             import json
+
             data_str = text.split("=")[1]
             data = json.loads(data_str)
 
@@ -136,17 +141,29 @@ class TencentFetcher(BaseMarketFetcher):
             klines = []
             for item in qfqday:
                 if len(item) >= 5:
-                    klines.append({
-                        "date": item[0],
-                        "open": float(item[1]),
-                        "high": float(item[2]),
-                        "low": float(item[3]),
-                        "close": float(item[4]),
-                        "volume": int(item[5]) if len(item) > 5 else 0
-                    })
+                    klines.append(
+                        {
+                            "date": item[0],
+                            "open": float(item[1]),
+                            "high": float(item[2]),
+                            "low": float(item[3]),
+                            "close": float(item[4]),
+                            "volume": int(item[5]) if len(item) > 5 else 0,
+                        }
+                    )
 
             return klines
 
-        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError, IndexError, json.JSONDecodeError) as e:
-            logger.debug(f"[Tencent] get_kline error for {symbol}: {type(e).__name__}: {e}")
+        except (
+            httpx.HTTPError,
+            asyncio.TimeoutError,
+            ConnectionError,
+            ValueError,
+            KeyError,
+            IndexError,
+            json.JSONDecodeError,
+        ) as e:
+            logger.debug(
+                f"[Tencent] get_kline error for {symbol}: {type(e).__name__}: {e}"
+            )
             return None

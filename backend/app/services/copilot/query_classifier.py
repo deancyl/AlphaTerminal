@@ -10,6 +10,7 @@ Key Features:
 - Symbol extraction from Chinese names and stock codes
 - Confidence scoring based on pattern matches
 """
+
 import logging
 import re
 import threading
@@ -22,17 +23,19 @@ logger = logging.getLogger(__name__)
 
 class QueryType(Enum):
     """Query classification types"""
-    COMPANY_DEEP_DIVE = "company_deep_dive"      # "分析茅台"
-    EVENT_DRIVEN = "event_driven"                 # "茅台涨价影响"
-    PORTFOLIO_RISK = "portfolio_risk"             # "检查我的持仓风险"
-    MACRO_IMPACT = "macro_impact"                 # "CPI对消费板块影响"
-    SECTOR_COMPARISON = "sector_comparison"       # "茅台 vs 五粮液"
-    QUICK_QA = "quick_qa"                         # "茅台市盈率是多少"
+
+    COMPANY_DEEP_DIVE = "company_deep_dive"  # "分析茅台"
+    EVENT_DRIVEN = "event_driven"  # "茅台涨价影响"
+    PORTFOLIO_RISK = "portfolio_risk"  # "检查我的持仓风险"
+    MACRO_IMPACT = "macro_impact"  # "CPI对消费板块影响"
+    SECTOR_COMPARISON = "sector_comparison"  # "茅台 vs 五粮液"
+    QUICK_QA = "quick_qa"  # "茅台市盈率是多少"
 
 
 @dataclass
 class ClassificationResult:
     """Result of query classification"""
+
     query_type: QueryType
     symbols: List[str] = field(default_factory=list)
     sector: Optional[str] = None
@@ -185,7 +188,21 @@ SECTOR_MAP = {
 }
 
 # Macro indicator keywords
-MACRO_KEYWORDS = ["GDP", "CPI", "PPI", "PMI", "M2", "M1", "M0", "社融", "信贷", "利率", "汇率", "通胀", "通缩"]
+MACRO_KEYWORDS = [
+    "GDP",
+    "CPI",
+    "PPI",
+    "PMI",
+    "M2",
+    "M1",
+    "M0",
+    "社融",
+    "信贷",
+    "利率",
+    "汇率",
+    "通胀",
+    "通缩",
+]
 
 # Quick QA patterns (questions about specific metrics)
 QUICK_QA_PATTERNS = [
@@ -198,7 +215,7 @@ QUICK_QA_PATTERNS = [
 class QueryClassifier:
     """
     Query classifier using regex patterns.
-    
+
     Classifies user queries into predefined types and extracts
     stock symbols, sectors, and macro indicators.
     """
@@ -210,10 +227,10 @@ class QueryClassifier:
     def classify(self, query: str) -> ClassificationResult:
         """
         Classify a user query.
-        
+
         Args:
             query: User's natural language query
-            
+
         Returns:
             ClassificationResult with query type and extracted entities
         """
@@ -221,7 +238,7 @@ class QueryClassifier:
             return ClassificationResult(
                 query_type=QueryType.QUICK_QA,
                 confidence=0.0,
-                original_query=query or ""
+                original_query=query or "",
             )
 
         query = query.strip()
@@ -232,7 +249,9 @@ class QueryClassifier:
         macro_indicators = self._extract_macro_indicators(query)
 
         # Classify query type
-        query_type, confidence = self._classify_type(query, symbols, sector, macro_indicators)
+        query_type, confidence = self._classify_type(
+            query, symbols, sector, macro_indicators
+        )
 
         result = ClassificationResult(
             query_type=query_type,
@@ -240,10 +259,12 @@ class QueryClassifier:
             sector=sector,
             macro_indicators=macro_indicators,
             confidence=confidence,
-            original_query=query
+            original_query=query,
         )
 
-        logger.debug(f"[QueryClassifier] Classified '{query}' as {query_type.value} (confidence: {confidence:.2f})")
+        logger.debug(
+            f"[QueryClassifier] Classified '{query}' as {query_type.value} (confidence: {confidence:.2f})"
+        )
 
         return result
 
@@ -252,11 +273,11 @@ class QueryClassifier:
         query: str,
         symbols: List[str],
         sector: Optional[str],
-        macro_indicators: List[str]
+        macro_indicators: List[str],
     ) -> Tuple[QueryType, float]:
         """
         Determine query type based on patterns and extracted entities.
-        
+
         Returns:
             Tuple of (QueryType, confidence)
         """
@@ -332,12 +353,12 @@ class QueryClassifier:
     def _extract_symbols(self, query: str) -> List[str]:
         """
         Extract stock symbols from query.
-        
+
         Matches:
         - Chinese stock names (茅台, 平安, etc.)
         - Stock codes (600519, 000001, etc.)
         - Prefixed codes (sh600519, sz000001)
-        
+
         Returns:
             List of normalized symbols (6-digit codes)
         """
@@ -370,7 +391,7 @@ class QueryClassifier:
     def _extract_sector(self, query: str) -> Optional[str]:
         """
         Extract sector name from query.
-        
+
         Returns:
             Sector name or None
         """
@@ -382,7 +403,7 @@ class QueryClassifier:
     def _extract_macro_indicators(self, query: str) -> List[str]:
         """
         Extract macro economic indicators from query.
-        
+
         Returns:
             List of indicator names
         """

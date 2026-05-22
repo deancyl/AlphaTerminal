@@ -6,6 +6,7 @@
 - 渐进式恢复（先试探性恢复）
 - 记录恢复历史用于分析
 """
+
 import logging
 from typing import Dict, Optional
 from dataclasses import dataclass
@@ -16,12 +17,15 @@ from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class RecoveryRecord:
     """恢复记录"""
+
     timestamp: datetime
     success: bool
     recovery_time: float  # 秒
+
 
 class AdaptiveCircuitBreaker(CircuitBreaker):
     """自适应熔断器"""
@@ -33,11 +37,10 @@ class AdaptiveCircuitBreaker(CircuitBreaker):
         base_timeout: float = 30.0,
         min_timeout: float = 10.0,
         max_timeout: float = 120.0,
-        recovery_history_size: int = 10
+        recovery_history_size: int = 10,
     ):
         config = CircuitBreakerConfig(
-            failure_threshold=failure_threshold,
-            timeout=base_timeout
+            failure_threshold=failure_threshold, timeout=base_timeout
         )
         super().__init__(name, config)
         self.base_timeout = base_timeout
@@ -51,7 +54,7 @@ class AdaptiveCircuitBreaker(CircuitBreaker):
     def get_adaptive_timeout(self) -> float:
         """
         计算自适应timeout
-        
+
         策略:
         - 如果最近恢复成功率高，缩短timeout
         - 如果连续失败，延长timeout
@@ -66,33 +69,27 @@ class AdaptiveCircuitBreaker(CircuitBreaker):
         # 根据成功率调整
         if success_rate >= 0.8:
             # 成功率高，缩短timeout
-            self._current_timeout = max(
-                self.min_timeout,
-                self._current_timeout * 0.5
-            )
+            self._current_timeout = max(self.min_timeout, self._current_timeout * 0.5)
         elif success_rate <= 0.3:
             # 成功率低，延长timeout
-            self._current_timeout = min(
-                self.max_timeout,
-                self._current_timeout * 1.5
-            )
+            self._current_timeout = min(self.max_timeout, self._current_timeout * 1.5)
 
         # 连续失败惩罚
         if self._consecutive_failures > 3:
             self._current_timeout = min(
                 self.max_timeout,
-                self._current_timeout * (1 + self._consecutive_failures * 0.1)
+                self._current_timeout * (1 + self._consecutive_failures * 0.1),
             )
 
         return self._current_timeout
 
     def record_recovery(self, success: bool, recovery_time: float):
         """记录恢复结果"""
-        self._recovery_history.append(RecoveryRecord(
-            timestamp=datetime.now(),
-            success=success,
-            recovery_time=recovery_time
-        ))
+        self._recovery_history.append(
+            RecoveryRecord(
+                timestamp=datetime.now(), success=success, recovery_time=recovery_time
+            )
+        )
 
         if success:
             self._consecutive_failures = 0
@@ -109,6 +106,7 @@ class AdaptiveCircuitBreaker(CircuitBreaker):
             "consecutive_failures": self._consecutive_failures,
             "recovery_history_size": len(self._recovery_history),
         }
+
 
 # 管理器
 class AdaptiveBreakerManager:
@@ -127,8 +125,10 @@ class AdaptiveBreakerManager:
         """获取所有熔断器状态"""
         return {name: breaker.get_stats() for name, breaker in self._breakers.items()}
 
+
 # 全局实例
 _manager: Optional[AdaptiveBreakerManager] = None
+
 
 def get_adaptive_breaker_manager() -> AdaptiveBreakerManager:
     global _manager

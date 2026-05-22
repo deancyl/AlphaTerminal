@@ -18,10 +18,10 @@ from app.services.unified_fetcher import (
 )
 from app.services.circuit_breaker import CircuitBreaker
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_cache():
@@ -30,14 +30,16 @@ def mock_cache():
     cache.get = MagicMock(return_value=None)
     cache.set = MagicMock(return_value=True)
     cache.delete = MagicMock(return_value=True)
-    cache.get_stats = MagicMock(return_value={
-        "hit_rate": 0.0,
-        "miss_rate": 100.0,
-        "total_requests": 0,
-        "hits": 0,
-        "misses": 0,
-        "entry_count": 0,
-    })
+    cache.get_stats = MagicMock(
+        return_value={
+            "hit_rate": 0.0,
+            "miss_rate": 100.0,
+            "total_requests": 0,
+            "hits": 0,
+            "misses": 0,
+            "entry_count": 0,
+        }
+    )
     return cache
 
 
@@ -59,8 +61,11 @@ def mock_metrics():
 @pytest.fixture
 def fetcher(mock_cache, mock_metrics):
     """Create UnifiedFetcher with mocked dependencies."""
-    with patch('app.services.unified_fetcher.get_cache', return_value=mock_cache), \
-         patch('app.services.unified_fetcher.get_cache_metrics', return_value=mock_metrics):
+    with patch(
+        "app.services.unified_fetcher.get_cache", return_value=mock_cache
+    ), patch(
+        "app.services.unified_fetcher.get_cache_metrics", return_value=mock_metrics
+    ):
         f = UnifiedFetcher()
         f.cache = mock_cache
         f.metrics = mock_metrics
@@ -71,14 +76,29 @@ def fetcher(mock_cache, mock_metrics):
 def sample_kline_data():
     """Sample K-line data for testing."""
     return [
-        {"date": "2024-01-01", "open": 10.0, "high": 10.5, "low": 9.8, "close": 10.2, "volume": 1000000},
-        {"date": "2024-01-02", "open": 10.2, "high": 10.8, "low": 10.0, "close": 10.6, "volume": 1200000},
+        {
+            "date": "2024-01-01",
+            "open": 10.0,
+            "high": 10.5,
+            "low": 9.8,
+            "close": 10.2,
+            "volume": 1000000,
+        },
+        {
+            "date": "2024-01-02",
+            "open": 10.2,
+            "high": 10.8,
+            "low": 10.0,
+            "close": 10.6,
+            "volume": 1200000,
+        },
     ]
 
 
 # ============================================================================
 # TestUnifiedFetcherFallback
 # ============================================================================
+
 
 class TestUnifiedFetcherFallback:
     """Tests for fetch_with_fallback function"""
@@ -89,7 +109,7 @@ class TestUnifiedFetcherFallback:
             key="kline:sh600519:daily",
             fetch_fn=lambda: sample_kline_data,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.is_success is True
@@ -108,7 +128,7 @@ class TestUnifiedFetcherFallback:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is True
@@ -125,7 +145,7 @@ class TestUnifiedFetcherFallback:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is False
@@ -142,7 +162,7 @@ class TestUnifiedFetcherFallback:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is False
@@ -160,7 +180,7 @@ class TestUnifiedFetcherFallback:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert isinstance(result.data, list)
@@ -172,6 +192,7 @@ class TestUnifiedFetcherFallback:
 # ============================================================================
 # TestUnifiedFetcherSourcePriority
 # ============================================================================
+
 
 class TestUnifiedFetcherSourcePriority:
     """Tests for source priority"""
@@ -191,7 +212,7 @@ class TestUnifiedFetcherSourcePriority:
             fetch_fn=track_primary,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert "primary" in call_order
@@ -222,7 +243,7 @@ class TestUnifiedFetcherSourcePriority:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is True
@@ -245,7 +266,7 @@ class TestUnifiedFetcherSourcePriority:
             key="kline:sh600519:daily",
             fetch_fn=primary_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.is_success is True
@@ -256,6 +277,7 @@ class TestUnifiedFetcherSourcePriority:
 # TestUnifiedFetcherDataMerge
 # ============================================================================
 
+
 class TestUnifiedFetcherDataMerge:
     """Tests for data merging"""
 
@@ -263,7 +285,7 @@ class TestUnifiedFetcherDataMerge:
         """Data from multiple sources should be merged correctly."""
         fallback_data = [
             {"date": "2024-01-01", "close": 10.0},
-            {"date": "2024-01-02", "close": 10.5}
+            {"date": "2024-01-02", "close": 10.5},
         ]
 
         primary_fn = lambda: (_ for _ in ()).throw(Exception("Primary failed"))
@@ -274,7 +296,7 @@ class TestUnifiedFetcherDataMerge:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is True
@@ -293,7 +315,7 @@ class TestUnifiedFetcherDataMerge:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.data == sample_kline_data
@@ -311,7 +333,7 @@ class TestUnifiedFetcherDataMerge:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is True
@@ -330,7 +352,7 @@ class TestUnifiedFetcherDataMerge:
             key="kline:sh600519:daily",
             fetch_fn=primary_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.data[0]["timestamp"] == "2024-01-01T10:00:00"
@@ -341,10 +363,13 @@ class TestUnifiedFetcherDataMerge:
 # TestUnifiedFetcherCache
 # ============================================================================
 
+
 class TestUnifiedFetcherCache:
     """Tests for cache integration"""
 
-    def test_cache_hit_returns_cached_data(self, fetcher, sample_kline_data, mock_cache):
+    def test_cache_hit_returns_cached_data(
+        self, fetcher, sample_kline_data, mock_cache
+    ):
         """Cache hit should return cached data without fetching."""
         mock_cache.get = MagicMock(return_value=sample_kline_data)
 
@@ -354,14 +379,16 @@ class TestUnifiedFetcherCache:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.from_cache is True
         assert result.data == sample_kline_data
         assert fetch_fn.called is False
 
-    def test_cache_miss_fetches_and_caches(self, fetcher, sample_kline_data, mock_cache):
+    def test_cache_miss_fetches_and_caches(
+        self, fetcher, sample_kline_data, mock_cache
+    ):
         """Cache miss should fetch data and cache it."""
         mock_cache.get = MagicMock(return_value=None)
 
@@ -371,7 +398,7 @@ class TestUnifiedFetcherCache:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.from_cache is False
@@ -389,7 +416,7 @@ class TestUnifiedFetcherCache:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.from_cache is False
@@ -405,7 +432,7 @@ class TestUnifiedFetcherCache:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result1.from_cache is False
@@ -416,7 +443,7 @@ class TestUnifiedFetcherCache:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert fetch_fn.call_count == 2
@@ -425,6 +452,7 @@ class TestUnifiedFetcherCache:
 # ============================================================================
 # TestUnifiedFetcherValidation
 # ============================================================================
+
 
 class TestUnifiedFetcherValidation:
     """Tests for data validation"""
@@ -437,7 +465,7 @@ class TestUnifiedFetcherValidation:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.is_success is True
@@ -451,7 +479,7 @@ class TestUnifiedFetcherValidation:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.is_success is True
@@ -467,7 +495,7 @@ class TestUnifiedFetcherValidation:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.is_success is True
@@ -481,7 +509,7 @@ class TestUnifiedFetcherValidation:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         for item in result.data:
@@ -493,6 +521,7 @@ class TestUnifiedFetcherValidation:
 # ============================================================================
 # TestUnifiedFetcherErrorHandling
 # ============================================================================
+
 
 class TestUnifiedFetcherErrorHandling:
     """Tests for error handling"""
@@ -507,7 +536,7 @@ class TestUnifiedFetcherErrorHandling:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is True
@@ -523,7 +552,7 @@ class TestUnifiedFetcherErrorHandling:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is True
@@ -539,7 +568,7 @@ class TestUnifiedFetcherErrorHandling:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is True
@@ -554,7 +583,7 @@ class TestUnifiedFetcherErrorHandling:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is True
@@ -575,7 +604,7 @@ class TestUnifiedFetcherErrorHandling:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is True
@@ -586,6 +615,7 @@ class TestUnifiedFetcherErrorHandling:
 # TestUnifiedFetcherPerformance
 # ============================================================================
 
+
 class TestUnifiedFetcherPerformance:
     """Tests for performance"""
 
@@ -594,9 +624,15 @@ class TestUnifiedFetcherPerformance:
         fetch_fn = lambda: sample_kline_data
 
         results = [
-            fetcher.fetch_sync("kline:sh600519:daily", fetch_fn, 300, DataSource.AKSHARE),
-            fetcher.fetch_sync("kline:sh600036:daily", fetch_fn, 300, DataSource.AKSHARE),
-            fetcher.fetch_sync("kline:sh601318:daily", fetch_fn, 300, DataSource.AKSHARE),
+            fetcher.fetch_sync(
+                "kline:sh600519:daily", fetch_fn, 300, DataSource.AKSHARE
+            ),
+            fetcher.fetch_sync(
+                "kline:sh600036:daily", fetch_fn, 300, DataSource.AKSHARE
+            ),
+            fetcher.fetch_sync(
+                "kline:sh601318:daily", fetch_fn, 300, DataSource.AKSHARE
+            ),
         ]
 
         assert all(r.is_success for r in results)
@@ -604,6 +640,7 @@ class TestUnifiedFetcherPerformance:
 
     def test_timeout_per_source(self, fetcher, sample_kline_data):
         """Each source has its own timeout protection."""
+
         def slow_fetch():
             time.sleep(0.01)
             return sample_kline_data
@@ -612,7 +649,7 @@ class TestUnifiedFetcherPerformance:
             key="kline:sh600519:daily",
             fetch_fn=slow_fetch,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert result.is_success is True
@@ -628,7 +665,7 @@ class TestUnifiedFetcherPerformance:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         elapsed = time.time() - start_time
@@ -641,6 +678,7 @@ class TestUnifiedFetcherPerformance:
 # TestUnifiedFetcherLogging
 # ============================================================================
 
+
 class TestUnifiedFetcherLogging:
     """Tests for logging"""
 
@@ -652,7 +690,7 @@ class TestUnifiedFetcherLogging:
             key="kline:sh600519:daily",
             fetch_fn=fetch_fn,
             ttl=300,
-            source=DataSource.AKSHARE
+            source=DataSource.AKSHARE,
         )
 
         assert fetcher.metrics.record_latency.called is True
@@ -667,7 +705,7 @@ class TestUnifiedFetcherLogging:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert fetcher.metrics.record_error.called is True
@@ -683,7 +721,7 @@ class TestUnifiedFetcherLogging:
             fetch_fn=primary_fn,
             ttl=300,
             source=DataSource.AKSHARE,
-            fallback_fn=fallback_fn
+            fallback_fn=fallback_fn,
         )
 
         assert result.is_success is False
@@ -693,6 +731,7 @@ class TestUnifiedFetcherLogging:
 # ============================================================================
 # TestFetchResult
 # ============================================================================
+
 
 class TestFetchResult:
     """Tests for FetchResult dataclass"""
@@ -704,7 +743,7 @@ class TestFetchResult:
             source=DataSource.AKSHARE,
             latency_ms=100.0,
             from_cache=False,
-            error=None
+            error=None,
         )
 
         assert result.is_success is True
@@ -716,7 +755,7 @@ class TestFetchResult:
             source=DataSource.AKSHARE,
             latency_ms=100.0,
             from_cache=False,
-            error="Something went wrong"
+            error="Something went wrong",
         )
 
         assert result.is_success is False
@@ -727,7 +766,7 @@ class TestFetchResult:
             data={"test": "data"},
             source=DataSource.AKSHARE,
             latency_ms=50.5,
-            from_cache=True
+            from_cache=True,
         )
 
         assert result.latency_ms > 0
@@ -736,6 +775,7 @@ class TestFetchResult:
 # ============================================================================
 # TestDataSource
 # ============================================================================
+
 
 class TestDataSource:
     """Tests for DataSource enum"""
@@ -757,6 +797,7 @@ class TestDataSource:
 # ============================================================================
 # TestUnifiedFetcherStats
 # ============================================================================
+
 
 class TestUnifiedFetcherStats:
     """Tests for statistics and management methods"""
@@ -814,14 +855,16 @@ class TestUnifiedFetcherStats:
 # TestGetFetcher
 # ============================================================================
 
+
 class TestGetFetcher:
     """Tests for get_fetcher singleton"""
 
     def test_get_fetcher_returns_singleton(self):
         """get_fetcher should return the same instance."""
-        with patch('app.services.unified_fetcher.get_cache'):
-            with patch('app.services.unified_fetcher.get_cache_metrics'):
+        with patch("app.services.unified_fetcher.get_cache"):
+            with patch("app.services.unified_fetcher.get_cache_metrics"):
                 import app.services.unified_fetcher as module
+
                 module._fetcher = None
 
                 fetcher1 = get_fetcher()
@@ -831,9 +874,10 @@ class TestGetFetcher:
 
     def test_get_fetcher_creates_instance(self):
         """get_fetcher should create instance if None."""
-        with patch('app.services.unified_fetcher.get_cache'):
-            with patch('app.services.unified_fetcher.get_cache_metrics'):
+        with patch("app.services.unified_fetcher.get_cache"):
+            with patch("app.services.unified_fetcher.get_cache_metrics"):
                 import app.services.unified_fetcher as module
+
                 module._fetcher = None
 
                 fetcher = get_fetcher()

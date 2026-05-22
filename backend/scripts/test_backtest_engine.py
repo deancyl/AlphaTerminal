@@ -4,8 +4,10 @@ Sample Strategy Test for Backtest Engine
 
 Demonstrates the backtest engine with a simple MA crossover strategy.
 """
+
 import sys
-sys.path.insert(0, '/vol3/1000/docker/opencode/workspace/AlphaTerminal/backend')
+
+sys.path.insert(0, "/vol3/1000/docker/opencode/workspace/AlphaTerminal/backend")
 
 import pandas as pd
 import numpy as np
@@ -21,7 +23,7 @@ from app.services.backtest.engine import (
 def generate_sample_data(days: int = 252) -> pd.DataFrame:
     """Generate sample OHLCV data with trend"""
     np.random.seed(42)
-    dates = pd.date_range(start='2023-01-01', periods=days, freq='D')
+    dates = pd.date_range(start="2023-01-01", periods=days, freq="D")
 
     # Generate trending price data
     closes = [100]
@@ -39,14 +41,16 @@ def generate_sample_data(days: int = 252) -> pd.DataFrame:
     lows = np.minimum(opens, closes) - np.abs(np.random.randn(days) * 1)
     volumes = np.random.randint(1000000, 10000000, days)
 
-    return pd.DataFrame({
-        'timestamp': dates,
-        'open': opens,
-        'high': highs,
-        'low': lows,
-        'close': closes,
-        'volume': volumes
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": opens,
+            "high": highs,
+            "low": lows,
+            "close": closes,
+            "volume": volumes,
+        }
+    )
 
 
 def ma_crossover_strategy(ctx: StrategyContext):
@@ -61,9 +65,9 @@ def ma_crossover_strategy(ctx: StrategyContext):
     slow_ma = np.mean(price_history[-30:])
 
     if fast_ma > slow_ma and not ctx.has_position():
-        ctx.buy('AAPL')
+        ctx.buy("AAPL")
     elif fast_ma < slow_ma and ctx.has_position():
-        ctx.sell('AAPL')
+        ctx.sell("AAPL")
 
 
 def rsi_strategy(ctx: StrategyContext):
@@ -75,7 +79,9 @@ def rsi_strategy(ctx: StrategyContext):
         return
 
     # Calculate RSI
-    changes = [price_history[i] - price_history[i-1] for i in range(1, len(price_history))]
+    changes = [
+        price_history[i] - price_history[i - 1] for i in range(1, len(price_history))
+    ]
     gains = [max(0, c) for c in changes[-14:]]
     losses = [abs(min(0, c)) for c in changes[-14:]]
 
@@ -89,9 +95,9 @@ def rsi_strategy(ctx: StrategyContext):
         rsi = 100 - (100 / (1 + rs))
 
     if rsi < 30 and not ctx.has_position():
-        ctx.buy('AAPL')
+        ctx.buy("AAPL")
     elif rsi > 70 and ctx.has_position():
-        ctx.sell('AAPL')
+        ctx.sell("AAPL")
 
 
 def run_backtest():
@@ -122,7 +128,7 @@ def run_backtest():
         position_size_pct=0.95,
         max_positions=1,
         timeframe=TimeFrame.D1,
-        warmup_bars=30
+        warmup_bars=30,
     )
     print(f"    Initial capital: ${config.initial_capital:,.2f}")
     print(f"    Commission: {config.commission * 100:.4f}%")
@@ -134,29 +140,39 @@ def run_backtest():
     print("\n[3] Running MA Crossover Strategy...")
     price_history = []
     engine = BacktestEngine(config)
-    result = engine.run_strategy(ma_crossover_strategy, data, symbol='AAPL')
+    result = engine.run_strategy(ma_crossover_strategy, data, symbol="AAPL")
 
     # Print results
     print("\n" + "=" * 70)
     print("RESULTS - MA CROSSOVER STRATEGY")
     print("=" * 70)
-    print(f"Total Return: ${result.metrics.total_return:,.2f} ({result.metrics.total_return_pct:.2f}%)")
+    print(
+        f"Total Return: ${result.metrics.total_return:,.2f} ({result.metrics.total_return_pct:.2f}%)"
+    )
     print(f"Annualized Return: {result.metrics.annualized_return_pct:.2f}%")
     print(f"Sharpe Ratio: {result.metrics.sharpe_ratio:.3f}")
     print(f"Sortino Ratio: {result.metrics.sortino_ratio:.3f}")
-    print(f"Max Drawdown: ${result.metrics.max_drawdown:,.2f} ({result.metrics.max_drawdown_pct:.2f}%)")
+    print(
+        f"Max Drawdown: ${result.metrics.max_drawdown:,.2f} ({result.metrics.max_drawdown_pct:.2f}%)"
+    )
     print(f"Win Rate: {result.metrics.win_rate:.2f}%")
     print(f"Profit Factor: {result.metrics.profit_factor:.2f}")
     print(f"Total Trades: {result.metrics.total_trades}")
-    print(f"Winning/Losing: {result.metrics.winning_trades}/{result.metrics.losing_trades}")
+    print(
+        f"Winning/Losing: {result.metrics.winning_trades}/{result.metrics.losing_trades}"
+    )
     print(f"Benchmark Return: {result.benchmark_return_pct:.2f}%")
     print(f"Execution Time: {result.execution_time_ms:.2f}ms")
 
     # Show sample trades
     print("\n[4] Sample Trades (first 5):")
     for i, trade in enumerate(result.trades[:5]):
-        print(f"    Trade {i+1}: {trade.side.value} {trade.quantity} @ ${trade.entry_price:.2f} -> ${trade.exit_price:.2f}")
-        print(f"             PnL: ${trade.pnl:.2f} ({trade.pnl_pct:.2f}%) - {trade.exit_reason}")
+        print(
+            f"    Trade {i+1}: {trade.side.value} {trade.quantity} @ ${trade.entry_price:.2f} -> ${trade.exit_price:.2f}"
+        )
+        print(
+            f"             PnL: ${trade.pnl:.2f} ({trade.pnl_pct:.2f}%) - {trade.exit_reason}"
+        )
 
     # Run RSI strategy
     print("\n" + "=" * 70)
@@ -165,9 +181,11 @@ def run_backtest():
 
     price_history = []
     engine2 = BacktestEngine(config)
-    result2 = engine2.run_strategy(rsi_strategy, data, symbol='AAPL')
+    result2 = engine2.run_strategy(rsi_strategy, data, symbol="AAPL")
 
-    print(f"Total Return: ${result2.metrics.total_return:,.2f} ({result2.metrics.total_return_pct:.2f}%)")
+    print(
+        f"Total Return: ${result2.metrics.total_return:,.2f} ({result2.metrics.total_return_pct:.2f}%)"
+    )
     print(f"Annualized Return: {result2.metrics.annualized_return_pct:.2f}%")
     print(f"Sharpe Ratio: {result2.metrics.sharpe_ratio:.3f}")
     print(f"Max Drawdown: {result2.metrics.max_drawdown_pct:.2f}%")
@@ -182,7 +200,7 @@ def run_backtest():
         "DEBUG CYCLE 3: DATA LOADING",
         "DEBUG CYCLE 7: METRIC CALCULATION",
         "DEBUG CYCLE 8: RESULT GENERATION",
-        "DEBUG CYCLE 10: PERFORMANCE SUMMARY"
+        "DEBUG CYCLE 10: PERFORMANCE SUMMARY",
     ]
 
     for cycle in debug_cycles:

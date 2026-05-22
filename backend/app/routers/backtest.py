@@ -1,6 +1,7 @@
 """
 回测引擎 API
 """
+
 import json
 import logging
 import asyncio
@@ -23,9 +24,9 @@ router = APIRouter()
 _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="backtest_")
 
 # ── 安全限制 ─────────────────────────────────────────────────────────
-MAX_PARAMS_DEPTH = 5      # JSON 最大嵌套深度
-MAX_PARAMS_KEYS = 50      # 最大键数量
-MAX_PARAMS_SIZE = 10000   # 最大 JSON 字符串长度
+MAX_PARAMS_DEPTH = 5  # JSON 最大嵌套深度
+MAX_PARAMS_KEYS = 50  # 最大键数量
+MAX_PARAMS_SIZE = 10000  # 最大 JSON 字符串长度
 
 
 def _validate_params_depth(obj, current_depth=0):
@@ -88,6 +89,7 @@ def _extract_strategy_params(strategy_type: str, raw_params: Dict[str, Any]) -> 
 def _validate_dates(start_date: str, end_date: str) -> tuple:
     """验证日期范围，返回 (is_valid, error_message, days_span)"""
     from datetime import datetime as dt
+
     MAX_YEARS = 10
     try:
         start = dt.strptime(start_date, "%Y-%m-%d")
@@ -96,7 +98,11 @@ def _validate_dates(start_date: str, end_date: str) -> tuple:
         if days_span < 0:
             return False, "start_date 不能晚于 end_date", 0
         if days_span > MAX_YEARS * 365:
-            return False, f"时间跨度不能超过 {MAX_YEARS} 年（约 {MAX_YEARS*365} 天），当前跨度 {days_span} 天", days_span
+            return (
+                False,
+                f"时间跨度不能超过 {MAX_YEARS} 年（约 {MAX_YEARS*365} 天），当前跨度 {days_span} 天",
+                days_span,
+            )
         return True, "", days_span
     except ValueError:
         return False, "日期格式错误，请使用 YYYY-MM-DD", 0
@@ -109,7 +115,11 @@ def _validate_capital(initial_capital: float) -> tuple:
     try:
         capital = float(initial_capital)
         if not (MIN_CAPITAL <= capital <= MAX_CAPITAL):
-            return False, f"initial_capital 必须介于 {MIN_CAPITAL} ~ {MAX_CAPITAL}，当前 {capital}", 0.0
+            return (
+                False,
+                f"initial_capital 必须介于 {MIN_CAPITAL} ~ {MAX_CAPITAL}，当前 {capital}",
+                0.0,
+            )
         return True, "", capital
     except (TypeError, ValueError):
         return False, f"initial_capital 必须是有效数字，当前 {initial_capital}", 0.0
@@ -118,7 +128,8 @@ def _validate_capital(initial_capital: float) -> tuple:
 def _calc_ma(data, period):
     """计算移动平均线"""
     return [None] * (period - 1) + [
-        round(sum(data[i-period+1:i+1]) / period, 2) for i in range(period - 1, len(data))
+        round(sum(data[i - period + 1 : i + 1]) / period, 2)
+        for i in range(period - 1, len(data))
     ]
 
 
@@ -126,7 +137,7 @@ def _calc_rsi(closes, period=14):
     """计算 RSI 指标"""
     gains, losses = [], []
     for i in range(1, len(closes)):
-        d = closes[i] - closes[i-1]
+        d = closes[i] - closes[i - 1]
         gains.append(max(d, 0))
         losses.append(max(-d, 0))
 
@@ -137,14 +148,14 @@ def _calc_rsi(closes, period=14):
     al = sum(losses[:period]) / period
     rs = ag / al if al != 0 else 0
 
-    avg_gain = [None] * period + [100 - 100/(1+rs)]
+    avg_gain = [None] * period + [100 - 100 / (1 + rs)]
     avg_loss = [None] * period + [0]
 
     for i in range(period, len(gains)):
-        ag = (ag*(period-1) + gains[i]) / period
-        al = (al*(period-1) + losses[i]) / period
+        ag = (ag * (period - 1) + gains[i]) / period
+        al = (al * (period - 1) + losses[i]) / period
         rs = ag / al if al != 0 else 0
-        avg_gain.append(100 - 100/(1+rs) if al != 0 else 50.0)
+        avg_gain.append(100 - 100 / (1 + rs) if al != 0 else 50.0)
         avg_loss.append(0)
 
     return avg_gain + [None] * (len(closes) - len(avg_gain))
@@ -156,13 +167,18 @@ def _calc_bollinger(closes, period=20, multiplier=2):
     upper, lower = [None] * len(closes), [None] * len(closes)
     for i in range(period - 1, len(closes)):
         if mid[i] is not None:
-            std = (sum((closes[j] - mid[i])**2 for j in range(i-period+1, i+1)) / period) ** 0.5
+            std = (
+                sum((closes[j] - mid[i]) ** 2 for j in range(i - period + 1, i + 1))
+                / period
+            ) ** 0.5
             upper[i] = round(mid[i] + multiplier * std, 2)
             lower[i] = round(mid[i] - multiplier * std, 2)
     return mid, upper, lower
 
 
-def _generate_signals(strategy_type: str, closes: list, rows: list, raw_params: dict) -> list:
+def _generate_signals(
+    strategy_type: str, closes: list, rows: list, raw_params: dict
+) -> list:
     """根据策略类型生成交易信号"""
     signals = [0] * len(closes)
 
@@ -174,9 +190,15 @@ def _generate_signals(strategy_type: str, closes: list, rows: list, raw_params: 
         for i in range(slow_ma, len(closes)):
             if fast_ma_vals[i] is None:
                 continue
-            if fast_ma_vals[i] > slow_ma_vals[i] and fast_ma_vals[i-1] <= slow_ma_vals[i-1]:
+            if (
+                fast_ma_vals[i] > slow_ma_vals[i]
+                and fast_ma_vals[i - 1] <= slow_ma_vals[i - 1]
+            ):
                 signals[i] = 1
-            elif fast_ma_vals[i] < slow_ma_vals[i] and fast_ma_vals[i-1] >= slow_ma_vals[i-1]:
+            elif (
+                fast_ma_vals[i] < slow_ma_vals[i]
+                and fast_ma_vals[i - 1] >= slow_ma_vals[i - 1]
+            ):
                 signals[i] = -1
 
     elif strategy_type == "rsi_oversold":
@@ -200,9 +222,9 @@ def _generate_signals(strategy_type: str, closes: list, rows: list, raw_params: 
         for i in range(1, len(closes)):
             if lower[i] is None:
                 continue
-            if closes[i-1] <= lower[i-1] and closes[i] > lower[i]:
+            if closes[i - 1] <= lower[i - 1] and closes[i] > lower[i]:
                 signals[i] = 1
-            elif closes[i-1] >= upper[i-1] and closes[i] < upper[i]:
+            elif closes[i - 1] >= upper[i - 1] and closes[i] < upper[i]:
                 signals[i] = -1
 
     elif strategy_type.startswith("ml_"):
@@ -222,17 +244,20 @@ def _generate_signals(strategy_type: str, closes: list, rows: list, raw_params: 
 
             # Create DataFrame for prediction using closes and rows
             import pandas as pd
-            df = pd.DataFrame({
-                'open': [float(r[1]) for r in rows],
-                'high': [float(r[2]) for r in rows],
-                'low': [float(r[3]) for r in rows],
-                'close': [float(r[4]) for r in rows],
-                'volume': [float(r[5]) for r in rows],
-            })
+
+            df = pd.DataFrame(
+                {
+                    "open": [float(r[1]) for r in rows],
+                    "high": [float(r[2]) for r in rows],
+                    "low": [float(r[3]) for r in rows],
+                    "close": [float(r[4]) for r in rows],
+                    "volume": [float(r[5]) for r in rows],
+                }
+            )
 
             result = strategy.run_prediction(df)
 
-            if result and hasattr(result, 'signals'):
+            if result and hasattr(result, "signals"):
                 signals = result.signals
 
         except Exception as e:
@@ -242,11 +267,17 @@ def _generate_signals(strategy_type: str, closes: list, rows: list, raw_params: 
     return signals
 
 
-def _simulate_trades(signals: list, closes: list, rows: list, initial_capital: float,
-                      commission: float = 0.0003, slippage: float = 0.0001) -> tuple:
+def _simulate_trades(
+    signals: list,
+    closes: list,
+    rows: list,
+    initial_capital: float,
+    commission: float = 0.0003,
+    slippage: float = 0.0001,
+) -> tuple:
     """
     模拟交易，返回 (trades, wins, losses, final_capital)
-    
+
     Args:
         signals: 交易信号列表 (1=买入, -1=卖出, 0=持有)
         closes: 收盘价列表
@@ -282,14 +313,18 @@ def _simulate_trades(signals: list, closes: list, rows: list, initial_capital: f
                     total_commission += commission_cost
                     total_slippage_cost += (exec_price - closes[i]) * shares
 
-                    trades.append({
-                        "entry_date": rows[i][0],
-                        "entry_price": round(exec_price, 2),
-                        "shares": shares,
-                        "type": "long",
-                        "commission": round(commission_cost, 2),
-                        "slippage_cost": round((exec_price - closes[i]) * shares, 2)
-                    })
+                    trades.append(
+                        {
+                            "entry_date": rows[i][0],
+                            "entry_price": round(exec_price, 2),
+                            "shares": shares,
+                            "type": "long",
+                            "commission": round(commission_cost, 2),
+                            "slippage_cost": round(
+                                (exec_price - closes[i]) * shares, 2
+                            ),
+                        }
+                    )
         elif signals[i] == -1 and position > 0:
             # 卖出：应用滑点（卖出价格更低）
             exec_price = closes[i] * (1 - slippage)
@@ -308,14 +343,16 @@ def _simulate_trades(signals: list, closes: list, rows: list, initial_capital: f
             total_commission += commission_cost
             total_slippage_cost += (closes[i] - exec_price) * position
 
-            trades[-1].update({
-                "exit_date": rows[i][0],
-                "exit_price": round(exec_price, 2),
-                "pnl": round(pnl, 2),
-                "pnl_pct": round((exec_price - entry_price) / entry_price * 100, 2),
-                "exit_commission": round(commission_cost, 2),
-                "exit_slippage_cost": round((closes[i] - exec_price) * position, 2)
-            })
+            trades[-1].update(
+                {
+                    "exit_date": rows[i][0],
+                    "exit_price": round(exec_price, 2),
+                    "pnl": round(pnl, 2),
+                    "pnl_pct": round((exec_price - entry_price) / entry_price * 100, 2),
+                    "exit_commission": round(commission_cost, 2),
+                    "exit_slippage_cost": round((closes[i] - exec_price) * position, 2),
+                }
+            )
             position = 0
 
     # 平仓剩余持仓
@@ -333,19 +370,28 @@ def _simulate_trades(signals: list, closes: list, rows: list, initial_capital: f
         capital += trade_value - commission_cost
         total_commission += commission_cost
 
-        trades[-1].update({
-            "exit_date": rows[-1][0],
-            "exit_price": round(exec_price, 2),
-            "pnl": round(pnl, 2),
-            "pnl_pct": round((exec_price - entry_price) / entry_price * 100, 2),
-            "exit_commission": round(commission_cost, 2)
-        })
+        trades[-1].update(
+            {
+                "exit_date": rows[-1][0],
+                "exit_price": round(exec_price, 2),
+                "pnl": round(pnl, 2),
+                "pnl_pct": round((exec_price - entry_price) / entry_price * 100, 2),
+                "exit_commission": round(commission_cost, 2),
+            }
+        )
 
     return trades, wins, losses, capital, total_commission, total_slippage_cost
 
 
-def _calculate_metrics(trades: list, wins: int, losses: int, final_capital: float,
-                       initial_capital: float, row_count: int, benchmark_return_pct: float) -> dict:
+def _calculate_metrics(
+    trades: list,
+    wins: int,
+    losses: int,
+    final_capital: float,
+    initial_capital: float,
+    row_count: int,
+    benchmark_return_pct: float,
+) -> dict:
     """计算回测统计指标"""
     total_return = final_capital - float(initial_capital)
     total_return_pct = round(total_return / float(initial_capital) * 100, 2)
@@ -360,10 +406,9 @@ def _calculate_metrics(trades: list, wins: int, losses: int, final_capital: floa
 
     for t in trades:
         equity += t["pnl"]
-        equity_curve.append({
-            "date": t.get("exit_date", t.get("entry_date")),
-            "value": round(equity, 2)
-        })
+        equity_curve.append(
+            {"date": t.get("exit_date", t.get("entry_date")), "value": round(equity, 2)}
+        )
         if equity > peak:
             peak = equity
         dd = peak - equity
@@ -372,23 +417,30 @@ def _calculate_metrics(trades: list, wins: int, losses: int, final_capital: floa
 
     # 计算年化收益
     years = row_count / 252
-    annualized_return = (final_capital / float(initial_capital)) ** (1 / years) - 1 if years > 0 else 0
+    annualized_return = (
+        (final_capital / float(initial_capital)) ** (1 / years) - 1 if years > 0 else 0
+    )
 
     # 计算夏普比率
     sharpe_ratio = 0
     if len(equity_curve) >= 2:
         returns = []
         for i in range(1, len(equity_curve)):
-            prev_val = equity_curve[i-1]["value"]
+            prev_val = equity_curve[i - 1]["value"]
             curr_val = equity_curve[i]["value"]
             if prev_val > 0:
                 ret = (curr_val - prev_val) / prev_val
                 returns.append(ret)
         if returns:
             import statistics
+
             daily_vol = statistics.stdev(returns) if len(returns) > 1 else 0
-            annualized_vol = daily_vol * (252 ** 0.5)
-            sharpe_ratio = round(annualized_return / annualized_vol, 2) if annualized_vol > 0 else 0
+            annualized_vol = daily_vol * (252**0.5)
+            sharpe_ratio = (
+                round(annualized_return / annualized_vol, 2)
+                if annualized_vol > 0
+                else 0
+            )
 
     return {
         "total_return": round(total_return, 2),
@@ -402,7 +454,7 @@ def _calculate_metrics(trades: list, wins: int, losses: int, final_capital: floa
         "losses": losses,
         "total_trades": total_trades,
         "equity_curve": equity_curve,
-        "benchmark_return_pct": benchmark_return_pct
+        "benchmark_return_pct": benchmark_return_pct,
     }
 
 
@@ -411,43 +463,57 @@ class BacktestRequest(BaseModel):
     period: str = Field(default="daily", pattern="^(daily|weekly|monthly)$")
     start_date: str = Field(..., description="开始日期 YYYY-MM-DD")
     end_date: str = Field(..., description="结束日期 YYYY-MM-DD")
-    initial_capital: float = Field(default=100000, ge=100, le=1e9, description="初始资金")
-    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$")
+    initial_capital: float = Field(
+        default=100000, ge=100, le=1e9, description="初始资金"
+    )
+    strategy_type: str = Field(
+        default="ma_crossover",
+        pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$",
+    )
     params: Optional[Dict[str, Any]] = Field(default=None)
-    commission: float = Field(default=0.0003, ge=0, le=0.1, description="手续费率 (默认0.03%)")
-    slippage: float = Field(default=0.0001, ge=0, le=0.1, description="滑点率 (默认0.01%)")
+    commission: float = Field(
+        default=0.0003, ge=0, le=0.1, description="手续费率 (默认0.03%)"
+    )
+    slippage: float = Field(
+        default=0.0001, ge=0, le=0.1, description="滑点率 (默认0.01%)"
+    )
 
-    @field_validator('symbol')
+    @field_validator("symbol")
     @classmethod
     def validate_symbol(cls, v: str) -> str:
         if not v or not v.strip():
-            raise ValueError('股票代码不能为空')
+            raise ValueError("股票代码不能为空")
         v = v.strip().lower()
-        if not v.startswith(('sh', 'sz', 'hk', 'us')):
-            raise ValueError('股票代码格式错误：应以 sh/sz/hk/us 开头（如 sh600519）')
+        if not v.startswith(("sh", "sz", "hk", "us")):
+            raise ValueError("股票代码格式错误：应以 sh/sz/hk/us 开头（如 sh600519）")
         return v
 
-    @field_validator('start_date', 'end_date')
+    @field_validator("start_date", "end_date")
     @classmethod
     def validate_date_format(cls, v: str) -> str:
         from datetime import datetime as dt
+
         try:
             dt.strptime(v, "%Y-%m-%d")
         except ValueError:
-            raise ValueError(f'日期格式错误：{v}，应为 YYYY-MM-DD')
+            raise ValueError(f"日期格式错误：{v}，应为 YYYY-MM-DD")
         return v
 
 
 class StrategyCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="策略名称")
     description: str = Field(default="", max_length=500)
-    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$")
+    strategy_type: str = Field(
+        default="ma_crossover",
+        pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$",
+    )
     params: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ═══════════════════════════════════════════════════════════════
 # 策略管理
 # ═══════════════════════════════════════════════════════════════
+
 
 @router.get("/strategies")
 @handle_errors(module="backtest")
@@ -473,15 +539,17 @@ async def get_strategies():
 
             strategies = []
             for r in rows:
-                strategies.append({
-                    "id": r[0],
-                    "name": r[1],
-                    "description": r[2],
-                    "type": r[3],
-                    "params": json.loads(r[4]) if r[4] else {},
-                    "created_at": r[5],
-                    "updated_at": r[6]
-                })
+                strategies.append(
+                    {
+                        "id": r[0],
+                        "name": r[1],
+                        "description": r[2],
+                        "type": r[3],
+                        "params": json.loads(r[4]) if r[4] else {},
+                        "created_at": r[5],
+                        "updated_at": r[6],
+                    }
+                )
             conn.close()
             return strategies
         except Exception as e:
@@ -495,7 +563,9 @@ async def get_strategies():
 
 @router.post("/strategies")
 @handle_errors(module="backtest")
-async def create_strategy(req: StrategyCreateRequest, _: None = Depends(require_api_key)):
+async def create_strategy(
+    req: StrategyCreateRequest, _: None = Depends(require_api_key)
+):
     """创建新策略"""
     params = _validate_params(req.params)
     loop = asyncio.get_event_loop()
@@ -506,11 +576,20 @@ async def create_strategy(req: StrategyCreateRequest, _: None = Depends(require_
             now = datetime.now().isoformat()
             # BEGIN IMMEDIATE 防止并发写入冲突（v0.6.49）
             conn.execute("BEGIN IMMEDIATE")
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO backtest_strategies (name, description, type, params, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (req.name, req.description, req.strategy_type,
-                  json.dumps(params), now, now))
+            """,
+                (
+                    req.name,
+                    req.description,
+                    req.strategy_type,
+                    json.dumps(params),
+                    now,
+                    now,
+                ),
+            )
             conn.commit()
 
             strategy_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -527,6 +606,7 @@ async def create_strategy(req: StrategyCreateRequest, _: None = Depends(require_
 # 回测执行
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.post("/run")
 @handle_errors(module="backtest")
 async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key)):
@@ -540,7 +620,9 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
     if not dates_valid:
         return error_response(ErrorCode.BAD_REQUEST, dates_error)
 
-    capital_valid, capital_error, initial_capital = _validate_capital(req.initial_capital)
+    capital_valid, capital_error, initial_capital = _validate_capital(
+        req.initial_capital
+    )
     if not capital_valid:
         return error_response(ErrorCode.BAD_REQUEST, capital_error)
 
@@ -548,15 +630,19 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
 
     async def _run_backtest_task():
         """Inner task for backtest execution (for worker registry tracking)."""
+
         def _sync_fetch_data():
             conn = _get_conn()
             try:
-                rows = conn.execute("""
+                rows = conn.execute(
+                    """
                     SELECT date, open, high, low, close, volume
                     FROM market_data_daily
                     WHERE symbol = ? AND date >= ? AND date <= ?
                     ORDER BY date ASC
-                """, (db_symbol, req.start_date, req.end_date)).fetchall()
+                """,
+                    (db_symbol, req.start_date, req.end_date),
+                ).fetchall()
                 conn.close()
                 return rows
             finally:
@@ -571,55 +657,71 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
 
         first_close = float(rows[0][4])
         last_close = float(rows[-1][4])
-        benchmark_return_pct = 0.0 if first_close <= 0 else round(
-            (last_close - first_close) / first_close * 100, 2
+        benchmark_return_pct = (
+            0.0
+            if first_close <= 0
+            else round((last_close - first_close) / first_close * 100, 2)
         )
 
         closes = [float(r[4]) for r in rows]
 
         signals = _generate_signals(strategy_type, closes, rows, raw_params)
 
-        trades, wins, losses, final_capital, total_commission, total_slippage_cost = _simulate_trades(
-            signals, closes, rows, initial_capital, req.commission, req.slippage
+        trades, wins, losses, final_capital, total_commission, total_slippage_cost = (
+            _simulate_trades(
+                signals, closes, rows, initial_capital, req.commission, req.slippage
+            )
         )
 
         metrics = _calculate_metrics(
-            trades, wins, losses, final_capital,
-            initial_capital, len(rows), benchmark_return_pct
+            trades,
+            wins,
+            losses,
+            final_capital,
+            initial_capital,
+            len(rows),
+            benchmark_return_pct,
         )
 
         def _sync_save_result():
             conn = _get_conn()
             try:
                 conn.execute("BEGIN IMMEDIATE")
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT INTO backtest_results 
                     (strategy_id, portfolio_id, start_date, end_date, 
                      initial_capital, final_capital, total_return, annual_return,
                      sharpe_ratio, max_drawdown, win_rate, trades_count, details, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    None, None,
-                    req.start_date, req.end_date,
-                    initial_capital,
-                    round(final_capital, 2),
-                    metrics["total_return_pct"],
-                    metrics["annualized_return_pct"],
-                    metrics["sharpe_ratio"],
-                    metrics["max_drawdown_pct"],
-                    metrics["win_rate"],
-                    metrics["total_trades"],
-                    json.dumps({
-                        "symbol": req.symbol,
-                        "trades": trades,
-                        "equity_curve": metrics["equity_curve"],
-                        "strategy_type": strategy_type,
-                        "wins": wins,
-                        "losses": losses,
-                        "benchmark_return_pct": benchmark_return_pct
-                    }),
-                    datetime.now().isoformat()
-                ))
+                """,
+                    (
+                        None,
+                        None,
+                        req.start_date,
+                        req.end_date,
+                        initial_capital,
+                        round(final_capital, 2),
+                        metrics["total_return_pct"],
+                        metrics["annualized_return_pct"],
+                        metrics["sharpe_ratio"],
+                        metrics["max_drawdown_pct"],
+                        metrics["win_rate"],
+                        metrics["total_trades"],
+                        json.dumps(
+                            {
+                                "symbol": req.symbol,
+                                "trades": trades,
+                                "equity_curve": metrics["equity_curve"],
+                                "strategy_type": strategy_type,
+                                "wins": wins,
+                                "losses": losses,
+                                "benchmark_return_pct": benchmark_return_pct,
+                            }
+                        ),
+                        datetime.now().isoformat(),
+                    ),
+                )
                 conn.commit()
                 conn.close()
             except Exception as e:
@@ -679,29 +781,34 @@ async def get_backtest_results(limit: int = 10):
     def _sync_query():
         conn = _get_conn()
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT id, strategy_id, portfolio_id, start_date, end_date, 
                        initial_capital, final_capital, total_return, 
                        max_drawdown, win_rate, trades_count, created_at
                 FROM backtest_results ORDER BY created_at DESC LIMIT ?
-            """, (limit,)).fetchall()
+            """,
+                (limit,),
+            ).fetchall()
 
             results = []
             for r in rows:
-                results.append({
-                    "id": r[0],
-                    "strategy_id": r[1],
-                    "portfolio_id": r[2],
-                    "start_date": r[3],
-                    "end_date": r[4],
-                    "initial_capital": r[5],
-                    "final_capital": r[6],
-                    "total_return": r[7],
-                    "max_drawdown": r[8],
-                    "win_rate": r[9],
-                    "trades_count": r[10],
-                    "created_at": r[11]
-                })
+                results.append(
+                    {
+                        "id": r[0],
+                        "strategy_id": r[1],
+                        "portfolio_id": r[2],
+                        "start_date": r[3],
+                        "end_date": r[4],
+                        "initial_capital": r[5],
+                        "final_capital": r[6],
+                        "total_return": r[7],
+                        "max_drawdown": r[8],
+                        "win_rate": r[9],
+                        "trades_count": r[10],
+                        "created_at": r[11],
+                    }
+                )
             conn.close()
             return results
         finally:
@@ -715,11 +822,15 @@ async def get_backtest_results(limit: int = 10):
 # Walk-Forward Analysis
 # ═══════════════════════════════════════════════════════════════
 
+
 class WalkForwardRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
     start_date: str = Field(..., description="开始日期 YYYY-MM-DD")
     end_date: str = Field(..., description="结束日期 YYYY-MM-DD")
-    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$")
+    strategy_type: str = Field(
+        default="ma_crossover",
+        pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$",
+    )
     initial_capital: float = Field(default=100000, ge=100, le=1e9)
     train_window_days: int = Field(default=252, ge=30, le=1260)
     test_window_days: int = Field(default=63, ge=10, le=252)
@@ -730,7 +841,9 @@ class WalkForwardRequest(BaseModel):
 
 @router.post("/walkforward/analyze")
 @handle_errors(module="backtest")
-async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require_api_key)):
+async def walkforward_analyze(
+    req: WalkForwardRequest, _: None = Depends(require_api_key)
+):
     """Walk-Forward Analysis for out-of-sample validation"""
     from app.services.backtest.walk_forward import WalkForwardAnalyzer
 
@@ -740,7 +853,9 @@ async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require
     if not dates_valid:
         return error_response(ErrorCode.BAD_REQUEST, dates_error)
 
-    capital_valid, capital_error, initial_capital = _validate_capital(req.initial_capital)
+    capital_valid, capital_error, initial_capital = _validate_capital(
+        req.initial_capital
+    )
     if not capital_valid:
         return error_response(ErrorCode.BAD_REQUEST, capital_error)
 
@@ -749,12 +864,15 @@ async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require
     def _sync_fetch_data():
         conn = _get_conn()
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT date, open, high, low, close, volume
                 FROM market_data_daily
                 WHERE symbol = ? AND date >= ? AND date <= ?
                 ORDER BY date ASC
-            """, (db_symbol, req.start_date, req.end_date)).fetchall()
+            """,
+                (db_symbol, req.start_date, req.end_date),
+            ).fetchall()
             conn.close()
             return rows
         finally:
@@ -763,24 +881,21 @@ async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require
     rows = await loop.run_in_executor(_executor, _sync_fetch_data)
 
     if len(rows) < 126:
-        return error_response(ErrorCode.BAD_REQUEST, f"数据不足({len(rows)}天)，Walk-Forward需要至少6个月数据")
+        return error_response(
+            ErrorCode.BAD_REQUEST,
+            f"数据不足({len(rows)}天)，Walk-Forward需要至少6个月数据",
+        )
 
     data = [{"date": r[0], "close": float(r[4])} for r in rows]
 
     default_param_grid = {
-        "ma_crossover": {
-            "fast_ma": [5, 10, 15],
-            "slow_ma": [20, 30, 60]
-        },
+        "ma_crossover": {"fast_ma": [5, 10, 15], "slow_ma": [20, 30, 60]},
         "rsi_oversold": {
             "rsi_period": [7, 14, 21],
             "rsi_buy": [25, 30, 35],
-            "rsi_sell": [65, 70, 75]
+            "rsi_sell": [65, 70, 75],
         },
-        "bollinger_bands": {
-            "bb_period": [15, 20, 25],
-            "bb_std": [1.5, 2.0, 2.5]
-        }
+        "bollinger_bands": {"bb_period": [15, 20, 25], "bb_std": [1.5, 2.0, 2.5]},
     }
 
     param_grid = req.param_grid or default_param_grid.get(req.strategy_type, {})
@@ -789,7 +904,7 @@ async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require
         train_window_days=req.train_window_days,
         test_window_days=req.test_window_days,
         step_days=req.step_days,
-        mode=req.mode
+        mode=req.mode,
     )
 
     anomalies = analyzer.detect_anomalies(data, req.symbol, req.strategy_type)
@@ -798,7 +913,7 @@ async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require
             "level": w.level,
             "category": w.category,
             "message": w.message,
-            "suggestion": w.suggestion
+            "suggestion": w.suggestion,
         }
         for w in anomalies
     ]
@@ -808,51 +923,58 @@ async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require
         strategy_type=req.strategy_type,
         param_grid=param_grid,
         initial_capital=initial_capital,
-        symbol=req.symbol
+        symbol=req.symbol,
     )
 
     windows_data = []
     for w in result.windows:
-        windows_data.append({
-            "window_index": w.window_index,
-            "train_start": w.train_start,
-            "train_end": w.train_end,
-            "test_start": w.test_start,
-            "test_end": w.test_end,
-            "train_return_pct": w.train_return_pct,
-            "train_sharpe": w.train_sharpe,
-            "test_return_pct": w.test_return_pct,
-            "test_sharpe": w.test_sharpe,
-            "return_gap": w.return_gap,
-            "is_overfitted": w.is_overfitted,
-            "best_params": w.best_params
-        })
+        windows_data.append(
+            {
+                "window_index": w.window_index,
+                "train_start": w.train_start,
+                "train_end": w.train_end,
+                "test_start": w.test_start,
+                "test_end": w.test_end,
+                "train_return_pct": w.train_return_pct,
+                "train_sharpe": w.train_sharpe,
+                "test_return_pct": w.test_return_pct,
+                "test_sharpe": w.test_sharpe,
+                "return_gap": w.return_gap,
+                "is_overfitted": w.is_overfitted,
+                "best_params": w.best_params,
+            }
+        )
 
-    return success_response({
-        "symbol": result.symbol,
-        "strategy_type": result.strategy_type,
-        "window_mode": result.window_mode,
-        "total_windows": result.total_windows,
-        "avg_test_return_pct": result.avg_test_return_pct,
-        "avg_test_sharpe": result.avg_test_sharpe,
-        "avg_test_max_dd_pct": result.avg_test_max_dd_pct,
-        "avg_test_win_rate": result.avg_test_win_rate,
-        "avg_train_return_pct": result.avg_train_return_pct,
-        "avg_return_gap": result.avg_return_gap,
-        "overfitting_windows": result.overfitting_windows,
-        "overfitting_ratio": result.overfitting_ratio,
-        "overfitting_severity": result.overfitting_severity,
-        "consistency_score": result.consistency_score,
-        "recommendation": result.recommendation,
-        "confidence": result.confidence,
-        "windows": windows_data,
-        "anomaly_warnings": anomaly_warnings
-    })
+    return success_response(
+        {
+            "symbol": result.symbol,
+            "strategy_type": result.strategy_type,
+            "window_mode": result.window_mode,
+            "total_windows": result.total_windows,
+            "avg_test_return_pct": result.avg_test_return_pct,
+            "avg_test_sharpe": result.avg_test_sharpe,
+            "avg_test_max_dd_pct": result.avg_test_max_dd_pct,
+            "avg_test_win_rate": result.avg_test_win_rate,
+            "avg_train_return_pct": result.avg_train_return_pct,
+            "avg_return_gap": result.avg_return_gap,
+            "overfitting_windows": result.overfitting_windows,
+            "overfitting_ratio": result.overfitting_ratio,
+            "overfitting_severity": result.overfitting_severity,
+            "consistency_score": result.consistency_score,
+            "recommendation": result.recommendation,
+            "confidence": result.confidence,
+            "windows": windows_data,
+            "anomaly_warnings": anomaly_warnings,
+        }
+    )
 
 
 class SmartParamsRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
-    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$")
+    strategy_type: str = Field(
+        default="ma_crossover",
+        pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$",
+    )
 
 
 class SmartParamsResponse(BaseModel):
@@ -877,14 +999,16 @@ async def get_smart_params(req: SmartParamsRequest, _: None = Depends(require_ap
         conn = _get_conn()
         try:
             cursor = conn.execute(
-                "SELECT COUNT(*) FROM market_data_daily WHERE symbol = ?",
-                (db_symbol,)
+                "SELECT COUNT(*) FROM market_data_daily WHERE symbol = ?", (db_symbol,)
             )
             row = cursor.fetchone()
             conn.close()
             return row[0] if row else 0
         except sqlite3.Error as e:
-            logger.error(f"[Backtest] Database error counting days for {db_symbol}: {type(e).__name__}: {e}", exc_info=True)
+            logger.error(
+                f"[Backtest] Database error counting days for {db_symbol}: {type(e).__name__}: {e}",
+                exc_info=True,
+            )
             conn.close()
             return 0
 
@@ -895,27 +1019,29 @@ async def get_smart_params(req: SmartParamsRequest, _: None = Depends(require_ap
             "train_test_ratio": 4,
             "min_train_days": 252,
             "min_test_days": 63,
-            "description": "趋势策略需要更长窗口捕捉完整周期"
+            "description": "趋势策略需要更长窗口捕捉完整周期",
         },
         "rsi_oversold": {
             "train_test_ratio": 3,
             "min_train_days": 126,
             "min_test_days": 42,
-            "description": "均值回归信号频繁，可使用较短窗口"
+            "description": "均值回归信号频繁，可使用较短窗口",
         },
         "bollinger_bands": {
             "train_test_ratio": 3,
             "min_train_days": 126,
             "min_test_days": 42,
-            "description": "布林带策略需要足够数据计算波动率"
-        }
+            "description": "布林带策略需要足够数据计算波动率",
+        },
     }
 
     config = strategy_config.get(req.strategy_type, strategy_config["ma_crossover"])
 
     if available_days < 126:
-        return error_response(ErrorCode.BAD_REQUEST,
-            f"数据不足({available_days}天)，Walk-Forward需要至少126天(6个月)")
+        return error_response(
+            ErrorCode.BAD_REQUEST,
+            f"数据不足({available_days}天)，Walk-Forward需要至少126天(6个月)",
+        )
 
     if available_days >= 1260:
         time_range = "5y"
@@ -948,12 +1074,14 @@ async def get_smart_params(req: SmartParamsRequest, _: None = Depends(require_ap
     if available_days < 252:
         warnings.append("⚠️ 数据量有限，结果置信度可能较低")
 
-    return success_response({
-        "train_window_days": train_days,
-        "test_window_days": test_days,
-        "time_range": time_range,
-        "available_days": available_days,
-        "recommended_windows": expected_windows,
-        "reasoning": reasoning,
-        "warnings": warnings
-    })
+    return success_response(
+        {
+            "train_window_days": train_days,
+            "test_window_days": test_days,
+            "time_range": time_range,
+            "available_days": available_days,
+            "recommended_windows": expected_windows,
+            "reasoning": reasoning,
+            "warnings": warnings,
+        }
+    )

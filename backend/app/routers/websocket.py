@@ -4,6 +4,7 @@ WebSocket 路由 — 统一端点 /ws/market
 心跳保活：服务端主动 ping，客户端响应 pong
 断连恢复：客户端发送 last_seq，服务端返回缺失的 tick
 """
+
 import asyncio
 import json
 import logging
@@ -92,7 +93,9 @@ async def ws_market(ws: WebSocket):
         try:
             await ws.send_text(json.dumps(data, ensure_ascii=False))
         except Exception as e:
-            logger.warning(f"[WS] Failed to send message: {type(e).__name__}: {e}", exc_info=True)
+            logger.warning(
+                f"[WS] Failed to send message: {type(e).__name__}: {e}", exc_info=True
+            )
 
     async def handle_message(raw: str):
         nonlocal ping_time
@@ -108,22 +111,17 @@ async def ws_market(ws: WebSocket):
         if action == "subscribe":
             success, error = await ws_manager.subscribe(conn, symbols)
             if success:
-                await send_json({
-                    "type": "subscribed",
-                    "symbols": list(await conn.get_symbols())
-                })
+                await send_json(
+                    {"type": "subscribed", "symbols": list(await conn.get_symbols())}
+                )
             else:
-                await send_json({
-                    "type": "error",
-                    "message": error
-                })
+                await send_json({"type": "error", "message": error})
 
         elif action == "unsubscribe":
             await ws_manager.unsubscribe(conn, symbols)
-            await send_json({
-                "type": "unsubscribed",
-                "symbols": list(await conn.get_symbols())
-            })
+            await send_json(
+                {"type": "unsubscribed", "symbols": list(await conn.get_symbols())}
+            )
 
         elif action == "recover":
             # 断连恢复：发送缺失的 tick
@@ -141,21 +139,22 @@ async def ws_market(ws: WebSocket):
 
                 for tick_item in missed_ticks:
                     recovered_tick = {
-                        **tick_item['tick'],
-                        'seq': tick_item['seq'],
-                        'recovered': True
+                        **tick_item["tick"],
+                        "seq": tick_item["seq"],
+                        "recovered": True,
                     }
                     await send_json(recovered_tick)
                     total_recovered += 1
 
             if total_recovered > 0:
-                logger.info(f"[WS] Recovered {total_recovered} ticks for {len(recover_symbols)} symbols")
+                logger.info(
+                    f"[WS] Recovered {total_recovered} ticks for {len(recover_symbols)} symbols"
+                )
 
             # 发送恢复完成确认
-            await send_json({
-                "type": "recovery_complete",
-                "recovered_count": total_recovered
-            })
+            await send_json(
+                {"type": "recovery_complete", "recovered_count": total_recovered}
+            )
 
         elif msg_type == "pong":
             if ping_time:
@@ -172,7 +171,9 @@ async def ws_market(ws: WebSocket):
 
         while True:
             try:
-                data = await asyncio.wait_for(ws.receive_text(), timeout=PING_INTERVAL + PONG_TIMEOUT)
+                data = await asyncio.wait_for(
+                    ws.receive_text(), timeout=PING_INTERVAL + PONG_TIMEOUT
+                )
             except asyncio.TimeoutError:
                 break
 

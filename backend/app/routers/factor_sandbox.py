@@ -43,43 +43,47 @@ _screening_progress: Dict[str, Dict[str, Any]] = {}
 _progress_lock = threading.Lock()
 
 SENSITIVE_PATTERNS = [
-    r'/[\w/.-]+\.py',
-    r'line \d+',
-    r'Traceback',
+    r"/[\w/.-]+\.py",
+    r"line \d+",
+    r"Traceback",
     r'File "',
-    r'Error:',
-    r'Exception:',
-    r'localhost',
-    r'127\.0\.0\.1',
-    r'0\.0\.0\.0',
-    r'password',
-    r'secret',
-    r'api[_-]?key',
-    r'token',
+    r"Error:",
+    r"Exception:",
+    r"localhost",
+    r"127\.0\.0\.1",
+    r"0\.0\.0\.0",
+    r"password",
+    r"secret",
+    r"api[_-]?key",
+    r"token",
 ]
+
 
 def sanitize_error_message(error: Exception) -> str:
     import re
+
     msg = str(error)
     for pattern in SENSITIVE_PATTERNS:
-        msg = re.sub(pattern, '[REDACTED]', msg, flags=re.IGNORECASE)
+        msg = re.sub(pattern, "[REDACTED]", msg, flags=re.IGNORECASE)
     if len(msg) > 100:
-        msg = msg[:100] + '...'
+        msg = msg[:100] + "..."
     return msg
 
+
 USER_FRIENDLY_ERRORS = {
-    'ConnectionError': '网络连接失败，请检查网络设置',
-    'TimeoutError': '请求超时，请稍后重试',
-    'KeyError': '数据格式错误',
-    'ValueError': '参数错误',
-    'ImportError': '服务配置错误',
+    "ConnectionError": "网络连接失败，请检查网络设置",
+    "TimeoutError": "请求超时，请稍后重试",
+    "KeyError": "数据格式错误",
+    "ValueError": "参数错误",
+    "ImportError": "服务配置错误",
 }
+
 
 # Thread-safe cache for factor values with automatic cleanup
 class ThreadSafeFactorCache:
     """
     Thread-safe factor value cache with automatic TTL cleanup.
-    
+
     Features:
     - asyncio.Lock for async context protection
     - threading.Lock for sync context protection (used in executor)
@@ -119,8 +123,9 @@ class ThreadSafeFactorCache:
                 self._cleanup_expired()
                 if len(self._cache) >= self._max_entries:
                     # Remove oldest entries
-                    oldest_keys = sorted(self._cache.keys(),
-                                         key=lambda k: self._cache[k][0])[:100]
+                    oldest_keys = sorted(
+                        self._cache.keys(), key=lambda k: self._cache[k][0]
+                    )[:100]
                     for k in oldest_keys:
                         del self._cache[k]
 
@@ -146,8 +151,7 @@ class ThreadSafeFactorCache:
         """Remove all expired entries"""
         now = time.time()
         expired_keys = [
-            k for k, (ts, _) in self._cache.items()
-            if now - ts >= self._ttl
+            k for k, (ts, _) in self._cache.items() if now - ts >= self._ttl
         ]
         for k in expired_keys:
             del self._cache[k]
@@ -162,8 +166,7 @@ class ThreadSafeFactorCache:
         with self._sync_lock:
             now = time.time()
             valid_entries = sum(
-                1 for ts, _ in self._cache.values()
-                if now - ts < self._ttl
+                1 for ts, _ in self._cache.values() if now - ts < self._ttl
             )
             return {
                 "total_entries": len(self._cache),
@@ -173,6 +176,7 @@ class ThreadSafeFactorCache:
                 "max_entries": self._max_entries,
             }
 
+
 # Global thread-safe cache instance
 _factor_cache = ThreadSafeFactorCache(ttl=300, max_entries=10000)
 
@@ -181,58 +185,73 @@ _factor_cache = ThreadSafeFactorCache(ttl=300, max_entries=10000)
 # Request/Response Models
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class FactorParam(BaseModel):
     """Factor parameter configuration"""
+
     id: str = Field(..., description="Factor ID")
-    params: Dict[str, Any] = Field(default_factory=dict, description="Factor parameters")
+    params: Dict[str, Any] = Field(
+        default_factory=dict, description="Factor parameters"
+    )
 
 
 class ScreenRequest(BaseModel):
     """Request model for stock screening"""
-    factors: List[FactorParam] = Field(..., min_length=1, max_length=20, description="Factor filters")
-    universe: str = Field(default="hs300", description="Stock universe: all, hs300, zz500, cyb50")
+
+    factors: List[FactorParam] = Field(
+        ..., min_length=1, max_length=20, description="Factor filters"
+    )
+    universe: str = Field(
+        default="hs300", description="Stock universe: all, hs300, zz500, cyb50"
+    )
     limit: int = Field(default=50, ge=1, le=500, description="Max results to return")
 
-    @field_validator('universe')
+    @field_validator("universe")
     @classmethod
     def validate_universe(cls, v: str) -> str:
-        valid = ['all', 'hs300', 'zz500', 'cyb50']
+        valid = ["all", "hs300", "zz500", "cyb50"]
         if v.lower() not in valid:
-            raise ValueError(f'universe must be one of: {valid}')
+            raise ValueError(f"universe must be one of: {valid}")
         return v.lower()
 
 
 class BacktestPreviewRequest(BaseModel):
     """Request model for quick backtest preview"""
-    symbols: List[str] = Field(..., min_length=1, max_length=10, description="Stock symbols")
+
+    symbols: List[str] = Field(
+        ..., min_length=1, max_length=10, description="Stock symbols"
+    )
     start_date: str = Field(..., description="Start date YYYY-MM-DD")
     end_date: str = Field(..., description="End date YYYY-MM-DD")
-    initial_capital: float = Field(default=100000, ge=10000, le=1e9, description="Initial capital")
+    initial_capital: float = Field(
+        default=100000, ge=10000, le=1e9, description="Initial capital"
+    )
 
-    @field_validator('symbols')
+    @field_validator("symbols")
     @classmethod
     def validate_symbols(cls, v: List[str]) -> List[str]:
         return [s.strip().lower() for s in v if s.strip()]
 
-    @field_validator('start_date', 'end_date')
+    @field_validator("start_date", "end_date")
     @classmethod
     def validate_date_format(cls, v: str) -> str:
         try:
             datetime.strptime(v, "%Y-%m-%d")
         except ValueError:
-            raise ValueError(f'Invalid date format: {v}, expected YYYY-MM-DD')
+            raise ValueError(f"Invalid date format: {v}, expected YYYY-MM-DD")
         return v
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_dates(self):
         if self.start_date > self.end_date:
-            raise ValueError('start_date must be before end_date')
+            raise ValueError("start_date must be before end_date")
         return self
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # API Endpoints
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/health")
 @handle_errors(module="factor_sandbox")
@@ -241,12 +260,14 @@ async def health_check():
     registry = get_factor_registry()
     screener = get_stock_screener()
 
-    return success_response({
-        "status": "healthy",
-        "factors_registered": len(registry.list_factors()),
-        "categories": len(registry.list_categories()),
-        "universes": [u.value for u in Universe],
-    })
+    return success_response(
+        {
+            "status": "healthy",
+            "factors_registered": len(registry.list_factors()),
+            "categories": len(registry.list_categories()),
+            "universes": [u.value for u in Universe],
+        }
+    )
 
 
 @router.get("/factors")
@@ -257,7 +278,7 @@ async def list_factors(
 ):
     """
     List all available factors
-    
+
     Returns factors from both attribution and screening categories
     """
     registry = get_factor_registry()
@@ -286,10 +307,12 @@ async def list_factors(
         ]
         factors = [f for f in factors if f.id in screening_factor_ids]
 
-    return success_response({
-        "factors": [f.to_dict() for f in factors],
-        "total": len(factors),
-    })
+    return success_response(
+        {
+            "factors": [f.to_dict() for f in factors],
+            "total": len(factors),
+        }
+    )
 
 
 @router.get("/factors/screening")
@@ -297,7 +320,7 @@ async def list_factors(
 async def list_screening_factors():
     """
     List screening-specific factors
-    
+
     These factors are designed for stock screening with real-time data
     """
     registry = get_factor_registry()
@@ -320,15 +343,17 @@ async def list_screening_factors():
         if factor:
             factors.append(factor)
 
-    return success_response({
-        "factors": [f.to_dict() for f in factors],
-        "total": len(factors),
-        "categories": [
-            {"id": "technical", "name": "技术信号", "icon": "📊"},
-            {"id": "sentiment", "name": "市场情绪", "icon": "🧠"},
-            {"id": "fund_flow", "name": "资金流向", "icon": "💰"},
-        ],
-    })
+    return success_response(
+        {
+            "factors": [f.to_dict() for f in factors],
+            "total": len(factors),
+            "categories": [
+                {"id": "technical", "name": "技术信号", "icon": "📊"},
+                {"id": "sentiment", "name": "市场情绪", "icon": "🧠"},
+                {"id": "fund_flow", "name": "资金流向", "icon": "💰"},
+            ],
+        }
+    )
 
 
 @router.post("/screen")
@@ -336,7 +361,7 @@ async def list_screening_factors():
 async def screen_stocks(req: ScreenRequest):
     """
     Screen stocks with factor filters
-    
+
     Returns stocks that match all factor criteria, sorted by composite score
     """
     start_time = time.time()
@@ -348,10 +373,12 @@ async def screen_stocks(req: ScreenRequest):
         # Convert request to screening factors
         screening_factors = []
         for fp in req.factors:
-            screening_factors.append(ScreeningFactor(
-                id=fp.id,
-                params=fp.params,
-            ))
+            screening_factors.append(
+                ScreeningFactor(
+                    id=fp.id,
+                    params=fp.params,
+                )
+            )
 
         result = await asyncio.wait_for(
             screener.screen_stocks(
@@ -364,21 +391,25 @@ async def screen_stocks(req: ScreenRequest):
 
         execution_time_ms = int((time.time() - start_time) * 1000)
 
-        return success_response({
-            "stocks": result["stocks"],
-            "total": result["total"],
-            "execution_time_ms": execution_time_ms,
-            "universe": req.universe,
-            "factors_applied": len(req.factors),
-        })
+        return success_response(
+            {
+                "stocks": result["stocks"],
+                "total": result["total"],
+                "execution_time_ms": execution_time_ms,
+                "universe": req.universe,
+                "factors_applied": len(req.factors),
+            }
+        )
 
     except asyncio.TimeoutError:
         logger.error("[FactorSandbox] Screening timeout after 30s", exc_info=True)
-        return error_response(ErrorCode.TIMEOUT_ERROR, "筛选超时，请尝试减少因子数量或缩小股票范围")
+        return error_response(
+            ErrorCode.TIMEOUT_ERROR, "筛选超时，请尝试减少因子数量或缩小股票范围"
+        )
     except Exception as e:
         logger.error(f"[FactorSandbox] Screening error: {e}", exc_info=True)
         error_type = type(e).__name__
-        user_msg = USER_FRIENDLY_ERRORS.get(error_type, '筛选失败，请稍后重试')
+        user_msg = USER_FRIENDLY_ERRORS.get(error_type, "筛选失败，请稍后重试")
         return error_response(ErrorCode.INTERNAL_ERROR, user_msg)
 
 
@@ -387,7 +418,7 @@ async def screen_stocks(req: ScreenRequest):
 async def backtest_preview(req: BacktestPreviewRequest):
     """
     Quick backtest preview for screened stocks
-    
+
     Runs a simple buy-and-hold backtest to show potential performance
     """
     loop = asyncio.get_event_loop()
@@ -402,12 +433,15 @@ async def backtest_preview(req: BacktestPreviewRequest):
 
             conn = _get_conn()
             try:
-                rows = conn.execute("""
+                rows = conn.execute(
+                    """
                     SELECT date, close
                     FROM market_data_daily
                     WHERE symbol = ? AND date >= ? AND date <= ?
                     ORDER BY date ASC
-                """, (db_symbol, req.start_date, req.end_date)).fetchall()
+                """,
+                    (db_symbol, req.start_date, req.end_date),
+                ).fetchall()
 
                 if len(rows) < 10:
                     continue
@@ -433,15 +467,17 @@ async def backtest_preview(req: BacktestPreviewRequest):
                 returns = np.diff(np.log(closes + 1e-10))
                 volatility = np.std(returns) * np.sqrt(252) * 100
 
-                results.append({
-                    "symbol": symbol,
-                    "start_price": float(start_price),
-                    "end_price": float(end_price),
-                    "total_return_pct": round(total_return, 2),
-                    "max_drawdown_pct": round(max_dd, 2),
-                    "volatility_pct": round(volatility, 2),
-                    "trading_days": len(closes),
-                })
+                results.append(
+                    {
+                        "symbol": symbol,
+                        "start_price": float(start_price),
+                        "end_price": float(end_price),
+                        "total_return_pct": round(total_return, 2),
+                        "max_drawdown_pct": round(max_dd, 2),
+                        "volatility_pct": round(volatility, 2),
+                        "trading_days": len(closes),
+                    }
+                )
 
             finally:
                 conn.close()
@@ -455,20 +491,24 @@ async def backtest_preview(req: BacktestPreviewRequest):
         )
 
         if not results:
-            return error_response(ErrorCode.NOT_FOUND, "No valid data found for specified stocks")
+            return error_response(
+                ErrorCode.NOT_FOUND, "No valid data found for specified stocks"
+            )
 
         # Sort by total return
         results.sort(key=lambda x: x["total_return_pct"], reverse=True)
 
-        return success_response({
-            "results": results,
-            "total": len(results),
-            "period": {
-                "start_date": req.start_date,
-                "end_date": req.end_date,
-            },
-            "initial_capital": req.initial_capital,
-        })
+        return success_response(
+            {
+                "results": results,
+                "total": len(results),
+                "period": {
+                    "start_date": req.start_date,
+                    "end_date": req.end_date,
+                },
+                "initial_capital": req.initial_capital,
+            }
+        )
 
     except asyncio.TimeoutError:
         logger.error("[FactorSandbox] Backtest preview timeout", exc_info=True)
@@ -476,7 +516,7 @@ async def backtest_preview(req: BacktestPreviewRequest):
     except Exception as e:
         logger.error(f"[FactorSandbox] Backtest preview error: {e}", exc_info=True)
         error_type = type(e).__name__
-        user_msg = USER_FRIENDLY_ERRORS.get(error_type, '回测预览失败，请稍后重试')
+        user_msg = USER_FRIENDLY_ERRORS.get(error_type, "回测预览失败，请稍后重试")
         return error_response(ErrorCode.INTERNAL_ERROR, user_msg)
 
 
@@ -499,18 +539,20 @@ async def clear_cache():
 # SSE Streaming Endpoints
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ScreenStreamRequest(BaseModel):
     """Request model for streaming stock screening"""
+
     factors: List[FactorParam] = Field(..., min_length=1, max_length=20)
     universe: str = Field(default="hs300")
     limit: int = Field(default=50, ge=1, le=500)
 
-    @field_validator('universe')
+    @field_validator("universe")
     @classmethod
     def validate_universe(cls, v: str) -> str:
-        valid = ['all', 'hs300', 'zz500', 'cyb50']
+        valid = ["all", "hs300", "zz500", "cyb50"]
         if v.lower() not in valid:
-            raise ValueError(f'universe must be one of: {valid}')
+            raise ValueError(f"universe must be one of: {valid}")
         return v.lower()
 
 
@@ -542,7 +584,7 @@ def _clear_progress(task_id: str):
 async def start_streaming_screen(req: ScreenStreamRequest):
     """
     Start a streaming screening task and return task_id for SSE connection.
-    
+
     Use GET /screen/{task_id}/stream to receive progress updates.
     """
     task_id = str(uuid.uuid4())
@@ -556,17 +598,21 @@ async def start_streaming_screen(req: ScreenStreamRequest):
         error=None,
     )
 
-    asyncio.create_task(_run_screening_task(
-        task_id=task_id,
-        factors=req.factors,
-        universe=req.universe,
-        limit=req.limit,
-    ))
+    asyncio.create_task(
+        _run_screening_task(
+            task_id=task_id,
+            factors=req.factors,
+            universe=req.universe,
+            limit=req.limit,
+        )
+    )
 
-    return success_response({
-        "task_id": task_id,
-        "stream_url": f"/api/v1/factor_sandbox/screen/{task_id}/stream",
-    })
+    return success_response(
+        {
+            "task_id": task_id,
+            "stream_url": f"/api/v1/factor_sandbox/screen/{task_id}/stream",
+        }
+    )
 
 
 async def _run_screening_task(
@@ -580,8 +626,7 @@ async def _run_screening_task(
         screener = get_stock_screener()
 
         screening_factors = [
-            ScreeningFactor(id=fp.id, params=fp.params)
-            for fp in factors
+            ScreeningFactor(id=fp.id, params=fp.params) for fp in factors
         ]
 
         _update_progress(task_id, status="running")
@@ -611,7 +656,7 @@ async def _run_screening_task(
     except Exception as e:
         logger.error(f"[FactorSandbox] Streaming screening error: {e}", exc_info=True)
         error_type = type(e).__name__
-        user_msg = USER_FRIENDLY_ERRORS.get(error_type, '筛选失败，请稍后重试')
+        user_msg = USER_FRIENDLY_ERRORS.get(error_type, "筛选失败，请稍后重试")
         _update_progress(task_id, status="error", error=user_msg)
 
 
@@ -620,11 +665,12 @@ async def _run_screening_task(
 async def stream_screening_progress(task_id: str):
     """
     SSE endpoint for real-time screening progress.
-    
+
     Yields events with format:
     - type: "progress" | "complete" | "error"
     - data: progress info or results
     """
+
     async def event_generator() -> AsyncGenerator[Dict[str, Any], None]:
         last_screened = 0
         retry_count = 0
@@ -651,58 +697,68 @@ async def stream_screening_progress(task_id: str):
             if status == "pending":
                 yield {
                     "event": "progress",
-                    "data": json.dumps({
-                        "type": "progress",
-                        "status": "pending",
-                        "screened_stocks": 0,
-                        "total_stocks": 0,
-                        "matches": [],
-                    }),
+                    "data": json.dumps(
+                        {
+                            "type": "progress",
+                            "status": "pending",
+                            "screened_stocks": 0,
+                            "total_stocks": 0,
+                            "matches": [],
+                        }
+                    ),
                 }
             elif status == "running":
                 current_screened = progress.get("screened_stocks", 0)
                 if current_screened != last_screened:
                     yield {
                         "event": "progress",
-                        "data": json.dumps({
-                            "type": "progress",
-                            "status": "running",
-                            "screened_stocks": progress.get("screened_stocks", 0),
-                            "total_stocks": progress.get("total_stocks", 0),
-                            "matches": progress.get("matches", []),
-                        }),
+                        "data": json.dumps(
+                            {
+                                "type": "progress",
+                                "status": "running",
+                                "screened_stocks": progress.get("screened_stocks", 0),
+                                "total_stocks": progress.get("total_stocks", 0),
+                                "matches": progress.get("matches", []),
+                            }
+                        ),
                     }
                     last_screened = current_screened
             elif status == "complete":
                 yield {
                     "event": "complete",
-                    "data": json.dumps({
-                        "type": "complete",
-                        "status": "complete",
-                        "screened_stocks": progress.get("screened_stocks", 0),
-                        "total_stocks": progress.get("total_stocks", 0),
-                        "matches": progress.get("matches", []),
-                    }),
+                    "data": json.dumps(
+                        {
+                            "type": "complete",
+                            "status": "complete",
+                            "screened_stocks": progress.get("screened_stocks", 0),
+                            "total_stocks": progress.get("total_stocks", 0),
+                            "matches": progress.get("matches", []),
+                        }
+                    ),
                 }
                 _clear_progress(task_id)
                 break
             elif status == "error":
                 yield {
                     "event": "error",
-                    "data": json.dumps({
-                        "type": "error",
-                        "error": progress.get("error", "Unknown error"),
-                    }),
+                    "data": json.dumps(
+                        {
+                            "type": "error",
+                            "error": progress.get("error", "Unknown error"),
+                        }
+                    ),
                 }
                 _clear_progress(task_id)
                 break
             elif status == "cancelled":
                 yield {
                     "event": "error",
-                    "data": json.dumps({
-                        "type": "cancelled",
-                        "error": "Task cancelled",
-                    }),
+                    "data": json.dumps(
+                        {
+                            "type": "cancelled",
+                            "error": "Task cancelled",
+                        }
+                    ),
                 }
                 _clear_progress(task_id)
                 break
@@ -715,7 +771,7 @@ async def stream_screening_progress(task_id: str):
             "X-Accel-Buffering": "no",
             "Cache-Control": "no-cache, must-revalidate",
             "Connection": "keep-alive",
-        }
+        },
     )
 
 

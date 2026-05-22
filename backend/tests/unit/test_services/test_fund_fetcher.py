@@ -7,6 +7,7 @@ Covers:
 3. Mock data methods (_mock_etf_info, _mock_fund_info, etc.)
 4. Risk metrics calculation (_calculate_risk_metrics)
 """
+
 import pytest
 import sys
 import os
@@ -79,7 +80,7 @@ class TestCleanValue:
 
     def test_clean_float_nan(self):
         """Test cleaning NaN float."""
-        assert clean_value(float('nan')) is None
+        assert clean_value(float("nan")) is None
 
     def test_clean_string_whitespace(self):
         """Test cleaning whitespace-only string."""
@@ -101,14 +102,14 @@ class TestFundFetcherETF:
         fetcher = FundFetcher()
 
         mock_sina_data = {
-            'source': 'sina',
-            'code': '510300',
-            'name': '沪深300ETF',
-            'price': 4.123,
-            'change_pct': 1.5,
+            "source": "sina",
+            "code": "510300",
+            "name": "沪深300ETF",
+            "price": 4.123,
+            "change_pct": 1.5,
         }
 
-        with patch('app.services.sina_etf_fetcher.get_sina_fetcher') as mock_get_sina:
+        with patch("app.services.sina_etf_fetcher.get_sina_fetcher") as mock_get_sina:
             mock_sina = MagicMock()
             mock_sina.get_etf_info = AsyncMock(return_value=mock_sina_data)
             mock_get_sina.return_value = mock_sina
@@ -116,8 +117,8 @@ class TestFundFetcherETF:
             result = await fetcher.get_etf_info("510300")
 
         assert result is not None
-        assert result['code'] == '510300'
-        assert result['source'] == 'sina'
+        assert result["code"] == "510300"
+        assert result["source"] == "sina"
 
     @pytest.mark.asyncio
     async def test_get_etf_info_akshare_fallback(self):
@@ -125,43 +126,47 @@ class TestFundFetcherETF:
         fetcher = FundFetcher()
 
         mock_ak_data = {
-            'source': 'akshare',
-            'code': '510300',
-            'name': '沪深300ETF',
-            'price': 4.123,
+            "source": "akshare",
+            "code": "510300",
+            "name": "沪深300ETF",
+            "price": 4.123,
         }
 
-        with patch('app.services.sina_etf_fetcher.get_sina_fetcher') as mock_get_sina:
+        with patch("app.services.sina_etf_fetcher.get_sina_fetcher") as mock_get_sina:
             mock_sina = MagicMock()
             mock_sina.get_etf_info = AsyncMock(return_value=None)
             mock_get_sina.return_value = mock_sina
 
-            with patch.object(fetcher.ak, 'get_etf_spot', new_callable=AsyncMock) as mock_ak:
+            with patch.object(
+                fetcher.ak, "get_etf_spot", new_callable=AsyncMock
+            ) as mock_ak:
                 mock_ak.return_value = mock_ak_data
 
                 result = await fetcher.get_etf_info("510300")
 
         assert result is not None
-        assert result['source'] == 'akshare'
+        assert result["source"] == "akshare"
 
     @pytest.mark.asyncio
     async def test_get_etf_info_mock_fallback(self):
         """Test ETF info returns mock data when all sources fail."""
         fetcher = FundFetcher()
 
-        with patch('app.services.sina_etf_fetcher.get_sina_fetcher') as mock_get_sina:
+        with patch("app.services.sina_etf_fetcher.get_sina_fetcher") as mock_get_sina:
             mock_sina = MagicMock()
             mock_sina.get_etf_info = AsyncMock(return_value=None)
             mock_get_sina.return_value = mock_sina
 
-            with patch.object(fetcher.ak, 'get_etf_spot', new_callable=AsyncMock) as mock_ak:
+            with patch.object(
+                fetcher.ak, "get_etf_spot", new_callable=AsyncMock
+            ) as mock_ak:
                 mock_ak.return_value = None
 
                 result = await fetcher.get_etf_info("510300")
 
         assert result is not None
-        assert result['source'] == 'mock'
-        assert result['code'] == '510300'
+        assert result["source"] == "mock"
+        assert result["code"] == "510300"
 
 
 class TestFundFetcherOpenFund:
@@ -173,20 +178,22 @@ class TestFundFetcherOpenFund:
         fetcher = FundFetcher()
 
         mock_em_data = {
-            'source': 'eastmoney',
-            'code': '110011',
-            'name': '易方达中小盘',
-            'nav': 5.6789,
+            "source": "eastmoney",
+            "code": "110011",
+            "name": "易方达中小盘",
+            "nav": 5.6789,
         }
 
-        with patch.object(fetcher.em, 'get_fund_info', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_info", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = mock_em_data
 
             result = await fetcher.get_fund_info("110011")
 
         assert result is not None
-        assert result['code'] == '110011'
-        assert result['source'] == 'eastmoney'
+        assert result["code"] == "110011"
+        assert result["source"] == "eastmoney"
 
     @pytest.mark.asyncio
     async def test_get_fund_info_akshare_fallback(self):
@@ -194,38 +201,46 @@ class TestFundFetcherOpenFund:
         fetcher = FundFetcher()
 
         mock_ak_data = {
-            'source': 'akshare',
-            'code': '110011',
-            'name': '易方达中小盘',
+            "source": "akshare",
+            "code": "110011",
+            "name": "易方达中小盘",
         }
 
-        with patch.object(fetcher.em, 'get_fund_info', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_info", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = None
 
-            with patch.object(fetcher.ak, 'get_fund_info', new_callable=AsyncMock) as mock_ak:
+            with patch.object(
+                fetcher.ak, "get_fund_info", new_callable=AsyncMock
+            ) as mock_ak:
                 mock_ak.return_value = mock_ak_data
 
                 result = await fetcher.get_fund_info("110011")
 
         assert result is not None
-        assert result['source'] == 'akshare'
+        assert result["source"] == "akshare"
 
     @pytest.mark.asyncio
     async def test_get_fund_info_mock_fallback(self):
         """Test fund info returns mock data when all sources fail."""
         fetcher = FundFetcher()
 
-        with patch.object(fetcher.em, 'get_fund_info', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_info", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = None
 
-            with patch.object(fetcher.ak, 'get_fund_info', new_callable=AsyncMock) as mock_ak:
+            with patch.object(
+                fetcher.ak, "get_fund_info", new_callable=AsyncMock
+            ) as mock_ak:
                 mock_ak.return_value = None
 
                 result = await fetcher.get_fund_info("110011")
 
         assert result is not None
-        assert result['source'] == 'mock'
-        assert result['code'] == '110011'
+        assert result["source"] == "mock"
+        assert result["code"] == "110011"
 
 
 class TestFundFetcherPortfolio:
@@ -237,37 +252,43 @@ class TestFundFetcherPortfolio:
         fetcher = FundFetcher()
 
         mock_em_data = {
-            'source': 'eastmoney',
-            'code': '110011',
-            'quarter': '2024年1季度',
-            'stocks': [{'code': '600519', 'name': '贵州茅台', 'ratio': 5.89}],
-            'assets': [{'name': '股票', 'ratio': 85.5}],
+            "source": "eastmoney",
+            "code": "110011",
+            "quarter": "2024年1季度",
+            "stocks": [{"code": "600519", "name": "贵州茅台", "ratio": 5.89}],
+            "assets": [{"name": "股票", "ratio": 85.5}],
         }
 
-        with patch.object(fetcher.em, 'get_fund_portfolio', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_portfolio", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = mock_em_data
 
             result = await fetcher.get_fund_portfolio("110011")
 
         assert result is not None
-        assert result['source'] == 'eastmoney'
-        assert len(result['stocks']) == 1
+        assert result["source"] == "eastmoney"
+        assert len(result["stocks"]) == 1
 
     @pytest.mark.asyncio
     async def test_get_fund_portfolio_mock(self):
         """Test fund portfolio returns mock data when sources fail."""
         fetcher = FundFetcher()
 
-        with patch.object(fetcher.em, 'get_fund_portfolio', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_portfolio", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = None
 
-            with patch.object(fetcher.ak, 'get_fund_portfolio', new_callable=AsyncMock) as mock_ak:
+            with patch.object(
+                fetcher.ak, "get_fund_portfolio", new_callable=AsyncMock
+            ) as mock_ak:
                 mock_ak.return_value = None
 
                 result = await fetcher.get_fund_portfolio("110011")
 
         assert result is not None
-        assert result['source'] == 'mock'
+        assert result["source"] == "mock"
 
 
 class TestFundFetcherNAV:
@@ -279,28 +300,34 @@ class TestFundFetcherNAV:
         fetcher = FundFetcher()
 
         mock_nav_data = [
-            {'date': '2024-01-01', 'nav': 5.0, 'accumulated_nav': 5.5},
-            {'date': '2024-01-02', 'nav': 5.1, 'accumulated_nav': 5.6},
+            {"date": "2024-01-01", "nav": 5.0, "accumulated_nav": 5.5},
+            {"date": "2024-01-02", "nav": 5.1, "accumulated_nav": 5.6},
         ]
 
-        with patch.object(fetcher.em, 'get_fund_nav_history', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_nav_history", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = mock_nav_data
 
             result = await fetcher.get_fund_nav_history("110011", "6m")
 
         assert result is not None
         assert len(result) == 2
-        assert result[0]['nav'] == 5.0
+        assert result[0]["nav"] == 5.0
 
     @pytest.mark.asyncio
     async def test_get_fund_nav_history_mock(self):
         """Test fund NAV history returns mock data when sources fail."""
         fetcher = FundFetcher()
 
-        with patch.object(fetcher.em, 'get_fund_nav_history', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_nav_history", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = None
 
-            with patch.object(fetcher.ak, 'get_fund_nav_history', new_callable=AsyncMock) as mock_ak:
+            with patch.object(
+                fetcher.ak, "get_fund_nav_history", new_callable=AsyncMock
+            ) as mock_ak:
                 mock_ak.return_value = None
 
                 result = await fetcher.get_fund_nav_history("110011", "6m")
@@ -318,11 +345,13 @@ class TestFundFetcherRank:
         fetcher = FundFetcher()
 
         mock_rank_data = [
-            {'code': '110011', 'name': '易方达中小盘', 'nav': 5.6789},
-            {'code': '000001', 'name': '华夏成长', 'nav': 1.2345},
+            {"code": "110011", "name": "易方达中小盘", "nav": 5.6789},
+            {"code": "000001", "name": "华夏成长", "nav": 1.2345},
         ]
 
-        with patch.object(fetcher.em, 'get_fund_rank', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_rank", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = mock_rank_data
 
             result = await fetcher.get_fund_rank("股票型")
@@ -336,13 +365,17 @@ class TestFundFetcherRank:
         fetcher = FundFetcher()
 
         mock_ak_data = [
-            {'code': '110011', 'name': '易方达中小盘'},
+            {"code": "110011", "name": "易方达中小盘"},
         ]
 
-        with patch.object(fetcher.em, 'get_fund_rank', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_rank", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = None
 
-            with patch.object(fetcher.ak, 'get_fund_rank', new_callable=AsyncMock) as mock_ak:
+            with patch.object(
+                fetcher.ak, "get_fund_rank", new_callable=AsyncMock
+            ) as mock_ak:
                 mock_ak.return_value = mock_ak_data
 
                 result = await fetcher.get_fund_rank("全部")
@@ -355,10 +388,14 @@ class TestFundFetcherRank:
         """Test fund rank returns empty list when all sources fail."""
         fetcher = FundFetcher()
 
-        with patch.object(fetcher.em, 'get_fund_rank', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_rank", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = None
 
-            with patch.object(fetcher.ak, 'get_fund_rank', new_callable=AsyncMock) as mock_ak:
+            with patch.object(
+                fetcher.ak, "get_fund_rank", new_callable=AsyncMock
+            ) as mock_ak:
                 mock_ak.return_value = None
 
                 result = await fetcher.get_fund_rank("全部")
@@ -374,17 +411,21 @@ class TestFundFetcherReturns:
         """Test fund returns returns mock data when sources fail."""
         fetcher = FundFetcher()
 
-        with patch.object(fetcher.em, 'get_fund_returns', new_callable=AsyncMock) as mock_em:
+        with patch.object(
+            fetcher.em, "get_fund_returns", new_callable=AsyncMock
+        ) as mock_em:
             mock_em.return_value = None
 
-            with patch('akshare.fund_open_fund_rank_em', new_callable=AsyncMock) as mock_ak:
+            with patch(
+                "akshare.fund_open_fund_rank_em", new_callable=AsyncMock
+            ) as mock_ak:
                 mock_ak.side_effect = Exception("Network error")
 
                 result = await fetcher.get_fund_returns("110011")
 
         assert result is not None
-        assert result['source'] == 'mock'
-        assert 'returns' in result
+        assert result["source"] == "mock"
+        assert "returns" in result
 
 
 class TestFundFetcherRisk:
@@ -396,37 +437,41 @@ class TestFundFetcherRisk:
         fetcher = FundFetcher()
 
         mock_nav_data = [
-            {'date': '2024-01-01', 'nav': 5.0},
-            {'date': '2024-01-02', 'nav': 5.1},
-            {'date': '2024-01-03', 'nav': 5.2},
-            {'date': '2024-01-04', 'nav': 5.15},
-            {'date': '2024-01-05', 'nav': 5.3},
+            {"date": "2024-01-01", "nav": 5.0},
+            {"date": "2024-01-02", "nav": 5.1},
+            {"date": "2024-01-03", "nav": 5.2},
+            {"date": "2024-01-04", "nav": 5.15},
+            {"date": "2024-01-05", "nav": 5.3},
         ] * 10
 
-        with patch.object(fetcher, 'get_fund_nav_history', new_callable=AsyncMock) as mock_nav:
+        with patch.object(
+            fetcher, "get_fund_nav_history", new_callable=AsyncMock
+        ) as mock_nav:
             mock_nav.return_value = mock_nav_data
 
             result = await fetcher.get_fund_risk_metrics("110011")
 
         assert result is not None
-        assert 'sharpe' in result
-        assert 'max_drawdown' in result
-        assert 'alpha' in result
-        assert 'beta' in result
-        assert 'volatility' in result
+        assert "sharpe" in result
+        assert "max_drawdown" in result
+        assert "alpha" in result
+        assert "beta" in result
+        assert "volatility" in result
 
     @pytest.mark.asyncio
     async def test_get_fund_risk_metrics_mock(self):
         """Test fund risk metrics returns mock data when NAV insufficient."""
         fetcher = FundFetcher()
 
-        with patch.object(fetcher, 'get_fund_nav_history', new_callable=AsyncMock) as mock_nav:
-            mock_nav.return_value = [{'nav': 5.0}]
+        with patch.object(
+            fetcher, "get_fund_nav_history", new_callable=AsyncMock
+        ) as mock_nav:
+            mock_nav.return_value = [{"nav": 5.0}]
 
             result = await fetcher.get_fund_risk_metrics("110011")
 
         assert result is not None
-        assert result['source'] == 'mock'
+        assert result["source"] == "mock"
 
 
 class TestCalculateRiskMetrics:
@@ -437,33 +482,33 @@ class TestCalculateRiskMetrics:
         fetcher = FundFetcher()
 
         nav_data = [
-            {'date': '2024-01-01', 'nav': 5.0},
-            {'date': '2024-01-02', 'nav': 5.1},
-            {'date': '2024-01-03', 'nav': 5.2},
-            {'date': '2024-01-04', 'nav': 5.15},
-            {'date': '2024-01-05', 'nav': 5.3},
+            {"date": "2024-01-01", "nav": 5.0},
+            {"date": "2024-01-02", "nav": 5.1},
+            {"date": "2024-01-03", "nav": 5.2},
+            {"date": "2024-01-04", "nav": 5.15},
+            {"date": "2024-01-05", "nav": 5.3},
         ] * 10
 
         result = fetcher._calculate_risk_metrics(nav_data)
 
-        assert 'sharpe' in result
-        assert 'max_drawdown' in result
-        assert 'alpha' in result
-        assert 'beta' in result
-        assert 'volatility' in result
-        assert isinstance(result['sharpe'], float)
+        assert "sharpe" in result
+        assert "max_drawdown" in result
+        assert "alpha" in result
+        assert "beta" in result
+        assert "volatility" in result
+        assert isinstance(result["sharpe"], float)
 
     def test_calculate_risk_metrics_empty_data(self):
         """Test risk metrics calculation with empty data."""
         fetcher = FundFetcher()
         result = fetcher._calculate_risk_metrics([])
-        assert result['source'] == 'mock'
+        assert result["source"] == "mock"
 
     def test_calculate_risk_metrics_insufficient_data(self):
         """Test risk metrics calculation with insufficient data."""
         fetcher = FundFetcher()
-        result = fetcher._calculate_risk_metrics([{'nav': 5.0}])
-        assert result['source'] == 'mock'
+        result = fetcher._calculate_risk_metrics([{"nav": 5.0}])
+        assert result["source"] == "mock"
 
 
 class TestMockMethods:
@@ -474,69 +519,79 @@ class TestMockMethods:
         fetcher = FundFetcher()
         result = fetcher._mock_etf_info("510300")
 
-        assert result['source'] == 'mock'
-        assert result['code'] == '510300'
-        assert 'name' in result
-        assert 'price' in result
-        assert 'change_pct' in result
+        assert result["source"] == "mock"
+        assert result["code"] == "510300"
+        assert "name" in result
+        assert "price" in result
+        assert "change_pct" in result
 
     def test_mock_fund_info(self):
         """Test mock fund info generation."""
         fetcher = FundFetcher()
         result = fetcher._mock_fund_info("110011")
 
-        assert result['source'] == 'mock'
-        assert result['code'] == '110011'
-        assert 'name' in result
-        assert 'nav' in result
-        assert 'type' in result
+        assert result["source"] == "mock"
+        assert result["code"] == "110011"
+        assert "name" in result
+        assert "nav" in result
+        assert "type" in result
 
     def test_mock_portfolio(self):
         """Test mock portfolio generation."""
         fetcher = FundFetcher()
         result = fetcher._mock_portfolio("110011")
 
-        assert result['source'] == 'mock'
-        assert result['code'] == '110011'
-        assert 'stocks' in result
-        assert 'assets' in result
-        assert len(result['stocks']) == 2
+        assert result["source"] == "mock"
+        assert result["code"] == "110011"
+        assert "stocks" in result
+        assert "assets" in result
+        assert len(result["stocks"]) == 2
 
     def test_mock_nav_history(self):
         """Test mock NAV history generation."""
         fetcher = FundFetcher()
 
-        for period in ['1m', '3m', '6m', '1y']:
+        for period in ["1m", "3m", "6m", "1y"]:
             result = fetcher._mock_nav_history(period)
             assert isinstance(result, list)
             assert len(result) > 0
-            assert 'date' in result[0]
-            assert 'nav' in result[0]
+            assert "date" in result[0]
+            assert "nav" in result[0]
 
     def test_mock_fund_returns(self):
         """Test mock fund returns generation."""
         fetcher = FundFetcher()
         result = fetcher._mock_fund_returns("110011")
 
-        assert result['source'] == 'mock'
-        assert result['code'] == '110011'
-        assert 'returns' in result
-        expected_keys = ['1w', '1m', '3m', '6m', '1y', '2y', '3y', 'ytd', 'since_inception']
+        assert result["source"] == "mock"
+        assert result["code"] == "110011"
+        assert "returns" in result
+        expected_keys = [
+            "1w",
+            "1m",
+            "3m",
+            "6m",
+            "1y",
+            "2y",
+            "3y",
+            "ytd",
+            "since_inception",
+        ]
         for key in expected_keys:
-            assert key in result['returns']
+            assert key in result["returns"]
 
     def test_mock_risk_metrics(self):
         """Test mock risk metrics generation."""
         fetcher = FundFetcher()
         result = fetcher._mock_risk_metrics("110011")
 
-        assert result['source'] == 'mock'
-        assert result['code'] == '110011'
-        assert 'sharpe' in result
-        assert 'max_drawdown' in result
-        assert 'alpha' in result
-        assert 'beta' in result
-        assert 'volatility' in result
+        assert result["source"] == "mock"
+        assert result["code"] == "110011"
+        assert "sharpe" in result
+        assert "max_drawdown" in result
+        assert "alpha" in result
+        assert "beta" in result
+        assert "volatility" in result
 
 
 class TestFundFetcherFullData:
@@ -547,45 +602,53 @@ class TestFundFetcherFullData:
         """Test full data for ETF."""
         fetcher = FundFetcher()
 
-        mock_etf_info = {'code': '510300', 'name': '沪深300ETF', 'price': 4.5}
-        mock_history = [{'date': '2024-01-01', 'close': 4.5}]
+        mock_etf_info = {"code": "510300", "name": "沪深300ETF", "price": 4.5}
+        mock_history = [{"date": "2024-01-01", "close": 4.5}]
 
-        with patch.object(fetcher, 'get_etf_info', new_callable=AsyncMock) as mock_info:
+        with patch.object(fetcher, "get_etf_info", new_callable=AsyncMock) as mock_info:
             mock_info.return_value = mock_etf_info
 
-            with patch.object(fetcher, 'get_etf_history', new_callable=AsyncMock) as mock_hist:
+            with patch.object(
+                fetcher, "get_etf_history", new_callable=AsyncMock
+            ) as mock_hist:
                 mock_hist.return_value = mock_history
 
                 result = await fetcher.get_fund_full_data("510300", is_etf=True)
 
-        assert 'info' in result
-        assert 'history' in result
-        assert result['info'] == mock_etf_info
-        assert result['history'] == mock_history
+        assert "info" in result
+        assert "history" in result
+        assert result["info"] == mock_etf_info
+        assert result["history"] == mock_history
 
     @pytest.mark.asyncio
     async def test_get_fund_full_data_open_fund(self):
         """Test full data for open fund."""
         fetcher = FundFetcher()
 
-        mock_info = {'code': '110011', 'name': '易方达中小盘'}
-        mock_nav = [{'date': '2024-01-01', 'nav': 5.0}]
-        mock_portfolio = {'stocks': [], 'assets': []}
+        mock_info = {"code": "110011", "name": "易方达中小盘"}
+        mock_nav = [{"date": "2024-01-01", "nav": 5.0}]
+        mock_portfolio = {"stocks": [], "assets": []}
 
-        with patch.object(fetcher, 'get_fund_info', new_callable=AsyncMock) as mock_get_info:
+        with patch.object(
+            fetcher, "get_fund_info", new_callable=AsyncMock
+        ) as mock_get_info:
             mock_get_info.return_value = mock_info
 
-            with patch.object(fetcher, 'get_fund_nav_history', new_callable=AsyncMock) as mock_nav_func:
+            with patch.object(
+                fetcher, "get_fund_nav_history", new_callable=AsyncMock
+            ) as mock_nav_func:
                 mock_nav_func.return_value = mock_nav
 
-                with patch.object(fetcher, 'get_fund_portfolio', new_callable=AsyncMock) as mock_port:
+                with patch.object(
+                    fetcher, "get_fund_portfolio", new_callable=AsyncMock
+                ) as mock_port:
                     mock_port.return_value = mock_portfolio
 
                     result = await fetcher.get_fund_full_data("110011", is_etf=False)
 
-        assert 'info' in result
-        assert 'nav_history' in result
-        assert 'portfolio' in result
+        assert "info" in result
+        assert "nav_history" in result
+        assert "portfolio" in result
 
 
 class TestCompareChartDataBuilder:
@@ -598,8 +661,8 @@ class TestCompareChartDataBuilder:
 
         # Test case: nav value of 0 should not cause division by zero
         fund_data_zero_nav = [
-            {'date': '2024-01-01', 'nav': 0},
-            {'date': '2024-01-02', 'nav': 1.0},
+            {"date": "2024-01-01", "nav": 0},
+            {"date": "2024-01-02", "nav": 1.0},
         ]
 
         fetcher = FundFetcher()
@@ -607,23 +670,25 @@ class TestCompareChartDataBuilder:
         result = fetcher._calculate_risk_metrics(fund_data_zero_nav)
 
         # Should return mock data (indicating graceful failure) not Infinity/NaN
-        if 'sharpe' in result:
-            sharpe = result['sharpe']
+        if "sharpe" in result:
+            sharpe = result["sharpe"]
             # Sharpe should not be Infinity or NaN
-            assert sharpe != float('inf'), "Sharpe ratio should not be Infinity"
-            assert sharpe == sharpe, "Sharpe ratio should not be NaN"  # NaN is not equal to itself
+            assert sharpe != float("inf"), "Sharpe ratio should not be Infinity"
+            assert (
+                sharpe == sharpe
+            ), "Sharpe ratio should not be NaN"  # NaN is not equal to itself
 
-        if 'max_drawdown' in result:
-            max_dd = result['max_drawdown']
-            assert max_dd != float('inf'), "Max drawdown should not be Infinity"
+        if "max_drawdown" in result:
+            max_dd = result["max_drawdown"]
+            assert max_dd != float("inf"), "Max drawdown should not be Infinity"
             assert max_dd == max_dd, "Max drawdown should not be NaN"
 
     def test_compare_chart_base_nav_none_guard(self):
         """Test that baseNav=None is handled gracefully."""
         # Test case: nav value of None should not cause errors
         fund_data_none_nav = [
-            {'date': '2024-01-01', 'nav': None},
-            {'date': '2024-01-02', 'nav': 1.0},
+            {"date": "2024-01-01", "nav": None},
+            {"date": "2024-01-02", "nav": 1.0},
         ]
 
         fetcher = FundFetcher()
@@ -631,8 +696,8 @@ class TestCompareChartDataBuilder:
 
         # Should return valid data, not crash
         assert result is not None
-        if 'source' in result:
-            assert result['source'] in ('mock', 'calculated')
+        if "source" in result:
+            assert result["source"] in ("mock", "calculated")
 
 
 class TestGetFetcher:
@@ -641,12 +706,14 @@ class TestGetFetcher:
     def test_get_fetcher_returns_instance(self):
         """Test get_fetcher returns a FundFetcher instance."""
         from app.services.fund_fetcher import get_fetcher
+
         fetcher = get_fetcher()
         assert isinstance(fetcher, FundFetcher)
 
     def test_get_fetcher_singleton(self):
         """Test get_fetcher returns same instance."""
         from app.services.fund_fetcher import get_fetcher
+
         fetcher1 = get_fetcher()
         fetcher2 = get_fetcher()
         assert fetcher1 is fetcher2
@@ -664,7 +731,7 @@ class TestEastmoneyClientWrapper:
         client = EastmoneyClient()
 
         # Verify method exists
-        assert hasattr(client, 'get_fund_returns')
+        assert hasattr(client, "get_fund_returns")
         # Verify it's callable
         assert callable(client.get_fund_returns)
 
@@ -675,11 +742,12 @@ class TestEastmoneyClientWrapper:
 
         # The method should be wrapped by the cache decorator
         # Verify the method exists and is callable
-        assert hasattr(FundFetcher, 'get_fund_returns')
+        assert hasattr(FundFetcher, "get_fund_returns")
         assert callable(FundFetcher.get_fund_returns)
 
         # Verify it's an async function (decorated with cache)
         import inspect
+
         assert inspect.iscoroutinefunction(FundFetcher.get_fund_returns)
 
     @pytest.mark.asyncio
@@ -689,11 +757,12 @@ class TestEastmoneyClientWrapper:
 
         # The method should be wrapped by the cache decorator
         # Verify the method exists and is callable
-        assert hasattr(FundFetcher, 'get_fund_risk_metrics')
+        assert hasattr(FundFetcher, "get_fund_risk_metrics")
         assert callable(FundFetcher.get_fund_risk_metrics)
 
         # Verify it's an async function (decorated with cache)
         import inspect
+
         assert inspect.iscoroutinefunction(FundFetcher.get_fund_risk_metrics)
 
 
@@ -706,13 +775,14 @@ class TestCompareChartGuard:
         Simulates the guard logic from chartDataBuilder that prevents
         division by zero when baseNav is 0 or None.
         """
+
         # Simulate the guard logic as would be in compare chart data builder
         def process_fund_history_safe(fund):
             """Safe fund history processing with baseNav guard."""
-            if not fund or 'history' not in fund or not fund['history']:
+            if not fund or "history" not in fund or not fund["history"]:
                 return None
 
-            baseNav = fund['history'][0]['nav']
+            baseNav = fund["history"][0]["nav"]
 
             # Guard: if baseNav is 0 or None/undefined, return None to prevent Infinity
             if baseNav is None or baseNav == 0:
@@ -720,46 +790,49 @@ class TestCompareChartGuard:
 
             # Calculate growth rates safely
             result = []
-            for item in fund['history']:
-                nav = item.get('nav')
+            for item in fund["history"]:
+                nav = item.get("nav")
                 if nav is not None and nav > 0:
                     growth = (nav - baseNav) / baseNav * 100
-                    result.append({
-                        'date': item.get('date'),
-                        'nav': nav,
-                        'growth': round(growth, 2)
-                    })
+                    result.append(
+                        {
+                            "date": item.get("date"),
+                            "nav": nav,
+                            "growth": round(growth, 2),
+                        }
+                    )
             return result
 
         # Test case: baseNav = 0 should return None (not cause Infinity)
-        fund_zero_nav = {'history': [{'nav': 0}], 'code': 'TEST'}
+        fund_zero_nav = {"history": [{"nav": 0}], "code": "TEST"}
         result = process_fund_history_safe(fund_zero_nav)
         assert result is None
 
         # Test case: baseNav = None should return None
-        fund_none_nav = {'history': [{'nav': None}], 'code': 'TEST'}
+        fund_none_nav = {"history": [{"nav": None}], "code": "TEST"}
         result = process_fund_history_safe(fund_none_nav)
         assert result is None
 
         # Test case: valid fund data should process normally
         fund_valid = {
-            'history': [
-                {'date': '2024-01-01', 'nav': 1.0},
-                {'date': '2024-01-02', 'nav': 1.1},
-                {'date': '2024-01-03', 'nav': 1.05},
+            "history": [
+                {"date": "2024-01-01", "nav": 1.0},
+                {"date": "2024-01-02", "nav": 1.1},
+                {"date": "2024-01-03", "nav": 1.05},
             ],
-            'code': 'TEST'
+            "code": "TEST",
         }
         result = process_fund_history_safe(fund_valid)
         assert result is not None
         assert len(result) == 3
         # First entry should have 0% growth (base nav compared to itself)
-        assert result[0]['growth'] == 0.0
+        assert result[0]["growth"] == 0.0
         # Second entry: (1.1 - 1.0) / 1.0 * 100 = 10%
-        assert result[1]['growth'] == 10.0
+        assert result[1]["growth"] == 10.0
 
     def test_division_by_zero_returns_not_infinity(self):
         """Test that division by zero doesn't produce Infinity or NaN."""
+
         def safe_divide(numerator, denominator, default=None):
             """Safe division that returns default if denominator is 0 or invalid."""
             if denominator is None or denominator == 0:
@@ -767,7 +840,7 @@ class TestCompareChartGuard:
             try:
                 result = numerator / denominator
                 # Check for infinity
-                if result == float('inf') or result == float('-inf'):
+                if result == float("inf") or result == float("-inf"):
                     return default
                 # Check for NaN
                 if result != result:  # NaN check
@@ -799,7 +872,7 @@ class TestEastmoneyParallelFetch:
         source = inspect.getsource(EastmoneyFundFetcher.get_fund_info)
 
         # Verify asyncio.gather is used for parallel fetching
-        assert 'asyncio.gather' in source
+        assert "asyncio.gather" in source
 
     @pytest.mark.asyncio
     async def test_asyncio_gather_used_in_get_fund_returns(self):
@@ -814,5 +887,5 @@ class TestEastmoneyParallelFetch:
         # This is expected - the key test is for get_fund_info
         # We verify the method exists and works
         fetcher = EastmoneyFundFetcher()
-        assert hasattr(fetcher, 'get_fund_returns')
+        assert hasattr(fetcher, "get_fund_returns")
         assert callable(fetcher.get_fund_returns)

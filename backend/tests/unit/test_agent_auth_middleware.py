@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 from fastapi import HTTPException, status
 
 # Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from app.middleware.agent_auth import (
     verify_agent_token,
@@ -34,15 +34,15 @@ from app.middleware.agent_auth import (
 )
 from app.services.agent.token_service import AgentToken, TokenScope
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_token_service():
     """Mock token service."""
-    with patch('app.middleware.agent_auth.get_token_service') as mock:
+    with patch("app.middleware.agent_auth.get_token_service") as mock:
         service = MagicMock()
         mock.return_value = service
         yield service
@@ -105,6 +105,7 @@ def client(app):
 # Token Verification Tests
 # ============================================================================
 
+
 class TestVerifyAgentToken:
     """Test verify_agent_token dependency."""
 
@@ -119,7 +120,7 @@ class TestVerifyAgentToken:
         app = FastAPI()
 
         @app.get("/test")
-        async def test_endpoint(token = None):
+        async def test_endpoint(token=None):
             from app.middleware.agent_auth import verify_agent_token
             from fastapi.security import HTTPAuthorizationCredentials
 
@@ -133,8 +134,7 @@ class TestVerifyAgentToken:
 
             # Create mock credentials
             credentials = HTTPAuthorizationCredentials(
-                scheme="Bearer",
-                credentials="AGT1_test_token"
+                scheme="Bearer", credentials="AGT1_test_token"
             )
 
             # Verify token
@@ -144,7 +144,7 @@ class TestVerifyAgentToken:
         client = TestClient(app)
 
         # Mock the token service
-        with patch('app.middleware.agent_auth.get_token_service') as mock_service:
+        with patch("app.middleware.agent_auth.get_token_service") as mock_service:
             service = MagicMock()
             service.verify_token.return_value = sample_token
             service.check_rate_limit.return_value = True
@@ -152,8 +152,7 @@ class TestVerifyAgentToken:
 
             # Test
             response = client.get(
-                "/test",
-                headers={"Authorization": "Bearer AGT1_test_token"}
+                "/test", headers={"Authorization": "Bearer AGT1_test_token"}
             )
 
             # Verify
@@ -199,12 +198,11 @@ class TestVerifyAgentToken:
 
         # Create mock credentials
         credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer",
-            credentials="invalid_token"
+            scheme="Bearer", credentials="invalid_token"
         )
 
         # Verify token should raise exception
-        with patch('app.middleware.agent_auth.get_token_service') as mock:
+        with patch("app.middleware.agent_auth.get_token_service") as mock:
             mock.return_value = mock_token_service
 
             with pytest.raises(HTTPException) as exc_info:
@@ -233,12 +231,11 @@ class TestVerifyAgentToken:
 
         # Create mock credentials
         credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer",
-            credentials="expired_token"
+            scheme="Bearer", credentials="expired_token"
         )
 
         # Verify token should raise exception
-        with patch('app.middleware.agent_auth.get_token_service') as mock:
+        with patch("app.middleware.agent_auth.get_token_service") as mock:
             mock.return_value = mock_token_service
 
             with pytest.raises(HTTPException) as exc_info:
@@ -267,12 +264,11 @@ class TestVerifyAgentToken:
 
         # Create mock credentials
         credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer",
-            credentials="rate_limited_token"
+            scheme="Bearer", credentials="rate_limited_token"
         )
 
         # Verify token should raise exception
-        with patch('app.middleware.agent_auth.get_token_service') as mock:
+        with patch("app.middleware.agent_auth.get_token_service") as mock:
             mock.return_value = mock_token_service
 
             with pytest.raises(HTTPException) as exc_info:
@@ -285,6 +281,7 @@ class TestVerifyAgentToken:
 # ============================================================================
 # Scope Enforcement Tests
 # ============================================================================
+
 
 class TestRequireScope:
     """Test require_scope dependency factory."""
@@ -302,16 +299,14 @@ class TestRequireScope:
         request.method = "GET"
         request.state = MagicMock()
         request.state.auth_context = RequestContext(
-            token=sample_token,
-            ip_address="127.0.0.1",
-            user_agent="test-agent"
+            token=sample_token, ip_address="127.0.0.1", user_agent="test-agent"
         )
 
         # Create scope checker
         scope_checker = require_scope(TokenScope.READ)
 
         # Test
-        with patch('app.middleware.agent_auth.get_token_service') as mock:
+        with patch("app.middleware.agent_auth.get_token_service") as mock:
             mock.return_value = mock_token_service
 
             result = await scope_checker(request, sample_token)
@@ -331,16 +326,14 @@ class TestRequireScope:
         request.method = "GET"
         request.state = MagicMock()
         request.state.auth_context = RequestContext(
-            token=sample_token,
-            ip_address="127.0.0.1",
-            user_agent="test-agent"
+            token=sample_token, ip_address="127.0.0.1", user_agent="test-agent"
         )
 
         # Create scope checker for BACKTEST
         scope_checker = require_scope(TokenScope.BACKTEST)
 
         # Test
-        with patch('app.middleware.agent_auth.get_token_service') as mock:
+        with patch("app.middleware.agent_auth.get_token_service") as mock:
             mock.return_value = mock_token_service
 
             with pytest.raises(HTTPException) as exc_info:
@@ -354,15 +347,14 @@ class TestRequireScope:
 # Request Context Tests
 # ============================================================================
 
+
 class TestRequestContext:
     """Test request context injection."""
 
     def test_context_creation(self, sample_token):
         """Test creating request context."""
         context = RequestContext(
-            token=sample_token,
-            ip_address="127.0.0.1",
-            user_agent="test-agent"
+            token=sample_token, ip_address="127.0.0.1", user_agent="test-agent"
         )
 
         assert context.token == sample_token
@@ -373,9 +365,7 @@ class TestRequestContext:
     def test_context_to_dict(self, sample_token):
         """Test converting context to dictionary."""
         context = RequestContext(
-            token=sample_token,
-            ip_address="127.0.0.1",
-            user_agent="test-agent"
+            token=sample_token, ip_address="127.0.0.1", user_agent="test-agent"
         )
 
         result = context.to_dict()
@@ -391,9 +381,7 @@ class TestRequestContext:
         request = MagicMock()
         request.state = MagicMock()
         request.state.auth_context = RequestContext(
-            token=sample_token,
-            ip_address="127.0.0.1",
-            user_agent="test-agent"
+            token=sample_token, ip_address="127.0.0.1", user_agent="test-agent"
         )
 
         token = get_current_token(request)
@@ -415,6 +403,7 @@ class TestRequestContext:
 # Audit Middleware Tests
 # ============================================================================
 
+
 class TestAuditMiddleware:
     """Test audit middleware."""
 
@@ -425,24 +414,24 @@ class TestAuditMiddleware:
         mock_token_service.check_rate_limit.return_value = True
 
         @app.get("/api/agent/v1/test")
-        async def test_endpoint(token = None):
+        async def test_endpoint(token=None):
             return {"status": "ok"}
 
         client = TestClient(app)
 
         # Test
-        with patch('app.middleware.agent_auth.get_token_service') as mock:
+        with patch("app.middleware.agent_auth.get_token_service") as mock:
             mock.return_value = mock_token_service
 
             response = client.get(
-                "/api/agent/v1/test",
-                headers={"Authorization": "Bearer test_token"}
+                "/api/agent/v1/test", headers={"Authorization": "Bearer test_token"}
             )
 
             assert response.status_code == 200
 
     def test_audit_middleware_non_agent_api(self, app):
         """Test audit middleware for non-agent API requests."""
+
         @app.get("/api/v1/test")
         async def test_endpoint():
             return {"status": "ok"}
@@ -454,7 +443,9 @@ class TestAuditMiddleware:
 
         assert response.status_code == 200
 
-    def test_audit_middleware_http_exception(self, app, mock_token_service, sample_token):
+    def test_audit_middleware_http_exception(
+        self, app, mock_token_service, sample_token
+    ):
         """Test audit middleware handling HTTP exceptions."""
         # Setup
         mock_token_service.verify_token.return_value = sample_token
@@ -469,12 +460,11 @@ class TestAuditMiddleware:
         client = TestClient(app)
 
         # Test
-        with patch('app.middleware.agent_auth.get_token_service') as mock:
+        with patch("app.middleware.agent_auth.get_token_service") as mock:
             mock.return_value = mock_token_service
 
             response = client.get(
-                "/api/agent/v1/error",
-                headers={"Authorization": "Bearer test_token"}
+                "/api/agent/v1/error", headers={"Authorization": "Bearer test_token"}
             )
 
             assert response.status_code == 400
@@ -483,6 +473,7 @@ class TestAuditMiddleware:
 # ============================================================================
 # Integration Tests
 # ============================================================================
+
 
 class TestIntegration:
     """Integration tests for the complete authentication flow."""
@@ -495,18 +486,18 @@ class TestIntegration:
         mock_token_service.check_scope.return_value = True
 
         @app.get("/api/agent/v1/protected")
-        async def protected_endpoint(token = None):
+        async def protected_endpoint(token=None):
             return {"token_id": "test"}
 
         client = TestClient(app)
 
         # Test
-        with patch('app.middleware.agent_auth.get_token_service') as mock:
+        with patch("app.middleware.agent_auth.get_token_service") as mock:
             mock.return_value = mock_token_service
 
             response = client.get(
                 "/api/agent/v1/protected",
-                headers={"Authorization": "Bearer test_token"}
+                headers={"Authorization": "Bearer test_token"},
             )
 
             assert response.status_code == 200
@@ -515,7 +506,7 @@ class TestIntegration:
         """Test authentication without token."""
 
         @app.get("/api/agent/v1/protected")
-        async def protected_endpoint(token = Depends(verify_agent_token)):
+        async def protected_endpoint(token=Depends(verify_agent_token)):
             return {"token_id": token.id}
 
         client = TestClient(app)

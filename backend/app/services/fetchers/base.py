@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
 
+
 class BaseMarketFetcher(ABC):
     """
     Base interface for all market data fetchers.
-    
+
     This abstract class defines the contract that all data fetchers must implement.
     It enables dynamic switching between different data sources (Sina, Tencent, Eastmoney, etc.)
     """
@@ -24,10 +25,10 @@ class BaseMarketFetcher(ABC):
     async def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
         Get real-time quote for a symbol.
-        
+
         Args:
             symbol: Stock symbol (e.g., "sh600519", "sz000001")
-            
+
         Returns:
             Dict with keys: name, price, change_pct, volume, open, high, low, prev_close
             or None if fetch failed
@@ -38,11 +39,11 @@ class BaseMarketFetcher(ABC):
     async def get_kline(self, symbol: str, period: str = "day") -> Optional[List[Dict]]:
         """
         Get K-line (candlestick) data.
-        
+
         Args:
             symbol: Stock symbol
             period: "minute", "day", "week", "month"
-            
+
         Returns:
             List of dicts with keys: date, open, high, low, close, volume
             or None if fetch failed
@@ -52,10 +53,10 @@ class BaseMarketFetcher(ABC):
     async def get_order_book(self, symbol: str) -> Optional[Dict]:
         """
         Get order book (Level 2 data).
-        
+
         Args:
             symbol: Stock symbol
-            
+
         Returns:
             Dict with keys: asks, bids (each is list of {price, volume})
             or None if not supported or fetch failed
@@ -66,10 +67,10 @@ class BaseMarketFetcher(ABC):
     async def get_futures_quote(self, symbol: str) -> Optional[Dict]:
         """
         Get futures quote.
-        
+
         Args:
             symbol: Futures symbol
-            
+
         Returns:
             Quote dict or None if not supported
         """
@@ -104,7 +105,7 @@ class BaseMarketFetcher(ABC):
     async def ping(self) -> bool:
         """
         Ping the data source to check connectivity.
-        
+
         Returns:
             True if reachable, False otherwise
         """

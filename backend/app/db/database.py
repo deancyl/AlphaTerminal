@@ -8,22 +8,30 @@ from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 # 使用工作区根目录的 database.db（包含示例数据）
-_db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'database.db')
+_db_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "database.db",
+)
 _lock = threading.RLock()
 
 # ── 环境变量强制启用 WAL 模式 ────────────────────────────────────────
-_FORCE_WAL = os.environ.get('ALPHATERMINAL_FORCE_WAL', '').lower() in ('1', 'true', 'yes')
+_FORCE_WAL = os.environ.get("ALPHATERMINAL_FORCE_WAL", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # ── 线程级连接池（SQLite连接非线程安全，每个线程复用自己的连接）────────────────
 _thread_local = threading.local()
 _WAL_MODE_CHECKED = False
 _USE_WAL = True
 
+
 def _get_thread_conn():
     """获取当前线程的连接（复用，不频繁创建/关闭）"""
     global _WAL_MODE_CHECKED, _USE_WAL
 
-    if not hasattr(_thread_local, 'conn') or _thread_local.conn is None:
+    if not hasattr(_thread_local, "conn") or _thread_local.conn is None:
         conn = sqlite3.connect(_db_path, timeout=45.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
 
@@ -48,19 +56,23 @@ def _get_thread_conn():
         conn.execute("PRAGMA busy_timeout=45000")
 
         # v0.6.62: SQLite 性能优化 PRAGMA
-        conn.execute("PRAGMA synchronous=NORMAL")    # 平衡性能与安全（减少 fsync）
-        conn.execute("PRAGMA cache_size=-64000")     # 64MB 页缓存
-        conn.execute("PRAGMA temp_store=MEMORY")     # 临时表内存存储
+        conn.execute("PRAGMA synchronous=NORMAL")  # 平衡性能与安全（减少 fsync）
+        conn.execute("PRAGMA cache_size=-64000")  # 64MB 页缓存
+        conn.execute("PRAGMA temp_store=MEMORY")  # 临时表内存存储
         _thread_local.conn = conn
-        logger.debug(f"[DB] Created new connection for thread {threading.current_thread().name}")
+        logger.debug(
+            f"[DB] Created new connection for thread {threading.current_thread().name}"
+        )
 
     return _thread_local.conn
 
+
 def _close_thread_conn():
     """关闭当前线程的连接（用于清理）"""
-    if hasattr(_thread_local, 'conn') and _thread_local.conn:
+    if hasattr(_thread_local, "conn") and _thread_local.conn:
         _thread_local.conn.close()
         _thread_local.conn = None
+
 
 @contextmanager
 def get_conn():
@@ -74,20 +86,29 @@ def get_conn():
         try:
             conn.rollback()
         except sqlite3.Error as rollback_err:
-            logger.error(f"[DB_CTX] Rollback failed: {type(rollback_err).__name__}: {rollback_err}", exc_info=True)
+            logger.error(
+                f"[DB_CTX] Rollback failed: {type(rollback_err).__name__}: {rollback_err}",
+                exc_info=True,
+            )
         raise
     except Exception as e:
         # 其他异常也尝试回滚
-        logger.error(f"[DB_CTX] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(
+            f"[DB_CTX] Unexpected error: {type(e).__name__}: {e}", exc_info=True
+        )
         try:
             conn.rollback()
         except sqlite3.Error as rollback_err:
-            logger.error(f"[DB_CTX] Rollback failed: {type(rollback_err).__name__}: {rollback_err}", exc_info=True)
+            logger.error(
+                f"[DB_CTX] Rollback failed: {type(rollback_err).__name__}: {rollback_err}",
+                exc_info=True,
+            )
         raise
+
 
 def _get_conn():
     """兼容旧代码：返回新连接（用于需要独立连接的场景）
-    
+
     v0.6.69: 添加 check_same_thread=False 以适应 FastAPI 多线程事件循环
     """
     conn = sqlite3.connect(_db_path, timeout=45.0, check_same_thread=False)
@@ -99,14 +120,23 @@ def _get_conn():
     conn.execute("PRAGMA busy_timeout=45000")
 
     # v0.6.62: SQLite 性能优化 PRAGMA
-    conn.execute("PRAGMA synchronous=NORMAL")    # 平衡性能与安全（减少 fsync）
-    conn.execute("PRAGMA cache_size=-64000")     # 64MB 页缓存
-    conn.execute("PRAGMA temp_store=MEMORY")     # 临时表内存存储
+    conn.execute("PRAGMA synchronous=NORMAL")  # 平衡性能与安全（减少 fsync）
+    conn.execute("PRAGMA cache_size=-64000")  # 64MB 页缓存
+    conn.execute("PRAGMA temp_store=MEMORY")  # 临时表内存存储
 
     return conn
 
+
 # 延迟导入，避免循环依赖
-from app.db.db_writer import enqueue, T_DAILY, T_PERIODIC, T_REALTIME, T_ALLSTOCKS, T_BUFFER
+from app.db.db_writer import (
+    enqueue,
+    T_DAILY,
+    T_PERIODIC,
+    T_REALTIME,
+    T_ALLSTOCKS,
+    T_BUFFER,
+)
+
 
 def init_tables():
     with _lock:
@@ -118,7 +148,9 @@ def init_tables():
                 data_type TEXT, timestamp INTEGER
             )
         """)
-        conn.execute("CREATE TABLE IF NOT EXISTS write_buffer (symbol TEXT, name TEXT, data TEXT)")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS write_buffer (symbol TEXT, name TEXT, data TEXT)"
+        )
         conn.execute("""
             CREATE TABLE IF NOT EXISTS market_data_daily (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,12 +206,24 @@ def init_tables():
             )
         """)
         conn.commit()
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_sym ON market_data_daily(symbol)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_periodic_sym_p ON market_data_periodic(symbol, period)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_pos_port ON positions(portfolio_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_snap_port ON portfolio_snapshots(portfolio_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_sym_date ON market_data_daily(symbol, date DESC)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_periodic_sym_period_date ON market_data_periodic(symbol, period, date DESC)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_daily_sym ON market_data_daily(symbol)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_periodic_sym_p ON market_data_periodic(symbol, period)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pos_port ON positions(portfolio_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_snap_port ON portfolio_snapshots(portfolio_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_daily_sym_date ON market_data_daily(symbol, date DESC)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_periodic_sym_period_date ON market_data_periodic(symbol, period, date DESC)"
+        )
         # ── Admin 系统配置持久化 ────────────────────────────────────
         conn.execute("""
             CREATE TABLE IF NOT EXISTS admin_config (
@@ -191,23 +235,30 @@ def init_tables():
         # ── Phase 1: 子账户系统增强 ───────────────────────────────
         # portfolios 表结构增强（新增字段，兼容存量数据）
         for col, dtype, default in [
-            ("parent_id",      "INTEGER", "DEFAULT NULL"),
-            ("cash_balance",   "REAL",    "DEFAULT 0.0"),
-            ("currency",       "TEXT",     "DEFAULT 'CNY'"),
-            ("asset_class",    "TEXT",     "DEFAULT 'mixed'"),
-            ("initial_capital","REAL",    "DEFAULT 0.0"),
-            ("status",         "TEXT",     "DEFAULT 'active'"),
-            ("strategy",      "TEXT",     "DEFAULT NULL"),
-            ("benchmark",     "TEXT",     "DEFAULT NULL"),
-            ("description",    "TEXT",     "DEFAULT NULL"),
+            ("parent_id", "INTEGER", "DEFAULT NULL"),
+            ("cash_balance", "REAL", "DEFAULT 0.0"),
+            ("currency", "TEXT", "DEFAULT 'CNY'"),
+            ("asset_class", "TEXT", "DEFAULT 'mixed'"),
+            ("initial_capital", "REAL", "DEFAULT 0.0"),
+            ("status", "TEXT", "DEFAULT 'active'"),
+            ("strategy", "TEXT", "DEFAULT NULL"),
+            ("benchmark", "TEXT", "DEFAULT NULL"),
+            ("description", "TEXT", "DEFAULT NULL"),
         ]:
             try:
-                conn.execute(f"ALTER TABLE portfolios ADD COLUMN {col} {dtype} {default}")
+                conn.execute(
+                    f"ALTER TABLE portfolios ADD COLUMN {col} {dtype} {default}"
+                )
             except sqlite3.OperationalError:
                 pass  # 列已存在时静默忽略
             except sqlite3.Error as e:
-                logger.error(f"[DB] Failed to add column {col}: {type(e).__name__}: {e}", exc_info=True)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_portfolios_parent ON portfolios(parent_id)")
+                logger.error(
+                    f"[DB] Failed to add column {col}: {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_portfolios_parent ON portfolios(parent_id)"
+        )
 
         # transactions 资金流水表（审计基石）
         conn.execute("""
@@ -224,9 +275,15 @@ def init_tables():
                 operator        TEXT DEFAULT 'system'
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_txn_portfolio ON transactions(portfolio_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_txn_type     ON transactions(type)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_txn_created  ON transactions(created_at)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_txn_portfolio ON transactions(portfolio_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_txn_type     ON transactions(type)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_txn_created  ON transactions(created_at)"
+        )
 
         # ── Phase 2: 持仓批次追踪（Lots）────────────────────────────
         conn.execute("""
@@ -245,8 +302,12 @@ def init_tables():
                 UNIQUE(portfolio_id, symbol, buy_order_id, buy_date)
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_lots_port_sym ON position_lots(portfolio_id, symbol)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_lots_status  ON position_lots(status)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_lots_port_sym ON position_lots(portfolio_id, symbol)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_lots_status  ON position_lots(status)"
+        )
 
         # ── Phase 3: 持仓聚合视图表（Read-optimized summary）────────────
         conn.execute("""
@@ -261,7 +322,9 @@ def init_tables():
                 PRIMARY KEY (portfolio_id, symbol)
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_psym_portfolio ON position_summary(portfolio_id)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_psym_portfolio ON position_summary(portfolio_id)"
+        )
 
         # ── 高可用缓存持久化表（SQLite-backed cache）───────────────────────
         conn.execute("""
@@ -275,8 +338,12 @@ def init_tables():
                 source TEXT DEFAULT ''
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache_persistence(expires_at)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_source ON cache_persistence(source)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache_persistence(expires_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cache_source ON cache_persistence(source)"
+        )
 
         # ── 基金净值历史表─────────────────────────────────────────────────────
         conn.execute("""
@@ -290,7 +357,9 @@ def init_tables():
                 PRIMARY KEY (fund_code, nav_date)
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_fund_nav_code ON fund_nav_history(fund_code)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fund_nav_code ON fund_nav_history(fund_code)"
+        )
 
         # ── Admin Session 持久化表 ────────────────────────────────────────
         conn.execute("""
@@ -303,8 +372,12 @@ def init_tables():
                 last_activity TEXT NOT NULL
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_ip ON admin_sessions(ip)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_admin_sessions_ip ON admin_sessions(ip)"
+        )
 
         conn.commit()
         conn.close()
@@ -314,40 +387,53 @@ def init_tables():
         init_persistence_tables()
     logger.info(f"DB Ready: {_db_path}")
 
+
 def buffer_insert(data_list):
     """写入 write_buffer（生产者：立即入队，不持有锁）"""
-    if not data_list: return
+    if not data_list:
+        return
     enqueue({"type": T_BUFFER, "rows": data_list})
+
 
 def buffer_insert_daily(data_list):
     """
     写入 market_data_daily（生产者：立即入队，不持有锁）
     表列: id, symbol, date, open, high, low, close, volume, amount, turnover_rate, amplitude, timestamp, data_type
     """
-    if not data_list: return
+    if not data_list:
+        return
     enqueue({"type": T_DAILY, "rows": data_list})
+
 
 def buffer_insert_periodic(data_list, period=None):
     """写入 market_data_periodic（生产者：立即入队，不持有锁）"""
-    if not data_list: return
+    if not data_list:
+        return
     enqueue({"type": T_PERIODIC, "rows": data_list, "period": period})
+
 
 def flush_buffer_to_realtime():
     """将 write_buffer 刷新到 market_data_realtime（生产者：立即入队，不持有锁）"""
     enqueue({"type": T_REALTIME, "rows": []})
 
-def get_latest_prices(symbols=None, data_type='realtime'):
+
+def get_latest_prices(symbols=None, data_type="realtime"):
     # WAL模式下读操作无需全局锁（SQLite支持并发读）
     conn = _get_conn()
     try:
         if symbols is not None and len(symbols) > 0:
             qs = ",".join(["?"] * len(symbols))
-            rows = conn.execute(f"SELECT * FROM market_data_realtime WHERE symbol IN ({qs})", symbols).fetchall()
+            rows = conn.execute(
+                f"SELECT * FROM market_data_realtime WHERE symbol IN ({qs})", symbols
+            ).fetchall()
         else:
-            rows = conn.execute("SELECT * FROM market_data_realtime WHERE data_type=?", (data_type,)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM market_data_realtime WHERE data_type=?", (data_type,)
+            ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
 
 def get_daily_history(symbol, limit=300, offset=0):
     # WAL模式下读操作无需全局锁
@@ -356,16 +442,17 @@ def get_daily_history(symbol, limit=300, offset=0):
         if offset > 0:
             rows = conn.execute(
                 "SELECT * FROM market_data_daily WHERE symbol=? ORDER BY date DESC LIMIT ? OFFSET ?",
-                (symbol, limit, offset)
+                (symbol, limit, offset),
             ).fetchall()
         else:
             rows = conn.execute(
                 "SELECT * FROM market_data_daily WHERE symbol=? ORDER BY date DESC LIMIT ?",
-                (symbol, limit)
+                (symbol, limit),
             ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
 
 def get_daily_count(symbol):
     """返回某标的日K总数（用于 has_more 判断）"""
@@ -373,12 +460,12 @@ def get_daily_count(symbol):
     conn = _get_conn()
     try:
         row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM market_data_daily WHERE symbol=?",
-            (symbol,)
+            "SELECT COUNT(*) as cnt FROM market_data_daily WHERE symbol=?", (symbol,)
         ).fetchone()
         return row["cnt"] if row else 0
     finally:
         conn.close()
+
 
 def get_periodic_count(symbol, period):
     """返回某标的某周期K线总数"""
@@ -387,11 +474,12 @@ def get_periodic_count(symbol, period):
     try:
         row = conn.execute(
             "SELECT COUNT(*) as cnt FROM market_data_periodic WHERE symbol=? AND period=?",
-            (symbol, period)
+            (symbol, period),
         ).fetchone()
         return row["cnt"] if row else 0
     finally:
         conn.close()
+
 
 def get_periodic_history(symbol, period, limit=200, offset=0):
     """获取周期K线（周线/月线），支持分页"""
@@ -399,24 +487,32 @@ def get_periodic_history(symbol, period, limit=200, offset=0):
     conn = _get_conn()
     try:
         if offset > 0:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT * FROM market_data_periodic WHERE symbol=? AND period=?
                 ORDER BY date DESC LIMIT ? OFFSET ?
-            """, (symbol, period, limit, offset)).fetchall()
+            """,
+                (symbol, period, limit, offset),
+            ).fetchall()
         else:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT * FROM market_data_periodic WHERE symbol=? AND period=?
                 ORDER BY date DESC LIMIT ?
-            """, (symbol, period, limit)).fetchall()
+            """,
+                (symbol, period, limit),
+            ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
 
 get_price_history = get_daily_history
 
 # ═══════════════════════════════════════════════════════════════
 # 全市场个股缓存 (all_stocks)
 # ═══════════════════════════════════════════════════════════════
+
 
 def init_all_stocks_table():
     """初始化全市场个股表"""
@@ -449,13 +545,24 @@ def init_all_stocks_table():
         # CREATE INDEX IF NOT EXISTS idx_allstocks_price_mktcap ON market_all_stocks(price, mktcap);
         # CREATE INDEX IF NOT EXISTS idx_allstocks_chgpct_turnover ON market_all_stocks(change_pct, turnover);
         # CREATE INDEX IF NOT EXISTS idx_allstocks_code_name ON market_all_stocks(code, name);
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_price_chgpct ON market_all_stocks(price, change_pct)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_price_turnover ON market_all_stocks(price, turnover)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_price_mktcap ON market_all_stocks(price, mktcap)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_chgpct_turnover ON market_all_stocks(change_pct, turnover)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_code_name ON market_all_stocks(code, name)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_allstocks_price_chgpct ON market_all_stocks(price, change_pct)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_allstocks_price_turnover ON market_all_stocks(price, turnover)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_allstocks_price_mktcap ON market_all_stocks(price, mktcap)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_allstocks_chgpct_turnover ON market_all_stocks(change_pct, turnover)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_allstocks_code_name ON market_all_stocks(code, name)"
+        )
         conn.commit()
         conn.close()
+
 
 def init_persistence_tables():
     """初始化策略/Token/审计日志持久化表"""
@@ -494,13 +601,18 @@ def init_orders_table():
                 FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_portfolio ON orders(portfolio_id)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_portfolio ON orders(portfolio_id)"
+        )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_symbol ON orders(symbol)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC)"
+        )
         conn.commit()
     finally:
         conn.close()
+
 
 def upsert_all_stocks(rows):
     """批量写入全市场个股数据（生产者：立即入队，不持有锁）"""
@@ -508,16 +620,25 @@ def upsert_all_stocks(rows):
         return
     enqueue({"type": T_ALLSTOCKS, "rows": rows})
 
+
 def search_stocks(
     keyword=None,
-    min_pct_chg=None, max_pct_chg=None,
-    min_turnover=None, max_turnover=None,
-    min_price=None, max_price=None,
-    min_pe=None, max_pe=None,
-    min_pb=None, max_pb=None,
-    min_mktcap=None, max_mktcap=None,
-    sort_by='change_pct', sort_dir='desc',
-    page=1, page_size=50
+    min_pct_chg=None,
+    max_pct_chg=None,
+    min_turnover=None,
+    max_turnover=None,
+    min_price=None,
+    max_price=None,
+    min_pe=None,
+    max_pe=None,
+    min_pb=None,
+    max_pb=None,
+    min_mktcap=None,
+    max_mktcap=None,
+    sort_by="change_pct",
+    sort_dir="desc",
+    page=1,
+    page_size=50,
 ):
     """
     全市场个股服务端过滤+排序+分页
@@ -576,23 +697,33 @@ def search_stocks(
             args.append(float(max_mktcap) * 1e8)
 
         ORDER_FIELDS = {
-            'code': 'code', 'name': 'name', 'price': 'price',
-            'change_pct': 'change_pct', 'turnover': 'turnover',
-            'volume': 'volume', 'amount': 'amount',
-            'per': 'per', 'pb': 'pb', 'mktcap': 'mktcap',
+            "code": "code",
+            "name": "name",
+            "price": "price",
+            "change_pct": "change_pct",
+            "turnover": "turnover",
+            "volume": "volume",
+            "amount": "amount",
+            "per": "per",
+            "pb": "pb",
+            "mktcap": "mktcap",
         }
         if sort_by not in ORDER_FIELDS:
-            raise ValueError(f"Invalid sort_by: '{sort_by}'. Must be one of: {list(ORDER_FIELDS.keys())}")
+            raise ValueError(
+                f"Invalid sort_by: '{sort_by}'. Must be one of: {list(ORDER_FIELDS.keys())}"
+            )
         order_col = ORDER_FIELDS[sort_by]
-        if sort_dir.upper() not in ('ASC', 'DESC'):
+        if sort_dir.upper() not in ("ASC", "DESC"):
             raise ValueError(f"Invalid sort_dir: '{sort_dir}'. Must be 'asc' or 'desc'")
         order_dir = sort_dir.upper()
 
         where_clause = " AND ".join(conditions)
 
         # 统计总数
-        count_sql = f"SELECT COUNT(*) as cnt FROM market_all_stocks WHERE {where_clause}"
-        total = conn.execute(count_sql, args).fetchone()['cnt']
+        count_sql = (
+            f"SELECT COUNT(*) as cnt FROM market_all_stocks WHERE {where_clause}"
+        )
+        total = conn.execute(count_sql, args).fetchone()["cnt"]
 
         # 分页
         offset = max(0, (max(1, page) - 1) * min(200, max(1, page_size)))
@@ -611,30 +742,33 @@ def search_stocks(
         # 序列化（补充 computed 字段）
         result = []
         for r in rows:
-            price = float(r['price'] or 0)
-            change_pct = float(r['change_pct'] or 0)
+            price = float(r["price"] or 0)
+            change_pct = float(r["change_pct"] or 0)
             prev = price / (1 + change_pct / 100) if change_pct != -100 else price
-            result.append({
-                "code": r['code'],
-                "name": r['name'],
-                "price": price,
-                "change_pct": change_pct,
-                "change": round(price - prev, 3),
-                "turnover": float(r['turnover'] or 0),
-                "volume": float(r['volume'] or 0),
-                "amount": float(r['amount'] or 0),
-                "pe": float(r['per'] or 0) if r['per'] else 0,
-                "pb": float(r['pb'] or 0) if r['pb'] else 0,
-                "mktcap": round(float(r['mktcap'] or 0) / 1e8, 2),
-                "price_high": float(r['price_high'] or 0),
-                "price_low": float(r['price_low'] or 0),
-                "open_price": float(r['open_price'] or 0),
-            })
+            result.append(
+                {
+                    "code": r["code"],
+                    "name": r["name"],
+                    "price": price,
+                    "change_pct": change_pct,
+                    "change": round(price - prev, 3),
+                    "turnover": float(r["turnover"] or 0),
+                    "volume": float(r["volume"] or 0),
+                    "amount": float(r["amount"] or 0),
+                    "pe": float(r["per"] or 0) if r["per"] else 0,
+                    "pb": float(r["pb"] or 0) if r["pb"] else 0,
+                    "mktcap": round(float(r["mktcap"] or 0) / 1e8, 2),
+                    "price_high": float(r["price_high"] or 0),
+                    "price_low": float(r["price_low"] or 0),
+                    "open_price": float(r["open_price"] or 0),
+                }
+            )
 
         return total, result, page, page_size
 
     finally:
         conn.close()
+
 
 def get_all_stocks(limit=5000, offset=0, search=None):
     """获取全市场个股列表，支持搜索"""
@@ -643,30 +777,41 @@ def get_all_stocks(limit=5000, offset=0, search=None):
     try:
         if search:
             pattern = f"%{search}%"
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT * FROM market_all_stocks
                 WHERE (code LIKE ? OR name LIKE ?) AND price > 0
                 ORDER BY code
                 LIMIT ? OFFSET ?
-            """, (pattern, pattern, limit, offset)).fetchall()
-            total = conn.execute("""
+            """,
+                (pattern, pattern, limit, offset),
+            ).fetchall()
+            total = conn.execute(
+                """
                 SELECT COUNT(*) AS cnt FROM market_all_stocks
                 WHERE (code LIKE ? OR name LIKE ?) AND price > 0
-            """, (pattern, pattern)).fetchone()['cnt']
+            """,
+                (pattern, pattern),
+            ).fetchone()["cnt"]
         else:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT * FROM market_all_stocks WHERE price > 0
                 ORDER BY code LIMIT ? OFFSET ?
-            """, (limit, offset)).fetchall()
-            total = conn.execute("SELECT COUNT(*) AS cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
+            """,
+                (limit, offset),
+            ).fetchall()
+            total = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM market_all_stocks WHERE price > 0"
+            ).fetchone()["cnt"]
         # 数据处理放在 try 块内，确保连接有效
         rows_list = [dict(r) for r in rows]
         # 补充 change 字段（数据库只有 change_pct）
         for r in rows_list:
-            price = float(r.get('price') or 0)
-            change_pct = float(r.get('change_pct') or 0)
-            if 'change' not in r or r.get('change') is None:
-                r['change'] = round(price * change_pct / 100, 3)
+            price = float(r.get("price") or 0)
+            change_pct = float(r.get("change_pct") or 0)
+            if "change" not in r or r.get("change") is None:
+                r["change"] = round(price * change_pct / 100, 3)
         return total, rows_list
     finally:
         conn.close()
@@ -683,40 +828,47 @@ def get_all_stocks_lite():
         """).fetchall()
         result = []
         for r in rows:
-            price = float(r['price'] or 0)
-            change_pct = float(r['change_pct'] or 0)
+            price = float(r["price"] or 0)
+            change_pct = float(r["change_pct"] or 0)
             prev = price / (1 + change_pct / 100) if change_pct != -100 else price
             change = round(price - prev, 3)
-            result.append({
-                "code": r['code'],
-                "name": r['name'],
-                "price": price,
-                "change_pct": change_pct,
-                "change": change,
-                "turnover": float(r['turnover'] or 0),
-                "volume": float(r['volume'] or 0),
-                "amount": float(r['amount'] or 0),
-                "pe": float(r['per'] or 0) if r['per'] else 0,  # PE
-                "pb": float(r['pb'] or 0) if r['pb'] else 0,    # PB
-                "mktcap": float(r['mktcap'] or 0) / 100000000,  # 市值(亿)
-            })
+            result.append(
+                {
+                    "code": r["code"],
+                    "name": r["name"],
+                    "price": price,
+                    "change_pct": change_pct,
+                    "change": change,
+                    "turnover": float(r["turnover"] or 0),
+                    "volume": float(r["volume"] or 0),
+                    "amount": float(r["amount"] or 0),
+                    "pe": float(r["per"] or 0) if r["per"] else 0,  # PE
+                    "pb": float(r["pb"] or 0) if r["pb"] else 0,  # PB
+                    "mktcap": float(r["mktcap"] or 0) / 100000000,  # 市值(亿)
+                }
+            )
         return result
     finally:
         conn.close()
+
 
 def get_all_stocks_count():
     """返回全市场个股总数"""
     # WAL 模式支持并发读
     conn = _get_conn()
     try:
-        cnt = conn.execute("SELECT COUNT(*) as cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
+        cnt = conn.execute(
+            "SELECT COUNT(*) as cnt FROM market_all_stocks WHERE price > 0"
+        ).fetchone()["cnt"]
         return cnt
     finally:
         conn.close()
 
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Admin 系统配置持久化
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def get_admin_config(key: str, default=None):
     """读取 admin 配置项（JSON 字符串），不存在则返回 default"""
@@ -730,29 +882,38 @@ def get_admin_config(key: str, default=None):
                 return default
             try:
                 import json as _json
-                return _json.loads(row['value'])
+
+                return _json.loads(row["value"])
             except json.JSONDecodeError as e:
-                logger.warning(f"[DB] JSON decode error for key '{key}': {e}", exc_info=True)
-                return row['value']
+                logger.warning(
+                    f"[DB] JSON decode error for key '{key}': {e}", exc_info=True
+                )
+                return row["value"]
             except Exception as e:
-                logger.error(f"[DB] Unexpected error parsing config for key '{key}': {type(e).__name__}: {e}", exc_info=True)
-                return row['value']
+                logger.error(
+                    f"[DB] Unexpected error parsing config for key '{key}': {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                return row["value"]
         finally:
             conn.close()
+
 
 def set_admin_config(key: str, value):
     """写入 admin 配置项（自动 JSON 序列化）"""
     import json as _json
+
     with _lock:
         conn = _get_conn()
         try:
             conn.execute(
                 "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
-                (key, _json.dumps(value), datetime.now().isoformat())
+                (key, _json.dumps(value), datetime.now().isoformat()),
             )
             conn.commit()
         finally:
             conn.close()
+
 
 def get_all_admin_configs():
     """读取所有 admin 配置项"""
@@ -761,16 +922,23 @@ def get_all_admin_configs():
         try:
             rows = conn.execute("SELECT key, value FROM admin_config").fetchall()
             import json as _json
+
             result = {}
             for r in rows:
                 try:
-                    result[r['key']] = _json.loads(r['value'])
+                    result[r["key"]] = _json.loads(r["value"])
                 except json.JSONDecodeError as e:
-                    logger.warning(f"[DB] JSON decode error for key '{r['key']}': {e}", exc_info=True)
-                    result[r['key']] = r['value']
+                    logger.warning(
+                        f"[DB] JSON decode error for key '{r['key']}': {e}",
+                        exc_info=True,
+                    )
+                    result[r["key"]] = r["value"]
                 except Exception as e:
-                    logger.error(f"[DB] Unexpected error parsing config for key '{r['key']}': {type(e).__name__}: {e}", exc_info=True)
-                    result[r['key']] = r['value']
+                    logger.error(
+                        f"[DB] Unexpected error parsing config for key '{r['key']}': {type(e).__name__}: {e}",
+                        exc_info=True,
+                    )
+                    result[r["key"]] = r["value"]
             return result
         finally:
             conn.close()

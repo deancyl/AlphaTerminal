@@ -7,6 +7,7 @@ Tests all risk management functionality including:
   - Risk validation and controls
   - Debug logging (10 cycles)
 """
+
 import pytest
 from app.services.risk_manager import (
     RiskManager,

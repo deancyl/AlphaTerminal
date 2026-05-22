@@ -12,6 +12,7 @@ test_sina_fetcher.py — Sina Fetcher 重构后单元测试
 6. HTTP retry + CB 联动（mock）
 7. get_quote 端到端（mock HTTP 200，返回正确价格）
 """
+
 import sys
 import os
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -43,8 +44,12 @@ class TestSymbolNormalization:
         assert normalize_symbol("sz000001") == "sz000001"
 
     def test_case_insensitive(self):
-        assert normalize_symbol("SH000001") == "sh000001"  # SH prefix preserved, lowercased
-        assert normalize_symbol("Sz000001") == "sz000001"  # SZ prefix preserved, lowercased
+        assert (
+            normalize_symbol("SH000001") == "sh000001"
+        )  # SH prefix preserved, lowercased
+        assert (
+            normalize_symbol("Sz000001") == "sz000001"
+        )  # SZ prefix preserved, lowercased
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -52,8 +57,15 @@ class TestSymbolNormalization:
 # ─────────────────────────────────────────────────────────────────────────────
 class TestIndexRouting:
     def test_index_symbols(self):
-        indices = ["sh000001", "sh000300", "sh000016", "sh000688",
-                   "sz399001", "sz399006", "sz399005"]
+        indices = [
+            "sh000001",
+            "sh000300",
+            "sh000016",
+            "sh000688",
+            "sz399001",
+            "sz399006",
+            "sz399005",
+        ]
         for s in indices:
             assert is_index_symbol(s) is True, f"{s} should be index"
 
@@ -110,8 +122,9 @@ class TestSinaIndexParsingBug:
         result = parse_sina_response(raw, "sh000001")
         assert result is not None
         # (3948.555 - 3948.555) / 3948.555 * 100 = 0.0
-        assert abs(result["change_pct"]) < 0.01, \
-            f"change_pct 应接近 0（平盘），实际 {result['change_pct']}"
+        assert (
+            abs(result["change_pct"]) < 0.01
+        ), f"change_pct 应接近 0（平盘），实际 {result['change_pct']}"
 
     def test_index_with_reported_chg_pct_deviation(self):
         """
@@ -127,8 +140,9 @@ class TestSinaIndexParsingBug:
         assert result is not None
         # 系统应拒绝 parts[32]=10%，使用计算值
         # (3948.555-3948.555)/3948.555*100 = 0%
-        assert abs(result["change_pct"]) < 1.0, \
-            f"偏差超过5%时应使用计算值，change_pct={result['change_pct']}，期望接近0"
+        assert (
+            abs(result["change_pct"]) < 1.0
+        ), f"偏差超过5%时应使用计算值，change_pct={result['change_pct']}，期望接近0"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -149,7 +163,9 @@ class TestSinaStockParsing:
         assert result["price"] == 1795.00, f"当前价应为 1795.00，实际 {result['price']}"
         assert result["name"] == "贵州茅台"
         assert result["open"] == 1800.00, f"今开应为 1800.00，实际 {result['open']}"
-        assert result["prev_close"] == 1948.55, f"昨收应为 1948.55，实际 {result['prev_close']}"
+        assert (
+            result["prev_close"] == 1948.55
+        ), f"昨收应为 1948.55，实际 {result['prev_close']}"
 
     def test_stock_change_pct_consistency(self):
         """个股涨跌幅必须与 (price - prev_close) / prev_close * 100 一致"""
@@ -160,8 +176,9 @@ class TestSinaStockParsing:
         result = parse_sina_response(raw, "sh600519")
         assert result is not None
         expected_chg_pct = round((1795.00 - 1948.55) / 1948.55 * 100, 4)
-        assert abs(result["change_pct"] - expected_chg_pct) < 0.02, \
-            f"change_pct={result['change_pct']} 与计算值 {expected_chg_pct} 不符"
+        assert (
+            abs(result["change_pct"] - expected_chg_pct) < 0.02
+        ), f"change_pct={result['change_pct']} 与计算值 {expected_chg_pct} 不符"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -187,6 +204,7 @@ class TestCriticalIndexWhitelist:
         assert result["price"] == 3.945, f"price={result['price']}"
         # validate_quote 层面拒绝
         from app.services.data_validator import validate_quote
+
         validated = validate_quote(result, source="sina")
         # 价格 3.945 不在 [2000, 6000]，应返回 None
         assert validated is None, "价格 3.945 不在合理范围，应被 validate_quote 拒绝"
@@ -200,6 +218,7 @@ class TestCriticalIndexWhitelist:
         result = parse_sina_response(raw, "sh000001")
         assert result is not None
         from app.services.data_validator import validate_quote
+
         validated = validate_quote(result, source="sina")
         assert validated is not None, "正常价格应通过校验"
         assert validated.price == 3948.555
@@ -262,14 +281,15 @@ class TestSinaFetcherGetQuote:
 
         with patch.object(fetcher, "_get_http") as mock_http:
             http_instance = AsyncMock()
-            http_instance.get_with_retry = AsyncMock(side_effect=Exception("network error"))
+            http_instance.get_with_retry = AsyncMock(
+                side_effect=Exception("network error")
+            )
             mock_http.return_value = http_instance
 
             result = await fetcher.get_quote("sh000001")
 
         assert result is None
-        assert cb._stats.consecutive_failures >= 1, \
-            "HTTP 失败应 record_failure"
+        assert cb._stats.consecutive_failures >= 1, "HTTP 失败应 record_failure"
         await fetcher.close()
 
 

@@ -8,6 +8,7 @@ v0.6.64: 统一异常处理装饰器
 - 持久化到 error_history 表
 - 返回标准错误响应
 """
+
 import functools
 import traceback
 import logging
@@ -30,13 +31,13 @@ def handle_errors(
 ):
     """
     统一异常处理装饰器
-    
+
     Args:
         module: 模块名（如 'stocks', 'portfolio'）
         function: 函数名（默认使用被装饰函数的 __name__）
         log_to_db: 是否记录到数据库
         reraise: 是否重新抛出异常（用于测试）
-    
+
     Usage:
         @router.get("/quote/{symbol}")
         @handle_errors(module="stocks")
@@ -44,6 +45,7 @@ def handle_errors(
             data = await fetch_quote(symbol)
             return success_response(data)
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs) -> Any:
@@ -67,7 +69,7 @@ def handle_errors(
                 error_type = type(e).__name__
                 error_message = str(e)
                 sanitized_message = sanitize_error(e, log_full_error=True)
-                trace_id = str(getattr(e, 'trace_id', None) or '')
+                trace_id = str(getattr(e, "trace_id", None) or "")
                 tb_str = traceback.format_exc()
 
                 log_error(
@@ -91,7 +93,9 @@ def handle_errors(
                             request_method=request_method,
                         )
                     except Exception as db_error:
-                        logger.warning(f"Failed to log error to DB: {db_error}", exc_info=True)
+                        logger.warning(
+                            f"Failed to log error to DB: {db_error}", exc_info=True
+                        )
 
                 if reraise:
                     raise
@@ -99,7 +103,7 @@ def handle_errors(
                 return error_response(
                     ErrorCode.INTERNAL_ERROR,
                     sanitized_message,
-                    {"trace_id": trace_id} if trace_id else None
+                    {"trace_id": trace_id} if trace_id else None,
                 )
 
         @functools.wraps(func)
@@ -124,7 +128,7 @@ def handle_errors(
                 error_type = type(e).__name__
                 error_message = str(e)
                 sanitized_message = sanitize_error(e, log_full_error=True)
-                trace_id = str(getattr(e, 'trace_id', None) or '')
+                trace_id = str(getattr(e, "trace_id", None) or "")
                 tb_str = traceback.format_exc()
 
                 log_error(
@@ -148,7 +152,9 @@ def handle_errors(
                             request_method=request_method,
                         )
                     except Exception as db_error:
-                        logger.warning(f"Failed to log error to DB: {db_error}", exc_info=True)
+                        logger.warning(
+                            f"Failed to log error to DB: {db_error}", exc_info=True
+                        )
 
                 if reraise:
                     raise
@@ -156,10 +162,11 @@ def handle_errors(
                 return error_response(
                     code=ErrorCode.INTERNAL_ERROR,
                     message=sanitized_message,
-                    details={"trace_id": trace_id} if trace_id else None
+                    details={"trace_id": trace_id} if trace_id else None,
                 )
 
         import asyncio
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         else:

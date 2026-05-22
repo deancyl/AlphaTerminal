@@ -8,6 +8,7 @@ Timeout Behavior:
     Background refresh threads have 30s timeout.
     API endpoints return 504 on timeout.
 """
+
 import asyncio
 import logging
 import threading
@@ -30,11 +31,7 @@ _CACHE_LOCK = threading.RLock()
 _REFRESH_SEM = threading.Semaphore(1)
 
 _CB_CIRCUIT_BREAKER = CircuitBreaker(
-    CircuitBreakerConfig(
-        failure_threshold=5,
-        success_threshold=2,
-        timeout=60.0
-    )
+    CircuitBreakerConfig(failure_threshold=5, success_threshold=2, timeout=60.0)
 )
 
 # ── Mock 可转债数据（无可靠免费接口时的兜底）────────────────────
@@ -51,7 +48,7 @@ _MOCK_COV_LIST = [
         "conversion_premium": 16.85,
         "credit_rating": "AAA",
         "issue_size": 30.0,
-        "subscribe_date": "2019-04-08"
+        "subscribe_date": "2019-04-08",
     },
     {
         "code": "110059",
@@ -65,7 +62,7 @@ _MOCK_COV_LIST = [
         "conversion_premium": 29.02,
         "credit_rating": "AAA",
         "issue_size": 500.0,
-        "subscribe_date": "2019-10-28"
+        "subscribe_date": "2019-10-28",
     },
     {
         "code": "113050",
@@ -79,14 +76,41 @@ _MOCK_COV_LIST = [
         "conversion_premium": 28.73,
         "credit_rating": "AAA",
         "issue_size": 200.0,
-        "subscribe_date": "2021-01-25"
-    }
+        "subscribe_date": "2021-01-25",
+    },
 ]
 
 _MOCK_COV_SPOT = [
-    {"symbol": "sh113527", "name": "核建转债", "trade": 112.50, "pricechange": 0.35, "volume": 125000, "amount": 14062500, "code": "113527", "ticktime": "15:00:00"},
-    {"symbol": "sh110059", "name": "浦发转债", "trade": 105.80, "pricechange": -0.15, "volume": 850000, "amount": 89930000, "code": "110059", "ticktime": "15:00:00"},
-    {"symbol": "sh113050", "name": "上银转债", "trade": 108.20, "pricechange": 0.20, "volume": 320000, "amount": 34624000, "code": "113050", "ticktime": "15:00:00"}
+    {
+        "symbol": "sh113527",
+        "name": "核建转债",
+        "trade": 112.50,
+        "pricechange": 0.35,
+        "volume": 125000,
+        "amount": 14062500,
+        "code": "113527",
+        "ticktime": "15:00:00",
+    },
+    {
+        "symbol": "sh110059",
+        "name": "浦发转债",
+        "trade": 105.80,
+        "pricechange": -0.15,
+        "volume": 850000,
+        "amount": 89930000,
+        "code": "110059",
+        "ticktime": "15:00:00",
+    },
+    {
+        "symbol": "sh113050",
+        "name": "上银转债",
+        "trade": 108.20,
+        "pricechange": 0.20,
+        "volume": 320000,
+        "amount": 34624000,
+        "code": "113050",
+        "ticktime": "15:00:00",
+    },
 ]
 
 _MOCK_COV_COMPARE = [
@@ -101,7 +125,7 @@ _MOCK_COV_COMPARE = [
         "conversion_premium": 16.85,
         "pure_bond_premium": 8.50,
         "put_trigger_price": 6.20,
-        "call_trigger_price": 11.51
+        "call_trigger_price": 11.51,
     },
     {
         "code": "110059",
@@ -114,8 +138,8 @@ _MOCK_COV_COMPARE = [
         "conversion_premium": 29.02,
         "pure_bond_premium": 5.80,
         "put_trigger_price": 8.75,
-        "call_trigger_price": 16.25
-    }
+        "call_trigger_price": 16.25,
+    },
 ]
 
 
@@ -130,18 +154,18 @@ async def _fetch_cov_list_async():
             "total": len(_MOCK_COV_LIST),
             "update_time": now_str,
             "source": "mock",
-            "circuit_breaker": "open"
+            "circuit_breaker": "open",
         }
         _cache.set(f"{NAMESPACE}list", cache_data, ttl=TTL)
         return
 
     try:
         import warnings
+
         warnings.filterwarnings("ignore")
 
         df = await asyncio.wait_for(
-            asyncio.to_thread(ak.bond_zh_cov),
-            timeout=float(BOND_REFRESH_TIMEOUT)
+            asyncio.to_thread(ak.bond_zh_cov), timeout=float(BOND_REFRESH_TIMEOUT)
         )
 
         if df is not None and not df.empty:
@@ -172,17 +196,23 @@ async def _fetch_cov_list_async():
                 "total": len(bonds),
                 "update_time": now_str,
                 "source": "akshare",
-                "circuit_breaker": "closed"
+                "circuit_breaker": "closed",
             }
             _cache.set(f"{NAMESPACE}list", cache_data, ttl=TTL)
             _CB_CIRCUIT_BREAKER.record_success()
             logger.info(f"[ConvertibleBond] list fetched, total: {len(bonds)}")
             return
     except asyncio.TimeoutError:
-        logger.warning(f"[ConvertibleBond] bond_zh_cov timed out after {BOND_REFRESH_TIMEOUT}s", exc_info=True)
+        logger.warning(
+            f"[ConvertibleBond] bond_zh_cov timed out after {BOND_REFRESH_TIMEOUT}s",
+            exc_info=True,
+        )
         _CB_CIRCUIT_BREAKER.record_failure()
     except Exception as e:
-        logger.warning(f"[ConvertibleBond] bond_zh_cov failed: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[ConvertibleBond] bond_zh_cov failed: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         _CB_CIRCUIT_BREAKER.record_failure()
 
     cache_data = {
@@ -190,7 +220,7 @@ async def _fetch_cov_list_async():
         "total": len(_MOCK_COV_LIST),
         "update_time": now_str,
         "source": "mock",
-        "circuit_breaker": _CB_CIRCUIT_BREAKER.state.value
+        "circuit_breaker": _CB_CIRCUIT_BREAKER.state.value,
     }
     _cache.set(f"{NAMESPACE}list", cache_data, ttl=TTL)
     logger.info("[ConvertibleBond] Using mock list fallback")
@@ -201,24 +231,27 @@ async def _fetch_cov_spot_async():
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     if not _CB_CIRCUIT_BREAKER.is_available():
-        logger.warning("[ConvertibleBond] Circuit breaker OPEN for spot, using mock fallback")
+        logger.warning(
+            "[ConvertibleBond] Circuit breaker OPEN for spot, using mock fallback"
+        )
         cache_data = {
             "spots": _MOCK_COV_SPOT,
             "total": len(_MOCK_COV_SPOT),
             "update_time": now_str,
             "source": "mock",
-            "circuit_breaker": "open"
+            "circuit_breaker": "open",
         }
         _cache.set(f"{NAMESPACE}spot", cache_data, ttl=TTL)
         return
 
     try:
         import warnings
+
         warnings.filterwarnings("ignore")
 
         df = await asyncio.wait_for(
             asyncio.to_thread(ak.bond_zh_hs_cov_spot),
-            timeout=float(BOND_REFRESH_TIMEOUT)
+            timeout=float(BOND_REFRESH_TIMEOUT),
         )
 
         if df is not None and not df.empty:
@@ -246,17 +279,23 @@ async def _fetch_cov_spot_async():
                 "total": len(spots),
                 "update_time": now_str,
                 "source": "akshare",
-                "circuit_breaker": "closed"
+                "circuit_breaker": "closed",
             }
             _cache.set(f"{NAMESPACE}spot", cache_data, ttl=TTL)
             _CB_CIRCUIT_BREAKER.record_success()
             logger.info(f"[ConvertibleBond] spot fetched, total: {len(spots)}")
             return
     except asyncio.TimeoutError:
-        logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot timed out after {BOND_REFRESH_TIMEOUT}s", exc_info=True)
+        logger.warning(
+            f"[ConvertibleBond] bond_zh_hs_cov_spot timed out after {BOND_REFRESH_TIMEOUT}s",
+            exc_info=True,
+        )
         _CB_CIRCUIT_BREAKER.record_failure()
     except Exception as e:
-        logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot failed: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[ConvertibleBond] bond_zh_hs_cov_spot failed: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         _CB_CIRCUIT_BREAKER.record_failure()
 
     cache_data = {
@@ -264,7 +303,7 @@ async def _fetch_cov_spot_async():
         "total": len(_MOCK_COV_SPOT),
         "update_time": now_str,
         "source": "mock",
-        "circuit_breaker": _CB_CIRCUIT_BREAKER.state.value
+        "circuit_breaker": _CB_CIRCUIT_BREAKER.state.value,
     }
     _cache.set(f"{NAMESPACE}spot", cache_data, ttl=TTL)
     logger.info("[ConvertibleBond] Using mock spot fallback")
@@ -275,24 +314,27 @@ async def _fetch_cov_compare_async():
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     if not _CB_CIRCUIT_BREAKER.is_available():
-        logger.warning("[ConvertibleBond] Circuit breaker OPEN for compare, using mock fallback")
+        logger.warning(
+            "[ConvertibleBond] Circuit breaker OPEN for compare, using mock fallback"
+        )
         cache_data = {
             "compares": _MOCK_COV_COMPARE,
             "total": len(_MOCK_COV_COMPARE),
             "update_time": now_str,
             "source": "mock",
-            "circuit_breaker": "open"
+            "circuit_breaker": "open",
         }
         _cache.set(f"{NAMESPACE}compare", cache_data, ttl=TTL)
         return
 
     try:
         import warnings
+
         warnings.filterwarnings("ignore")
 
         df = await asyncio.wait_for(
             asyncio.to_thread(ak.bond_cov_comparison),
-            timeout=float(BOND_REFRESH_TIMEOUT)
+            timeout=float(BOND_REFRESH_TIMEOUT),
         )
 
         if df is not None and not df.empty:
@@ -322,17 +364,23 @@ async def _fetch_cov_compare_async():
                 "total": len(compares),
                 "update_time": now_str,
                 "source": "akshare",
-                "circuit_breaker": "closed"
+                "circuit_breaker": "closed",
             }
             _cache.set(f"{NAMESPACE}compare", cache_data, ttl=TTL)
             _CB_CIRCUIT_BREAKER.record_success()
             logger.info(f"[ConvertibleBond] compare fetched, total: {len(compares)}")
             return
     except asyncio.TimeoutError:
-        logger.warning(f"[ConvertibleBond] bond_cov_comparison timed out after {BOND_REFRESH_TIMEOUT}s", exc_info=True)
+        logger.warning(
+            f"[ConvertibleBond] bond_cov_comparison timed out after {BOND_REFRESH_TIMEOUT}s",
+            exc_info=True,
+        )
         _CB_CIRCUIT_BREAKER.record_failure()
     except Exception as e:
-        logger.warning(f"[ConvertibleBond] bond_cov_comparison failed: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[ConvertibleBond] bond_cov_comparison failed: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         _CB_CIRCUIT_BREAKER.record_failure()
 
     cache_data = {
@@ -340,7 +388,7 @@ async def _fetch_cov_compare_async():
         "total": len(_MOCK_COV_COMPARE),
         "update_time": now_str,
         "source": "mock",
-        "circuit_breaker": _CB_CIRCUIT_BREAKER.state.value
+        "circuit_breaker": _CB_CIRCUIT_BREAKER.state.value,
     }
     _cache.set(f"{NAMESPACE}compare", cache_data, ttl=TTL)
     logger.info("[ConvertibleBond] Using mock compare fallback")
@@ -355,7 +403,7 @@ def _safe_float(val):
         # 检查 NaN/Inf，这些值不能 JSON 序列化
         if not isinstance(f, float) or f != f:  # NaN check (NaN != NaN)
             return None
-        if f == float('inf') or f == float('-inf'):
+        if f == float("inf") or f == float("-inf"):
             return None
         return f
     except (ValueError, TypeError):
@@ -367,11 +415,13 @@ def _get_cov_list_cache() -> dict:
     cached = _cache.get(f"{NAMESPACE}list")
     if cached is None:
         if _REFRESH_SEM.acquire(blocking=False):
+
             def bg():
                 try:
                     asyncio.run(_fetch_cov_list_async())
                 finally:
                     _REFRESH_SEM.release()
+
             t = threading.Thread(target=bg, daemon=True, name="cov-list-refresh")
             t.start()
     return cached if cached else {}
@@ -382,11 +432,13 @@ def _get_cov_spot_cache() -> dict:
     cached = _cache.get(f"{NAMESPACE}spot")
     if cached is None:
         if _REFRESH_SEM.acquire(blocking=False):
+
             def bg():
                 try:
                     asyncio.run(_fetch_cov_spot_async())
                 finally:
                     _REFRESH_SEM.release()
+
             t = threading.Thread(target=bg, daemon=True, name="cov-spot-refresh")
             t.start()
     return cached if cached else {}
@@ -397,11 +449,13 @@ def _get_cov_compare_cache() -> dict:
     cached = _cache.get(f"{NAMESPACE}compare")
     if cached is None:
         if _REFRESH_SEM.acquire(blocking=False):
+
             def bg():
                 try:
                     asyncio.run(_fetch_cov_compare_async())
                 finally:
                     _REFRESH_SEM.release()
+
             t = threading.Thread(target=bg, daemon=True, name="cov-compare-refresh")
             t.start()
     return cached if cached else {}
@@ -413,7 +467,7 @@ async def convertible_bond_list():
     """
     可转债列表
     返回：所有可转债基本信息 + 转股溢价率分析
-    
+
     字段说明：
       code: 债券代码
       name: 债券简称
@@ -430,12 +484,14 @@ async def convertible_bond_list():
     """
     try:
         cache = _get_cov_list_cache()
-        return success_response({
-            "bonds": cache.get("bonds", []),
-            "total": cache.get("total", 0),
-            "update_time": cache.get("update_time", ""),
-            "source": cache.get("source", "unknown"),
-        })
+        return success_response(
+            {
+                "bonds": cache.get("bonds", []),
+                "total": cache.get("total", 0),
+                "update_time": cache.get("update_time", ""),
+                "source": cache.get("source", "unknown"),
+            }
+        )
     except Exception as e:
         logger.error(f"[convertible_bond_list] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取可转债列表失败: {str(e)}")
@@ -447,7 +503,7 @@ async def convertible_bond_spot():
     """
     可转债实时行情
     返回：实时报价、涨跌幅、成交量
-    
+
     字段说明：
       symbol: 交易代码（含交易所前缀）
       name: 债券名称
@@ -461,15 +517,19 @@ async def convertible_bond_spot():
     """
     try:
         cache = _get_cov_spot_cache()
-        return success_response({
-            "spots": cache.get("spots", []),
-            "total": cache.get("total", 0),
-            "update_time": cache.get("update_time", ""),
-            "source": cache.get("source", "unknown"),
-        })
+        return success_response(
+            {
+                "spots": cache.get("spots", []),
+                "total": cache.get("total", 0),
+                "update_time": cache.get("update_time", ""),
+                "source": cache.get("source", "unknown"),
+            }
+        )
     except Exception as e:
         logger.error(f"[convertible_bond_spot] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取可转债实时行情失败: {str(e)}")
+        return error_response(
+            ErrorCode.INTERNAL_ERROR, f"获取可转债实时行情失败: {str(e)}"
+        )
 
 
 @router.get("/bond/convertible/comparison")
@@ -478,7 +538,7 @@ async def convertible_bond_comparison():
     """
     可转债比价表
     返回：转股溢价率、纯债溢价率对比
-    
+
     字段说明：
       code: 转债代码
       name: 转债名称
@@ -494,15 +554,19 @@ async def convertible_bond_comparison():
     """
     try:
         cache = _get_cov_compare_cache()
-        return success_response({
-            "compares": cache.get("compares", []),
-            "total": cache.get("total", 0),
-            "update_time": cache.get("update_time", ""),
-            "source": cache.get("source", "unknown"),
-        })
+        return success_response(
+            {
+                "compares": cache.get("compares", []),
+                "total": cache.get("total", 0),
+                "update_time": cache.get("update_time", ""),
+                "source": cache.get("source", "unknown"),
+            }
+        )
     except Exception as e:
         logger.error(f"[convertible_bond_comparison] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取可转债比价表失败: {str(e)}")
+        return error_response(
+            ErrorCode.INTERNAL_ERROR, f"获取可转债比价表失败: {str(e)}"
+        )
 
 
 @router.get("/bond/convertible/{symbol}/value")
@@ -510,11 +574,12 @@ async def convertible_bond_comparison():
 async def convertible_bond_value(symbol: str):
     try:
         import warnings
+
         warnings.filterwarnings("ignore")
 
         df = await asyncio.wait_for(
             asyncio.to_thread(ak.bond_zh_cov_value_analysis, symbol=symbol),
-            timeout=BOND_REFRESH_TIMEOUT
+            timeout=BOND_REFRESH_TIMEOUT,
         )
 
         if df is not None and not df.empty:
@@ -534,26 +599,36 @@ async def convertible_bond_value(symbol: str):
                     logger.debug(f"[ConvertibleBond] parse value row error: {e}")
                     continue
 
-            return success_response({
-                "symbol": symbol,
-                "values": values,
-                "total": len(values),
-                "source": "akshare",
-            })
+            return success_response(
+                {
+                    "symbol": symbol,
+                    "values": values,
+                    "total": len(values),
+                    "source": "akshare",
+                }
+            )
         else:
             raise ValueError("empty dataframe")
     except asyncio.TimeoutError:
-        logger.warning(f"[ConvertibleBond] bond_zh_cov_value_analysis timed out for {symbol}", exc_info=True)
+        logger.warning(
+            f"[ConvertibleBond] bond_zh_cov_value_analysis timed out for {symbol}",
+            exc_info=True,
+        )
         return error_response("请求超时，请稍后重试", code=504)
     except Exception as e:
-        logger.warning(f"[ConvertibleBond] bond_zh_cov_value_analysis failed for {symbol}: {e}", exc_info=True)
-        return success_response({
-            "symbol": symbol,
-            "values": [],
-            "total": 0,
-            "source": "error",
-            "message": f"获取可转债价值分析失败: {str(e)}",
-        })
+        logger.warning(
+            f"[ConvertibleBond] bond_zh_cov_value_analysis failed for {symbol}: {e}",
+            exc_info=True,
+        )
+        return success_response(
+            {
+                "symbol": symbol,
+                "values": [],
+                "total": 0,
+                "source": "error",
+                "message": f"获取可转债价值分析失败: {str(e)}",
+            }
+        )
 
 
 # ── 启动时立即填充 Mock 数据（防止第一次请求返回空）──────────────
@@ -561,27 +636,40 @@ def _init_mock_cache():
     """同步填充 Mock 数据，保证 API 启动后立即可用"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    _cache.set(f"{NAMESPACE}list", {
-        "bonds": _MOCK_COV_LIST,
-        "total": len(_MOCK_COV_LIST),
-        "update_time": now_str,
-        "source": "mock",
-    }, ttl=TTL)
+    _cache.set(
+        f"{NAMESPACE}list",
+        {
+            "bonds": _MOCK_COV_LIST,
+            "total": len(_MOCK_COV_LIST),
+            "update_time": now_str,
+            "source": "mock",
+        },
+        ttl=TTL,
+    )
 
-    _cache.set(f"{NAMESPACE}spot", {
-        "spots": _MOCK_COV_SPOT,
-        "total": len(_MOCK_COV_SPOT),
-        "update_time": now_str,
-        "source": "mock",
-    }, ttl=TTL)
+    _cache.set(
+        f"{NAMESPACE}spot",
+        {
+            "spots": _MOCK_COV_SPOT,
+            "total": len(_MOCK_COV_SPOT),
+            "update_time": now_str,
+            "source": "mock",
+        },
+        ttl=TTL,
+    )
 
-    _cache.set(f"{NAMESPACE}compare", {
-        "compares": _MOCK_COV_COMPARE,
-        "total": len(_MOCK_COV_COMPARE),
-        "update_time": now_str,
-        "source": "mock",
-    }, ttl=TTL)
+    _cache.set(
+        f"{NAMESPACE}compare",
+        {
+            "compares": _MOCK_COV_COMPARE,
+            "total": len(_MOCK_COV_COMPARE),
+            "update_time": now_str,
+            "source": "mock",
+        },
+        ttl=TTL,
+    )
 
     logger.info("[ConvertibleBond] Mock data initialized")
+
 
 _init_mock_cache()

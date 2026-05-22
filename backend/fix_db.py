@@ -6,10 +6,12 @@ fix_db.py — 数据库迁移修复脚本 (Phase 6.7)
 1. portfolios 表添加缺失的 7 个字段
 2. 创建 backtest_strategies 和 backtest_results 表
 """
+
 import sqlite3
 import sys
 
 DB_PATH = "/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/database.db"
+
 
 def fix_portfolios_table(conn):
     """修复 portfolios 表缺失字段"""
@@ -45,6 +47,7 @@ def fix_portfolios_table(conn):
     conn.commit()
     print(f"portfolios 表修复完成，新增 {added} 列")
     return added
+
 
 def create_backtest_tables(conn):
     """创建回测相关表"""
@@ -90,6 +93,7 @@ def create_backtest_tables(conn):
     conn.commit()
     print("回测表创建完成")
 
+
 def verify_fix(conn):
     """验证修复结果"""
     cursor = conn.cursor()
@@ -101,7 +105,9 @@ def verify_fix(conn):
     print(f"列名：{cols}")
 
     print("\n=== 验证 backtest 表 ===")
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'backtest%'")
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'backtest%'"
+    )
     tables = [row[0] for row in cursor.fetchall()]
     print(f"回测相关表：{tables}")
 
@@ -109,6 +115,7 @@ def verify_fix(conn):
     cursor.execute("SELECT COUNT(*) FROM portfolios")
     count = cursor.fetchone()[0]
     print(f"现有投资组合数：{count}")
+
 
 if __name__ == "__main__":
     print("=" * 60)
@@ -133,5 +140,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ 修复失败：{type(e).__name__}: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

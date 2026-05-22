@@ -7,6 +7,7 @@ Tests cover:
 - Portfolio optimization
 - Factor analysis
 """
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -59,12 +60,15 @@ class TestMLTraining:
 
     def test_train_model_invalid_symbol_returns_422(self, client: TestClient):
         """Test POST /api/v1/ml/train with invalid symbol format."""
-        response = client.post("/api/v1/ml/train", json={
-            "model_id": "test_model",
-            "symbol": "invalid_symbol",
-            "start_date": "2023-01-01",
-            "end_date": "2023-12-31",
-        })
+        response = client.post(
+            "/api/v1/ml/train",
+            json={
+                "model_id": "test_model",
+                "symbol": "invalid_symbol",
+                "start_date": "2023-01-01",
+                "end_date": "2023-12-31",
+            },
+        )
 
         # Should return validation error or bad request
         assert response.status_code in [400, 422]
@@ -75,12 +79,15 @@ class TestMLPrediction:
 
     def test_predict_model_not_found(self, client: TestClient):
         """Test POST /api/v1/ml/predict with nonexistent model."""
-        response = client.post("/api/v1/ml/predict", json={
-            "model_id": "nonexistent_model",
-            "symbol": "sh600519",
-            "start_date": "2023-01-01",
-            "end_date": "2023-12-31",
-        })
+        response = client.post(
+            "/api/v1/ml/predict",
+            json={
+                "model_id": "nonexistent_model",
+                "symbol": "sh600519",
+                "start_date": "2023-01-01",
+                "end_date": "2023-12-31",
+            },
+        )
 
         # Should return error (model not found)
         data = response.json()
@@ -98,25 +105,31 @@ class TestMLPortfolioOptimization:
 
     def test_optimize_invalid_method_returns_422(self, client: TestClient):
         """Test POST /api/v1/ml/optimize with invalid method."""
-        response = client.post("/api/v1/ml/optimize", json={
-            "symbols": ["sh600519", "sh600036"],
-            "start_date": "2023-01-01",
-            "end_date": "2023-12-31",
-            "method": "invalid_method",
-        })
+        response = client.post(
+            "/api/v1/ml/optimize",
+            json={
+                "symbols": ["sh600519", "sh600036"],
+                "start_date": "2023-01-01",
+                "end_date": "2023-12-31",
+                "method": "invalid_method",
+            },
+        )
 
         assert response.status_code == 422
 
     def test_optimize_valid_request_structure(self, client: TestClient):
         """Test POST /api/v1/ml/optimize with valid request structure."""
-        response = client.post("/api/v1/ml/optimize", json={
-            "symbols": ["sh600519", "sh600036"],
-            "start_date": "2023-01-01",
-            "end_date": "2023-12-31",
-            "method": "mvo",
-            "risk_aversion": 1.0,
-            "max_weight": 0.3,
-        })
+        response = client.post(
+            "/api/v1/ml/optimize",
+            json={
+                "symbols": ["sh600519", "sh600036"],
+                "start_date": "2023-01-01",
+                "end_date": "2023-12-31",
+                "method": "mvo",
+                "risk_aversion": 1.0,
+                "max_weight": 0.3,
+            },
+        )
 
         # Should return 200 or 401 (if API key required)
         assert response.status_code in [200, 401]
@@ -133,22 +146,28 @@ class TestMLFactorAnalysis:
 
     def test_factors_invalid_symbol_returns_422(self, client: TestClient):
         """Test POST /api/v1/ml/factors with invalid symbol format."""
-        response = client.post("/api/v1/ml/factors", json={
-            "symbol": "invalid",
-            "start_date": "2023-01-01",
-            "end_date": "2023-12-31",
-        })
+        response = client.post(
+            "/api/v1/ml/factors",
+            json={
+                "symbol": "invalid",
+                "start_date": "2023-01-01",
+                "end_date": "2023-12-31",
+            },
+        )
 
         assert response.status_code == 422
 
     def test_factors_valid_request_structure(self, client: TestClient):
         """Test POST /api/v1/ml/factors with valid request structure."""
-        response = client.post("/api/v1/ml/factors", json={
-            "symbol": "sh600519",
-            "start_date": "2023-01-01",
-            "end_date": "2023-12-31",
-            "factors": ["momentum", "value"],
-        })
+        response = client.post(
+            "/api/v1/ml/factors",
+            json={
+                "symbol": "sh600519",
+                "start_date": "2023-01-01",
+                "end_date": "2023-12-31",
+                "factors": ["momentum", "value"],
+            },
+        )
 
         # Should return 200 or 401 (if API key required)
         assert response.status_code in [200, 401]
@@ -165,9 +184,23 @@ class TestMLRiskMetrics:
 
     def test_risk_metrics_valid_request(self, client: TestClient):
         """Test POST /api/v1/ml/risk-metrics with valid returns."""
-        response = client.post("/api/v1/ml/risk-metrics", json={
-            "daily_returns": [0.01, -0.02, 0.03, 0.01, -0.01, 0.02, 0.01, -0.03, 0.02, 0.01],
-        })
+        response = client.post(
+            "/api/v1/ml/risk-metrics",
+            json={
+                "daily_returns": [
+                    0.01,
+                    -0.02,
+                    0.03,
+                    0.01,
+                    -0.01,
+                    0.02,
+                    0.01,
+                    -0.03,
+                    0.02,
+                    0.01,
+                ],
+            },
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -202,8 +235,10 @@ class TestMLOptimizationMethods:
 # Fixtures
 # ═══════════════════════════════════════════════════════════════
 
+
 @pytest.fixture
 def client():
     """Create test client."""
     from app.main import app
+
     return TestClient(app)

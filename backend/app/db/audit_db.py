@@ -36,10 +36,18 @@ def init_audit_table():
                     chain_index INTEGER NOT NULL DEFAULT 0
                 )
             """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_logs(agent_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_logs(resource)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_logs(agent_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_logs(resource)"
+            )
 
             # Add hash chain columns to existing tables (safe migration)
             for col, dtype, default in [
@@ -48,12 +56,16 @@ def init_audit_table():
                 ("chain_index", "INTEGER", "NOT NULL DEFAULT 0"),
             ]:
                 try:
-                    conn.execute(f"ALTER TABLE audit_logs ADD COLUMN {col} {dtype} {default}")
+                    conn.execute(
+                        f"ALTER TABLE audit_logs ADD COLUMN {col} {dtype} {default}"
+                    )
                 except sqlite3.OperationalError:
                     pass  # Column already exists
 
             # Create index after migration (in case column was just added)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_chain_index ON audit_logs(chain_index)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_chain_index ON audit_logs(chain_index)"
+            )
 
             conn.commit()
         finally:
@@ -70,7 +82,7 @@ def log_audit(
 ) -> int:
     """
     Log an audit event
-    
+
     Args:
         agent_id: Agent/token ID performing the action
         action: Action type (e.g., 'create_token', 'run_backtest', 'get_price')
@@ -78,7 +90,7 @@ def log_audit(
         details: Additional details as dict
         ip_address: Client IP address
         user_agent: Client user agent
-    
+
     Returns:
         Log entry ID
     """
@@ -88,11 +100,14 @@ def log_audit(
     with _lock:
         conn = _get_conn()
         try:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 INSERT INTO audit_logs
                 (timestamp, agent_id, action, resource, details, ip_address, user_agent)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (now, agent_id, action, resource, details_str, ip_address, user_agent))
+            """,
+                (now, agent_id, action, resource, details_str, ip_address, user_agent),
+            )
             conn.commit()
             return cursor.lastrowid
         except Exception as e:
@@ -114,9 +129,9 @@ def get_audit_logs_keyset(
 ) -> List[Dict]:
     """
     Get audit logs using keyset (cursor-based) pagination.
-    
+
     This provides O(1) performance for deep pages compared to OFFSET pagination.
-    
+
     Args:
         after_timestamp: Get logs before this timestamp (ISO format) - cursor
         after_id: Get logs with id less than this (for same timestamp) - cursor
@@ -126,7 +141,7 @@ def get_audit_logs_keyset(
         resource: Filter by resource (LIKE match)
         start_time: Filter by start time
         end_time: Filter by end time
-        
+
     Returns:
         List of audit log records
     """
@@ -188,7 +203,7 @@ def get_audit_logs(
 ) -> List[Dict]:
     """
     Query audit logs with filters (OFFSET pagination - deprecated, use get_audit_logs_keyset)
-    
+
     Args:
         agent_id: Filter by agent ID
         action: Filter by action type
@@ -197,7 +212,7 @@ def get_audit_logs(
         end_time: Filter by end time
         limit: Max results
         offset: Offset for pagination
-    
+
     Returns:
         List of audit log entries
     """
@@ -286,16 +301,18 @@ def delete_old_logs(days: int = 2555) -> int:
         try:
             cutoff = datetime.now()
             from datetime import timedelta
+
             cutoff_str = (cutoff - timedelta(days=days)).isoformat()
 
             cursor = conn.execute(
-                "DELETE FROM audit_logs WHERE timestamp < ?",
-                (cutoff_str,)
+                "DELETE FROM audit_logs WHERE timestamp < ?", (cutoff_str,)
             )
             conn.commit()
             deleted = cursor.rowcount
             if deleted > 0:
-                logger.info(f"[AuditDB] Deleted {deleted} old audit logs (older than {days} days)")
+                logger.info(
+                    f"[AuditDB] Deleted {deleted} old audit logs (older than {days} days)"
+                )
             return deleted
         except Exception as e:
             logger.error(f"[AuditDB] Delete old logs failed: {e}", exc_info=True)
@@ -310,21 +327,28 @@ def get_agent_activity_summary(agent_id: str, days: int = 7) -> Dict:
     try:
         cutoff = datetime.now()
         from datetime import timedelta
+
         cutoff_str = (cutoff - timedelta(days=days)).isoformat()
 
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT action, COUNT(*) as cnt
             FROM audit_logs
             WHERE agent_id = ? AND timestamp >= ?
             GROUP BY action
             ORDER BY cnt DESC
-        """, (agent_id, cutoff_str)).fetchall()
+        """,
+            (agent_id, cutoff_str),
+        ).fetchall()
 
-        total = conn.execute("""
+        total = conn.execute(
+            """
             SELECT COUNT(*) as cnt
             FROM audit_logs
             WHERE agent_id = ? AND timestamp >= ?
-        """, (agent_id, cutoff_str)).fetchone()
+        """,
+            (agent_id, cutoff_str),
+        ).fetchone()
 
         return {
             "agent_id": agent_id,
@@ -334,7 +358,12 @@ def get_agent_activity_summary(agent_id: str, days: int = 7) -> Dict:
         }
     except Exception as e:
         logger.error(f"[AuditDB] Get summary failed: {e}", exc_info=True)
-        return {"agent_id": agent_id, "period_days": days, "total_actions": 0, "actions_by_type": {}}
+        return {
+            "agent_id": agent_id,
+            "period_days": days,
+            "total_actions": 0,
+            "actions_by_type": {},
+        }
     finally:
         conn.close()
 
@@ -347,6 +376,9 @@ def _row_to_dict(row: sqlite3.Row) -> Dict:
         try:
             result["details"] = json.loads(result["details"])
         except (json.JSONDecodeError, TypeError) as e:
-            logger.warning(f"[AUDIT_DB] Failed to parse details JSON: {type(e).__name__}: {e}", exc_info=True)
+            logger.warning(
+                f"[AUDIT_DB] Failed to parse details JSON: {type(e).__name__}: {e}",
+                exc_info=True,
+            )
 
     return result

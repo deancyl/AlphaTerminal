@@ -41,17 +41,18 @@ class DiffResponse(BaseModel):
 
 
 def _get_audit_records_by_timestamp(
-    conn: sqlite3.Connection,
-    from_ts: str,
-    to_ts: str
+    conn: sqlite3.Connection, from_ts: str, to_ts: str
 ) -> List[Dict[str, Any]]:
-    cursor = conn.execute("""
+    cursor = conn.execute(
+        """
         SELECT id, timestamp, agent_id, action, resource, details,
                prev_hash, record_hash, chain_index
         FROM audit_logs
         WHERE timestamp >= ? AND timestamp <= ?
         ORDER BY timestamp ASC
-    """, (from_ts, to_ts))
+    """,
+        (from_ts, to_ts),
+    )
 
     records = []
     for row in cursor.fetchall():
@@ -60,17 +61,19 @@ def _get_audit_records_by_timestamp(
         except json.JSONDecodeError:
             details = {}
 
-        records.append({
-            "id": row[0],
-            "timestamp": row[1],
-            "actor_id": row[2],
-            "action": row[3],
-            "resource": row[4],
-            "details": details,
-            "prev_hash": row[5],
-            "record_hash": row[6],
-            "chain_index": row[7]
-        })
+        records.append(
+            {
+                "id": row[0],
+                "timestamp": row[1],
+                "actor_id": row[2],
+                "action": row[3],
+                "resource": row[4],
+                "details": details,
+                "prev_hash": row[5],
+                "record_hash": row[6],
+                "chain_index": row[7],
+            }
+        )
 
     return records
 
@@ -101,36 +104,32 @@ def _extract_config_changes(records: List[Dict[str, Any]]) -> List[Dict[str, Any
                 old_val = before_state.get(key)
                 new_val = after_state.get(key)
                 if old_val != new_val:
-                    field_changes.append({
-                        "field": key,
-                        "old_value": old_val,
-                        "new_value": new_val
-                    })
+                    field_changes.append(
+                        {"field": key, "old_value": old_val, "new_value": new_val}
+                    )
         elif after_state:
             for key, val in after_state.items():
-                field_changes.append({
-                    "field": key,
-                    "old_value": None,
-                    "new_value": val
-                })
+                field_changes.append(
+                    {"field": key, "old_value": None, "new_value": val}
+                )
         elif before_state:
             for key, val in before_state.items():
-                field_changes.append({
-                    "field": key,
-                    "old_value": val,
-                    "new_value": None
-                })
+                field_changes.append(
+                    {"field": key, "old_value": val, "new_value": None}
+                )
 
         if field_changes:
-            changes.append({
-                "timestamp": record["timestamp"],
-                "action": record["action"],
-                "resource": record["resource"],
-                "actor_id": record["actor_id"],
-                "change_type": change_type,
-                "fields": field_changes,
-                "record_id": record["id"]
-            })
+            changes.append(
+                {
+                    "timestamp": record["timestamp"],
+                    "action": record["action"],
+                    "resource": record["resource"],
+                    "actor_id": record["actor_id"],
+                    "change_type": change_type,
+                    "fields": field_changes,
+                    "record_id": record["id"],
+                }
+            )
 
     return changes
 
@@ -139,11 +138,11 @@ def _extract_config_changes(records: List[Dict[str, Any]]) -> List[Dict[str, Any
 @handle_errors(module="audit_playback")
 async def get_config_diff(
     from_timestamp: str = Query(..., description="Start timestamp (ISO format)"),
-    to_timestamp: str = Query(..., description="End timestamp (ISO format)")
+    to_timestamp: str = Query(..., description="End timestamp (ISO format)"),
 ):
     """
     Get config diff between two timestamps.
-    
+
     Returns all changes with field-level detail:
     - field: changed field name
     - old_value: value before change
@@ -154,7 +153,9 @@ async def get_config_diff(
     def _sync_get_diff():
         conn = _get_conn()
         try:
-            records = _get_audit_records_by_timestamp(conn, from_timestamp, to_timestamp)
+            records = _get_audit_records_by_timestamp(
+                conn, from_timestamp, to_timestamp
+            )
             changes = _extract_config_changes(records)
             conn.close()
             return changes
@@ -169,8 +170,8 @@ async def get_config_diff(
             "from_timestamp": from_timestamp,
             "to_timestamp": to_timestamp,
             "changes": changes,
-            "total_changes": len(changes)
-        }
+            "total_changes": len(changes),
+        },
     }
 
 
@@ -178,11 +179,13 @@ async def get_config_diff(
 @handle_errors(module="audit_playback")
 async def get_audit_timeline(
     limit: int = Query(default=100, ge=1, le=1000),
-    action_filter: Optional[str] = Query(default=None, description="Filter by action type")
+    action_filter: Optional[str] = Query(
+        default=None, description="Filter by action type"
+    ),
 ):
     """
     Get audit timeline for timeline slider.
-    
+
     Returns list of timestamps with action summaries.
     """
     loop = asyncio.get_event_loop()
@@ -191,30 +194,38 @@ async def get_audit_timeline(
         conn = _get_conn()
         try:
             if action_filter:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT id, timestamp, agent_id, action, resource
                     FROM audit_logs
                     WHERE action = ?
                     ORDER BY timestamp DESC
                     LIMIT ?
-                """, (action_filter, limit))
+                """,
+                    (action_filter, limit),
+                )
             else:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT id, timestamp, agent_id, action, resource
                     FROM audit_logs
                     ORDER BY timestamp DESC
                     LIMIT ?
-                """, (limit,))
+                """,
+                    (limit,),
+                )
 
             timeline = []
             for row in cursor.fetchall():
-                timeline.append({
-                    "id": row[0],
-                    "timestamp": row[1],
-                    "actor_id": row[2],
-                    "action": row[3],
-                    "resource": row[4]
-                })
+                timeline.append(
+                    {
+                        "id": row[0],
+                        "timestamp": row[1],
+                        "actor_id": row[2],
+                        "action": row[3],
+                        "resource": row[4],
+                    }
+                )
 
             conn.close()
             return timeline
@@ -223,13 +234,7 @@ async def get_audit_timeline(
 
     timeline = await loop.run_in_executor(_executor, _sync_get_timeline)
 
-    return {
-        "code": 0,
-        "data": {
-            "timeline": timeline,
-            "total": len(timeline)
-        }
-    }
+    return {"code": 0, "data": {"timeline": timeline, "total": len(timeline)}}
 
 
 @router.post("/rollback")
@@ -237,7 +242,7 @@ async def get_audit_timeline(
 async def rollback_config(body: RollbackRequest):
     """
     Rollback config to selected timestamp.
-    
+
     WARNING: This is a destructive operation!
     - Verifies hash chain integrity first
     - Restores config from audit_chain records
@@ -246,7 +251,7 @@ async def rollback_config(body: RollbackRequest):
     if not body.confirm:
         raise HTTPException(
             status_code=400,
-            detail="Rollback requires confirm=true. This is a destructive operation."
+            detail="Rollback requires confirm=true. This is a destructive operation.",
         )
 
     loop = asyncio.get_event_loop()
@@ -261,16 +266,19 @@ async def rollback_config(body: RollbackRequest):
                 return {
                     "success": False,
                     "error": f"Hash chain verification failed: {verification.get('error_type')}",
-                    "verification": verification
+                    "verification": verification,
                 }
 
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT id, timestamp, details, record_hash, chain_index
                 FROM audit_logs
                 WHERE timestamp <= ?
                 ORDER BY timestamp DESC
                 LIMIT 1
-            """, (body.timestamp,))
+            """,
+                (body.timestamp,),
+            )
 
             target_record = cursor.fetchone()
 
@@ -278,7 +286,7 @@ async def rollback_config(body: RollbackRequest):
                 conn.close()
                 return {
                     "success": False,
-                    "error": f"No audit record found at or before {body.timestamp}"
+                    "error": f"No audit record found at or before {body.timestamp}",
                 }
 
             target_details = json.loads(target_record[2]) if target_record[2] else {}
@@ -288,7 +296,7 @@ async def rollback_config(body: RollbackRequest):
                 conn.close()
                 return {
                     "success": False,
-                    "error": "Target record has no after_state to restore"
+                    "error": "Target record has no after_state to restore",
                 }
 
             conn.close()
@@ -298,7 +306,7 @@ async def rollback_config(body: RollbackRequest):
                 "target_timestamp": target_record[1],
                 "target_record_id": target_record[0],
                 "restored_state": after_state,
-                "chain_index": target_record[4]
+                "chain_index": target_record[4],
             }
         finally:
             conn.close()
@@ -313,19 +321,21 @@ async def rollback_config(body: RollbackRequest):
     return {
         "code": 0,
         "message": f"配置已回滚至 {result['target_timestamp']}",
-        "data": result
+        "data": result,
     }
 
 
 @router.get("/verify_chain")
 @handle_errors(module="audit_playback")
 async def verify_hash_chain(
-    from_id: Optional[int] = Query(default=None, description="Start ID for verification"),
-    to_id: Optional[int] = Query(default=None, description="End ID for verification")
+    from_id: Optional[int] = Query(
+        default=None, description="Start ID for verification"
+    ),
+    to_id: Optional[int] = Query(default=None, description="End ID for verification"),
 ):
     """
     Verify hash chain integrity.
-    
+
     Returns:
     - valid: bool - Whether the chain is valid
     - chain_length: int - Number of records in chain
@@ -348,9 +358,9 @@ async def verify_hash_chain(
                 "total_records": stats.get("total_records", 0),
                 "chain_index_min": stats.get("chain_index_min"),
                 "chain_index_max": stats.get("chain_index_max"),
-                "genesis_hash": GENESIS_HASH
-            }
-        }
+                "genesis_hash": GENESIS_HASH,
+            },
+        },
     }
 
 
@@ -365,12 +375,15 @@ async def get_audit_record(record_id: int):
     def _sync_get_record():
         conn = _get_conn()
         try:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT id, timestamp, agent_id, action, resource, details,
                        ip_address, user_agent, prev_hash, record_hash, chain_index
                 FROM audit_logs
                 WHERE id = ?
-            """, (record_id,))
+            """,
+                (record_id,),
+            )
 
             row = cursor.fetchone()
             conn.close()
@@ -394,7 +407,7 @@ async def get_audit_record(record_id: int):
                 "user_agent": row[7],
                 "prev_hash": row[8],
                 "record_hash": row[9],
-                "chain_index": row[10]
+                "chain_index": row[10],
             }
         finally:
             conn.close()
@@ -404,10 +417,7 @@ async def get_audit_record(record_id: int):
     if not record:
         raise HTTPException(status_code=404, detail=f"Record {record_id} not found")
 
-    return {
-        "code": 0,
-        "data": record
-    }
+    return {"code": 0, "data": record}
 
 
 @router.get("/stats")
@@ -418,7 +428,4 @@ async def get_audit_stats():
     """
     stats = get_chain_stats()
 
-    return {
-        "code": 0,
-        "data": stats
-    }
+    return {"code": 0, "data": stats}

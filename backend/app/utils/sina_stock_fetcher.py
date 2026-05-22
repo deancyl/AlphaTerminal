@@ -7,7 +7,7 @@ which successfully fetches ~5000 stocks.
 
 Usage:
     from app.utils.sina_stock_fetcher import fetch_all_stocks_sina
-    
+
     stocks = fetch_all_stocks_sina(max_pages=20)
     print(f"Fetched {len(stocks)} stocks")
 """
@@ -21,19 +21,22 @@ logger = logging.getLogger(__name__)
 
 try:
     from curl_cffi import requests as curl_requests
+
     HAS_CURL_CFFI = True
 except ImportError:
     import requests as curl_requests
+
     HAS_CURL_CFFI = False
 
-from app.services.circuit_breaker import CircuitBreaker, CircuitState, CircuitBreakerConfig
+from app.services.circuit_breaker import (
+    CircuitBreaker,
+    CircuitState,
+    CircuitBreakerConfig,
+)
 
 _SINA_STOCK_CB = CircuitBreaker(
     name="sina_stock_fetcher",
-    config=CircuitBreakerConfig(
-        failure_threshold=5,
-        timeout=60.0
-    )
+    config=CircuitBreakerConfig(failure_threshold=5, timeout=60.0),
 )
 
 _SINA_API_URL = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
@@ -43,6 +46,7 @@ def _get_proxies() -> Optional[Dict]:
     """Get proxy configuration from settings."""
     try:
         from app.config.settings import get_settings
+
         settings = get_settings()
         proxy = settings.HTTP_PROXY or settings.http_proxy
         if proxy:
@@ -67,21 +71,21 @@ def fetch_all_stocks_sina(
     max_pages: int = 20,
     timeout: int = 15,
     exclude_bj: bool = True,
-    delay: float = 0.3
+    delay: float = 0.3,
 ) -> List[Dict]:
     """
     Fetch all A-share stocks from Sina Finance API.
-    
+
     Fetches from both Shanghai (sh_a) and Shenzhen (sz_a) markets.
     Note: hs_a node returns Beijing Stock Exchange stocks, not A-shares.
-    
+
     Args:
         page_size: Number of stocks per page (default 500)
         max_pages: Maximum pages to fetch per market (default 20)
         timeout: Request timeout in seconds
         exclude_bj: Exclude Beijing Stock Exchange stocks (bj prefix)
         delay: Delay between pages in seconds (rate limiting)
-    
+
     Returns:
         List of stock dicts with symbol, code, name, price, change_pct, etc.
     """
@@ -106,7 +110,9 @@ def fetch_all_stocks_sina(
                     response = curl_requests.get(url, timeout=timeout, proxies=proxies)
 
                 if response.status_code != 200:
-                    logger.warning(f"[SinaStockFetcher] {node} page {page}: {response.status_code}")
+                    logger.warning(
+                        f"[SinaStockFetcher] {node} page {page}: {response.status_code}"
+                    )
                     break
 
                 data = json.loads(response.text)
@@ -119,24 +125,36 @@ def fetch_all_stocks_sina(
                     if exclude_bj and symbol.startswith("bj"):
                         continue
 
-                    all_stocks.append({
-                        "symbol": symbol,
-                        "code": item.get("code", ""),
-                        "name": item.get("name", ""),
-                        "price": _safe_float(item.get("trade")),
-                        "change_pct": _safe_float(item.get("changepercent")),
-                        "volume": _safe_float(item.get("volume")),
-                        "amount": _safe_float(item.get("amount")),
-                        "market_cap": _safe_float(item.get("mktcap")) * 10000,
-                        "high": _safe_float(item.get("high")),
-                        "low": _safe_float(item.get("low")),
-                        "pre_close": _safe_float(item.get("settlement")),
-                        "pe": _safe_float(item.get("per")) if item.get("per") not in ("", None, "-", "--") else None,
-                        "pb": _safe_float(item.get("pb")) if item.get("pb") not in ("", None, "-", "--") else None,
-                        "turnover": _safe_float(item.get("turnoverratio")),
-                    })
+                    all_stocks.append(
+                        {
+                            "symbol": symbol,
+                            "code": item.get("code", ""),
+                            "name": item.get("name", ""),
+                            "price": _safe_float(item.get("trade")),
+                            "change_pct": _safe_float(item.get("changepercent")),
+                            "volume": _safe_float(item.get("volume")),
+                            "amount": _safe_float(item.get("amount")),
+                            "market_cap": _safe_float(item.get("mktcap")) * 10000,
+                            "high": _safe_float(item.get("high")),
+                            "low": _safe_float(item.get("low")),
+                            "pre_close": _safe_float(item.get("settlement")),
+                            "pe": (
+                                _safe_float(item.get("per"))
+                                if item.get("per") not in ("", None, "-", "--")
+                                else None
+                            ),
+                            "pb": (
+                                _safe_float(item.get("pb"))
+                                if item.get("pb") not in ("", None, "-", "--")
+                                else None
+                            ),
+                            "turnover": _safe_float(item.get("turnoverratio")),
+                        }
+                    )
 
-                logger.debug(f"[SinaStockFetcher] {node} page {page}: +{len(data)}, total {len(all_stocks)}")
+                logger.debug(
+                    f"[SinaStockFetcher] {node} page {page}: +{len(data)}, total {len(all_stocks)}"
+                )
 
                 if len(data) < page_size:
                     logger.info(f"[SinaStockFetcher] {node} last page at {page}")
@@ -146,7 +164,9 @@ def fetch_all_stocks_sina(
                     time.sleep(delay)
 
             except Exception as e:
-                logger.error(f"[SinaStockFetcher] {node} page {page} failed: {e}", exc_info=True)
+                logger.error(
+                    f"[SinaStockFetcher] {node} page {page} failed: {e}", exc_info=True
+                )
                 continue
 
     if len(all_stocks) > 100:
@@ -154,7 +174,9 @@ def fetch_all_stocks_sina(
         logger.info(f"[SinaStockFetcher] Fetched {len(all_stocks)} stocks")
     else:
         _SINA_STOCK_CB.record_failure()
-        logger.warning(f"[SinaStockFetcher] Only {len(all_stocks)} stocks, recording failure")
+        logger.warning(
+            f"[SinaStockFetcher] Only {len(all_stocks)} stocks, recording failure"
+        )
 
     return all_stocks
 
@@ -163,8 +185,16 @@ def get_circuit_breaker_status() -> Dict:
     """Get circuit breaker status for monitoring."""
     return {
         "state": _SINA_STOCK_CB.state.name,
-        "failure_count": _SINA_STOCK_CB._stats.consecutive_failures if hasattr(_SINA_STOCK_CB, '_stats') else 0,
-        "last_failure_time": _SINA_STOCK_CB._stats.last_failure_time if hasattr(_SINA_STOCK_CB, '_stats') else None,
+        "failure_count": (
+            _SINA_STOCK_CB._stats.consecutive_failures
+            if hasattr(_SINA_STOCK_CB, "_stats")
+            else 0
+        ),
+        "last_failure_time": (
+            _SINA_STOCK_CB._stats.last_failure_time
+            if hasattr(_SINA_STOCK_CB, "_stats")
+            else None
+        ),
     }
 
 

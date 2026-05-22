@@ -3,6 +3,7 @@ E2E tests for futures workflow.
 
 Tests the complete futures workflow from dashboard loading to data refresh.
 """
+
 import pytest
 import time
 from fastapi.testclient import TestClient
@@ -15,6 +16,7 @@ class TestFuturesE2EWorkflow:
     def client(self):
         """Create a test client for the FastAPI app."""
         from app.main import app
+
         return TestClient(app)
 
     def test_complete_futures_workflow(self, client):
@@ -79,7 +81,9 @@ class TestFuturesE2EWorkflow:
         commodities_data = commodities_response.json()
 
         # Verify update_time is consistent
-        assert main_data["data"]["update_time"] == commodities_data["data"]["update_time"]
+        assert (
+            main_data["data"]["update_time"] == commodities_data["data"]["update_time"]
+        )
 
     def test_futures_error_handling(self, client):
         """Test error handling across workflow"""
@@ -99,7 +103,9 @@ class TestFuturesE2EWorkflow:
         valid_symbols = ["IF", "IC", "IM"]
 
         for symbol in valid_symbols:
-            response = client.get(f"/api/v1/futures/index_history?symbol={symbol}&limit=10")
+            response = client.get(
+                f"/api/v1/futures/index_history?symbol={symbol}&limit=10"
+            )
             assert response.status_code == 200
             data = response.json()
             assert data["code"] == 0
@@ -125,7 +131,9 @@ class TestFuturesE2EWorkflow:
         valid_sectors = ["黑色建材", "能源化工", "新能源", "其他"]
         for item in commodities:
             if "sector" in item:
-                assert item["sector"] in valid_sectors, f"Invalid sector: {item['sector']}"
+                assert (
+                    item["sector"] in valid_sectors
+                ), f"Invalid sector: {item['sector']}"
 
     def test_main_indexes_structure(self, client):
         """Test main indexes response structure"""

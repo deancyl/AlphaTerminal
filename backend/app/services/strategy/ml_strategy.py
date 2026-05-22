@@ -4,6 +4,7 @@ ML Strategy Module
 Provides base classes for ML-based trading strategies that integrate
 with AlphaTerminal's backtest engine and Qlib's ML framework.
 """
+
 import logging
 import numpy as np
 import pandas as pd
@@ -47,7 +48,7 @@ class MLStrategyConfig:
 class BaseMLStrategy(ABC):
     """
     Abstract base class for ML-based trading strategies.
-    
+
     Subclasses must implement:
         - predict(): Generate predictions from features
         - generate_signals(): Convert predictions to trading signals
@@ -88,7 +89,11 @@ class BaseMLStrategy(ABC):
         if self._model is None:
             return False
 
-        from app.services.qlib.model_loader import get_model_loader, ModelType, ModelProvider
+        from app.services.qlib.model_loader import (
+            get_model_loader,
+            ModelType,
+            ModelProvider,
+        )
 
         loader = get_model_loader()
         return loader.save_model(
@@ -104,7 +109,11 @@ class BaseMLStrategy(ABC):
         from app.services.qlib.feature_pipeline import FeaturePipeline, FeatureSet
 
         if self._feature_pipeline is None:
-            feature_set = FeatureSet.ALPHA158 if self.config.feature_set == "Alpha158" else FeatureSet.ALPHA360
+            feature_set = (
+                FeatureSet.ALPHA158
+                if self.config.feature_set == "Alpha158"
+                else FeatureSet.ALPHA360
+            )
             self._feature_pipeline = FeaturePipeline(feature_set)
 
         return self._feature_pipeline.generate_features(df)
@@ -112,10 +121,10 @@ class BaseMLStrategy(ABC):
     def run_prediction(self, df: pd.DataFrame) -> PredictionResult:
         """
         Run the full prediction pipeline.
-        
+
         Args:
             df: DataFrame with OHLCV data
-            
+
         Returns:
             PredictionResult with predictions and signals
         """
@@ -176,7 +185,7 @@ class BaseMLStrategy(ABC):
 class LightGBMStrategy(BaseMLStrategy):
     """
     LightGBM-based trading strategy.
-    
+
     Uses gradient boosting for prediction with configurable
     prediction threshold for signal generation.
     """
@@ -244,7 +253,7 @@ class LightGBMStrategy(BaseMLStrategy):
 class QlibMLStrategy(BaseMLStrategy):
     """
     Full Qlib integration strategy.
-    
+
     Uses Qlib's model zoo (HIST, GATE, etc.) for prediction
     with Alpha158/Alpha360 features.
     """
@@ -309,7 +318,7 @@ class QlibMLStrategy(BaseMLStrategy):
 class EnsembleMLStrategy(BaseMLStrategy):
     """
     Ensemble strategy combining multiple ML models.
-    
+
     Aggregates predictions from multiple models using
     configurable voting or averaging methods.
     """
@@ -366,13 +375,13 @@ def create_ml_strategy(
 ) -> BaseMLStrategy:
     """
     Factory function to create ML strategies.
-    
+
     Args:
         model_id: Unique model identifier
         strategy_type: Type of strategy (lightgbm, qlib, ensemble)
         feature_set: Feature set to use (Alpha158, Alpha360)
         **kwargs: Additional configuration options
-        
+
     Returns:
         Configured ML strategy instance
     """
@@ -391,5 +400,7 @@ def create_ml_strategy(
         aggregation = kwargs.get("aggregation", "mean")
         return EnsembleMLStrategy(config, strategies, aggregation)
     else:
-        logger.warning(f"[MLStrategy] Unknown strategy type: {strategy_type}, using LightGBM")
+        logger.warning(
+            f"[MLStrategy] Unknown strategy type: {strategy_type}, using LightGBM"
+        )
         return LightGBMStrategy(config)

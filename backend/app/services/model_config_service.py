@@ -12,6 +12,7 @@ Key Features:
 
 CRITICAL: No in-memory caching - always read from DB for hot-reload.
 """
+
 import logging
 import threading
 import httpx
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ModelInstance:
     """Model instance configuration"""
+
     model_id: str
     provider: str
     api_key: str = ""
@@ -47,13 +49,14 @@ class ModelInstance:
             "is_default": self.is_default,
             "max_concurrent": self.max_concurrent,
             "context_length": self.context_length,
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
 
 @dataclass
 class ProviderState:
     """Provider state with multiple models"""
+
     provider: str
     models: Dict[str, ModelInstance] = field(default_factory=dict)
     default_model: Optional[str] = None
@@ -65,14 +68,14 @@ class ProviderState:
             "models": {k: v.to_dict() for k, v in self.models.items()},
             "default_model": self.default_model,
             "enabled": self.enabled,
-            "model_count": len(self.models)
+            "model_count": len(self.models),
         }
 
 
 class ModelConfigService:
     """
     Multi-model configuration service with hot-reload.
-    
+
     CRITICAL: No in-memory caching - always read from DB.
     """
 
@@ -81,16 +84,18 @@ class ModelConfigService:
         self._initialized = False
         logger.info("[ModelConfigService] Initialized with hot-reload enabled")
 
-    def get_model(self, provider: str, model_id: Optional[str] = None) -> Optional[ModelInstance]:
+    def get_model(
+        self, provider: str, model_id: Optional[str] = None
+    ) -> Optional[ModelInstance]:
         """
         Get a specific model configuration.
-        
+
         Hot-reload: Reads from DB on each request.
-        
+
         Args:
             provider: Provider name (e.g., 'openai', 'deepseek')
             model_id: Model ID (optional, uses default if not specified)
-            
+
         Returns:
             ModelInstance or None
         """
@@ -128,21 +133,48 @@ class ModelConfigService:
             is_default=(target_model_id == config.get("default_model")),
             max_concurrent=model_config.get("max_concurrent", 10),
             context_length=model_config.get("context_length", 4096),
-            metadata=model_config.get("metadata", {})
+            metadata=model_config.get("metadata", {}),
         )
 
-    def _get_fallback_model(self, provider: str, model_id: Optional[str]) -> Optional[ModelInstance]:
+    def _get_fallback_model(
+        self, provider: str, model_id: Optional[str]
+    ) -> Optional[ModelInstance]:
         """Fallback to environment variables if DB config not found"""
         import os
 
         provider_key = f"llm_{provider}"
         env_key_map = {
-            "llm_openai": ("OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_MODEL", "gpt-3.5-turbo"),
-            "llm_deepseek": ("DEEPSEEK_API_KEY", "DEEPSEEK_API_BASE", "DEEPSEEK_MODEL", "deepseek-chat"),
-            "llm_qianwen": ("QIANWEN_API_KEY", "QIANWEN_API_BASE", "QIANWEN_MODEL", "qwen-plus"),
+            "llm_openai": (
+                "OPENAI_API_KEY",
+                "OPENAI_API_BASE",
+                "OPENAI_MODEL",
+                "gpt-3.5-turbo",
+            ),
+            "llm_deepseek": (
+                "DEEPSEEK_API_KEY",
+                "DEEPSEEK_API_BASE",
+                "DEEPSEEK_MODEL",
+                "deepseek-chat",
+            ),
+            "llm_qianwen": (
+                "QIANWEN_API_KEY",
+                "QIANWEN_API_BASE",
+                "QIANWEN_MODEL",
+                "qwen-plus",
+            ),
             "llm_minimax": ("MINIMAX_API_KEY", None, "MINIMAX_MODEL", "abab6.5s-chat"),
-            "llm_kimi": ("KIMI_API_KEY", "KIMI_API_BASE", "KIMI_MODEL", "moonshot-v1-8k"),
-            "llm_siliconflow": ("SILICONFLOW_API_KEY", "SILICONFLOW_API_BASE", "SILICONFLOW_MODEL", "deepseek-ai/DeepSeek-V3"),
+            "llm_kimi": (
+                "KIMI_API_KEY",
+                "KIMI_API_BASE",
+                "KIMI_MODEL",
+                "moonshot-v1-8k",
+            ),
+            "llm_siliconflow": (
+                "SILICONFLOW_API_KEY",
+                "SILICONFLOW_API_BASE",
+                "SILICONFLOW_MODEL",
+                "deepseek-ai/DeepSeek-V3",
+            ),
         }
 
         if provider_key not in env_key_map:
@@ -166,15 +198,15 @@ class ModelConfigService:
             is_default=True,
             max_concurrent=10,
             context_length=4096,
-            metadata={}
+            metadata={},
         )
 
     def get_all_providers(self) -> Dict[str, ProviderState]:
         """
         Get all provider configurations.
-        
+
         Hot-reload: Reads from DB on each request.
-        
+
         Returns:
             Dict of provider_name -> ProviderState
         """
@@ -200,14 +232,14 @@ class ModelConfigService:
                     is_default=(model_id == default_model),
                     max_concurrent=model_cfg.get("max_concurrent", 10),
                     context_length=model_cfg.get("context_length", 4096),
-                    metadata=model_cfg.get("metadata", {})
+                    metadata=model_cfg.get("metadata", {}),
                 )
 
             providers[provider] = ProviderState(
                 provider=provider,
                 models=model_instances,
                 default_model=default_model,
-                enabled=any(m.enabled for m in model_instances.values())
+                enabled=any(m.enabled for m in model_instances.values()),
             )
 
         # Add fallback providers from environment
@@ -218,7 +250,14 @@ class ModelConfigService:
     def _add_fallback_providers(self, providers: Dict[str, ProviderState]):
         """Add providers from environment variables if not in DB"""
 
-        fallback_providers = ["openai", "deepseek", "qianwen", "minimax", "kimi", "siliconflow"]
+        fallback_providers = [
+            "openai",
+            "deepseek",
+            "qianwen",
+            "minimax",
+            "kimi",
+            "siliconflow",
+        ]
 
         for provider in fallback_providers:
             if provider in providers:
@@ -230,18 +269,18 @@ class ModelConfigService:
                     provider=provider,
                     models={model.model_id: model},
                     default_model=model.model_id,
-                    enabled=True
+                    enabled=True,
                 )
 
     def add_model(self, provider: str, model_id: str, config: Dict[str, Any]) -> bool:
         """
         Add a new model to a provider.
-        
+
         Args:
             provider: Provider name
             model_id: Model ID
             config: Model configuration
-            
+
         Returns:
             Success status
         """
@@ -251,20 +290,22 @@ class ModelConfigService:
             "enabled": config.get("enabled", True),
             "max_concurrent": config.get("max_concurrent", 10),
             "context_length": config.get("context_length", 4096),
-            "metadata": config.get("metadata", {})
+            "metadata": config.get("metadata", {}),
         }
 
         return model_config_db.add_model_to_config(provider_key, model_id, model_config)
 
-    def update_model(self, provider: str, model_id: str, updates: Dict[str, Any]) -> bool:
+    def update_model(
+        self, provider: str, model_id: str, updates: Dict[str, Any]
+    ) -> bool:
         """
         Update model configuration.
-        
+
         Args:
             provider: Provider name
             model_id: Model ID
             updates: Fields to update
-            
+
         Returns:
             Success status
         """
@@ -274,11 +315,11 @@ class ModelConfigService:
     def remove_model(self, provider: str, model_id: str) -> bool:
         """
         Remove a model from a provider.
-        
+
         Args:
             provider: Provider name
             model_id: Model ID
-            
+
         Returns:
             Success status
         """
@@ -288,11 +329,11 @@ class ModelConfigService:
     def set_default(self, provider: str, model_id: str) -> bool:
         """
         Set the default model for a provider.
-        
+
         Args:
             provider: Provider name
             model_id: Model ID to set as default
-            
+
         Returns:
             Success status
         """
@@ -302,11 +343,11 @@ class ModelConfigService:
     def test_connection(self, provider: str, model_id: str) -> Dict[str, Any]:
         """
         Test connection to a model.
-        
+
         Args:
             provider: Provider name
             model_id: Model ID
-            
+
         Returns:
             Connection test result
         """
@@ -317,7 +358,7 @@ class ModelConfigService:
                 "success": False,
                 "error": "Model not found",
                 "provider": provider,
-                "model_id": model_id
+                "model_id": model_id,
             }
 
         if not model.api_key:
@@ -325,23 +366,25 @@ class ModelConfigService:
                 "success": False,
                 "error": "API key not configured",
                 "provider": provider,
-                "model_id": model_id
+                "model_id": model_id,
             }
 
         # Test with a simple API call
         try:
-            base_url = (model.base_url or self._get_default_base_url(provider)).rstrip("/")
+            base_url = (model.base_url or self._get_default_base_url(provider)).rstrip(
+                "/"
+            )
             url = f"{base_url}/chat/completions"
 
             headers = {
                 "Authorization": f"Bearer {model.api_key}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
             payload = {
                 "model": model_id,
                 "messages": [{"role": "user", "content": "test"}],
-                "max_tokens": 1
+                "max_tokens": 1,
             }
 
             with httpx.Client(timeout=10.0) as client:
@@ -352,14 +395,14 @@ class ModelConfigService:
                         "success": True,
                         "provider": provider,
                         "model_id": model_id,
-                        "latency_ms": response.elapsed.total_seconds() * 1000
+                        "latency_ms": response.elapsed.total_seconds() * 1000,
                     }
                 else:
                     return {
                         "success": False,
                         "error": f"API returned {response.status_code}",
                         "provider": provider,
-                        "model_id": model_id
+                        "model_id": model_id,
                     }
 
         except Exception as e:
@@ -367,7 +410,7 @@ class ModelConfigService:
                 "success": False,
                 "error": str(e),
                 "provider": provider,
-                "model_id": model_id
+                "model_id": model_id,
             }
 
     def _get_default_base_url(self, provider: str) -> str:
@@ -378,14 +421,14 @@ class ModelConfigService:
             "qianwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "minimax": "https://api.minimax.chat/v1",
             "kimi": "https://api.moonshot.cn/v1",
-            "siliconflow": "https://api.siliconflow.cn/v1"
+            "siliconflow": "https://api.siliconflow.cn/v1",
         }
         return defaults.get(provider, "")
 
     def get_config_version(self) -> int:
         """
         Get the latest config version number.
-        
+
         Returns:
             Version number
         """
@@ -395,10 +438,10 @@ class ModelConfigService:
     def get_enabled_models(self, provider: str) -> List[str]:
         """
         Get list of enabled models for a provider.
-        
+
         Args:
             provider: Provider name
-            
+
         Returns:
             List of model IDs
         """

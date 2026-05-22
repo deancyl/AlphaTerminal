@@ -36,6 +36,7 @@ CACHE_TTL = 300
 @dataclass
 class F9DataResult:
     """F9 数据结果"""
+
     symbol: str
     financial: Optional[Dict[str, Any]] = None
     institution: Optional[Dict[str, Any]] = None
@@ -87,27 +88,29 @@ class F9Fetcher:
             return None
 
         # 检查是否是 success_response 格式
-        if hasattr(response, 'get') and callable(response.get):
+        if hasattr(response, "get") and callable(response.get):
             # 字典-like 对象
-            if response.get('code') == 0:
-                return response.get('data')
+            if response.get("code") == 0:
+                return response.get("data")
             else:
                 # 错误响应
-                error_msg = response.get('message', 'Unknown error')
+                error_msg = response.get("message", "Unknown error")
                 logger.warning(f"[F9Fetcher] Router returned error: {error_msg}")
                 return None
         elif isinstance(response, dict):
-            if response.get('code') == 0:
-                return response.get('data')
+            if response.get("code") == 0:
+                return response.get("data")
             else:
-                error_msg = response.get('message', 'Unknown error')
+                error_msg = response.get("message", "Unknown error")
                 logger.warning(f"[F9Fetcher] Router returned error: {error_msg}")
                 return None
 
         # 尝试直接返回（某些响应可能直接是 data）
         return response if isinstance(response, dict) else None
 
-    async def _fetch_financial(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
+    async def _fetch_financial(
+        self, symbol: str, use_cache: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """获取财务数据"""
         if use_cache:
             cached = self._get_from_cache(symbol, "financial")
@@ -122,13 +125,18 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "financial", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for financial:{symbol}", exc_info=True)
+            logger.warning(
+                f"[F9Fetcher] Circuit breaker open for financial:{symbol}",
+                exc_info=True,
+            )
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing financial for {symbol}: {e}", exc_info=True)
             return None
 
-    async def _fetch_institution(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
+    async def _fetch_institution(
+        self, symbol: str, use_cache: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """获取机构持股数据"""
         if use_cache:
             cached = self._get_from_cache(symbol, "institution")
@@ -143,13 +151,18 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "institution", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for institution:{symbol}", exc_info=True)
+            logger.warning(
+                f"[F9Fetcher] Circuit breaker open for institution:{symbol}",
+                exc_info=True,
+            )
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing institution for {symbol}: {e}", exc_info=True)
             return None
 
-    async def _fetch_forecast(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
+    async def _fetch_forecast(
+        self, symbol: str, use_cache: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """获取盈利预测数据"""
         if use_cache:
             cached = self._get_from_cache(symbol, "forecast")
@@ -164,13 +177,17 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "forecast", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for forecast:{symbol}", exc_info=True)
+            logger.warning(
+                f"[F9Fetcher] Circuit breaker open for forecast:{symbol}", exc_info=True
+            )
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing forecast for {symbol}: {e}", exc_info=True)
             return None
 
-    async def _fetch_shareholder(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
+    async def _fetch_shareholder(
+        self, symbol: str, use_cache: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """获取股东研究数据"""
         if use_cache:
             cached = self._get_from_cache(symbol, "shareholder")
@@ -185,13 +202,18 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "shareholder", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for shareholder:{symbol}", exc_info=True)
+            logger.warning(
+                f"[F9Fetcher] Circuit breaker open for shareholder:{symbol}",
+                exc_info=True,
+            )
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing shareholder for {symbol}: {e}", exc_info=True)
             return None
 
-    async def _fetch_margin(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
+    async def _fetch_margin(
+        self, symbol: str, use_cache: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """获取融资融券数据"""
         if use_cache:
             cached = self._get_from_cache(symbol, "margin")
@@ -206,13 +228,17 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "margin", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for margin:{symbol}", exc_info=True)
+            logger.warning(
+                f"[F9Fetcher] Circuit breaker open for margin:{symbol}", exc_info=True
+            )
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing margin for {symbol}: {e}", exc_info=True)
             return None
 
-    async def _fetch_peers(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
+    async def _fetch_peers(
+        self, symbol: str, use_cache: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """获取同业比较数据"""
         if use_cache:
             cached = self._get_from_cache(symbol, "peers")
@@ -227,13 +253,17 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "peers", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for peers:{symbol}", exc_info=True)
+            logger.warning(
+                f"[F9Fetcher] Circuit breaker open for peers:{symbol}", exc_info=True
+            )
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing peers for {symbol}: {e}", exc_info=True)
             return None
 
-    async def _fetch_announcements(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
+    async def _fetch_announcements(
+        self, symbol: str, use_cache: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """获取公司公告数据"""
         if use_cache:
             cached = self._get_from_cache(symbol, "announcements")
@@ -248,7 +278,10 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "announcements", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for announcements:{symbol}", exc_info=True)
+            logger.warning(
+                f"[F9Fetcher] Circuit breaker open for announcements:{symbol}",
+                exc_info=True,
+            )
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing announcements for {symbol}: {e}", exc_info=True)
@@ -259,7 +292,7 @@ class F9Fetcher:
         symbol: str,
         tabs: Optional[List[str]] = None,
         timeout: float = 10.0,
-        use_cache: bool = True
+        use_cache: bool = True,
     ) -> F9DataResult:
         """
         获取 F9 深度数据
@@ -297,7 +330,9 @@ class F9Fetcher:
         for tab in tabs:
             if tab in fetchers:
                 tasks[tab] = asyncio.create_task(
-                    asyncio.wait_for(fetchers[tab](normalized_symbol, use_cache), timeout=timeout)
+                    asyncio.wait_for(
+                        fetchers[tab](normalized_symbol, use_cache), timeout=timeout
+                    )
                 )
 
         if not tasks:
@@ -305,7 +340,9 @@ class F9Fetcher:
             return result
 
         # 等待所有任务完成
-        done, pending = await asyncio.wait(tasks.values(), return_when=asyncio.ALL_COMPLETED)
+        done, pending = await asyncio.wait(
+            tasks.values(), return_when=asyncio.ALL_COMPLETED
+        )
 
         # 收集结果
         errors = []
@@ -313,18 +350,28 @@ class F9Fetcher:
             try:
                 data = task.result()
                 if data is None:
-                    errors.append(f"{tab}: data is None (possibly circuit breaker open)")
+                    errors.append(
+                        f"{tab}: data is None (possibly circuit breaker open)"
+                    )
                 else:
                     setattr(result, tab, data)
             except asyncio.TimeoutError:
                 errors.append(f"{tab}: timeout after {timeout}s")
-                logger.warning(f"[F9Fetcher] Timeout for {tab}:{normalized_symbol}", exc_info=True)
+                logger.warning(
+                    f"[F9Fetcher] Timeout for {tab}:{normalized_symbol}", exc_info=True
+                )
             except CircuitBreakerOpen:
                 errors.append(f"{tab}: circuit breaker open")
-                logger.warning(f"[F9Fetcher] Circuit breaker open for {tab}:{normalized_symbol}", exc_info=True)
+                logger.warning(
+                    f"[F9Fetcher] Circuit breaker open for {tab}:{normalized_symbol}",
+                    exc_info=True,
+                )
             except Exception as e:
                 errors.append(f"{tab}: {str(e)}")
-                logger.error(f"[F9Fetcher] Error fetching {tab} for {normalized_symbol}: {e}", exc_info=True)
+                logger.error(
+                    f"[F9Fetcher] Error fetching {tab} for {normalized_symbol}: {e}",
+                    exc_info=True,
+                )
 
         # 取消未完成的任务
         for task in pending:

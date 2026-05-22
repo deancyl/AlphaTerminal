@@ -54,7 +54,7 @@ class TestMacroRetryMechanism:
                     assert "price" in item
                     assert "change_pct" in item
 
-    @patch('app.routers.market.overview._fetch_macro_data')
+    @patch("app.routers.market.overview._fetch_macro_data")
     def test_macro_fetch_failure_handling(self, mock_fetch, client):
         """Test that macro fetch failure is handled gracefully."""
         # Mock a failure
@@ -75,8 +75,10 @@ class TestExponentialBackoff:
 
         # Verify the pattern (1s * 2^n)
         for i, delay in enumerate(expected_delays):
-            calculated = 1000 * (2 ** i)
-            assert delay == calculated, f"Delay {i}: expected {calculated}ms, got {delay}ms"
+            calculated = 1000 * (2**i)
+            assert (
+                delay == calculated
+            ), f"Delay {i}: expected {calculated}ms, got {delay}ms"
 
     def test_max_retries(self):
         """Test that max retries is set to 5."""

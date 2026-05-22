@@ -4,6 +4,7 @@ Workflow Engine for Agentic Workflow
 Orchestrates multi-step workflows based on natural language queries.
 Uses LLM for intent parsing and step planning.
 """
+
 import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +32,7 @@ class WorkflowStatus(str, Enum):
 @dataclass
 class WorkflowStep:
     """Single step in a workflow"""
+
     id: str
     tool: str
     params: Dict[str, Any]
@@ -51,13 +53,14 @@ class WorkflowStep:
             "error": self.error,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
-            "elapsed_ms": self.elapsed_ms
+            "elapsed_ms": self.elapsed_ms,
         }
 
 
 @dataclass
 class Workflow:
     """Complete workflow with steps and result"""
+
     id: str
     query: str
     steps: List[WorkflowStep] = field(default_factory=list)
@@ -76,14 +79,14 @@ class Workflow:
             "result": self.result,
             "created_at": self.created_at,
             "completed_at": self.completed_at,
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
 
 class WorkflowEngine:
     """
     Workflow orchestration engine.
-    
+
     Parses natural language queries into executable workflows,
     executes steps, and generates reports.
     """
@@ -96,29 +99,35 @@ class WorkflowEngine:
     def parse_intent(self, query: str) -> Dict[str, Any]:
         """
         Parse user intent from natural language query.
-        
+
         Returns:
             Dict with query_type, symbols, sector, suggested_tools
         """
         result = self.classifier.classify(query)
 
-        suggested_tools = self._suggest_tools(result.query_type, result.symbols, result.sector)
+        suggested_tools = self._suggest_tools(
+            result.query_type, result.symbols, result.sector
+        )
 
         return {
             "query_type": result.query_type.value,
             "symbols": result.symbols,
             "sector": result.sector,
             "confidence": result.confidence,
-            "suggested_tools": suggested_tools
+            "suggested_tools": suggested_tools,
         }
 
-    def _suggest_tools(self, query_type: QueryType, symbols: List[str], sector: Optional[str]) -> List[str]:
+    def _suggest_tools(
+        self, query_type: QueryType, symbols: List[str], sector: Optional[str]
+    ) -> List[str]:
         """Suggest tools based on query type"""
         base_tools = []
 
         if query_type == QueryType.COMPANY_DEEP_DIVE:
             if symbols:
-                base_tools.extend(["get_quote", "get_financial", "get_kline", "get_news"])
+                base_tools.extend(
+                    ["get_quote", "get_financial", "get_kline", "get_news"]
+                )
         elif query_type == QueryType.SECTOR_COMPARISON:
             if symbols:
                 base_tools.extend(["get_quote", "get_financial"])
@@ -138,7 +147,7 @@ class WorkflowEngine:
     def plan_workflow(self, query: str) -> Workflow:
         """
         Plan a workflow based on the query.
-        
+
         Returns:
             Workflow with planned steps
         """
@@ -182,38 +191,39 @@ class WorkflowEngine:
                     params["indicator"] = "GDP"
 
             if params or tool_name in ["get_news"]:
-                steps.append(WorkflowStep(
-                    id=f"{workflow_id}_step_{i+1}",
-                    tool=tool_name,
-                    params=params
-                ))
+                steps.append(
+                    WorkflowStep(
+                        id=f"{workflow_id}_step_{i+1}", tool=tool_name, params=params
+                    )
+                )
 
         if not steps and symbols:
-            steps.append(WorkflowStep(
-                id=f"{workflow_id}_step_1",
-                tool="get_quote",
-                params={"symbol": symbols[0]}
-            ))
+            steps.append(
+                WorkflowStep(
+                    id=f"{workflow_id}_step_1",
+                    tool="get_quote",
+                    params={"symbol": symbols[0]},
+                )
+            )
 
         workflow = Workflow(
             id=workflow_id,
             query=query,
             steps=steps,
-            metadata={
-                "intent": intent,
-                "planned_at": datetime.now().isoformat()
-            }
+            metadata={"intent": intent, "planned_at": datetime.now().isoformat()},
         )
 
         self._workflows[workflow_id] = workflow
-        logger.info(f"[WorkflowEngine] Planned workflow {workflow_id} with {len(steps)} steps")
+        logger.info(
+            f"[WorkflowEngine] Planned workflow {workflow_id} with {len(steps)} steps"
+        )
 
         return workflow
 
     async def execute_step(self, step: WorkflowStep) -> Dict[str, Any]:
         """
         Execute a single workflow step.
-        
+
         Returns:
             Execution result
         """
@@ -237,7 +247,7 @@ class WorkflowEngine:
     async def execute_workflow(self, workflow: Workflow) -> Workflow:
         """
         Execute all steps in a workflow.
-        
+
         Returns:
             Updated workflow with results
         """
@@ -247,7 +257,9 @@ class WorkflowEngine:
             try:
                 await self.execute_step(step)
             except Exception as e:
-                logger.error(f"[WorkflowEngine] Step {step.id} failed: {e}", exc_info=True)
+                logger.error(
+                    f"[WorkflowEngine] Step {step.id} failed: {e}", exc_info=True
+                )
                 step.status = "failed"
                 step.error = str(e)
 
@@ -266,14 +278,16 @@ class WorkflowEngine:
         workflow.result = await self.generate_report(workflow)
 
         self._workflows[workflow.id] = workflow
-        logger.info(f"[WorkflowEngine] Workflow {workflow.id} completed with status {workflow.status.value}")
+        logger.info(
+            f"[WorkflowEngine] Workflow {workflow.id} completed with status {workflow.status.value}"
+        )
 
         return workflow
 
     async def generate_report(self, workflow: Workflow) -> str:
         """
         Generate Markdown report from workflow results.
-        
+
         Returns:
             Markdown formatted report
         """
@@ -282,11 +296,9 @@ class WorkflowEngine:
 
         for step in workflow.steps:
             if step.output:
-                steps_data.append({
-                    "tool": step.tool,
-                    "params": step.params,
-                    "output": step.output
-                })
+                steps_data.append(
+                    {"tool": step.tool, "params": step.params, "output": step.output}
+                )
 
         if not steps_data:
             return f"# 分析报告\n\n查询：{query}\n\n未能获取到有效数据。"
@@ -298,7 +310,7 @@ class WorkflowEngine:
             f"**生成时间**: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}",
             "",
             "---",
-            ""
+            "",
         ]
 
         for step_data in steps_data:
@@ -318,17 +330,19 @@ class WorkflowEngine:
             elif tool == "get_macro_data":
                 report_lines.extend(self._format_macro_section(output))
 
-        report_lines.extend([
-            "",
-            "---",
-            "",
-            "## ⚠️ 风险提示",
-            "",
-            "- 以上分析基于公开数据，仅供参考，不构成投资建议",
-            "- 股市有风险，投资需谨慎",
-            "- 请结合自身风险承受能力做出投资决策",
-            ""
-        ])
+        report_lines.extend(
+            [
+                "",
+                "---",
+                "",
+                "## ⚠️ 风险提示",
+                "",
+                "- 以上分析基于公开数据，仅供参考，不构成投资建议",
+                "- 股市有风险，投资需谨慎",
+                "- 请结合自身风险承受能力做出投资决策",
+                "",
+            ]
+        )
 
         return "\n".join(report_lines)
 
@@ -359,7 +373,7 @@ class WorkflowEngine:
             f"| 成交量 | {data.get('volume', 0):,.0f} |",
             f"| 最高 | ¥{data.get('high', 0):.2f} |",
             f"| 最低 | ¥{data.get('low', 0):.2f} |",
-            ""
+            "",
         ]
 
     def _format_financial_section(self, data: Dict[str, Any]) -> List[str]:
@@ -370,10 +384,7 @@ class WorkflowEngine:
         latest = data.get("data", {})
         history = data.get("history", [])
 
-        lines = [
-            "## 📈 财务指标",
-            ""
-        ]
+        lines = ["## 📈 财务指标", ""]
 
         if latest:
             key_metrics = ["roe", "roa", "pe_ttm", "pb", "debt_ratio", "current_ratio"]
@@ -414,11 +425,21 @@ class WorkflowEngine:
         latest = kline_data[-1]
         prev = kline_data[-2]
 
-        ma5 = sum(d["close"] for d in kline_data[-5:]) / 5 if len(kline_data) >= 5 else 0
-        ma20 = sum(d["close"] for d in kline_data[-20:]) / 20 if len(kline_data) >= 20 else 0
+        ma5 = (
+            sum(d["close"] for d in kline_data[-5:]) / 5 if len(kline_data) >= 5 else 0
+        )
+        ma20 = (
+            sum(d["close"] for d in kline_data[-20:]) / 20
+            if len(kline_data) >= 20
+            else 0
+        )
 
-        recent_high = max(d["high"] for d in kline_data[-20:]) if len(kline_data) >= 20 else 0
-        recent_low = min(d["low"] for d in kline_data[-20:]) if len(kline_data) >= 20 else 0
+        recent_high = (
+            max(d["high"] for d in kline_data[-20:]) if len(kline_data) >= 20 else 0
+        )
+        recent_low = (
+            min(d["low"] for d in kline_data[-20:]) if len(kline_data) >= 20 else 0
+        )
 
         return [
             "## 📉 技术分析",
@@ -432,7 +453,7 @@ class WorkflowEngine:
             f"| MA20 | ¥{ma20:.2f} | {'多头' if latest['close'] > ma20 else '空头'} |",
             f"| 20日最高 | ¥{recent_high:.2f} | - |",
             f"| 20日最低 | ¥{recent_low:.2f} | - |",
-            ""
+            "",
         ]
 
     def _format_news_section(self, data: Dict[str, Any]) -> List[str]:
@@ -442,12 +463,7 @@ class WorkflowEngine:
 
         news_list = data.get("news", [])
 
-        lines = [
-            "## 📰 相关新闻",
-            "",
-            f"共 {len(news_list)} 条新闻",
-            ""
-        ]
+        lines = ["## 📰 相关新闻", "", f"共 {len(news_list)} 条新闻", ""]
 
         for i, news in enumerate(news_list[:5], 1):
             title = news.get("title", "")
@@ -479,7 +495,7 @@ class WorkflowEngine:
             "**成分股**:",
             "",
             "| 代码 | 名称 | 涨跌幅 |",
-            "|------|------|--------|"
+            "|------|------|--------|",
         ]
 
         for stock in stocks[:10]:
@@ -501,10 +517,7 @@ class WorkflowEngine:
         name = data.get("name", "")
         latest = data.get("latest", {})
 
-        lines = [
-            f"## 🌏 宏观经济: {name} ({indicator})",
-            ""
-        ]
+        lines = [f"## 🌏 宏观经济: {name} ({indicator})", ""]
 
         if latest:
             lines.append("| 指标 | 数值 |")

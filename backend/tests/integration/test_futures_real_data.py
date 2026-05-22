@@ -2,11 +2,11 @@
 P0 Integration Tests for Futures Real Data
 Tests critical paths for real data API and historical endpoint.
 """
+
 import time
 from fastapi.testclient import TestClient
 
 from app.main import app
-
 
 client = TestClient(app)
 
@@ -121,7 +121,9 @@ class TestFuturesIndexHistoryExtended:
 
     def test_index_history_with_period_daily(self):
         """Test index_history with daily period"""
-        response = client.get("/api/v1/futures/index_history?symbol=IF&period=daily&limit=10")
+        response = client.get(
+            "/api/v1/futures/index_history?symbol=IF&period=daily&limit=10"
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -132,7 +134,9 @@ class TestFuturesIndexHistoryExtended:
 
     def test_index_history_with_period_minute(self):
         """Test index_history with minute period"""
-        response = client.get("/api/v1/futures/index_history?symbol=IC&period=5min&limit=10")
+        response = client.get(
+            "/api/v1/futures/index_history?symbol=IC&period=5min&limit=10"
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -143,7 +147,9 @@ class TestFuturesIndexHistoryExtended:
         valid_symbols = ["IF", "IC", "IM"]
 
         for symbol in valid_symbols:
-            response = client.get(f"/api/v1/futures/index_history?symbol={symbol}&limit=5")
+            response = client.get(
+                f"/api/v1/futures/index_history?symbol={symbol}&limit=5"
+            )
             assert response.status_code == 200
 
             data = response.json()
@@ -273,7 +279,9 @@ class TestFuturesCacheBehavior:
 
         # Both should have same structure
         assert data1["code"] == data2["code"]
-        assert len(data1["data"]["index_futures"]) == len(data2["data"]["index_futures"])
+        assert len(data1["data"]["index_futures"]) == len(
+            data2["data"]["index_futures"]
+        )
 
     def test_commodities_cache_consistency(self):
         """Test that commodities cache is consistent"""

@@ -5,6 +5,7 @@
 
 Phase B: 统一 API 响应格式
 """
+
 import logging
 import asyncio
 import re
@@ -33,7 +34,7 @@ _futures_cb = CircuitBreaker(
     CircuitBreakerConfig(
         failure_threshold=5,
         timeout=60.0,
-    )
+    ),
 )
 
 # Module-level cache for test compatibility (initialized by _init_mock_cache)
@@ -42,40 +43,40 @@ _FUTURES_CACHE = {}
 # 重点监控的国内商品期货合约
 WATCHED_COMMODITIES = {
     # (symbol, name, unit)
-    "RB0": ("螺纹钢",   "元/吨"),
-    "HC0": ("热卷",     "元/吨"),
-    "I0":  ("铁矿石",   "元/吨"),
-    "JM0": ("焦煤",     "元/吨"),
-    "J0":  ("焦炭",     "元/吨"),
-    "SC0": ("原油",     "元/桶"),
-    "FU0": ("燃油",     "元/吨"),
-    "TA0": ("PTA",      "元/吨"),
-    "MA0": ("甲醇",     "元/吨"),
-    "V0":  ("PVC",      "元/吨"),
-    "UR0": ("尿素",     "元/吨"),
-    "EG0": ("乙二醇",   "元/吨"),
-    "PP0": ("聚丙烯",   "元/吨"),
-    "LC0": ("碳酸锂",   "元/吨"),
-    "SA0": ("纯碱",     "元/吨"),
+    "RB0": ("螺纹钢", "元/吨"),
+    "HC0": ("热卷", "元/吨"),
+    "I0": ("铁矿石", "元/吨"),
+    "JM0": ("焦煤", "元/吨"),
+    "J0": ("焦炭", "元/吨"),
+    "SC0": ("原油", "元/桶"),
+    "FU0": ("燃油", "元/吨"),
+    "TA0": ("PTA", "元/吨"),
+    "MA0": ("甲醇", "元/吨"),
+    "V0": ("PVC", "元/吨"),
+    "UR0": ("尿素", "元/吨"),
+    "EG0": ("乙二醇", "元/吨"),
+    "PP0": ("聚丙烯", "元/吨"),
+    "LC0": ("碳酸锂", "元/吨"),
+    "SA0": ("纯碱", "元/吨"),
 }
 
 # 板块映射：symbol → (板块名, emoji)
 COMMODITY_SECTORS = {
     "RB0": ("黑色建材", "🔨"),
     "HC0": ("黑色建材", "🔨"),
-    "I0":  ("黑色建材", "🔨"),
+    "I0": ("黑色建材", "🔨"),
     "JM0": ("黑色建材", "🔨"),
-    "J0":  ("黑色建材", "🔨"),
+    "J0": ("黑色建材", "🔨"),
     "SC0": ("能源化工", "⚡"),
     "FU0": ("能源化工", "⚡"),
     "TA0": ("能源化工", "⚡"),
     "MA0": ("能源化工", "⚡"),
-    "V0":  ("能源化工", "⚡"),
+    "V0": ("能源化工", "⚡"),
     "UR0": ("能源化工", "⚡"),
     "EG0": ("能源化工", "⚡"),
     "PP0": ("能源化工", "⚡"),
-    "LC0": ("新能源",   "🔋"),
-    "SA0": ("新能源",   "🔋"),
+    "LC0": ("新能源", "🔋"),
+    "SA0": ("新能源", "🔋"),
 }
 
 SINA_HEADERS = {
@@ -91,6 +92,7 @@ async def _fetch_index_futures_realtime():
     """
     import akshare as ak
     import warnings
+
     warnings.filterwarnings("ignore")
 
     # Check circuit breaker
@@ -113,13 +115,20 @@ async def _fetch_index_futures_realtime():
             # Use asyncio.wait_for for 15 second timeout
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
-                loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_realtime(symbol=ak_symbol_name)),
-                timeout=15.0
+                loop.run_in_executor(
+                    _futures_executor,
+                    lambda: ak.futures_zh_realtime(symbol=ak_symbol_name),
+                ),
+                timeout=15.0,
             )
 
             if df is not None and len(df) > 0:
                 # Get the main contract (first row, symbol ends with 0)
-                main_row = df[df['symbol'].str.endswith('0')].iloc[0] if len(df[df['symbol'].str.endswith('0')]) > 0 else df.iloc[0]
+                main_row = (
+                    df[df["symbol"].str.endswith("0")].iloc[0]
+                    if len(df[df["symbol"].str.endswith("0")]) > 0
+                    else df.iloc[0]
+                )
 
                 price = main_row.get("trade", 0)
                 change_pct = main_row.get("changepercent", 0)
@@ -135,14 +144,16 @@ async def _fetch_index_futures_realtime():
                 else:
                     pos_str = "N/A"
 
-                index_futures.append({
-                    "symbol": symbol,
-                    "name": name,
-                    "price": round(float(price), 2) if price else 0,
-                    "change_pct": round(float(change_pct), 2) if change_pct else 0,
-                    "position": pos_str,
-                    "note": f"IM{symbol}",
-                })
+                index_futures.append(
+                    {
+                        "symbol": symbol,
+                        "name": name,
+                        "price": round(float(price), 2) if price else 0,
+                        "change_pct": round(float(change_pct), 2) if change_pct else 0,
+                        "position": pos_str,
+                        "note": f"IM{symbol}",
+                    }
+                )
                 source = "real"
                 _futures_cb.record_success()
                 logger.info(f"[Futures] Fetched real data for {symbol}: price={price}")
@@ -155,13 +166,17 @@ async def _fetch_index_futures_realtime():
 
     # Fallback to mock if all failed
     if not index_futures:
-        logger.warning("[Futures] All index futures fetch failed, using mock data with DEMO label")
+        logger.warning(
+            "[Futures] All index futures fetch failed, using mock data with DEMO label"
+        )
         # Add DEMO label to mock data so users know it's not real
         index_futures = [{**mock, "is_demo": True} for mock in _MOCK_INDEX_FUTURES]
         source = "mock"
     elif len(index_futures) < 3:
         # If we got some but not all, add mock data for missing ones with DEMO label
-        logger.warning(f"[Futures] Only fetched {len(index_futures)} futures, adding demo data for missing")
+        logger.warning(
+            f"[Futures] Only fetched {len(index_futures)} futures, adding demo data for missing"
+        )
         fetched_symbols = [f["symbol"] for f in index_futures]
         for mock in _MOCK_INDEX_FUTURES:
             if mock["symbol"] not in fetched_symbols:
@@ -186,11 +201,16 @@ def _fetch_commodities_sync():
             if "=" not in line or "none_match" in line:
                 continue
             try:
-                sym = line.split("=")[0].replace("v_qt_", "").replace("v_", "").strip('" ')
+                sym = (
+                    line.split("=")[0]
+                    .replace("v_qt_", "")
+                    .replace("v_", "")
+                    .strip('" ')
+                )
                 fields = line.split("=")[1].strip('";\n')
                 f = [x.strip() for x in fields.split(",")]
                 if len(f) > 10:
-                    price  = float(f[1]) if f[1] else None
+                    price = float(f[1]) if f[1] else None
                     change = float(f[32]) if f[32] else 0.0
                     spot_data[sym] = {
                         "price": round(price, 2) if price else 0,
@@ -218,16 +238,18 @@ def _fetch_commodities_sync():
     for sym, (name, unit) in WATCHED_COMMODITIES.items():
         d = spot_data.get(sym, {})
         sector_key = COMMODITY_SECTORS.get(sym, ("其他", "📦"))
-        commodities.append({
-            "symbol":     sym,
-            "name":       name,
-            "unit":       unit,
-            "price":      d.get("price", 0),
-            "change_pct": d.get("change_pct", 0),
-            "tick":       d.get("tick", ""),
-            "sector":     sector_key[0],
-            "sector_emoji": sector_key[1],
-        })
+        commodities.append(
+            {
+                "symbol": sym,
+                "name": name,
+                "unit": unit,
+                "price": d.get("price", 0),
+                "change_pct": d.get("change_pct", 0),
+                "tick": d.get("tick", ""),
+                "sector": sector_key[0],
+                "sector_emoji": sector_key[1],
+            }
+        )
 
     return commodities
 
@@ -235,7 +257,7 @@ def _fetch_commodities_sync():
 async def _fetch_futures_data():
     """
     Fetch futures data from multiple sources.
-    
+
     Returns:
         dict: {
             index_futures: list,
@@ -259,35 +281,37 @@ async def _fetch_futures_data():
 
     cache_data = {
         "index_futures": index_futures,
-        "commodities":   commodities,
-        "update_time":   now_str,
-        "index_source":  index_source,
+        "commodities": commodities,
+        "update_time": now_str,
+        "index_source": index_source,
     }
 
-    logger.info(f"[Futures] Fetched {len(commodities)} commodities + {len(index_futures)} index futures (source: {index_source})")
+    logger.info(
+        f"[Futures] Fetched {len(commodities)} commodities + {len(index_futures)} index futures (source: {index_source})"
+    )
     return cache_data
 
 
 async def _get_futures_cache() -> dict:
     """Get futures data with request coalescing (prevents thundering herd)."""
     return await _cache.get_or_set_async(
-        key=f"{NAMESPACE}main",
-        ttl=TTL,
-        fetch_fn=_fetch_futures_data
+        key=f"{NAMESPACE}main", ttl=TTL, fetch_fn=_fetch_futures_data
     )
 
 
 @router.get("/futures/index_history")
 @handle_errors(module="futures")
-async def futures_index_history(symbol: str = "IF", period: str = "daily", limit: int = 200):
+async def futures_index_history(
+    symbol: str = "IF", period: str = "daily", limit: int = 200
+):
     """
     股指期货历史K线数据
-    
+
     参数:
       symbol: 品种代码 (IF/IC/IM)
       period: 周期 (daily/1min/5min/15min/30min/60min)
       limit: 返回条数 (默认200)
-    
+
     返回:
       symbol: 品种代码
       history: K线数据 [{date, open, close, high, low, volume, hold}]
@@ -296,17 +320,20 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
     valid_symbols = ["IF", "IC", "IM"]
     if symbol.upper() not in valid_symbols:
         logger.warning(f"[futures_index_history] Invalid symbol: {symbol}")
-        return success_response({
-            "symbol": symbol.upper(),
-            "history": [],
-            "message": f"暂不支持品种: {symbol}，支持: {', '.join(valid_symbols)}"
-        })
+        return success_response(
+            {
+                "symbol": symbol.upper(),
+                "history": [],
+                "message": f"暂不支持品种: {symbol}，支持: {', '.join(valid_symbols)}",
+            }
+        )
 
     symbol = symbol.upper()
 
     try:
         import akshare as ak
         import warnings
+
         warnings.filterwarnings("ignore")
 
         # 主力合约代码（加0后缀）
@@ -317,31 +344,39 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
         if period == "daily":
             # 日线数据
             df = await asyncio.wait_for(
-                loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_daily_sina(symbol=contract_symbol)),
-                timeout=10.0
+                loop.run_in_executor(
+                    _futures_executor,
+                    lambda: ak.futures_zh_daily_sina(symbol=contract_symbol),
+                ),
+                timeout=10.0,
             )
         else:
             # 分钟数据
             df = await asyncio.wait_for(
-                loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_minute_sina(symbol=contract_symbol)),
-                timeout=10.0
+                loop.run_in_executor(
+                    _futures_executor,
+                    lambda: ak.futures_zh_minute_sina(symbol=contract_symbol),
+                ),
+                timeout=10.0,
             )
 
         # 处理数据
         history = []
         if df is not None and not df.empty:
             # 重命名列（akshare返回的列名可能不同）
-            df = df.rename(columns={
-                'date': 'date',
-                'open': 'open',
-                'high': 'high',
-                'low': 'low',
-                'close': 'close',
-                'volume': 'volume',
-                'hold': 'hold',
-                'open_interest': 'hold',
-                '持仓量': 'hold',
-            })
+            df = df.rename(
+                columns={
+                    "date": "date",
+                    "open": "open",
+                    "high": "high",
+                    "low": "low",
+                    "close": "close",
+                    "volume": "volume",
+                    "hold": "hold",
+                    "open_interest": "hold",
+                    "持仓量": "hold",
+                }
+            )
 
             # 取最后 limit 条
             df = df.tail(limit)
@@ -363,28 +398,37 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
                     continue
 
         logger.info(f"[futures_index_history] {symbol}({period}): {len(history)} bars")
-        return success_response({
-            "symbol": symbol,
-            "period": period,
-            "history": history,
-        })
+        return success_response(
+            {
+                "symbol": symbol,
+                "period": period,
+                "history": history,
+            }
+        )
 
     except asyncio.TimeoutError:
         logger.warning(f"[futures_index_history] Timeout for {symbol}", exc_info=True)
-        return success_response({
-            "symbol": symbol,
-            "period": period,
-            "history": [],
-            "message": "数据获取超时，请稍后重试"
-        })
+        return success_response(
+            {
+                "symbol": symbol,
+                "period": period,
+                "history": [],
+                "message": "数据获取超时，请稍后重试",
+            }
+        )
     except Exception as e:
-        logger.warning(f"[futures_index_history] Failed for {symbol}: {type(e).__name__}: {e}", exc_info=True)
-        return success_response({
-            "symbol": symbol,
-            "period": period,
-            "history": [],
-            "message": f"获取数据失败: {str(e)}"
-        })
+        logger.warning(
+            f"[futures_index_history] Failed for {symbol}: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        return success_response(
+            {
+                "symbol": symbol,
+                "period": period,
+                "history": [],
+                "message": f"获取数据失败: {str(e)}",
+            }
+        )
 
 
 @router.get("/futures/main_indexes")
@@ -395,11 +439,13 @@ async def futures_main_indexes():
     """
     try:
         cache = await _get_futures_cache()
-        return success_response({
-            "index_futures": cache.get("index_futures", []),
-            "update_time":  cache.get("update_time", ""),
-            "source":       cache.get("index_source", "mock"),
-        })
+        return success_response(
+            {
+                "index_futures": cache.get("index_futures", []),
+                "update_time": cache.get("update_time", ""),
+                "source": cache.get("index_source", "mock"),
+            }
+        )
     except Exception as e:
         logger.error(f"[futures_main_indexes] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取股指期货失败: {str(e)}")
@@ -413,10 +459,12 @@ async def futures_commodities():
     """
     try:
         cache = await _get_futures_cache()
-        return success_response({
-            "commodities": cache.get("commodities", []),
-            "update_time": cache.get("update_time", ""),
-        })
+        return success_response(
+            {
+                "commodities": cache.get("commodities", []),
+                "update_time": cache.get("update_time", ""),
+            }
+        )
     except Exception as e:
         logger.error(f"[futures_commodities] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取大宗商品失败: {str(e)}")
@@ -445,54 +493,79 @@ async def futures_term_structure(symbol: str = "RB"):
       - Backwardation（贴水）：近月 > 远月，向下倾斜曲线 → 现货紧缺
     """
     # 去除数字和特殊字符，提取字母前缀
-    prefix = re.sub(r'[^A-Za-z]', '', symbol).upper()
+    prefix = re.sub(r"[^A-Za-z]", "", symbol).upper()
     if not prefix:
         return success_response(None, f"无效品种代码: {symbol}")
 
     # 从 WATCHED_COMMODITIES 反查中文名
     zh_name = None
     for sym_key, (name, _unit) in WATCHED_COMMODITIES.items():
-        key_prefix = re.sub(r'[^A-Za-z]', '', sym_key).upper()
+        key_prefix = re.sub(r"[^A-Za-z]", "", sym_key).upper()
         if key_prefix == prefix:
             zh_name = name
             break
 
     if not zh_name:
-        return error_response(ErrorCode.BAD_REQUEST, f"暂不支持品种: {prefix}，支持的品种见 /futures/commodities", {"symbol": prefix, "name": None, "term_structure": []})
+        return error_response(
+            ErrorCode.BAD_REQUEST,
+            f"暂不支持品种: {prefix}，支持的品种见 /futures/commodities",
+            {"symbol": prefix, "name": None, "term_structure": []},
+        )
 
     try:
         import akshare as ak
         import warnings
+
         warnings.filterwarnings("ignore")
         # 同步 IO 放入线程池，避免阻塞 FastAPI 事件循环
         # 添加 10 秒超时保护
         loop = asyncio.get_running_loop()
         try:
             df = await asyncio.wait_for(
-                loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_realtime(symbol=zh_name)),
-                timeout=10.0
+                loop.run_in_executor(
+                    _futures_executor, lambda: ak.futures_zh_realtime(symbol=zh_name)
+                ),
+                timeout=10.0,
             )
         except asyncio.TimeoutError:
-            logger.warning(f"[Futures] term_structure timeout for {prefix}", exc_info=True)
-            return error_response(ErrorCode.INTERNAL_ERROR, "数据源响应超时，请稍后重试", {
-                "symbol": prefix,
-                "name": zh_name,
-                "term_structure": []
-            })
+            logger.warning(
+                f"[Futures] term_structure timeout for {prefix}", exc_info=True
+            )
+            return error_response(
+                ErrorCode.INTERNAL_ERROR,
+                "数据源响应超时，请稍后重试",
+                {"symbol": prefix, "name": zh_name, "term_structure": []},
+            )
 
         curves = []
         for _, row in df.iterrows():
             contract_sym = str(row.get("symbol", "")).strip()
-            price = row.get("trade") if row.get("trade") is not None else row.get("最新价")
-            vol   = row.get("volume") if row.get("volume") is not None else row.get("成交量")
-            oi    = row.get("position") if row.get("position") is not None else row.get("持仓量", 0)
+            price = (
+                row.get("trade") if row.get("trade") is not None else row.get("最新价")
+            )
+            vol = (
+                row.get("volume")
+                if row.get("volume") is not None
+                else row.get("成交量")
+            )
+            oi = (
+                row.get("position")
+                if row.get("position") is not None
+                else row.get("持仓量", 0)
+            )
 
-            try: price = float(price)
-            except (TypeError, ValueError): price = None
-            try: vol = float(vol)
-            except (TypeError, ValueError): vol = None
-            try: oi = float(oi) if oi is not None else 0.0
-            except (TypeError, ValueError): oi = 0.0
+            try:
+                price = float(price)
+            except (TypeError, ValueError):
+                price = None
+            try:
+                vol = float(vol)
+            except (TypeError, ValueError):
+                vol = None
+            try:
+                oi = float(oi) if oi is not None else 0.0
+            except (TypeError, ValueError):
+                oi = 0.0
 
             # 过滤僵尸合约（无成交量或无价格）
             if (vol is None or vol == 0) and (price is None or price == 0):
@@ -502,7 +575,7 @@ async def futures_term_structure(symbol: str = "RB"):
 
             # 提取交割月数字：RB2405 → 2405
             try:
-                month_match = re.search(r'\d+$', contract_sym)
+                month_match = re.search(r"\d+$", contract_sym)
                 if not month_match:
                     continue
                 month_code = month_match.group()
@@ -510,29 +583,46 @@ async def futures_term_structure(symbol: str = "RB"):
                 # AkShare 上游接口字段规则变动时，fail-safe 跳过该行
                 continue
 
-            curves.append({
-                "contract": contract_sym.upper(),
-                "month":    month_code,
-                "price":    round(price, 2),
-                "oi":       int(oi) if oi else 0,
-            })
+            curves.append(
+                {
+                    "contract": contract_sym.upper(),
+                    "month": month_code,
+                    "price": round(price, 2),
+                    "oi": int(oi) if oi else 0,
+                }
+            )
 
         if not curves:
-            return error_response(ErrorCode.NOT_FOUND, f"品种 {prefix}({zh_name}) 暂无可用合约数据", {"symbol": prefix, "name": zh_name, "term_structure": []})
+            return error_response(
+                ErrorCode.NOT_FOUND,
+                f"品种 {prefix}({zh_name}) 暂无可用合约数据",
+                {"symbol": prefix, "name": zh_name, "term_structure": []},
+            )
 
         # 按交割月升序排列
         curves = sorted(curves, key=lambda x: x["month"])
 
-        logger.info(f"[Futures] term_structure {prefix}({zh_name}): {len(curves)} contracts")
-        return success_response({
-            "symbol": prefix,
-            "name":   zh_name,
-            "term_structure": curves,
-        })
+        logger.info(
+            f"[Futures] term_structure {prefix}({zh_name}): {len(curves)} contracts"
+        )
+        return success_response(
+            {
+                "symbol": prefix,
+                "name": zh_name,
+                "term_structure": curves,
+            }
+        )
 
     except Exception as e:
-        logger.warning(f"[Futures] term_structure failed for {prefix}: {type(e).__name__}: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取期限结构失败: {type(e).__name__}: {str(e)}", {"symbol": prefix, "name": zh_name, "term_structure": []})
+        logger.warning(
+            f"[Futures] term_structure failed for {prefix}: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        return error_response(
+            ErrorCode.INTERNAL_ERROR,
+            f"获取期限结构失败: {type(e).__name__}: {str(e)}",
+            {"symbol": prefix, "name": zh_name, "term_structure": []},
+        )
 
 
 # ── Mock 数据（仅作为 Fallback，确保服务稳定性）────────────────
@@ -541,25 +631,130 @@ async def futures_term_structure(symbol: str = "RB"):
 # 当主数据源失败时，Mock 数据确保 API 不返回空结果
 # 请勿删除：用于启动初始化和网络异常时的降级处理
 _MOCK_COMMODITIES = [
-    {"symbol": "RB0", "name": "螺纹钢",   "unit": "元/吨", "price": 3850, "change_pct": +1.28, "tick": ""},
-    {"symbol": "HC0", "name": "热卷",     "unit": "元/吨", "price": 3920, "change_pct": -0.54, "tick": ""},
-    {"symbol": "SA0", "name": "纯碱",     "unit": "元/吨", "price": 1580, "change_pct": +3.21, "tick": ""},
-    {"symbol": "LC0", "name": "碳酸锂",   "unit": "元/吨", "price": 78000, "change_pct": -2.17, "tick": ""},
-    {"symbol": "I0",  "name": "铁矿石",   "unit": "元/吨", "price": 920,  "change_pct": +0.83, "tick": ""},
-    {"symbol": "JM0", "name": "焦煤",     "unit": "元/吨", "price": 1380, "change_pct": +1.45, "tick": ""},
-    {"symbol": "SC0", "name": "原油",     "unit": "元/桶", "price": 580,  "change_pct": -1.32, "tick": ""},
-    {"symbol": "FU0", "name": "燃油",     "unit": "元/吨", "price": 3100, "change_pct": -0.78, "tick": ""},
-    {"symbol": "TA0", "name": "PTA",      "unit": "元/吨", "price": 6810, "change_pct": +0.29, "tick": ""},
-    {"symbol": "MA0", "name": "甲醇",     "unit": "元/吨", "price": 2580, "change_pct": +1.08, "tick": ""},
-    {"symbol": "V0",  "name": "PVC",      "unit": "元/吨", "price": 6350, "change_pct": -0.21, "tick": ""},
-    {"symbol": "UR0", "name": "尿素",     "unit": "元/吨", "price": 2180, "change_pct": +2.44, "tick": ""},
+    {
+        "symbol": "RB0",
+        "name": "螺纹钢",
+        "unit": "元/吨",
+        "price": 3850,
+        "change_pct": +1.28,
+        "tick": "",
+    },
+    {
+        "symbol": "HC0",
+        "name": "热卷",
+        "unit": "元/吨",
+        "price": 3920,
+        "change_pct": -0.54,
+        "tick": "",
+    },
+    {
+        "symbol": "SA0",
+        "name": "纯碱",
+        "unit": "元/吨",
+        "price": 1580,
+        "change_pct": +3.21,
+        "tick": "",
+    },
+    {
+        "symbol": "LC0",
+        "name": "碳酸锂",
+        "unit": "元/吨",
+        "price": 78000,
+        "change_pct": -2.17,
+        "tick": "",
+    },
+    {
+        "symbol": "I0",
+        "name": "铁矿石",
+        "unit": "元/吨",
+        "price": 920,
+        "change_pct": +0.83,
+        "tick": "",
+    },
+    {
+        "symbol": "JM0",
+        "name": "焦煤",
+        "unit": "元/吨",
+        "price": 1380,
+        "change_pct": +1.45,
+        "tick": "",
+    },
+    {
+        "symbol": "SC0",
+        "name": "原油",
+        "unit": "元/桶",
+        "price": 580,
+        "change_pct": -1.32,
+        "tick": "",
+    },
+    {
+        "symbol": "FU0",
+        "name": "燃油",
+        "unit": "元/吨",
+        "price": 3100,
+        "change_pct": -0.78,
+        "tick": "",
+    },
+    {
+        "symbol": "TA0",
+        "name": "PTA",
+        "unit": "元/吨",
+        "price": 6810,
+        "change_pct": +0.29,
+        "tick": "",
+    },
+    {
+        "symbol": "MA0",
+        "name": "甲醇",
+        "unit": "元/吨",
+        "price": 2580,
+        "change_pct": +1.08,
+        "tick": "",
+    },
+    {
+        "symbol": "V0",
+        "name": "PVC",
+        "unit": "元/吨",
+        "price": 6350,
+        "change_pct": -0.21,
+        "tick": "",
+    },
+    {
+        "symbol": "UR0",
+        "name": "尿素",
+        "unit": "元/吨",
+        "price": 2180,
+        "change_pct": +2.44,
+        "tick": "",
+    },
 ]
 
 # 股指期货 Mock 数据（Fallback 用，请勿删除）
 _MOCK_INDEX_FUTURES = [
-    {"symbol": "IF",  "name": "IF 沪深300",   "price": 4448.2,  "change_pct": -0.93, "position": "8.2万手", "note": "IMIF"},
-    {"symbol": "IC",  "name": "IC 中证500",   "price": 6102.4,  "change_pct": +0.31, "position": "6.5万手", "note": "IMIC"},
-    {"symbol": "IM",  "name": "IM 中证1000",  "price": 6438.8,  "change_pct": +0.72, "position": "5.1万手", "note": "IMIM"},
+    {
+        "symbol": "IF",
+        "name": "IF 沪深300",
+        "price": 4448.2,
+        "change_pct": -0.93,
+        "position": "8.2万手",
+        "note": "IMIF",
+    },
+    {
+        "symbol": "IC",
+        "name": "IC 中证500",
+        "price": 6102.4,
+        "change_pct": +0.31,
+        "position": "6.5万手",
+        "note": "IMIC",
+    },
+    {
+        "symbol": "IM",
+        "name": "IM 中证1000",
+        "price": 6438.8,
+        "change_pct": +0.72,
+        "position": "5.1万手",
+        "note": "IMIM",
+    },
 ]
 
 
@@ -568,16 +763,19 @@ def _init_mock_cache():
     now_str = datetime.now().strftime("%H:%M")
     # Add is_demo label to mock data for transparency
     mock_index_with_demo = [{**mock, "is_demo": True} for mock in _MOCK_INDEX_FUTURES]
-    mock_commodities_with_demo = [{**mock, "is_demo": True} for mock in _MOCK_COMMODITIES]
+    mock_commodities_with_demo = [
+        {**mock, "is_demo": True} for mock in _MOCK_COMMODITIES
+    ]
     cache_data = {
         "index_futures": mock_index_with_demo,
-        "commodities":   mock_commodities_with_demo,
-        "update_time":   now_str,
-        "index_source":  "mock",
+        "commodities": mock_commodities_with_demo,
+        "update_time": now_str,
+        "index_source": "mock",
     }
     _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
     global _FUTURES_CACHE
     _FUTURES_CACHE = cache_data
     logger.info("[Futures] Mock cache initialized with DEMO labels")
+
 
 _init_mock_cache()

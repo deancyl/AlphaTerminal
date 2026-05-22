@@ -38,9 +38,15 @@ def init_strategy_table():
                 )
             """)
             # Indexes for frequently queried columns
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_strategies_name ON strategies(name)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_strategies_market ON strategies(market)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_strategies_deleted ON strategies(deleted_at)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_strategies_name ON strategies(name)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_strategies_market ON strategies(market)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_strategies_deleted ON strategies(deleted_at)"
+            )
             conn.commit()
         finally:
             conn.close()
@@ -58,7 +64,7 @@ def create_strategy(
 ) -> Dict[str, Any]:
     """
     Create a new strategy
-    
+
     Args:
         strategy_id: Unique strategy identifier
         name: Strategy name
@@ -68,7 +74,7 @@ def create_strategy(
         parameters: Strategy parameters dict
         stop_loss_pct: Stop loss percentage
         take_profit_pct: Take profit percentage
-    
+
     Returns:
         Created strategy dict
     """
@@ -78,22 +84,25 @@ def create_strategy(
     with _lock:
         conn = _get_conn()
         try:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO strategies 
                 (id, name, description, code, market, parameters, stop_loss_pct, take_profit_pct, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                strategy_id,
-                name,
-                description,
-                code,
-                market,
-                params_json,
-                stop_loss_pct,
-                take_profit_pct,
-                now,
-                now,
-            ))
+            """,
+                (
+                    strategy_id,
+                    name,
+                    description,
+                    code,
+                    market,
+                    params_json,
+                    stop_loss_pct,
+                    take_profit_pct,
+                    now,
+                    now,
+                ),
+            )
             conn.commit()
 
             return {
@@ -109,7 +118,10 @@ def create_strategy(
                 "updated_at": now,
             }
         except sqlite3.IntegrityError:
-            logger.error(f"[StrategyDB] Create failed - duplicate id: {strategy_id}", exc_info=True)
+            logger.error(
+                f"[StrategyDB] Create failed - duplicate id: {strategy_id}",
+                exc_info=True,
+            )
             raise ValueError(f"Strategy with id {strategy_id} already exists")
         except Exception as e:
             logger.error(f"[StrategyDB] Create failed: {e}", exc_info=True)
@@ -121,10 +133,10 @@ def create_strategy(
 def get_strategy(strategy_id: str) -> Optional[Dict[str, Any]]:
     """
     Get a strategy by ID (excludes soft-deleted)
-    
+
     Args:
         strategy_id: Strategy ID
-    
+
     Returns:
         Strategy dict or None if not found
     """
@@ -132,7 +144,7 @@ def get_strategy(strategy_id: str) -> Optional[Dict[str, Any]]:
     try:
         row = conn.execute(
             "SELECT * FROM strategies WHERE id = ? AND deleted_at IS NULL",
-            (strategy_id,)
+            (strategy_id,),
         ).fetchone()
 
         if row is None:
@@ -154,13 +166,13 @@ def list_strategies(
 ) -> List[Dict[str, Any]]:
     """
     List strategies with optional filters
-    
+
     Args:
         market: Filter by market (optional)
         include_deleted: Include soft-deleted strategies
         limit: Max results
         offset: Offset for pagination
-    
+
     Returns:
         List of strategy dicts
     """
@@ -207,7 +219,7 @@ def update_strategy(
 ) -> Optional[Dict[str, Any]]:
     """
     Update a strategy (partial update)
-    
+
     Args:
         strategy_id: Strategy ID
         name: New name (optional)
@@ -217,7 +229,7 @@ def update_strategy(
         parameters: New parameters (optional)
         stop_loss_pct: New stop loss (optional)
         take_profit_pct: New take profit (optional)
-    
+
     Returns:
         Updated strategy dict or None if not found
     """
@@ -277,11 +289,11 @@ def update_strategy(
 def delete_strategy(strategy_id: str, soft_delete: bool = True) -> bool:
     """
     Delete a strategy
-    
+
     Args:
         strategy_id: Strategy ID
         soft_delete: If True, set deleted_at timestamp; if False, hard delete
-    
+
     Returns:
         True if deleted, False if not found
     """
@@ -292,13 +304,12 @@ def delete_strategy(strategy_id: str, soft_delete: bool = True) -> bool:
                 # Soft delete
                 cursor = conn.execute(
                     "UPDATE strategies SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
-                    (datetime.now().isoformat(), strategy_id)
+                    (datetime.now().isoformat(), strategy_id),
                 )
             else:
                 # Hard delete
                 cursor = conn.execute(
-                    "DELETE FROM strategies WHERE id = ?",
-                    (strategy_id,)
+                    "DELETE FROM strategies WHERE id = ?", (strategy_id,)
                 )
 
             conn.commit()
@@ -313,10 +324,10 @@ def delete_strategy(strategy_id: str, soft_delete: bool = True) -> bool:
 def restore_strategy(strategy_id: str) -> bool:
     """
     Restore a soft-deleted strategy
-    
+
     Args:
         strategy_id: Strategy ID
-    
+
     Returns:
         True if restored, False if not found
     """
@@ -325,7 +336,7 @@ def restore_strategy(strategy_id: str) -> bool:
         try:
             cursor = conn.execute(
                 "UPDATE strategies SET deleted_at = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NOT NULL",
-                (datetime.now().isoformat(), strategy_id)
+                (datetime.now().isoformat(), strategy_id),
             )
             conn.commit()
             return cursor.rowcount > 0
@@ -336,14 +347,16 @@ def restore_strategy(strategy_id: str) -> bool:
             conn.close()
 
 
-def count_strategies(market: Optional[str] = None, include_deleted: bool = False) -> int:
+def count_strategies(
+    market: Optional[str] = None, include_deleted: bool = False
+) -> int:
     """
     Count strategies with optional filters
-    
+
     Args:
         market: Filter by market (optional)
         include_deleted: Include soft-deleted strategies
-    
+
     Returns:
         Count of strategies
     """

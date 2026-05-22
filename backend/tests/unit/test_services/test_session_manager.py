@@ -8,6 +8,7 @@ Tests:
 - test_config_binding
 - test_cleanup_expired_sessions
 """
+
 import pytest
 from unittest.mock import patch
 from datetime import datetime, timedelta
@@ -25,7 +26,7 @@ class TestSessionManager:
     @pytest.fixture
     def mock_session_db(self):
         """Mock session_db module."""
-        with patch('app.services.session_manager.session_db') as mock:
+        with patch("app.services.session_manager.session_db") as mock:
             yield mock
 
     @pytest.fixture
@@ -50,7 +51,7 @@ class TestSessionManager:
             "expires_at": (datetime.now() + timedelta(hours=1)).isoformat(),
             "message_count": 0,
             "total_tokens": 0,
-            "total_cost_usd": 0.0
+            "total_cost_usd": 0.0,
         }
 
         result = manager.create_or_get_session(user_id="user-1")
@@ -75,7 +76,7 @@ class TestSessionManager:
             "expires_at": (datetime.now() + timedelta(hours=1)).isoformat(),
             "message_count": 5,
             "total_tokens": 1000,
-            "total_cost_usd": 0.05
+            "total_cost_usd": 0.05,
         }
 
         result = manager.get_session("existing-session")
@@ -97,7 +98,7 @@ class TestSessionManager:
             session_id="expired-session",
             created_at="2024-01-01T00:00:00",
             last_active_at="2024-01-01T00:00:00",
-            expires_at=expired_time
+            expires_at=expired_time,
         )
 
         assert session.is_expired() is True
@@ -110,7 +111,7 @@ class TestSessionManager:
             session_id="active-session",
             created_at="2024-01-01T00:00:00",
             last_active_at="2024-01-01T00:00:00",
-            expires_at=future_time
+            expires_at=future_time,
         )
 
         assert session.is_expired() is False
@@ -130,7 +131,7 @@ class TestSessionManager:
             "expires_at": (datetime.now() + timedelta(hours=1)).isoformat(),
             "message_count": 0,
             "total_tokens": 0,
-            "total_cost_usd": 0.0
+            "total_cost_usd": 0.0,
         }
         mock_session_db.update_session_models.return_value = True
 
@@ -151,7 +152,7 @@ class TestSessionManager:
             "expires_at": (datetime.now() + timedelta(hours=1)).isoformat(),
             "message_count": 0,
             "total_tokens": 0,
-            "total_cost_usd": 0.0
+            "total_cost_usd": 0.0,
         }
 
         result = manager.get_bound_model("test-session", "openai")
@@ -178,7 +179,7 @@ class TestSessionManagerEdgeCases:
 
     @pytest.fixture
     def mock_session_db(self):
-        with patch('app.services.session_manager.session_db') as mock:
+        with patch("app.services.session_manager.session_db") as mock:
             yield mock
 
     @pytest.fixture
@@ -235,7 +236,7 @@ class TestSessionManagerEdgeCases:
                 "expires_at": (datetime.now() + timedelta(hours=1)).isoformat(),
                 "message_count": 0,
                 "total_tokens": 0,
-                "total_cost_usd": 0.0
+                "total_cost_usd": 0.0,
             }
         ]
 
@@ -247,6 +248,7 @@ class TestSessionManagerEdgeCases:
     def test_singleton_pattern(self):
         """Singleton should return same instance."""
         import app.services.session_manager as module
+
         module._manager_instance = None
 
         instance1 = get_session_manager()

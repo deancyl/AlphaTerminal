@@ -7,6 +7,7 @@ Verifies:
 - Provider context is added correctly
 - Full errors are logged (not exposed to users)
 """
+
 import logging
 from app.utils.error_sanitizer import (
     sanitize_error,
@@ -89,6 +90,7 @@ class TestSanitizeError:
 
     def test_json_decode_error_mapping(self):
         import json
+
         e = json.JSONDecodeError("Expecting value", "", 0)
         result = sanitize_error(e, provider="qianwen", log_full_error=False)
         assert result == "通义千问 API 调用失败: 数据解析失败，请稍后重试"
@@ -166,8 +168,15 @@ class TestProviderContext:
 
     def test_all_providers_have_context(self):
         providers = [
-            "openai", "deepseek", "qianwen", "minimax",
-            "siliconflow", "opencode", "opencode_go", "opencode_zen", "kimi"
+            "openai",
+            "deepseek",
+            "qianwen",
+            "minimax",
+            "siliconflow",
+            "opencode",
+            "opencode_go",
+            "opencode_zen",
+            "kimi",
         ]
         for provider in providers:
             assert provider in PROVIDER_CONTEXT

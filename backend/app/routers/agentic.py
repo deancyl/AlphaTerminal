@@ -8,6 +8,7 @@ Endpoints:
 - GET /api/v1/agentic/tools - List available tools
 - GET /api/v1/agentic/workflow/{id} - Get workflow status
 """
+
 import logging
 from typing import Optional
 
@@ -25,6 +26,7 @@ router = APIRouter()
 
 class WorkflowRequest(BaseModel):
     """Request body for workflow execution"""
+
     query: str = Field(..., description="Natural language query")
     execute: bool = Field(True, description="Whether to execute immediately")
     provider: Optional[str] = Field(None, description="LLM provider (optional)")
@@ -32,6 +34,7 @@ class WorkflowRequest(BaseModel):
 
 class WorkflowResponse(BaseModel):
     """Response for workflow creation"""
+
     workflow_id: str
     status: str
     message: str
@@ -42,31 +45,27 @@ class WorkflowResponse(BaseModel):
 async def list_tools():
     """
     List all available tools.
-    
+
     Returns:
         List of tool definitions with parameters
     """
     registry = get_tool_registry()
     tools = registry.list_tools()
 
-    return success_response({
-        "tools": [t.to_dict() for t in tools],
-        "count": len(tools)
-    })
+    return success_response(
+        {"tools": [t.to_dict() for t in tools], "count": len(tools)}
+    )
 
 
 @router.post("/workflow")
 @handle_errors(module="agentic")
-async def create_workflow(
-    request: WorkflowRequest,
-    background_tasks: BackgroundTasks
-):
+async def create_workflow(request: WorkflowRequest, background_tasks: BackgroundTasks):
     """
     Create and optionally execute a workflow.
-    
+
     Args:
         request: Workflow request with query and options
-        
+
     Returns:
         Workflow ID and initial status
     """
@@ -78,30 +77,37 @@ async def create_workflow(
     workflow = engine.plan_workflow(request.query.strip())
 
     if request.execute:
+
         async def run_workflow():
             try:
                 await engine.execute_workflow(workflow)
             except Exception as e:
-                logger.error(f"[Agentic] Workflow {workflow.id} failed: {e}", exc_info=True)
+                logger.error(
+                    f"[Agentic] Workflow {workflow.id} failed: {e}", exc_info=True
+                )
                 workflow.status = WorkflowStatus.FAILED
                 workflow.result = f"执行失败: {str(e)}"
 
         background_tasks.add_task(run_workflow)
 
-        return success_response({
-            "workflow_id": workflow.id,
-            "status": "running",
-            "steps": len(workflow.steps),
-            "message": "Workflow started in background"
-        })
+        return success_response(
+            {
+                "workflow_id": workflow.id,
+                "status": "running",
+                "steps": len(workflow.steps),
+                "message": "Workflow started in background",
+            }
+        )
     else:
-        return success_response({
-            "workflow_id": workflow.id,
-            "status": "planned",
-            "steps": [s.to_dict() for s in workflow.steps],
-            "intent": workflow.metadata.get("intent", {}),
-            "message": "Workflow planned, use /workflow/{id}/execute to run"
-        })
+        return success_response(
+            {
+                "workflow_id": workflow.id,
+                "status": "planned",
+                "steps": [s.to_dict() for s in workflow.steps],
+                "intent": workflow.metadata.get("intent", {}),
+                "message": "Workflow planned, use /workflow/{id}/execute to run",
+            }
+        )
 
 
 @router.get("/workflow/{workflow_id}")
@@ -109,10 +115,10 @@ async def create_workflow(
 async def get_workflow_status(workflow_id: str):
     """
     Get workflow status and results.
-    
+
     Args:
         workflow_id: Workflow ID
-        
+
     Returns:
         Workflow status, steps, and result (if completed)
     """
@@ -127,16 +133,13 @@ async def get_workflow_status(workflow_id: str):
 
 @router.post("/workflow/{workflow_id}/execute")
 @handle_errors(module="agentic")
-async def execute_workflow(
-    workflow_id: str,
-    background_tasks: BackgroundTasks
-):
+async def execute_workflow(workflow_id: str, background_tasks: BackgroundTasks):
     """
     Execute a planned workflow.
-    
+
     Args:
         workflow_id: Workflow ID
-        
+
     Returns:
         Execution status
     """
@@ -159,11 +162,13 @@ async def execute_workflow(
 
     background_tasks.add_task(run_workflow)
 
-    return success_response({
-        "workflow_id": workflow_id,
-        "status": "running",
-        "message": "Workflow execution started"
-    })
+    return success_response(
+        {
+            "workflow_id": workflow_id,
+            "status": "running",
+            "message": "Workflow execution started",
+        }
+    )
 
 
 @router.get("/workflows")
@@ -171,20 +176,19 @@ async def execute_workflow(
 async def list_workflows(limit: int = 20):
     """
     List recent workflows.
-    
+
     Args:
         limit: Maximum number of workflows to return
-        
+
     Returns:
         List of recent workflows
     """
     engine = get_workflow_engine()
     workflows = engine.list_workflows(limit=limit)
 
-    return success_response({
-        "workflows": [w.to_dict() for w in workflows],
-        "count": len(workflows)
-    })
+    return success_response(
+        {"workflows": [w.to_dict() for w in workflows], "count": len(workflows)}
+    )
 
 
 @router.get("/health")
@@ -194,8 +198,10 @@ async def health_check():
     registry = get_tool_registry()
     engine = get_workflow_engine()
 
-    return success_response({
-        "status": "healthy",
-        "tools_count": len(registry.list_tools()),
-        "workflows_cached": len(engine._workflows)
-    })
+    return success_response(
+        {
+            "status": "healthy",
+            "tools_count": len(registry.list_tools()),
+            "workflows_cached": len(engine._workflows),
+        }
+    )

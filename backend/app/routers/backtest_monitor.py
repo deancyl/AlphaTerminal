@@ -4,6 +4,7 @@ Backtest Monitor Router - Real-time monitoring for backtest workers.
 Provides REST API and WebSocket endpoints for monitoring and controlling
 running backtest processes.
 """
+
 import asyncio
 import logging
 from datetime import datetime
@@ -26,11 +27,13 @@ async def get_backtest_metrics():
     metrics = registry.get_metrics()
     summary = registry.get_summary()
 
-    return success_response({
-        "workers": metrics,
-        "summary": summary,
-        "timestamp": datetime.now().isoformat()
-    })
+    return success_response(
+        {
+            "workers": metrics,
+            "summary": summary,
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
 
 @router.get("/summary")
@@ -54,18 +57,25 @@ async def kill_backtest(worker_id: str, _: None = Depends(require_api_key)):
         return error_response(ErrorCode.NOT_FOUND, f"Worker {worker_id} not found")
 
     if worker.status != "running":
-        return error_response(ErrorCode.BAD_REQUEST, f"Worker {worker_id} is not running (status: {worker.status})")
+        return error_response(
+            ErrorCode.BAD_REQUEST,
+            f"Worker {worker_id} is not running (status: {worker.status})",
+        )
 
     success = await registry.kill(worker_id)
 
     if success:
-        return success_response({
-            "worker_id": worker_id,
-            "status": "cancelled",
-            "message": f"Worker {worker_id} has been killed"
-        })
+        return success_response(
+            {
+                "worker_id": worker_id,
+                "status": "cancelled",
+                "message": f"Worker {worker_id} has been killed",
+            }
+        )
     else:
-        return error_response(ErrorCode.INTERNAL_ERROR, f"Failed to kill worker {worker_id}")
+        return error_response(
+            ErrorCode.INTERNAL_ERROR, f"Failed to kill worker {worker_id}"
+        )
 
 
 @router.post("/cleanup")
@@ -75,10 +85,12 @@ async def cleanup_completed_workers(_: None = Depends(require_api_key)):
     registry = get_backtest_registry()
     registry.cleanup_completed()
 
-    return success_response({
-        "message": "Cleanup completed",
-        "active_workers": len(registry.get_all_workers())
-    })
+    return success_response(
+        {
+            "message": "Cleanup completed",
+            "active_workers": len(registry.get_all_workers()),
+        }
+    )
 
 
 @router.websocket("/stream")
@@ -96,12 +108,14 @@ async def backtest_stream(websocket: WebSocket):
             metrics = registry.get_metrics()
             summary = registry.get_summary()
 
-            await websocket.send_json({
-                "type": "backtest_metrics",
-                "timestamp": datetime.now().isoformat(),
-                "workers": metrics,
-                "summary": summary
-            })
+            await websocket.send_json(
+                {
+                    "type": "backtest_metrics",
+                    "timestamp": datetime.now().isoformat(),
+                    "workers": metrics,
+                    "summary": summary,
+                }
+            )
 
             await asyncio.sleep(1.0)
     except WebSocketDisconnect:
@@ -119,8 +133,10 @@ async def health_check():
     registry = get_backtest_registry()
     summary = registry.get_summary()
 
-    return success_response({
-        "status": "healthy",
-        "active_workers": summary["running"],
-        "total_workers": summary["total_workers"]
-    })
+    return success_response(
+        {
+            "status": "healthy",
+            "active_workers": summary["running"],
+            "total_workers": summary["total_workers"],
+        }
+    )

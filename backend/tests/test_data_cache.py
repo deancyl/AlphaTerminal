@@ -9,6 +9,7 @@ Tests all cache functionality including:
   - Statistics tracking
   - Debug logging (10 cycles)
 """
+
 import time
 import threading
 import logging
@@ -27,7 +28,7 @@ class TestCacheEntry:
             created_at=now,
             expires_at=now + 300,
             size_bytes=100,
-            hit_count=0
+            hit_count=0,
         )
         assert entry.key == "test_key"
         assert entry.value == "test_value"
@@ -40,10 +41,7 @@ class TestCacheEntry:
         """Test is_expired returns False for valid entry."""
         now = time.time()
         entry = CacheEntry(
-            key="test_key",
-            value="test_value",
-            created_at=now,
-            expires_at=now + 300
+            key="test_key", value="test_value", created_at=now, expires_at=now + 300
         )
         assert entry.is_expired() is False
 
@@ -54,7 +52,7 @@ class TestCacheEntry:
             key="test_key",
             value="test_value",
             created_at=now - 400,
-            expires_at=now - 100
+            expires_at=now - 100,
         )
         assert entry.is_expired() is True
 
@@ -501,12 +499,7 @@ class TestDataCacheEdgeCases:
         """Test setting complex objects."""
         cache = DataCache()
 
-        complex_obj = {
-            "nested": {
-                "data": [1, 2, 3],
-                "meta": {"key": "value"}
-            }
-        }
+        complex_obj = {"nested": {"data": [1, 2, 3], "meta": {"key": "value"}}}
 
         result = cache.set("complex_key", complex_obj)
         assert result is True

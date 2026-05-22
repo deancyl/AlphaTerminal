@@ -49,7 +49,9 @@ class Job:
             "status": self.status.value,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "progress": self.progress,
             "result": self.result,
             "error": self.error,
@@ -69,7 +71,7 @@ class JobQueue:
         return cls._instance
 
     def __init__(self):
-        if hasattr(self, '_initialized') and self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
         self._jobs: Dict[str, Job] = {}
         self._job_queue = queue.Queue()
@@ -100,7 +102,9 @@ class JobQueue:
 
     def _start_workers(self):
         for i in range(self._worker_count):
-            t = threading.Thread(target=self._worker_loop, daemon=True, name=f"JobWorker-{i}")
+            t = threading.Thread(
+                target=self._worker_loop, daemon=True, name=f"JobWorker-{i}"
+            )
             t.start()
             self._workers.append(t)
 
@@ -122,7 +126,11 @@ class JobQueue:
         job.status = JobStatus.RUNNING
         job.started_at = datetime.now()
         self._save_job(job)
-        self._update_job(job_id, status=JobStatus.RUNNING.value, started_at=job.started_at.isoformat())
+        self._update_job(
+            job_id,
+            status=JobStatus.RUNNING.value,
+            started_at=job.started_at.isoformat(),
+        )
 
         try:
             if job.job_type == "backtest":
@@ -139,14 +147,25 @@ class JobQueue:
             job.result = result
             job.progress = 1.0
             self._save_job(job)
-            self._update_job(job_id, status=JobStatus.COMPLETED.value, completed_at=job.completed_at.isoformat(), result=json.dumps(result), progress=1.0)
+            self._update_job(
+                job_id,
+                status=JobStatus.COMPLETED.value,
+                completed_at=job.completed_at.isoformat(),
+                result=json.dumps(result),
+                progress=1.0,
+            )
 
         except Exception as e:
             job.status = JobStatus.FAILED
             job.completed_at = datetime.now()
             job.error = str(e)
             logger.error(f"Job {job_id} failed: {e}", exc_info=True)
-            self._update_job(job_id, status=JobStatus.FAILED.value, completed_at=job.completed_at.isoformat(), error=str(e))
+            self._update_job(
+                job_id,
+                status=JobStatus.FAILED.value,
+                completed_at=job.completed_at.isoformat(),
+                error=str(e),
+            )
 
     def _run_backtest_job(self, job: Job) -> Dict:
         params = job.params
@@ -171,12 +190,16 @@ class JobQueue:
         equity = [1.0]
         position = 0
         for i in range(1, len(df)):
-            sig = signal_values.iloc[i] if hasattr(signal_values, 'iloc') else signal_values[i]
+            sig = (
+                signal_values.iloc[i]
+                if hasattr(signal_values, "iloc")
+                else signal_values[i]
+            )
             if position == 0 and sig == 1:
                 position = 1
             elif position > 0 and sig == -1:
                 position = 0
-            ret = (df.iloc[i]["close"] / df.iloc[i-1]["close"] - 1) if position else 0
+            ret = (df.iloc[i]["close"] / df.iloc[i - 1]["close"] - 1) if position else 0
             equity.append(equity[-1] * (1 + ret))
 
         equity_series = pd.Series(equity, index=df.index)
@@ -198,7 +221,9 @@ class JobQueue:
         param_grid = params.get("param_grid", {})
 
         strategy = create_indicator_strategy(code)
-        df = self._get_history_data(symbol, params.get("start_date", ""), params.get("end_date", ""))
+        df = self._get_history_data(
+            symbol, params.get("start_date", ""), params.get("end_date", "")
+        )
         if df is None:
             raise ValueError(f"No data for {symbol}")
 
@@ -221,17 +246,26 @@ class JobQueue:
     def _get_history_data(self, symbol: str, start_date: str, end_date: str):
         try:
             db_symbol = symbol.replace("sh", "").replace("sz", "")
-            conn = sqlite3.connect(os.environ.get('ALPHATERM_DB', '/vol3/1000/docker/opencode/workspace/AlphaTerminal/database.db'))
-            rows = conn.execute("""
+            conn = sqlite3.connect(
+                os.environ.get(
+                    "ALPHATERM_DB",
+                    "/vol3/1000/docker/opencode/workspace/AlphaTerminal/database.db",
+                )
+            )
+            rows = conn.execute(
+                """
                 SELECT date, open, high, low, close, volume
                 FROM market_data_daily
                 WHERE symbol = ? AND date >= ? AND date <= ?
                 ORDER BY date ASC
-            """, (db_symbol, start_date, end_date)).fetchall()
+            """,
+                (db_symbol, start_date, end_date),
+            ).fetchall()
             conn.close()
             if not rows:
                 return None
             import pandas as pd
+
             dates = [r[0] for r in rows]
             data = {
                 "open": [float(r[1]) for r in rows],
@@ -285,7 +319,11 @@ class JobQueue:
         if job.status == JobStatus.PENDING:
             job.status = JobStatus.CANCELLED
             job.completed_at = datetime.now()
-            self._update_job(job_id, status=JobStatus.CANCELLED.value, completed_at=job.completed_at.isoformat())
+            self._update_job(
+                job_id,
+                status=JobStatus.CANCELLED.value,
+                completed_at=job.completed_at.isoformat(),
+            )
             return True
         return False
 

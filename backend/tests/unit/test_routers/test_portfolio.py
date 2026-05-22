@@ -1,12 +1,12 @@
 """
 Tests for portfolio router.
 """
+
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 
 from app.main import app
-
 
 client = TestClient(app)
 
@@ -22,10 +22,10 @@ class TestPortfolioCRUD:
             "type": "portfolio",
             "currency": "CNY",
             "initial_capital": 100000.0,
-            "description": "用于测试的组合"
+            "description": "用于测试的组合",
         }
 
-        with patch('app.db.database._get_conn') as mock_conn:
+        with patch("app.db.database._get_conn") as mock_conn:
             mock_cursor = MagicMock()
             mock_cursor.lastrowid = 1
             mock_conn.return_value.__enter__.return_value = mock_cursor
@@ -40,7 +40,7 @@ class TestPortfolioCRUD:
         """Test portfolio creation with invalid data."""
         invalid_data = {
             "name": "",  # Empty name should fail validation
-            "initial_capital": -1000  # Negative capital
+            "initial_capital": -1000,  # Negative capital
         }
 
         response = client.post("/api/v1/portfolio/", json=invalid_data)
@@ -66,10 +66,7 @@ class TestPortfolioCRUD:
 
     def test_update_portfolio(self):
         """Test updating portfolio."""
-        update_data = {
-            "name": "更新后的名称",
-            "description": "更新后的描述"
-        }
+        update_data = {"name": "更新后的名称", "description": "更新后的描述"}
 
         response = client.put("/api/v1/portfolio/1", json=update_data)
 
@@ -100,11 +97,7 @@ class TestPortfolioPositions:
 
     def test_add_position(self):
         """Test adding position to portfolio."""
-        position_data = {
-            "symbol": "000001",
-            "shares": 1000,
-            "avg_cost": 10.5
-        }
+        position_data = {"symbol": "000001", "shares": 1000, "avg_cost": 10.5}
 
         response = client.post("/api/v1/portfolio/1/positions", json=position_data)
 
@@ -125,7 +118,7 @@ class TestPortfolioPnL:
             data = response.json()
             # Check expected fields
             if isinstance(data, dict):
-                assert any(key in data for key in ['total_pnl', 'pnl', 'daily_pnl'])
+                assert any(key in data for key in ["total_pnl", "pnl", "daily_pnl"])
 
 
 @pytest.mark.skip(reason="Requires database setup - integration test")
@@ -147,10 +140,7 @@ class TestPortfolioValidation:
 
     def test_invalid_currency(self):
         """Test validation of invalid currency."""
-        portfolio_data = {
-            "name": "测试组合",
-            "currency": "INVALID"
-        }
+        portfolio_data = {"name": "测试组合", "currency": "INVALID"}
 
         response = client.post("/api/v1/portfolio/", json=portfolio_data)
 
@@ -159,10 +149,7 @@ class TestPortfolioValidation:
 
     def test_negative_initial_capital(self):
         """Test validation of negative initial capital."""
-        portfolio_data = {
-            "name": "测试组合",
-            "initial_capital": -1000
-        }
+        portfolio_data = {"name": "测试组合", "initial_capital": -1000}
 
         response = client.post("/api/v1/portfolio/", json=portfolio_data)
 

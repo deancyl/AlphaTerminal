@@ -31,8 +31,8 @@ class TestCircuitBreaker:
                 failure_threshold=5,
                 success_threshold=2,
                 timeout=30.0,
-                half_open_max_calls=3
-            )
+                half_open_max_calls=3,
+            ),
         )
 
     def test_initial_state_is_closed(self, circuit_breaker):
@@ -168,8 +168,8 @@ class TestSlidingWindowCircuitBreaker:
                 failure_rate_threshold=0.5,
                 consecutive_failures=5,
                 timeout=30.0,
-                success_threshold=2
-            )
+                success_threshold=2,
+            ),
         )
 
     def test_initial_state_is_closed(self, sliding_breaker):
@@ -232,6 +232,7 @@ class TestCircuitBreakerIntegration:
     @pytest.fixture
     def mock_data_source(self):
         """Create a mock data source with circuit breaker."""
+
         class MockDataSource:
             def __init__(self):
                 self.breaker = CircuitBreaker(
@@ -240,8 +241,8 @@ class TestCircuitBreakerIntegration:
                         failure_threshold=3,
                         success_threshold=2,
                         timeout=5.0,
-                        half_open_max_calls=3
-                    )
+                        half_open_max_calls=3,
+                    ),
                 )
                 self.call_count = 0
 
@@ -324,8 +325,8 @@ class TestCircuitBreakerEdgeCases:
                 failure_rate_threshold=0.5,
                 consecutive_failures=100,  # High to avoid triggering
                 timeout=30.0,
-                success_threshold=2
-            )
+                success_threshold=2,
+            ),
         )
 
         # 4 failures, 6 successes = 40% failure rate
@@ -346,8 +347,8 @@ class TestCircuitBreakerEdgeCases:
                 failure_rate_threshold=0.5,
                 consecutive_failures=100,
                 timeout=30.0,
-                success_threshold=2
-            )
+                success_threshold=2,
+            ),
         )
 
         for _ in range(5):
@@ -368,21 +369,21 @@ class TestCircuitBreakerEdgeCases:
                 failure_threshold=100,
                 success_threshold=2,
                 timeout=30.0,
-                half_open_max_calls=3
-            )
+                half_open_max_calls=3,
+            ),
         )
 
         async def concurrent_operations():
             tasks = []
             for i in range(100):
                 if i % 2 == 0:
-                    tasks.append(asyncio.create_task(
-                        asyncio.to_thread(breaker.record_failure)
-                    ))
+                    tasks.append(
+                        asyncio.create_task(asyncio.to_thread(breaker.record_failure))
+                    )
                 else:
-                    tasks.append(asyncio.create_task(
-                        asyncio.to_thread(breaker.record_success)
-                    ))
+                    tasks.append(
+                        asyncio.create_task(asyncio.to_thread(breaker.record_success))
+                    )
             await asyncio.gather(*tasks)
 
         asyncio.run(concurrent_operations())
@@ -399,8 +400,8 @@ class TestCircuitBreakerEdgeCases:
                 failure_threshold=1,
                 success_threshold=2,
                 timeout=0.0,
-                half_open_max_calls=3
-            )
+                half_open_max_calls=3,
+            ),
         )
 
         breaker.record_failure()

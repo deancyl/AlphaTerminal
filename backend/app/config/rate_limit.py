@@ -5,6 +5,7 @@ Defines rate limits for different endpoint categories.
 
 P0-2: Added market_radar endpoint rate limit
 """
+
 from dataclasses import dataclass
 from typing import Optional
 import os
@@ -54,7 +55,9 @@ class RateLimitConfig:
 
     def __post_init__(self):
         if self.enabled is None:
-            self.enabled = os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
+            self.enabled = (
+                os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
+            )
 
         env_limit = os.environ.get("RATE_LIMIT_GLOBAL")
         if env_limit:

@@ -32,8 +32,10 @@ router = APIRouter(prefix="/data_gaps", tags=["data_gaps"])
 # Pydantic Models
 # ═══════════════════════════════════════════════════════════════
 
+
 class GapInfo(BaseModel):
     """Information about a data gap"""
+
     date: str
     weekday: str
     is_trading_day: bool = True
@@ -42,6 +44,7 @@ class GapInfo(BaseModel):
 
 class AnomalyInfo(BaseModel):
     """Price anomaly (>20% change)"""
+
     date: str
     symbol: str
     change_pct: float
@@ -51,6 +54,7 @@ class AnomalyInfo(BaseModel):
 
 class ScanResult(BaseModel):
     """Result of gap scan"""
+
     symbol: str
     data_type: str
     start_date: str
@@ -64,6 +68,7 @@ class ScanResult(BaseModel):
 
 class BackfillRequest(BaseModel):
     """Request to backfill missing data"""
+
     symbol: str
     dates: List[str]
     data_type: str = "kline"
@@ -71,6 +76,7 @@ class BackfillRequest(BaseModel):
 
 class BackfillResult(BaseModel):
     """Result of backfill operation"""
+
     symbol: str
     data_type: str
     total_requested: int
@@ -82,6 +88,7 @@ class BackfillResult(BaseModel):
 
 class CalendarDay(BaseModel):
     """Single day in calendar heatmap"""
+
     date: str
     gap_count: int
     has_data: bool
@@ -93,26 +100,68 @@ class CalendarDay(BaseModel):
 
 # Chinese holidays 2024 (simplified list)
 CN_HOLIDAYS_2024 = {
-    "2024-01-01", "2024-02-10", "2024-02-11", "2024-02-12",
-    "2024-02-13", "2024-02-14", "2024-02-15", "2024-02-16", "2024-02-17",
-    "2024-04-04", "2024-04-05", "2024-04-06",
-    "2024-05-01", "2024-05-02", "2024-05-03", "2024-05-04", "2024-05-05",
-    "2024-06-08", "2024-06-09", "2024-06-10",
-    "2024-09-15", "2024-09-16", "2024-09-17",
-    "2024-10-01", "2024-10-02", "2024-10-03", "2024-10-04", "2024-10-05",
-    "2024-10-06", "2024-10-07",
+    "2024-01-01",
+    "2024-02-10",
+    "2024-02-11",
+    "2024-02-12",
+    "2024-02-13",
+    "2024-02-14",
+    "2024-02-15",
+    "2024-02-16",
+    "2024-02-17",
+    "2024-04-04",
+    "2024-04-05",
+    "2024-04-06",
+    "2024-05-01",
+    "2024-05-02",
+    "2024-05-03",
+    "2024-05-04",
+    "2024-05-05",
+    "2024-06-08",
+    "2024-06-09",
+    "2024-06-10",
+    "2024-09-15",
+    "2024-09-16",
+    "2024-09-17",
+    "2024-10-01",
+    "2024-10-02",
+    "2024-10-03",
+    "2024-10-04",
+    "2024-10-05",
+    "2024-10-06",
+    "2024-10-07",
 }
 
 # Chinese holidays 2025 (simplified list)
 CN_HOLIDAYS_2025 = {
     "2025-01-01",
-    "2025-01-28", "2025-01-29", "2025-01-30", "2025-01-31",
-    "2025-02-01", "2025-02-02", "2025-02-03", "2025-02-04",
-    "2025-04-04", "2025-04-05", "2025-04-06",
-    "2025-05-01", "2025-05-02", "2025-05-03", "2025-05-04", "2025-05-05",
-    "2025-05-31", "2025-06-01", "2025-06-02",
-    "2025-10-01", "2025-10-02", "2025-10-03", "2025-10-04",
-    "2025-10-05", "2025-10-06", "2025-10-07", "2025-10-08",
+    "2025-01-28",
+    "2025-01-29",
+    "2025-01-30",
+    "2025-01-31",
+    "2025-02-01",
+    "2025-02-02",
+    "2025-02-03",
+    "2025-02-04",
+    "2025-04-04",
+    "2025-04-05",
+    "2025-04-06",
+    "2025-05-01",
+    "2025-05-02",
+    "2025-05-03",
+    "2025-05-04",
+    "2025-05-05",
+    "2025-05-31",
+    "2025-06-01",
+    "2025-06-02",
+    "2025-10-01",
+    "2025-10-02",
+    "2025-10-03",
+    "2025-10-04",
+    "2025-10-05",
+    "2025-10-06",
+    "2025-10-07",
+    "2025-10-08",
 }
 
 
@@ -152,14 +201,17 @@ def _scan_kline_gaps_sync(symbol: str, start_date: str, end_date: str) -> dict:
         clean_symbol = symbol.replace("sh", "").replace("sz", "").replace("bj", "")
 
         # Query existing dates
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT DISTINCT date 
             FROM market_data_daily 
             WHERE symbol = ? 
             AND date >= ? 
             AND date <= ?
             ORDER BY date
-        """, (clean_symbol, start_date, end_date))
+        """,
+            (clean_symbol, start_date, end_date),
+        )
 
         existing_dates = {row[0] for row in cursor.fetchall()}
 
@@ -181,17 +233,20 @@ def _scan_kline_gaps_sync(symbol: str, start_date: str, end_date: str) -> dict:
             if is_trading:
                 trading_days.append(date_str)
                 if date_str not in existing_dates:
-                    missing_dates.append({
-                        "date": date_str,
-                        "weekday": get_weekday_name(current),
-                        "is_trading_day": True,
-                        "reason": None
-                    })
+                    missing_dates.append(
+                        {
+                            "date": date_str,
+                            "weekday": get_weekday_name(current),
+                            "is_trading_day": True,
+                            "reason": None,
+                        }
+                    )
 
             current += timedelta(days=1)
 
         # Check for anomalies (>20% price change)
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT date, close, volume,
                    (close - LAG(close) OVER (ORDER BY date)) * 100.0 / LAG(close) OVER (ORDER BY date) as change_pct
             FROM market_data_daily 
@@ -199,21 +254,29 @@ def _scan_kline_gaps_sync(symbol: str, start_date: str, end_date: str) -> dict:
             AND date >= ? 
             AND date <= ?
             ORDER BY date
-        """, (clean_symbol, start_date, end_date))
+        """,
+            (clean_symbol, start_date, end_date),
+        )
 
         anomaly_dates = []
         for row in cursor.fetchall():
             if row[3] is not None and abs(row[3]) > 20:
-                anomaly_dates.append({
-                    "date": row[0],
-                    "symbol": symbol,
-                    "change_pct": round(row[3], 2),
-                    "close": row[1],
-                    "volume": row[2]
-                })
+                anomaly_dates.append(
+                    {
+                        "date": row[0],
+                        "symbol": symbol,
+                        "change_pct": round(row[3], 2),
+                        "close": row[1],
+                        "volume": row[2],
+                    }
+                )
 
         # Calculate coverage
-        coverage = (len(trading_days) - len(missing_dates)) / len(trading_days) * 100 if trading_days else 0
+        coverage = (
+            (len(trading_days) - len(missing_dates)) / len(trading_days) * 100
+            if trading_days
+            else 0
+        )
 
         return {
             "symbol": symbol,
@@ -224,7 +287,7 @@ def _scan_kline_gaps_sync(symbol: str, start_date: str, end_date: str) -> dict:
             "trading_days": len(trading_days),
             "missing_dates": missing_dates,
             "anomaly_dates": anomaly_dates,
-            "coverage_pct": round(coverage, 2)
+            "coverage_pct": round(coverage, 2),
         }
 
     except Exception as e:
@@ -252,40 +315,46 @@ def _backfill_kline_sync(symbol: str, dates: List[str]) -> dict:
             period="daily",
             start_date=dates[0].replace("-", ""),
             end_date=dates[-1].replace("-", ""),
-            adjust=""
+            adjust="",
         )
 
         if df is not None and not df.empty:
             for _, row in df.iterrows():
                 try:
-                    date_val = row['日期']
-                    if hasattr(date_val, 'strftime'):
+                    date_val = row["日期"]
+                    if hasattr(date_val, "strftime"):
                         date_str = date_val.strftime("%Y-%m-%d")
                     else:
                         date_str = str(date_val)[:10]
 
-                    conn.execute("""
+                    conn.execute(
+                        """
                         INSERT OR REPLACE INTO market_data_daily 
                         (symbol, date, open, high, low, close, volume, amount)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        clean_symbol,
-                        date_str,
-                        float(row['开盘']) if row['开盘'] is not None else 0.0,
-                        float(row['最高']) if row['最高'] is not None else 0.0,
-                        float(row['最低']) if row['最低'] is not None else 0.0,
-                        float(row['收盘']) if row['收盘'] is not None else 0.0,
-                        float(row['成交量']) if row['成交量'] is not None else 0.0,
-                        float(row['成交额']) if row['成交额'] is not None else 0.0
-                    ))
+                    """,
+                        (
+                            clean_symbol,
+                            date_str,
+                            float(row["开盘"]) if row["开盘"] is not None else 0.0,
+                            float(row["最高"]) if row["最高"] is not None else 0.0,
+                            float(row["最低"]) if row["最低"] is not None else 0.0,
+                            float(row["收盘"]) if row["收盘"] is not None else 0.0,
+                            float(row["成交量"]) if row["成交量"] is not None else 0.0,
+                            float(row["成交额"]) if row["成交额"] is not None else 0.0,
+                        ),
+                    )
 
                     if date_str in dates:
                         success_count += 1
 
                 except Exception as e:
-                    current_date = date_str if 'date_str' in dir() else 'unknown'
-                    logger.warning(f"[DataGaps] Failed to insert {current_date}: {e}", exc_info=True)
-                    if 'date_str' in dir() and date_str in dates:
+                    current_date = date_str if "date_str" in dir() else "unknown"
+                    logger.warning(
+                        f"[DataGaps] Failed to insert {current_date}: {e}",
+                        exc_info=True,
+                    )
+                    if "date_str" in dir() and date_str in dates:
                         failed_dates.append(date_str)
 
             conn.commit()
@@ -302,7 +371,11 @@ def _backfill_kline_sync(symbol: str, dates: List[str]) -> dict:
         "success_count": success_count,
         "failed_count": len(failed_dates),
         "failed_dates": failed_dates,
-        "message": f"成功回填 {success_count}/{len(dates)} 天数据" if success_count > 0 else "回填失败"
+        "message": (
+            f"成功回填 {success_count}/{len(dates)} 天数据"
+            if success_count > 0
+            else "回填失败"
+        ),
     }
 
 
@@ -328,13 +401,16 @@ def _get_calendar_data_sync(year: int, month: int) -> dict:
         total_stocks = cursor.fetchone()[0] or 0
 
         # Get dates with data
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT date, COUNT(DISTINCT symbol) as stock_count
             FROM market_data_daily
             WHERE date >= ? AND date < ?
             GROUP BY date
             ORDER BY date
-        """, (start_date, end_date))
+        """,
+            (start_date, end_date),
+        )
 
         calendar_data = {}
         for row in cursor.fetchall():
@@ -344,7 +420,7 @@ def _get_calendar_data_sync(year: int, month: int) -> dict:
             calendar_data[date_str] = {
                 "date": date_str,
                 "gap_count": gap_count,
-                "has_data": stock_count > 0
+                "has_data": stock_count > 0,
             }
 
         # Fill in missing dates
@@ -359,7 +435,7 @@ def _get_calendar_data_sync(year: int, month: int) -> dict:
                 calendar_data[date_str] = {
                     "date": date_str,
                     "gap_count": total_stocks if is_trading else 0,
-                    "has_data": False
+                    "has_data": False,
                 }
             current += timedelta(days=1)
 
@@ -367,22 +443,18 @@ def _get_calendar_data_sync(year: int, month: int) -> dict:
             "year": year,
             "month": month,
             "total_stocks": total_stocks,
-            "calendar": list(calendar_data.values())
+            "calendar": list(calendar_data.values()),
         }
 
     except Exception as e:
         logger.error(f"[DataGaps] Calendar query failed: {e}", exc_info=True)
-        return {
-            "year": year,
-            "month": month,
-            "total_stocks": 0,
-            "calendar": []
-        }
+        return {"year": year, "month": month, "total_stocks": 0, "calendar": []}
 
 
 # ═══════════════════════════════════════════════════════════════
 # API Endpoints
 # ═══════════════════════════════════════════════════════════════
+
 
 @router.get("/scan")
 @handle_errors(module="data_gaps")
@@ -391,11 +463,11 @@ async def scan_data_gaps(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
     data_type: str = Query("kline", description="Data type: kline, macro, futures"),
-    _: bool = Depends(verify_admin_key)
+    _: bool = Depends(verify_admin_key),
 ):
     """
     Scan for missing data dates.
-    
+
     Returns:
     - List of missing trading days
     - Price anomalies (>20% change)
@@ -408,23 +480,21 @@ async def scan_data_gaps(
 
         if data_type != "kline":
             # For now, only kline is fully implemented
-            return success_response({
-                "symbol": symbol,
-                "data_type": data_type,
-                "message": f"{data_type} gap scanning not yet implemented",
-                "missing_dates": [],
-                "anomaly_dates": [],
-                "coverage_pct": 100
-            })
+            return success_response(
+                {
+                    "symbol": symbol,
+                    "data_type": data_type,
+                    "message": f"{data_type} gap scanning not yet implemented",
+                    "missing_dates": [],
+                    "anomaly_dates": [],
+                    "coverage_pct": 100,
+                }
+            )
 
         # Run scan in thread pool
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
-            _executor,
-            _scan_kline_gaps_sync,
-            symbol,
-            start_date,
-            end_date
+            _executor, _scan_kline_gaps_sync, symbol, start_date, end_date
         )
 
         return success_response(result)
@@ -439,36 +509,36 @@ async def scan_data_gaps(
 @router.post("/backfill")
 @handle_errors(module="data_gaps")
 async def backfill_data_gaps(
-    request: BackfillRequest,
-    _: bool = Depends(verify_admin_key)
+    request: BackfillRequest, _: bool = Depends(verify_admin_key)
 ):
     """
     One-click backfill missing data.
-    
+
     Fetches data from akshare and inserts into database.
     """
     try:
         if not request.dates:
-            raise HTTPException(status_code=400, detail="No dates provided for backfill")
+            raise HTTPException(
+                status_code=400, detail="No dates provided for backfill"
+            )
 
         if request.data_type != "kline":
-            return success_response({
-                "symbol": request.symbol,
-                "data_type": request.data_type,
-                "message": f"{request.data_type} backfill not yet implemented",
-                "total_requested": len(request.dates),
-                "success_count": 0,
-                "failed_count": len(request.dates),
-                "failed_dates": request.dates
-            })
+            return success_response(
+                {
+                    "symbol": request.symbol,
+                    "data_type": request.data_type,
+                    "message": f"{request.data_type} backfill not yet implemented",
+                    "total_requested": len(request.dates),
+                    "success_count": 0,
+                    "failed_count": len(request.dates),
+                    "failed_dates": request.dates,
+                }
+            )
 
         # Run backfill in thread pool
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
-            _executor,
-            _backfill_kline_sync,
-            request.symbol,
-            request.dates
+            _executor, _backfill_kline_sync, request.symbol, request.dates
         )
 
         return success_response(result)
@@ -485,21 +555,18 @@ async def backfill_data_gaps(
 async def get_data_gaps_calendar(
     year: int = Query(..., ge=2020, le=2030, description="Year"),
     month: int = Query(..., ge=1, le=12, description="Month"),
-    _: bool = Depends(verify_admin_key)
+    _: bool = Depends(verify_admin_key),
 ):
     """
     Get calendar heatmap data for visualization.
-    
+
     Returns gap count for each day in the specified month.
     """
     try:
         # Run calendar query in thread pool
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
-            _executor,
-            _get_calendar_data_sync,
-            year,
-            month
+            _executor, _get_calendar_data_sync, year, month
         )
 
         return success_response(result)
@@ -513,8 +580,6 @@ async def get_data_gaps_calendar(
 @handle_errors(module="data_gaps")
 async def health_check():
     """Health check endpoint"""
-    return success_response({
-        "status": "ok",
-        "service": "data_gaps",
-        "db_path": _db_path
-    })
+    return success_response(
+        {"status": "ok", "service": "data_gaps", "db_path": _db_path}
+    )

@@ -54,6 +54,7 @@ def cleanup_env():
 
 # Register cleanup at module level
 import atexit
+
 atexit.register(cleanup_env)
 
 
@@ -189,8 +190,9 @@ class TestAgentDB:
         # Reset singleton and thread-local storage
         AgentDB._instance = None
         import threading
-        if hasattr(threading.local(), 'conn'):
-            delattr(threading.local(), 'conn')
+
+        if hasattr(threading.local(), "conn"):
+            delattr(threading.local(), "conn")
 
         with patch("app.db.agent_db.DB_PATH", db_path):
             with patch("app.db.agent_db._thread_local", threading.local()):
@@ -508,8 +510,9 @@ class TestAgentDBSingleton:
 
         AgentDB._instance = None
         import threading
-        if hasattr(threading.local(), 'conn'):
-            delattr(threading.local(), 'conn')
+
+        if hasattr(threading.local(), "conn"):
+            delattr(threading.local(), "conn")
 
         with patch("app.db.agent_db.DB_PATH", db_path):
             with patch("app.db.agent_db._thread_local", threading.local()):
@@ -531,8 +534,9 @@ class TestDatabaseIndexes:
 
         AgentDB._instance = None
         import threading
-        if hasattr(threading.local(), 'conn'):
-            delattr(threading.local(), 'conn')
+
+        if hasattr(threading.local(), "conn"):
+            delattr(threading.local(), "conn")
 
         with patch("app.db.agent_db.DB_PATH", db_path):
             with patch("app.db.agent_db._thread_local", threading.local()):
@@ -580,8 +584,9 @@ class TestConcurrency:
 
         AgentDB._instance = None
         import threading
-        if hasattr(threading.local(), 'conn'):
-            delattr(threading.local(), 'conn')
+
+        if hasattr(threading.local(), "conn"):
+            delattr(threading.local(), "conn")
 
         with patch("app.db.agent_db.DB_PATH", db_path):
             with patch("app.db.agent_db._thread_local", threading.local()):
@@ -684,8 +689,9 @@ class TestDebugLogging:
 
         AgentDB._instance = None
         import threading
-        if hasattr(threading.local(), 'conn'):
-            delattr(threading.local(), 'conn')
+
+        if hasattr(threading.local(), "conn"):
+            delattr(threading.local(), "conn")
 
         with patch("app.db.agent_db.DB_PATH", db_path):
             with patch("app.db.agent_db._thread_local", threading.local()):
@@ -730,8 +736,9 @@ class TestModuleFunctions:
 
         AgentDB._instance = None
         import threading
-        if hasattr(threading.local(), 'conn'):
-            delattr(threading.local(), 'conn')
+
+        if hasattr(threading.local(), "conn"):
+            delattr(threading.local(), "conn")
 
         with patch("app.db.agent_db.DB_PATH", db_path):
             with patch("app.db.agent_db._thread_local", threading.local()):
@@ -748,8 +755,9 @@ class TestModuleFunctions:
 
         AgentDB._instance = None
         import threading
-        if hasattr(threading.local(), 'conn'):
-            delattr(threading.local(), 'conn')
+
+        if hasattr(threading.local(), "conn"):
+            delattr(threading.local(), "conn")
 
         with patch("app.db.agent_db.DB_PATH", db_path):
             with patch("app.db.agent_db._thread_local", threading.local()):

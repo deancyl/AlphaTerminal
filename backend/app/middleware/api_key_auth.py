@@ -12,6 +12,7 @@ Usage:
     async def sensitive_endpoint(_: None = Depends(require_api_key)):
         ...
 """
+
 import logging
 from typing import Optional
 
@@ -43,22 +44,26 @@ async def require_api_key(
 ) -> None:
     """
     Dependency that requires a valid API key for access.
-    
+
     If ADMIN_API_KEY is not configured, authentication is skipped (development mode).
     If ADMIN_API_KEY is configured, requests must include:
         Authorization: Bearer <ADMIN_API_KEY>
-    
+
     Raises:
         HTTPException: 401 if missing/invalid API key
     """
     api_key = _get_api_key()
 
     if not _is_auth_enabled():
-        logger.debug(f"[AUTH_SKIP] No ADMIN_API_KEY configured, skipping auth for {request.url.path}")
+        logger.debug(
+            f"[AUTH_SKIP] No ADMIN_API_KEY configured, skipping auth for {request.url.path}"
+        )
         return None
 
     if credentials is None:
-        logger.warning(f"[AUTH_FAIL] Missing Authorization header for {request.url.path}")
+        logger.warning(
+            f"[AUTH_FAIL] Missing Authorization header for {request.url.path}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key required. Include Authorization: Bearer <key>",
@@ -79,7 +84,9 @@ async def require_api_key(
         )
 
     client_ip = request.client.host if request.client else "unknown"
-    logger.info(f"[AUTH_OK] API key authenticated for {request.url.path} from {client_ip}")
+    logger.info(
+        f"[AUTH_OK] API key authenticated for {request.url.path} from {client_ip}"
+    )
 
     return None
 
@@ -90,10 +97,10 @@ async def optional_api_key(
 ) -> bool:
     """
     Dependency that checks API key but doesn't require it.
-    
+
     Returns:
         True if authenticated, False otherwise
-    
+
     Use this for endpoints that have enhanced features when authenticated
     but are still accessible without authentication.
     """
@@ -110,10 +117,10 @@ async def optional_api_key(
 class APIKeyAuth:
     """
     Class-based dependency for API key authentication.
-    
+
     Useful for more complex scenarios where you need to pass
     authentication state to the endpoint handler.
-    
+
     Usage:
         @router.post("/sensitive")
         async def sensitive_endpoint(auth: APIKeyAuth = Depends()):

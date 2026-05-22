@@ -7,6 +7,7 @@ Manages multiple WebSocket streamers and provides:
     - Automatic failover between streaming and polling
     - Unified tick broadcast to ws_manager
 """
+
 import asyncio
 import logging
 import time
@@ -42,7 +43,7 @@ class StreamingStats:
 class StreamingManager:
     """
     Manages WebSocket streaming with circuit breaker and HTTP fallback.
-    
+
     Features:
         - Automatic failover to HTTP polling when streaming fails
         - Circuit breaker prevents cascading failures
@@ -91,9 +92,13 @@ class StreamingManager:
     @property
     def stats(self) -> StreamingStats:
         self._stats.mode = self._mode
-        self._stats.active_streamers = sum(1 for s in self._streamers.values() if s.is_connected)
+        self._stats.active_streamers = sum(
+            1 for s in self._streamers.values() if s.is_connected
+        )
         self._stats.total_symbols = len(self._subscribed_symbols)
-        self._stats.uptime_seconds = time.time() - self._start_time if self._start_time > 0 else 0
+        self._stats.uptime_seconds = (
+            time.time() - self._start_time if self._start_time > 0 else 0
+        )
         return self._stats
 
     @property
@@ -125,7 +130,9 @@ class StreamingManager:
 
         await self._try_start_streaming()
 
-        logger.info(f"[StreamingManager] Started with mode={self._mode.value}, symbols={len(self._subscribed_symbols)}")
+        logger.info(
+            f"[StreamingManager] Started with mode={self._mode.value}, symbols={len(self._subscribed_symbols)}"
+        )
 
     async def stop(self):
         self._running = False
@@ -154,11 +161,15 @@ class StreamingManager:
         if self._circuit_breaker_open:
             elapsed = time.time() - self._circuit_breaker_open_time
             if elapsed < self.CIRCUIT_BREAKER_RESET_DELAY:
-                logger.info(f"[StreamingManager] Circuit breaker open, using HTTP fallback ({elapsed:.0f}s remaining)")
+                logger.info(
+                    f"[StreamingManager] Circuit breaker open, using HTTP fallback ({elapsed:.0f}s remaining)"
+                )
                 await self._start_http_fallback()
                 return
             else:
-                logger.info("[StreamingManager] Circuit breaker reset delay elapsed, attempting streaming")
+                logger.info(
+                    "[StreamingManager] Circuit breaker reset delay elapsed, attempting streaming"
+                )
                 self._circuit_breaker_open = False
                 self._circuit_breaker_failures = 0
 
@@ -167,10 +178,7 @@ class StreamingManager:
             return
 
         try:
-            streamer = SinaStreamer(
-                on_tick=self._on_tick,
-                proxy=self._proxy
-            )
+            streamer = SinaStreamer(on_tick=self._on_tick, proxy=self._proxy)
 
             await streamer.start(list(self._subscribed_symbols))
 
@@ -192,7 +200,9 @@ class StreamingManager:
         self._mode = StreamingMode.HTTP_FALLBACK
         self._stats.http_fallback_activations += 1
 
-        logger.info(f"[StreamingManager] HTTP fallback mode active (polling every {self.HTTP_POLL_INTERVAL}s)")
+        logger.info(
+            f"[StreamingManager] HTTP fallback mode active (polling every {self.HTTP_POLL_INTERVAL}s)"
+        )
 
         if self._http_poll_task:
             self._http_poll_task.cancel()
@@ -240,8 +250,8 @@ class StreamingManager:
                     "chg": quote.change,
                     "chg_pct": quote.change_pct,
                     "volume": quote.volume,
-                    "amount": getattr(quote, 'amount', 0),
-                    "turnover": getattr(quote, 'turnover', 0),
+                    "amount": getattr(quote, "amount", 0),
+                    "turnover": getattr(quote, "turnover", 0),
                     "timestamp": int(time.time()),
                     "source": "http_poll",
                 }
@@ -264,13 +274,17 @@ class StreamingManager:
     async def _check_streaming_health(self):
         for name, streamer in list(self._streamers.items()):
             if streamer.is_failed:
-                logger.warning(f"[StreamingManager] Streamer {name} failed, recording failure")
+                logger.warning(
+                    f"[StreamingManager] Streamer {name} failed, recording failure"
+                )
                 self._record_failure()
                 await streamer.stop()
                 del self._streamers[name]
 
         if not self._streamers and self._mode == StreamingMode.STREAMING:
-            logger.warning("[StreamingManager] No active streamers, switching to HTTP fallback")
+            logger.warning(
+                "[StreamingManager] No active streamers, switching to HTTP fallback"
+            )
             await self._start_http_fallback()
 
     async def _try_resume_streaming(self):
@@ -304,7 +318,9 @@ class StreamingManager:
 
     async def add_symbols(self, symbols: List[str]):
         async with self._lock:
-            new_symbols = [s.lower() for s in symbols if s.lower() not in self._subscribed_symbols]
+            new_symbols = [
+                s.lower() for s in symbols if s.lower() not in self._subscribed_symbols
+            ]
             if not new_symbols:
                 return
 
@@ -317,7 +333,9 @@ class StreamingManager:
 
     async def remove_symbols(self, symbols: List[str]):
         async with self._lock:
-            to_remove = [s.lower() for s in symbols if s.lower() in self._subscribed_symbols]
+            to_remove = [
+                s.lower() for s in symbols if s.lower() in self._subscribed_symbols
+            ]
             if not to_remove:
                 return
 

@@ -16,7 +16,17 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Body, Query, Request
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
+    HTTPException,
+    Depends,
+    Header,
+    Body,
+    Query,
+    Request,
+)
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 
@@ -42,11 +52,13 @@ JWT_SECRET_KEY = secrets.token_hex(32)
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 
+
 def _generate_session_token(admin_key: str) -> str:
     timestamp = str(int(time.time()))
     random_bytes = secrets.token_hex(16)
     payload = f"{admin_key}:{timestamp}:{random_bytes}"
     return hashlib.sha256(payload.encode()).hexdigest()
+
 
 def _create_admin_session(admin_key: str) -> str:
     session_token = _generate_session_token(admin_key)
@@ -55,17 +67,20 @@ def _create_admin_session(admin_key: str) -> str:
         session_token=session_token,
         expires_at=expires_at,
         ip="unknown",
-        user_agent=None
+        user_agent=None,
     )
     logger.info(f"[Admin] Created new admin session, expires at {expires_at}")
     return session_token
 
+
 def _validate_admin_session(session_token: str, client_ip: str = "unknown") -> bool:
     return session_db.validate_admin_session(session_token, client_ip)
+
 
 def _cleanup_expired_sessions():
     deleted = session_db.cleanup_expired_admin_sessions()
     return deleted
+
 
 def _generate_jwt_token(admin_key: str) -> tuple[str, datetime]:
     """Generate a JWT token with expiry."""
@@ -74,10 +89,11 @@ def _generate_jwt_token(admin_key: str) -> tuple[str, datetime]:
         "admin_key_hash": hashlib.sha256(admin_key.encode()).hexdigest()[:16],
         "iat": datetime.now(),
         "exp": expires_at,
-        "type": "admin_access"
+        "type": "admin_access",
     }
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token, expires_at
+
 
 def _validate_jwt_token(token: str) -> tuple[bool, str]:
     """
@@ -94,40 +110,58 @@ def _validate_jwt_token(token: str) -> tuple[bool, str]:
     except jwt.InvalidTokenError as e:
         return False, f"Invalid token: {str(e)}"
 
+
 # ═══════════════════════════════════════════════════════════════
 # Pydantic Request Models
 # ═══════════════════════════════════════════════════════════════
 
+
 class LLMSettingsRequest(BaseModel):
-    provider: str = Field(..., pattern="^(deepseek|qianwen|openai|anthropic|local|siliconflow|opencode|opencode_go|opencode_zen|kimi)$")
+    provider: str = Field(
+        ...,
+        pattern="^(deepseek|qianwen|openai|anthropic|local|siliconflow|opencode|opencode_go|opencode_zen|kimi)$",
+    )
     api_key: Optional[str] = Field(default=None, max_length=200)
     base_url: Optional[str] = Field(default=None, max_length=500)
     model: str = Field(..., max_length=100)
 
+
 class LLMTestRequest(BaseModel):
-    provider: str = Field(..., pattern="^(deepseek|qianwen|openai|anthropic|local|siliconflow|opencode|opencode_go|opencode_zen|kimi)$")
+    provider: str = Field(
+        ...,
+        pattern="^(deepseek|qianwen|openai|anthropic|local|siliconflow|opencode|opencode_go|opencode_zen|kimi)$",
+    )
     api_key: str = Field(..., min_length=1, max_length=200)
     base_url: str = Field(..., min_length=1, max_length=500)
     model: Optional[str] = Field(default=None, max_length=100)
 
+
 class WatchdogToggleRequest(BaseModel):
     enabled: bool
+
 
 class SchedulerControlRequest(BaseModel):
     action: str = Field(..., pattern="^(start|stop|pause|resume|run)$")
 
+
 class CacheInvalidateRequest(BaseModel):
     cache_type: str = Field(..., pattern="^(all|market|news|macro|f9|sectors|quotes)$")
+
 
 class CacheWarmupRequest(BaseModel):
     data_type: str = Field(..., pattern="^(all|overview|sectors|macro|quotes)$")
 
+
 class DatabaseMaintenanceRequest(BaseModel):
-    action: str = Field(..., pattern="^(vacuum|analyze|backup|cleanup|integrity_check|wal_checkpoint)$")
+    action: str = Field(
+        ..., pattern="^(vacuum|analyze|backup|cleanup|integrity_check|wal_checkpoint)$"
+    )
+
 
 # ═══════════════════════════════════════════════════════════════
 # Multi-Model Management Request Models
 # ═══════════════════════════════════════════════════════════════
+
 
 class ModelConfigRequest(BaseModel):
     provider: str = Field(..., min_length=1, max_length=50)
@@ -138,6 +172,7 @@ class ModelConfigRequest(BaseModel):
     concurrency_limit: Optional[int] = Field(default=10, ge=1, le=1000)
     enabled: Optional[bool] = Field(default=True)
 
+
 class ModelUpdateRequest(BaseModel):
     provider: str = Field(..., min_length=1, max_length=50)
     model_id: str = Field(..., min_length=1, max_length=100)
@@ -145,13 +180,16 @@ class ModelUpdateRequest(BaseModel):
     concurrency_limit: Optional[int] = Field(default=None, ge=1, le=1000)
     enabled: Optional[bool] = Field(default=None)
 
+
 class SetDefaultModelRequest(BaseModel):
     provider: str = Field(..., min_length=1, max_length=50)
     model_id: str = Field(..., min_length=1, max_length=100)
 
+
 class TestConnectionRequest(BaseModel):
     provider: str = Field(..., min_length=1, max_length=50)
     model_id: str = Field(..., min_length=1, max_length=100)
+
 
 class CustomPricingRequest(BaseModel):
     model_id: str = Field(..., min_length=1, max_length=100)
@@ -159,6 +197,7 @@ class CustomPricingRequest(BaseModel):
     input_price_per_million: float = Field(..., ge=0)
     output_price_per_million: float = Field(..., ge=0)
     currency: str = Field(default="USD", max_length=10)
+
 
 # ═══════════════════════════════════════════════════════════════
 # 认证机制（必须在 router 定义之前，否则 NameError）
@@ -169,9 +208,11 @@ _auth_failures = {}  # {ip: [timestamp1, timestamp2, ...]}
 _AUTH_RATE_LIMIT = 5  # 每分钟最多 5 次失败
 _AUTH_WINDOW_SEC = 60  # 窗口 60 秒
 
+
 def _check_rate_limit(client_ip: str) -> bool:
     """检查是否超过速率限制，返回 True 表示允许继续"""
     import time as _time
+
     now = _time.time()
     failures = _auth_failures.get(client_ip, [])
     # 清理过期记录
@@ -179,22 +220,28 @@ def _check_rate_limit(client_ip: str) -> bool:
     _auth_failures[client_ip] = failures
     return len(failures) < _AUTH_RATE_LIMIT
 
+
 def _record_failure(client_ip: str):
     """记录一次失败"""
     import time as _time
+
     if client_ip not in _auth_failures:
         _auth_failures[client_ip] = []
     _auth_failures[client_ip].append(_time.time())
+
 
 def verify_admin_key(
     request: Request,
     api_key: Optional[str] = None,
     x_forwarded_for: Optional[str] = Header(None),
-    x_real_ip: Optional[str] = Header(None)
+    x_real_ip: Optional[str] = Header(None),
 ):
     """Admin API 密钥校验（带速率限制）"""
-    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
-                                    request.client.host if request and request.client else None)
+    client_ip = get_client_ip_safe(
+        x_forwarded_for,
+        x_real_ip,
+        request.client.host if request and request.client else None,
+    )
 
     configured_key = os.environ.get("ADMIN_API_KEY", "")
 
@@ -202,23 +249,29 @@ def verify_admin_key(
         return True
 
     if not _check_rate_limit(client_ip):
-        raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
+        raise HTTPException(
+            status_code=429, detail="Too many failed attempts, please try again later"
+        )
 
     if api_key != configured_key:
         _record_failure(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
 
+
 def admin_read_auth(request: Request, api_key: Optional[str] = None):
     """读操作认证 - GET 类接口"""
     return verify_admin_key(request, api_key)
+
 
 def admin_write_auth(request: Request, api_key: Optional[str] = None):
     """写操作认证 - POST/PUT/DELETE 类接口"""
     return verify_admin_key(request, api_key)
 
+
 # Unauthenticated router for session token endpoint
 session_router = APIRouter(prefix="/admin", tags=["admin"])
+
 
 @session_router.post("/session")
 def get_admin_session(
@@ -229,15 +282,16 @@ def get_admin_session(
 ):
     """
     Get admin session token for UI authentication.
-    
+
     Requires X-Admin-Api-Key header with the configured ADMIN_API_KEY.
     Returns a session token valid for 24 hours.
-    
+
     This endpoint is intentionally unauthenticated (no Depends) because
     it's the authentication entry point for the admin UI.
     """
-    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
-                                    request.client.host if request.client else None)
+    client_ip = get_client_ip_safe(
+        x_forwarded_for, x_real_ip, request.client.host if request.client else None
+    )
 
     settings = get_settings()
     configured_key = settings.ADMIN_API_KEY
@@ -246,7 +300,9 @@ def get_admin_session(
         raise HTTPException(status_code=400, detail="ADMIN_API_KEY not configured")
 
     if not _check_rate_limit(client_ip):
-        raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
+        raise HTTPException(
+            status_code=429, detail="Too many failed attempts, please try again later"
+        )
 
     if x_admin_api_key != configured_key:
         _record_failure(client_ip)
@@ -267,8 +323,9 @@ def get_admin_session(
             "session_token": session_token,
             "expires_at": session["expires_at"] if session else "",
             "expires_in_hours": ADMIN_SESSION_EXPIRY_HOURS,
-        }
+        },
     }
+
 
 @session_router.get("/session/validate")
 def validate_admin_session(
@@ -278,11 +335,16 @@ def validate_admin_session(
     x_admin_session: str = Header(None, alias="X-Admin-Session"),
 ):
     """Validate an admin session token."""
-    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
-                                    request.client.host if request.client else None)
+    client_ip = get_client_ip_safe(
+        x_forwarded_for, x_real_ip, request.client.host if request.client else None
+    )
 
     if not x_admin_session:
-        return {"code": 1, "message": "No session token provided", "data": {"valid": False}}
+        return {
+            "code": 1,
+            "message": "No session token provided",
+            "data": {"valid": False},
+        }
 
     _cleanup_expired_sessions()
     is_valid = _validate_admin_session(x_admin_session, client_ip)
@@ -296,10 +358,15 @@ def validate_admin_session(
                 "valid": True,
                 "expires_at": session.get("expires_at") if session else None,
                 "ip": session.get("ip") if session else None,
-            }
+            },
         }
     else:
-        return {"code": 1, "message": "Session expired or invalid", "data": {"valid": False}}
+        return {
+            "code": 1,
+            "message": "Session expired or invalid",
+            "data": {"valid": False},
+        }
+
 
 @session_router.post("/token")
 def get_admin_token(
@@ -310,12 +377,13 @@ def get_admin_token(
 ):
     """
     Get admin JWT token for UI authentication.
-    
+
     Requires X-Admin-Api-Key header with the configured ADMIN_API_KEY.
     Returns a JWT token valid for 24 hours.
     """
-    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
-                                    request.client.host if request.client else None)
+    client_ip = get_client_ip_safe(
+        x_forwarded_for, x_real_ip, request.client.host if request.client else None
+    )
 
     settings = get_settings()
     configured_key = settings.ADMIN_API_KEY
@@ -324,7 +392,9 @@ def get_admin_token(
         raise HTTPException(status_code=400, detail="ADMIN_API_KEY not configured")
 
     if not _check_rate_limit(client_ip):
-        raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
+        raise HTTPException(
+            status_code=429, detail="Too many failed attempts, please try again later"
+        )
 
     if x_admin_api_key != configured_key:
         _record_failure(client_ip)
@@ -343,8 +413,9 @@ def get_admin_token(
             "token": jwt_token,
             "expires_at": expires_at.isoformat(),
             "expires_in_hours": JWT_EXPIRY_HOURS,
-        }
+        },
     }
+
 
 @session_router.get("/token/validate")
 def validate_admin_token(
@@ -357,8 +428,9 @@ def validate_admin_token(
     Validate an admin JWT token.
     Returns 401 if token is invalid or expired.
     """
-    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
-                                    request.client.host if request.client else None)
+    client_ip = get_client_ip_safe(
+        x_forwarded_for, x_real_ip, request.client.host if request.client else None
+    )
 
     if not x_admin_token:
         raise HTTPException(status_code=401, detail="No token provided")
@@ -367,26 +439,22 @@ def validate_admin_token(
     is_valid, error_msg = _validate_jwt_token(x_admin_token)
 
     if is_valid:
-        return {
-            "code": 0,
-            "message": "success",
-            "data": {"valid": True}
-        }
+        return {"code": 0, "message": "success", "data": {"valid": True}}
     else:
         logger.info(f"[Admin] Token validation failed for IP {client_ip}: {error_msg}")
         raise HTTPException(status_code=401, detail=error_msg)
 
+
 # router 定义（在 verify_admin_key 之后）
 router = APIRouter(
-    prefix="/admin",
-    tags=["admin"],
-    dependencies=[Depends(verify_admin_key)]
+    prefix="/admin", tags=["admin"], dependencies=[Depends(verify_admin_key)]
 )
 
 
 # ═══════════════════════════════════════════════════════════════
 # LLM 配置管理（API Key 可视化配置）
 # ═══════════════════════════════════════════════════════════════
+
 
 def _mask_key(key: str) -> str:
     """掩码处理 API Key"""
@@ -396,41 +464,69 @@ def _mask_key(key: str) -> str:
         return key
     return f"{key[:6]}...{key[-4:]}"
 
+
 @router.get("/settings/llm")
 @handle_errors(module="admin")
 def get_llm_settings():
     """获取 LLM 配置（API Key 已掩码）。优先级：数据库 > .env > 默认值"""
     from app.db.database import get_admin_config
-    providers = ["deepseek", "qianwen", "openai", "siliconflow", "opencode", "opencode_go", "opencode_zen", "kimi"]
+
+    providers = [
+        "deepseek",
+        "qianwen",
+        "openai",
+        "siliconflow",
+        "opencode",
+        "opencode_go",
+        "opencode_zen",
+        "kimi",
+    ]
     defaults = {
         "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
-        "qianwen":  {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus"},
-        "openai":   {"base_url": "https://api.openai.com/v1", "model": "gpt-3.5-turbo"},
-        "siliconflow": {"base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"},
-        "opencode": {"base_url": "https://api.opencode.ai/v1", "model": "opencode-chat"},
-        "opencode_go": {"base_url": "https://opencode.ai/zen/go/v1", "model": "minimax-m2.7"},
-        "opencode_zen": {"base_url": "https://opencode.ai/zen/v1", "model": "minimax-m2.5-free"},
-        "kimi":     {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k"},
+        "qianwen": {
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "model": "qwen-plus",
+        },
+        "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-3.5-turbo"},
+        "siliconflow": {
+            "base_url": "https://api.siliconflow.cn/v1",
+            "model": "deepseek-ai/DeepSeek-V3",
+        },
+        "opencode": {
+            "base_url": "https://api.opencode.ai/v1",
+            "model": "opencode-chat",
+        },
+        "opencode_go": {
+            "base_url": "https://opencode.ai/zen/go/v1",
+            "model": "minimax-m2.7",
+        },
+        "opencode_zen": {
+            "base_url": "https://opencode.ai/zen/v1",
+            "model": "minimax-m2.5-free",
+        },
+        "kimi": {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k"},
     }
     result = {}
     for p in providers:
-        db  = get_admin_config(f"llm_{p}") or {}
+        db = get_admin_config(f"llm_{p}") or {}
         env = os.getenv(f"{p.upper()}_API_KEY", "")
         result[p] = {
-            "api_key":       _mask_key(db.get("api_key") or env),
-            "base_url":      db.get("base_url") or defaults[p]["base_url"],
-            "model":          db.get("model")    or defaults[p]["model"],
-            "has_db_config":  bool(db.get("api_key")),
+            "api_key": _mask_key(db.get("api_key") or env),
+            "base_url": db.get("base_url") or defaults[p]["base_url"],
+            "model": db.get("model") or defaults[p]["model"],
+            "has_db_config": bool(db.get("api_key")),
         }
     return {"code": 0, "data": result}
+
 
 @router.post("/settings/llm")
 @handle_errors(module="admin")
 def save_llm_settings(body: LLMSettingsRequest):
     """保存 LLM 配置到数据库（永久生效）"""
     from app.db.database import set_admin_config
+
     provider = body.provider.lower()
-    key_map  = {
+    key_map = {
         "deepseek": "llm_deepseek",
         "qianwen": "llm_qianwen",
         "openai": "llm_openai",
@@ -442,16 +538,21 @@ def save_llm_settings(body: LLMSettingsRequest):
     }
     if provider not in key_map:
         return {"code": 1, "error": f"Unknown provider: {provider}"}
-    set_admin_config(key_map[provider], {
-        "api_key":  (body.api_key or "").strip(),
-        "base_url": (body.base_url or "").strip(),
-        "model":    body.model.strip(),
-    })
+    set_admin_config(
+        key_map[provider],
+        {
+            "api_key": (body.api_key or "").strip(),
+            "base_url": (body.base_url or "").strip(),
+            "model": body.model.strip(),
+        },
+    )
     return {"code": 0, "message": f"{provider} 配置已保存"}
+
 
 # ═══════════════════════════════════════════════════════════════
 # Multi-Model Management Endpoints
 # ═══════════════════════════════════════════════════════════════
+
 
 @router.get("/models/all")
 @handle_errors(module="admin")
@@ -466,24 +567,27 @@ def get_all_models():
     for provider_name, provider_state in providers.items():
         models_data = []
         for model_id, model in provider_state.models.items():
-            models_data.append({
-                "model_id": model.model_id,
-                "enabled": model.enabled,
-                "is_default": model.is_default,
-                "max_concurrent": model.max_concurrent,
-                "context_length": model.context_length,
-                "api_key_masked": _mask_key(model.api_key),
-                "base_url": model.base_url
-            })
+            models_data.append(
+                {
+                    "model_id": model.model_id,
+                    "enabled": model.enabled,
+                    "is_default": model.is_default,
+                    "max_concurrent": model.max_concurrent,
+                    "context_length": model.context_length,
+                    "api_key_masked": _mask_key(model.api_key),
+                    "base_url": model.base_url,
+                }
+            )
         result[provider_name] = {
             "provider": provider_name,
             "enabled": provider_state.enabled,
             "default_model": provider_state.default_model,
             "model_count": len(models_data),
-            "models": models_data
+            "models": models_data,
         }
 
     return {"code": 0, "data": result}
+
 
 @router.get("/models/{provider}")
 @handle_errors(module="admin")
@@ -501,15 +605,17 @@ def get_provider_models(provider: str):
     provider_state = providers[provider_lower]
     models_data = []
     for model_id, model in provider_state.models.items():
-        models_data.append({
-            "model_id": model.model_id,
-            "enabled": model.enabled,
-            "is_default": model.is_default,
-            "max_concurrent": model.max_concurrent,
-            "context_length": model.context_length,
-            "api_key_masked": _mask_key(model.api_key),
-            "base_url": model.base_url
-        })
+        models_data.append(
+            {
+                "model_id": model.model_id,
+                "enabled": model.enabled,
+                "is_default": model.is_default,
+                "max_concurrent": model.max_concurrent,
+                "context_length": model.context_length,
+                "api_key_masked": _mask_key(model.api_key),
+                "base_url": model.base_url,
+            }
+        )
 
     return {
         "code": 0,
@@ -517,9 +623,10 @@ def get_provider_models(provider: str):
             "provider": provider_lower,
             "enabled": provider_state.enabled,
             "default_model": provider_state.default_model,
-            "models": models_data
-        }
+            "models": models_data,
+        },
     }
+
 
 @router.post("/models/add")
 @handle_errors(module="admin")
@@ -533,15 +640,19 @@ def add_model(body: ModelConfigRequest):
         "enabled": body.enabled,
         "max_concurrent": body.concurrency_limit,
         "context_length": body.context_length,
-        "metadata": {}
+        "metadata": {},
     }
 
     success = service.add_model(body.provider.lower(), body.model_id, config)
 
     if success:
-        return {"code": 0, "message": f"Model '{body.model_id}' added to provider '{body.provider}'"}
+        return {
+            "code": 0,
+            "message": f"Model '{body.model_id}' added to provider '{body.provider}'",
+        }
     else:
         return {"code": 1, "error": f"Failed to add model '{body.model_id}'"}
+
 
 @router.patch("/models/update")
 @handle_errors(module="admin")
@@ -569,6 +680,7 @@ def update_model(body: ModelUpdateRequest):
     else:
         return {"code": 1, "error": f"Failed to update model '{body.model_id}'"}
 
+
 @router.delete("/models/{provider}/{model_id}")
 @handle_errors(module="admin")
 def remove_model(provider: str, model_id: str):
@@ -583,6 +695,7 @@ def remove_model(provider: str, model_id: str):
     else:
         return {"code": 1, "error": f"Failed to remove model '{model_id}'"}
 
+
 @router.post("/models/set-default")
 @handle_errors(module="admin")
 def set_default_model(body: SetDefaultModelRequest):
@@ -593,9 +706,13 @@ def set_default_model(body: SetDefaultModelRequest):
     success = service.set_default(body.provider.lower(), body.model_id)
 
     if success:
-        return {"code": 0, "message": f"Default model set to '{body.model_id}' for '{body.provider}'"}
+        return {
+            "code": 0,
+            "message": f"Default model set to '{body.model_id}' for '{body.provider}'",
+        }
     else:
         return {"code": 1, "error": "Failed to set default model"}
+
 
 @router.post("/models/test")
 @handle_errors(module="admin")
@@ -609,7 +726,12 @@ def test_model_connection(body: TestConnectionRequest):
     if result.get("success"):
         return {"code": 0, "data": result}
     else:
-        return {"code": 1, "error": result.get("error", "Connection test failed"), "data": result}
+        return {
+            "code": 1,
+            "error": result.get("error", "Connection test failed"),
+            "data": result,
+        }
+
 
 @router.get("/models/pricing/catalog")
 @handle_errors(module="admin")
@@ -619,6 +741,7 @@ def get_pricing_catalog():
 
     pricing = get_all_pricing()
     return {"code": 0, "data": pricing}
+
 
 @router.post("/models/pricing/add")
 @handle_errors(module="admin")
@@ -633,13 +756,17 @@ def add_custom_pricing(body: CustomPricingRequest):
         "input_cost_per_token": body.input_price_per_million / 1e6,
         "output_cost_per_token": body.output_price_per_million / 1e6,
         "context_length": 4096,
-        "metadata": json.dumps({"currency": body.currency, "custom": True})
+        "metadata": json.dumps({"currency": body.currency, "custom": True}),
     }
 
     result = seed_pricing_catalog(models=[custom_model], force=True)
 
     if result.get("inserted", 0) > 0 or result.get("updated", 0) > 0:
-        return {"code": 0, "message": f"Custom pricing added for '{body.model_id}'", "data": result}
+        return {
+            "code": 0,
+            "message": f"Custom pricing added for '{body.model_id}'",
+            "data": result,
+        }
     else:
         return {"code": 1, "error": "Failed to add custom pricing", "data": result}
 
@@ -649,10 +776,11 @@ def add_custom_pricing(body: CustomPricingRequest):
 def test_llm_connection(body: LLMTestRequest):
     """探测 LLM Provider 连接"""
     import httpx
+
     provider = body.provider.lower()
-    api_key  = body.api_key.strip()
+    api_key = body.api_key.strip()
     base_url = body.base_url.strip()
-    model    = (body.model or "").strip()
+    model = (body.model or "").strip()
     defaults = {
         "deepseek": "deepseek-chat",
         "qianwen": "qwen-plus",
@@ -663,16 +791,26 @@ def test_llm_connection(body: LLMTestRequest):
         "opencode_zen": "minimax-m2.5-free",
         "kimi": "moonshot-v1-8k",
     }
-    test_url  = f"{base_url.rstrip('/')}/chat/completions"
-    headers   = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload   = {"model": model or defaults.get(provider, "gpt-3.5-turbo"),
-                 "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
+    test_url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model or defaults.get(provider, "gpt-3.5-turbo"),
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 5,
+    }
     try:
         resp = httpx.post(test_url, headers=headers, json=payload, timeout=15)
         if resp.status_code == 200:
             return {"code": 0, "message": "连接成功 ✅", "status": resp.status_code}
-        err = resp.json().get("error", {}) if "json" in resp.headers.get("content-type","") else {}
-        return {"code": 1, "error": f"HTTP {resp.status_code}: {err.get('message', resp.text[:80])}"}
+        err = (
+            resp.json().get("error", {})
+            if "json" in resp.headers.get("content-type", "")
+            else {}
+        )
+        return {
+            "code": 1,
+            "error": f"HTTP {resp.status_code}: {err.get('message', resp.text[:80])}",
+        }
     except httpx.TimeoutException:
         return {"code": 1, "error": "连接超时，请检查 URL"}
     except Exception as e:
@@ -683,18 +821,17 @@ def test_llm_connection(body: LLMTestRequest):
 # 数据源控制
 # ═══════════════════════════════════════════════════════════════
 
+
 class SourceBalanceConfig(BaseModel):
     strategy: str = "weighted_round_robin"  # weighted_round_robin | priority | failover
     weights: Dict[str, int] = {"tencent": 50, "sina": 30, "eastmoney": 20}
-    health_check: Dict[str, Any] = {
-        "interval": 10,
-        "timeout": 3,
-        "fail_threshold": 3
-    }
+    health_check: Dict[str, Any] = {"interval": 10, "timeout": 3, "fail_threshold": 3}
+
 
 class CircuitBreakerControl(BaseModel):
     source: str
     action: str  # "open" | "close" | "half_open"
+
 
 @router.get("/sources/status")
 @handle_errors(module="admin")
@@ -711,8 +848,17 @@ async def get_sources_status():
             conn = _get_conn()
             try:
                 cursor = conn.cursor()
-                cursor.execute("SELECT source, state, fail_count, last_fail_time FROM circuit_breaker")
-                db_states = {row[0]: {"state": row[1], "fail_count": row[2], "last_fail_time": row[3]} for row in cursor.fetchall()}
+                cursor.execute(
+                    "SELECT source, state, fail_count, last_fail_time FROM circuit_breaker"
+                )
+                db_states = {
+                    row[0]: {
+                        "state": row[1],
+                        "fail_count": row[2],
+                        "last_fail_time": row[3],
+                    }
+                    for row in cursor.fetchall()
+                }
             finally:
                 conn.close()
             return db_states
@@ -728,10 +874,11 @@ async def get_sources_status():
             **status,
             "state": db_state.get("state", status.get("state", "unknown")),
             "fail_count": db_state.get("fail_count", 0),
-            "last_fail_time": db_state.get("last_fail_time")
+            "last_fail_time": db_state.get("last_fail_time"),
         }
 
     return {"sources": merged, "timestamp": int(time.time())}
+
 
 @router.post("/sources/circuit_breaker")
 @handle_errors(module="admin")
@@ -748,6 +895,7 @@ async def control_circuit_breaker(control: CircuitBreakerControl):
 
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action: {control.action}")
+
 
 @router.post("/sources/probe")
 @handle_errors(module="admin")
@@ -768,12 +916,25 @@ async def probe_all_sources():
                 "state": current_state.get("state", "unknown"),
                 "fail_count": current_state.get("fail_count", 0),
                 "is_primary": name == current_source,
-                "history": history[-5:] if history else []
+                "history": history[-5:] if history else [],
             }
         except Exception as e:
-            results[name] = {"status": "error", "latency": None, "state": "unknown", "fail_count": 0, "is_primary": name == current_source, "history": [], "error": str(e)}
+            results[name] = {
+                "status": "error",
+                "latency": None,
+                "state": "unknown",
+                "fail_count": 0,
+                "is_primary": name == current_source,
+                "history": [],
+                "error": str(e),
+            }
 
-    return {"sources": results, "current_source": current_source, "timestamp": int(time.time())}
+    return {
+        "sources": results,
+        "current_source": current_source,
+        "timestamp": int(time.time()),
+    }
+
 
 @router.get("/sources/balance")
 @handle_errors(module="admin")
@@ -785,7 +946,9 @@ async def get_balance_config():
         conn = _get_conn()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT value FROM admin_config WHERE key = 'source_balance'")
+            cursor.execute(
+                "SELECT value FROM admin_config WHERE key = 'source_balance'"
+            )
             row = cursor.fetchone()
             conn.close()
             return row
@@ -795,14 +958,17 @@ async def get_balance_config():
     row = await loop.run_in_executor(_executor, _sync_get)
     if row:
         import json
+
         return json.loads(row[0])
     return SourceBalanceConfig().dict()
+
 
 @router.post("/sources/balance")
 @handle_errors(module="admin")
 async def set_balance_config(config: SourceBalanceConfig):
     """设置负载均衡配置"""
     import json
+
     loop = asyncio.get_event_loop()
 
     def _sync_set():
@@ -811,7 +977,11 @@ async def set_balance_config(config: SourceBalanceConfig):
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
-                ("source_balance", json.dumps(config.dict()), datetime.now().isoformat())
+                (
+                    "source_balance",
+                    json.dumps(config.dict()),
+                    datetime.now().isoformat(),
+                ),
             )
             conn.commit()
             conn.close()
@@ -826,6 +996,7 @@ async def set_balance_config(config: SourceBalanceConfig):
 # 调度器控制
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.get("/scheduler/jobs")
 @handle_errors(module="admin")
 async def get_scheduler_jobs():
@@ -836,13 +1007,16 @@ async def get_scheduler_jobs():
             {
                 "id": job.id,
                 "name": job.name,
-                "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+                "next_run_time": (
+                    job.next_run_time.isoformat() if job.next_run_time else None
+                ),
                 "trigger": str(job.trigger),
                 "state": "running" if job.next_run_time is not None else "paused",
             }
             for job in jobs
         ]
     }
+
 
 @router.post("/scheduler/jobs/{job_id}/control")
 @handle_errors(module="admin")
@@ -869,6 +1043,7 @@ async def control_scheduler_job(job_id: str, body: SchedulerControlRequest):
 # 缓存控制
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.post("/cache/invalidate")
 @handle_errors(module="admin")
 async def invalidate_cache(body: CacheInvalidateRequest):
@@ -876,20 +1051,24 @@ async def invalidate_cache(body: CacheInvalidateRequest):
     cache_type = body.cache_type
     if cache_type == "sectors":
         from app.services.sectors_cache import invalidate
+
         invalidate()
         return {"message": "板块缓存已清空"}
     elif cache_type == "quotes":
         from app.services.quote_source import clear_cache
+
         clear_cache()
         return {"message": "行情缓存已清空"}
     elif cache_type == "all":
         from app.services.sectors_cache import invalidate as invalidate_sectors
         from app.services.quote_source import clear_cache as clear_quotes
+
         invalidate_sectors()
         clear_quotes()
         return {"message": "所有缓存已清空"}
     else:
         raise HTTPException(status_code=400, detail=f"Unknown cache type: {cache_type}")
+
 
 @router.post("/cache/warmup")
 @handle_errors(module="admin")
@@ -898,10 +1077,12 @@ async def warmup_cache(body: CacheWarmupRequest):
     data_type = body.data_type
     if data_type == "sectors":
         from app.services.sectors_cache import warmup
+
         await warmup()
         return {"message": "板块缓存预热已启动"}
     elif data_type == "quotes":
         from app.services.quote_source import warmup
+
         await warmup()
         return {"message": "行情缓存预热已启动"}
     else:
@@ -911,6 +1092,7 @@ async def warmup_cache(body: CacheWarmupRequest):
 # ═══════════════════════════════════════════════════════════════
 # 数据库维护
 # ═══════════════════════════════════════════════════════════════
+
 
 @router.post("/database/maintenance")
 @handle_errors(module="admin")
@@ -938,10 +1120,14 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
                     task_manager.update_progress(task_id, 20, "开始 VACUUM...")
                     conn.execute("VACUUM")
 
-                    task_manager.update_progress(task_id, 90, "VACUUM 完成，清理连接...")
+                    task_manager.update_progress(
+                        task_id, 90, "VACUUM 完成，清理连接..."
+                    )
                     conn.close()
 
-                    task_manager.complete_task(task_id, {"message": "数据库已优化 (VACUUM)"})
+                    task_manager.complete_task(
+                        task_id, {"message": "数据库已优化 (VACUUM)"}
+                    )
                 except Exception as e:
                     conn.close()
                     task_manager.fail_task(task_id, str(e))
@@ -950,13 +1136,10 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
 
         loop.run_in_executor(_executor, _run_vacuum)
 
-        return {
-            "code": 0,
-            "message": "VACUUM 已在后台启动",
-            "task_id": task_id
-        }
+        return {"code": 0, "message": "VACUUM 已在后台启动", "task_id": task_id}
 
     elif action == "wal_checkpoint":
+
         def _sync_checkpoint():
             conn = _get_conn()
             try:
@@ -1005,6 +1188,7 @@ async def get_maintenance_task_status(task_id: str):
 
     return {"code": 0, "data": task.to_dict()}
 
+
 @router.get("/database/stats")
 @handle_errors(module="admin")
 async def get_database_stats():
@@ -1025,12 +1209,22 @@ async def get_database_stats():
             tables = cursor.fetchall()
 
             stats = {}
-            _ALLOWED_TABLES = frozenset({
-                'market_data_realtime', 'market_data_daily', 'market_data_periodic',
-                'write_buffer', 'portfolios', 'positions', 'portfolio_snapshots',
-                'admin_config', 'market_all_stocks', 'transactions',
-                'position_lots', 'position_summary',
-            })
+            _ALLOWED_TABLES = frozenset(
+                {
+                    "market_data_realtime",
+                    "market_data_daily",
+                    "market_data_periodic",
+                    "write_buffer",
+                    "portfolios",
+                    "positions",
+                    "portfolio_snapshots",
+                    "admin_config",
+                    "market_all_stocks",
+                    "transactions",
+                    "position_lots",
+                    "position_summary",
+                }
+            )
             for table_name, _ in tables:
                 if table_name not in _ALLOWED_TABLES:
                     continue
@@ -1043,7 +1237,12 @@ async def get_database_stats():
 
             db_size = os.path.getsize(_db_path) if os.path.exists(_db_path) else 0
             conn.close()
-            return {"tables": stats, "total_tables": len(tables), "db_size_bytes": db_size, "db_size_mb": round(db_size / (1024 * 1024), 2)}
+            return {
+                "tables": stats,
+                "total_tables": len(tables),
+                "db_size_bytes": db_size,
+                "db_size_mb": round(db_size / (1024 * 1024), 2),
+            }
         finally:
             conn.close()
 
@@ -1054,13 +1253,14 @@ async def get_database_stats():
 # 系统监控
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.get("/system/metrics")
 @handle_errors(module="admin")
 async def get_system_metrics():
     """获取系统资源使用情况"""
     cpu_percent = psutil.cpu_percent(interval=1)
     memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
+    disk = psutil.disk_usage("/")
 
     return {
         "cpu_percent": cpu_percent,
@@ -1068,16 +1268,17 @@ async def get_system_metrics():
             "total": memory.total,
             "available": memory.available,
             "percent": memory.percent,
-            "used": memory.used
+            "used": memory.used,
         },
         "disk": {
             "total": disk.total,
             "used": disk.used,
             "free": disk.free,
-            "percent": (disk.used / disk.total) * 100
+            "percent": (disk.used / disk.total) * 100,
         },
-        "timestamp": int(time.time())
+        "timestamp": int(time.time()),
     }
+
 
 @router.get("/system/logs")
 @router.get("/logs/recent")  # 兼容旧接口
@@ -1088,7 +1289,7 @@ async def get_recent_logs(lines: int = Query(default=100, ge=1, le=1000)):
     if not log_file.exists():
         return {"logs": [], "message": "日志文件不存在"}
 
-    with open(log_file, 'r') as f:
+    with open(log_file, "r") as f:
         all_lines = f.readlines()
 
     recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
@@ -1099,11 +1300,12 @@ async def get_recent_logs(lines: int = Query(default=100, ge=1, le=1000)):
 # Token Usage Query Endpoints
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.get("/tokens/stats")
 @handle_errors(module="admin")
 def get_token_stats(
     start_time: Optional[str] = Query(default=None),
-    end_time: Optional[str] = Query(default=None)
+    end_time: Optional[str] = Query(default=None),
 ):
     """Get total token usage statistics"""
     from app.services.token_tracking_service import get_token_tracking_service
@@ -1113,6 +1315,7 @@ def get_token_stats(
 
     return {"code": 0, "data": stats}
 
+
 @router.get("/tokens/history")
 @handle_errors(module="admin")
 def get_token_history(
@@ -1121,7 +1324,7 @@ def get_token_history(
     user_id: Optional[str] = Query(default=None),
     start_date: Optional[str] = Query(default=None),
     end_date: Optional[str] = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=1000)
+    limit: int = Query(default=100, ge=1, le=1000),
 ):
     """Get token usage history with filters"""
     from app.services.token_tracking_service import get_token_tracking_service
@@ -1133,16 +1336,17 @@ def get_token_history(
         user_id=user_id,
         start_date=start_date,
         end_date=end_date,
-        limit=limit
+        limit=limit,
     )
 
     return {"code": 0, "data": history, "count": len(history)}
+
 
 @router.get("/tokens/aggregated")
 @handle_errors(module="admin")
 def get_token_aggregated(
     aggregate_type: str = Query(default="daily", pattern="^(hourly|daily|weekly)$"),
-    limit: int = Query(default=30, ge=1, le=365)
+    limit: int = Query(default=30, ge=1, le=365),
 ):
     """Get aggregated token usage statistics for charts"""
     from app.services.token_tracking_service import get_token_tracking_service
@@ -1152,11 +1356,12 @@ def get_token_aggregated(
 
     return {"code": 0, "data": aggregated, "count": len(aggregated)}
 
+
 @router.get("/tokens/breakdown/models")
 @handle_errors(module="admin")
 def get_token_breakdown_models(
     start_time: Optional[str] = Query(default=None),
-    end_time: Optional[str] = Query(default=None)
+    end_time: Optional[str] = Query(default=None),
 ):
     """Get token usage breakdown by model"""
     from app.services.token_tracking_service import get_token_tracking_service
@@ -1166,11 +1371,10 @@ def get_token_breakdown_models(
 
     return {"code": 0, "data": breakdown, "count": len(breakdown)}
 
+
 @router.get("/tokens/breakdown/providers")
 @handle_errors(module="admin")
-def get_token_breakdown_providers(
-    days: int = Query(default=30, ge=1, le=365)
-):
+def get_token_breakdown_providers(days: int = Query(default=30, ge=1, le=365)):
     """Get token usage breakdown by provider"""
     from app.services.token_tracking_service import get_token_tracking_service
 
@@ -1178,6 +1382,7 @@ def get_token_breakdown_providers(
     breakdown = service.get_provider_breakdown(days)
 
     return {"code": 0, "data": breakdown, "count": len(breakdown)}
+
 
 @router.get("/tokens/session/{session_id}")
 @handle_errors(module="admin")
@@ -1199,8 +1404,8 @@ def get_session_token_usage(session_id: str):
             "total_requests": total_requests,
             "total_tokens": total_tokens,
             "total_cost_usd": total_cost,
-            "history": history[:100]
-        }
+            "history": history[:100],
+        },
     }
 
 
@@ -1208,22 +1413,18 @@ def get_session_token_usage(session_id: str):
 # Session Management Endpoints
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.get("/sessions/active")
 @handle_errors(module="admin")
-def get_active_sessions(
-    limit: int = Query(default=100, ge=1, le=1000)
-):
+def get_active_sessions(limit: int = Query(default=100, ge=1, le=1000)):
     """Get all active sessions"""
     from app.services.session_manager import get_session_manager
 
     manager = get_session_manager()
     sessions = manager.get_active_sessions(limit)
 
-    return {
-        "code": 0,
-        "data": [s.to_dict() for s in sessions],
-        "count": len(sessions)
-    }
+    return {"code": 0, "data": [s.to_dict() for s in sessions], "count": len(sessions)}
+
 
 @router.get("/sessions/stats")
 @handle_errors(module="admin")
@@ -1235,6 +1436,7 @@ def get_sessions_stats():
     stats = manager.get_global_stats()
 
     return {"code": 0, "data": stats}
+
 
 @router.get("/sessions/{session_id}")
 @handle_errors(module="admin")
@@ -1250,6 +1452,7 @@ def get_session_details(session_id: str):
 
     return {"code": 0, "data": session.to_dict()}
 
+
 @router.delete("/sessions/{session_id}")
 @handle_errors(module="admin")
 def terminate_session(session_id: str):
@@ -1264,6 +1467,7 @@ def terminate_session(session_id: str):
     else:
         return {"code": 1, "error": f"Failed to terminate session '{session_id}'"}
 
+
 @router.post("/sessions/cleanup")
 @handle_errors(module="admin")
 def trigger_session_cleanup():
@@ -1272,7 +1476,12 @@ def trigger_session_cleanup():
 
     deleted = session_db.cleanup_expired_sessions()
 
-    return {"code": 0, "message": f"Cleaned up {deleted} expired sessions", "data": {"deleted_count": deleted}}
+    return {
+        "code": 0,
+        "message": f"Cleaned up {deleted} expired sessions",
+        "data": {"deleted_count": deleted},
+    }
+
 
 @router.get("/sessions/{session_id}/conversations")
 @handle_errors(module="admin")
@@ -1284,7 +1493,11 @@ def get_session_conversations(session_id: str):
     if not session:
         return {"code": 1, "error": f"Session '{session_id}' not found"}
 
-    conversations = session_db.get_session_conversations(session_id) if hasattr(session_db, 'get_session_conversations') else []
+    conversations = (
+        session_db.get_session_conversations(session_id)
+        if hasattr(session_db, "get_session_conversations")
+        else []
+    )
 
     return {"code": 0, "data": conversations, "count": len(conversations)}
 
@@ -1293,12 +1506,15 @@ def get_session_conversations(session_id: str):
 # WebSocket Real-time Token Updates
 # ═══════════════════════════════════════════════════════════════
 
-_token_stream_connections: dict = {}  # conn_id -> {"last_pong": float, "missed_pongs": int}
+_token_stream_connections: dict = (
+    {}
+)  # conn_id -> {"last_pong": float, "missed_pongs": int}
 _token_stream_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
 
 PING_INTERVAL = 5  # seconds
 PONG_TIMEOUT = 10  # seconds
 MAX_MISSED_PONGS = 3
+
 
 @router.websocket("/tokens/stream")
 @handle_errors(module="admin")
@@ -1306,21 +1522,18 @@ async def token_stream_ws(websocket: WebSocket):
     """WebSocket for real-time token usage updates with heartbeat"""
     await websocket.accept()
     conn_id = f"token_ws_{int(time.time())}_{secrets.token_hex(4)}"
-    _token_stream_connections[conn_id] = {
-        "last_pong": time.time(),
-        "missed_pongs": 0
-    }
+    _token_stream_connections[conn_id] = {"last_pong": time.time(), "missed_pongs": 0}
 
-    await websocket.send_json({
-        "type": "connected",
-        "conn_id": conn_id,
-        "timestamp": int(time.time())
-    })
+    await websocket.send_json(
+        {"type": "connected", "conn_id": conn_id, "timestamp": int(time.time())}
+    )
 
     try:
         while True:
             try:
-                update = await asyncio.wait_for(_token_stream_queue.get(), timeout=PING_INTERVAL)
+                update = await asyncio.wait_for(
+                    _token_stream_queue.get(), timeout=PING_INTERVAL
+                )
                 await websocket.send_json(update)
                 _token_stream_connections[conn_id]["last_pong"] = time.time()
                 _token_stream_connections[conn_id]["missed_pongs"] = 0
@@ -1329,13 +1542,14 @@ async def token_stream_ws(websocket: WebSocket):
                 if not conn_state:
                     break
 
-                await websocket.send_json({
-                    "type": "ping",
-                    "timestamp": int(time.time())
-                })
+                await websocket.send_json(
+                    {"type": "ping", "timestamp": int(time.time())}
+                )
 
                 try:
-                    msg = await asyncio.wait_for(websocket.receive_json(), timeout=PONG_TIMEOUT)
+                    msg = await asyncio.wait_for(
+                        websocket.receive_json(), timeout=PONG_TIMEOUT
+                    )
                     if msg.get("action") == "pong":
                         conn_state["last_pong"] = time.time()
                         conn_state["missed_pongs"] = 0
@@ -1343,9 +1557,15 @@ async def token_stream_ws(websocket: WebSocket):
                         pass
                 except asyncio.TimeoutError:
                     conn_state["missed_pongs"] += 1
-                    logger.warning(f"[TokenWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}", exc_info=True)
+                    logger.warning(
+                        f"[TokenWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}",
+                        exc_info=True,
+                    )
                     if conn_state["missed_pongs"] >= MAX_MISSED_PONGS:
-                        logger.warning(f"[TokenWS] Closing dead connection: {conn_id}", exc_info=True)
+                        logger.warning(
+                            f"[TokenWS] Closing dead connection: {conn_id}",
+                            exc_info=True,
+                        )
                         break
                 except Exception as e:
                     logger.debug(f"[TokenWS] Connection error: {e}")
@@ -1356,14 +1576,19 @@ async def token_stream_ws(websocket: WebSocket):
         logger.warning(f"[TokenWS] Unexpected error: {e}", exc_info=True)
     finally:
         _token_stream_connections.pop(conn_id, None)
-        logger.info(f"[TokenWS] Connection closed: {conn_id}, remaining: {len(_token_stream_connections)}")
+        logger.info(
+            f"[TokenWS] Connection closed: {conn_id}, remaining: {len(_token_stream_connections)}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
 # WebSocket 实时日志流
 # ═══════════════════════════════════════════════════════════════
 
-_log_stream_connections: dict = {}  # conn_id -> {"last_pong": float, "missed_pongs": int}
+_log_stream_connections: dict = (
+    {}
+)  # conn_id -> {"last_pong": float, "missed_pongs": int}
+
 
 @router.websocket("/logs/stream")
 @handle_errors(module="admin")
@@ -1372,20 +1597,19 @@ async def log_stream_ws(websocket: WebSocket):
     await websocket.accept()
 
     conn_id = f"log_ws_{int(time.time())}_{secrets.token_hex(4)}"
-    _log_stream_connections[conn_id] = {
-        "last_pong": time.time(),
-        "missed_pongs": 0
-    }
+    _log_stream_connections[conn_id] = {"last_pong": time.time(), "missed_pongs": 0}
 
     queue = _log_queue
 
-    await websocket.send_json({
-        "type": "connected",
-        "conn_id": conn_id,
-        "timestamp": int(time.time()),
-        "level": "INFO",
-        "message": "Log stream connected. Waiting for logs..."
-    })
+    await websocket.send_json(
+        {
+            "type": "connected",
+            "conn_id": conn_id,
+            "timestamp": int(time.time()),
+            "level": "INFO",
+            "message": "Log stream connected. Waiting for logs...",
+        }
+    )
 
     try:
         while True:
@@ -1399,13 +1623,14 @@ async def log_stream_ws(websocket: WebSocket):
                 if not conn_state:
                     break
 
-                await websocket.send_json({
-                    "type": "ping",
-                    "timestamp": int(time.time())
-                })
+                await websocket.send_json(
+                    {"type": "ping", "timestamp": int(time.time())}
+                )
 
                 try:
-                    msg = await asyncio.wait_for(websocket.receive_json(), timeout=PONG_TIMEOUT)
+                    msg = await asyncio.wait_for(
+                        websocket.receive_json(), timeout=PONG_TIMEOUT
+                    )
                     if msg.get("action") == "pong":
                         conn_state["last_pong"] = time.time()
                         conn_state["missed_pongs"] = 0
@@ -1413,9 +1638,14 @@ async def log_stream_ws(websocket: WebSocket):
                         pass
                 except asyncio.TimeoutError:
                     conn_state["missed_pongs"] += 1
-                    logger.warning(f"[LogWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}", exc_info=True)
+                    logger.warning(
+                        f"[LogWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}",
+                        exc_info=True,
+                    )
                     if conn_state["missed_pongs"] >= MAX_MISSED_PONGS:
-                        logger.warning(f"[LogWS] Closing dead connection: {conn_id}", exc_info=True)
+                        logger.warning(
+                            f"[LogWS] Closing dead connection: {conn_id}", exc_info=True
+                        )
                         break
                 except Exception as e:
                     logger.debug(f"[LogWS] Connection error: {e}")
@@ -1426,7 +1656,10 @@ async def log_stream_ws(websocket: WebSocket):
         logger.warning(f"[LogWS] Unexpected error: {e}", exc_info=True)
     finally:
         _log_stream_connections.pop(conn_id, None)
-        logger.info(f"[LogWS] Connection closed: {conn_id}, remaining: {len(_log_stream_connections)}")
+        logger.info(
+            f"[LogWS] Connection closed: {conn_id}, remaining: {len(_log_stream_connections)}"
+        )
+
 
 # 预先创建日志队列供外部导入使用
 _log_queue = asyncio.Queue(maxsize=100)
@@ -1434,6 +1667,7 @@ _log_queue = asyncio.Queue(maxsize=100)
 # 初始化 error_logger 的队列引用
 try:
     from app.services.error_logger import init_log_queue
+
     init_log_queue(_log_queue)
     logger.info("[Admin] error_logger 队列已初始化")
 except Exception as e:
@@ -1444,23 +1678,21 @@ except Exception as e:
 # 进程保活监控 (Watchdog)
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.get("/watchdog/status")
 @handle_errors(module="admin")
 async def get_watchdog_status():
     """获取进程保活监控状态"""
     from app.services.watchdog import get_watchdog_state
-    return {
-        "code": 0,
-        "message": "success",
-        "data": get_watchdog_state()
-    }
+
+    return {"code": 0, "message": "success", "data": get_watchdog_state()}
 
 
 @router.post("/watchdog/toggle")
 @handle_errors(module="admin")
 async def toggle_watchdog_endpoint(body: WatchdogToggleRequest):
     """切换进程保活开关
-    
+
     请求体: {"enabled": true/false}
     """
     from app.services.watchdog import toggle_watchdog
@@ -1470,7 +1702,7 @@ async def toggle_watchdog_endpoint(body: WatchdogToggleRequest):
         return {
             "code": 0,
             "message": f"进程保活已{'启用' if body.enabled else '禁用'}",
-            "data": {"enabled": body.enabled}
+            "data": {"enabled": body.enabled},
         }
     else:
         return {"code": 500, "message": "切换失败，请检查日志"}
@@ -1490,7 +1722,7 @@ async def manual_restart_backend():
         return {
             "code": 0,
             "message": "后端重启指令已发送，请等待 5-10 秒后刷新页面",
-            "data": {"restart_time": datetime.now().isoformat()}
+            "data": {"restart_time": datetime.now().isoformat()},
         }
     else:
         return {"code": 500, "message": "重启失败，请检查后端日志"}
@@ -1499,6 +1731,7 @@ async def manual_restart_backend():
 # ═══════════════════════════════════════════════════════════════
 # WebSocket 指标
 # ═══════════════════════════════════════════════════════════════
+
 
 @router.get("/ws/metrics")
 @handle_errors(module="admin")
@@ -1518,7 +1751,7 @@ async def get_ws_metrics():
             "subscribed_symbols": metrics.get("subscribed_symbols", 0),
             "token_stream_connections": len(_token_stream_connections),
             "log_stream_connections": len(_log_stream_connections),
-        }
+        },
     }
 
 
@@ -1533,19 +1766,23 @@ async def get_websocket_stats():
     token_conns = []
     now = time.time()
     for conn_id, state in _token_stream_connections.items():
-        token_conns.append({
-            "conn_id": conn_id,
-            "last_pong_age": now - state["last_pong"],
-            "missed_pongs": state["missed_pongs"]
-        })
+        token_conns.append(
+            {
+                "conn_id": conn_id,
+                "last_pong_age": now - state["last_pong"],
+                "missed_pongs": state["missed_pongs"],
+            }
+        )
 
     log_conns = []
     for conn_id, state in _log_stream_connections.items():
-        log_conns.append({
-            "conn_id": conn_id,
-            "last_pong_age": now - state["last_pong"],
-            "missed_pongs": state["missed_pongs"]
-        })
+        log_conns.append(
+            {
+                "conn_id": conn_id,
+                "last_pong_age": now - state["last_pong"],
+                "missed_pongs": state["missed_pongs"],
+            }
+        )
 
     return {
         "code": 0,
@@ -1556,19 +1793,20 @@ async def get_websocket_stats():
             },
             "token_stream": {
                 "connections": len(_token_stream_connections),
-                "details": token_conns[:20]
+                "details": token_conns[:20],
             },
             "log_stream": {
                 "connections": len(_log_stream_connections),
-                "details": log_conns[:20]
-            }
-        }
+                "details": log_conns[:20],
+            },
+        },
     }
 
 
 # ═══════════════════════════════════════════════════════════════
 # Rate Limiting 管理
 # ═══════════════════════════════════════════════════════════════
+
 
 @router.get("/ratelimit/stats")
 @handle_errors(module="admin")
@@ -1590,13 +1828,15 @@ async def get_rate_limit_stats():
     for key, entry in stats.get("entries", {}).items():
         if entry.get("count", 0) >= 10:
             ip = key.split(":")[0] if ":" in key else key
-            blocked_ips.append({
-                "ip": ip,
-                "path": key.split(":", 1)[1] if ":" in key else "",
-                "count": entry.get("count", 0),
-                "reset_at": entry.get("reset_at", 0),
-                "remaining_seconds": max(0, int(entry.get("reset_at", 0) - now))
-            })
+            blocked_ips.append(
+                {
+                    "ip": ip,
+                    "path": key.split(":", 1)[1] if ":" in key else "",
+                    "count": entry.get("count", 0),
+                    "reset_at": entry.get("reset_at", 0),
+                    "remaining_seconds": max(0, int(entry.get("reset_at", 0) - now)),
+                }
+            )
 
     return {
         "code": 0,
@@ -1604,8 +1844,8 @@ async def get_rate_limit_stats():
             "total_tracked_ips": stats.get("total_keys", 0),
             "endpoint_limits": endpoint_limits,
             "blocked_requests": blocked_ips[:50],
-            "enabled": True
-        }
+            "enabled": True,
+        },
     }
 
 
@@ -1625,7 +1865,7 @@ async def reset_rate_limit(ip: Optional[str] = None):
         return {
             "code": 0,
             "message": f"已重置 {ip} 的速率限制",
-            "data": {"reset_count": len(keys_to_reset)}
+            "data": {"reset_count": len(keys_to_reset)},
         }
     else:
         limiter.reset()
@@ -1633,7 +1873,13 @@ async def reset_rate_limit(ip: Optional[str] = None):
         return {
             "code": 0,
             "message": "已重置所有速率限制",
-            "data": {"reset_count": stats.get("total_keys", 0) if (stats := get_limiter().get_stats()) else 0}
+            "data": {
+                "reset_count": (
+                    stats.get("total_keys", 0)
+                    if (stats := get_limiter().get_stats())
+                    else 0
+                )
+            },
         }
 
 
@@ -1644,6 +1890,7 @@ async def reset_rate_limit(ip: Optional[str] = None):
 _web_vitals_buffer: List[Dict[str, Any]] = []
 WEB_VITALS_MAX_BUFFER = 100
 
+
 class WebVitalsMetric(BaseModel):
     name: str
     value: float
@@ -1651,15 +1898,18 @@ class WebVitalsMetric(BaseModel):
     timestamp: int
     page: str
 
+
 @router.post("/web-vitals")
 @handle_errors(module="admin")
 async def collect_web_vitals(request: Request):
     """Collect web vitals metrics from frontend. Handles both JSON and text/plain (sendBeacon)."""
     try:
         body = await request.body()
-        body_str = body.decode('utf-8') if isinstance(body, bytes) else body
+        body_str = body.decode("utf-8") if isinstance(body, bytes) else body
 
-        if request.headers.get('content-type', '').startswith('application/json') or body_str.startswith('{'):
+        if request.headers.get("content-type", "").startswith(
+            "application/json"
+        ) or body_str.startswith("{"):
             data = json.loads(body_str)
         else:
             data = json.loads(body_str)
@@ -1670,12 +1920,15 @@ async def collect_web_vitals(request: Request):
             _web_vitals_buffer.pop(0)
 
         if metric.rating == "poor":
-            logger.warning(f"[WebVitals] Poor metric: {metric.name}={metric.value}ms on {metric.page}")
+            logger.warning(
+                f"[WebVitals] Poor metric: {metric.name}={metric.value}ms on {metric.page}"
+            )
 
         return {"code": 0, "message": "Metric recorded"}
     except Exception as e:
         logger.error(f"[WebVitals] Failed to parse metric: {e}", exc_info=True)
         return {"code": 0, "message": "Metric ignored"}
+
 
 @router.get("/web-vitals")
 @handle_errors(module="admin")
@@ -1702,14 +1955,15 @@ async def get_web_vitals_stats():
         "data": {
             "metrics": _web_vitals_buffer[-20:],
             "summary": summary,
-            "total_collected": len(_web_vitals_buffer)
-        }
+            "total_collected": len(_web_vitals_buffer),
+        },
     }
 
 
 # ═══════════════════════════════════════════════════════════════
 # WebSocket Streaming Management
 # ═══════════════════════════════════════════════════════════════
+
 
 @router.get("/streaming/status")
 @handle_errors(module="admin")
@@ -1720,10 +1974,7 @@ async def get_streaming_status():
     manager = get_streaming_manager()
     status = manager.get_status()
 
-    return {
-        "code": 0,
-        "data": status
-    }
+    return {"code": 0, "data": status}
 
 
 @router.post("/streaming/failover")
@@ -1738,7 +1989,7 @@ async def trigger_streaming_failover():
     return {
         "code": 0,
         "message": "已切换到 HTTP 轮询模式",
-        "data": {"mode": manager.mode.value}
+        "data": {"mode": manager.mode.value},
     }
 
 
@@ -1754,7 +2005,7 @@ async def reset_streaming_circuit_breaker():
     return {
         "code": 0,
         "message": "熔断器已重置，正在尝试恢复 WebSocket 连接",
-        "data": {"mode": manager.mode.value}
+        "data": {"mode": manager.mode.value},
     }
 
 
@@ -1769,10 +2020,7 @@ async def get_streaming_symbols():
 
     return {
         "code": 0,
-        "data": {
-            "total_symbols": stats.total_symbols,
-            "mode": stats.mode.value
-        }
+        "data": {"total_symbols": stats.total_symbols, "mode": stats.mode.value},
     }
 
 
@@ -1788,7 +2036,7 @@ async def add_streaming_symbols(symbols: List[str] = Body(...)):
     return {
         "code": 0,
         "message": f"已添加 {len(symbols)} 个订阅",
-        "data": {"symbols": symbols}
+        "data": {"symbols": symbols},
     }
 
 
@@ -1803,11 +2051,12 @@ async def remove_streaming_symbols(symbols: List[str] = Body(...)):
     return {
         "code": 0,
         "message": f"已移除 {len(symbols)} 个订阅",
-        "data": {"symbols": symbols}
+        "data": {"symbols": symbols},
     }
 
 
 _admin_session_cleanup_running = False
+
 
 def _start_admin_session_cleanup_thread():
     global _admin_session_cleanup_running
@@ -1818,17 +2067,24 @@ def _start_admin_session_cleanup_thread():
 
     def cleanup_loop():
         import time as _time
+
         while True:
             try:
                 _time.sleep(60)
                 session_db.cleanup_expired_admin_sessions()
             except Exception as e:
-                logger.warning(f"[AdminSession] Cleanup thread error: {e}", exc_info=True)
+                logger.warning(
+                    f"[AdminSession] Cleanup thread error: {e}", exc_info=True
+                )
 
     import threading
-    thread = threading.Thread(target=cleanup_loop, daemon=True, name="admin_session_cleanup")
+
+    thread = threading.Thread(
+        target=cleanup_loop, daemon=True, name="admin_session_cleanup"
+    )
     thread.start()
     logger.info("[AdminSession] Started background cleanup thread (60s interval)")
+
 
 _start_admin_session_cleanup_thread()
 
@@ -1837,16 +2093,18 @@ _start_admin_session_cleanup_thread()
 # Source Switchboard - Visual Topology & Manual Fallback
 # ═══════════════════════════════════════════════════════════════
 
+
 class SourceSwitchRequest(BaseModel):
     source: str = Field(..., description="Source name to switch from")
     fallback: str = Field(..., description="Fallback source to switch to")
+
 
 @router.get("/sources/topology")
 @handle_errors(module="admin")
 async def get_source_topology():
     """
     Get visual topology data for Source Switchboard.
-    
+
     Returns nodes (data sources) and edges (fallback relationships).
     Each node has status indicator (green/yellow/red).
     """
@@ -1869,19 +2127,21 @@ async def get_source_topology():
         else:
             node_status = "red"  # Unhealthy
 
-        nodes.append({
-            "id": name,
-            "name": name.upper(),
-            "type": "data_source",
-            "status": node_status,
-            "state": status.get("state", "unknown"),
-            "health": status.get("health", "unknown"),
-            "latency_ms": status.get("latency_ms"),
-            "fail_count": status.get("fail_count", 0),
-            "is_primary": name == current_source,
-            "is_current": name == current_source,
-            "last_check": status.get("last_fail_time")
-        })
+        nodes.append(
+            {
+                "id": name,
+                "name": name.upper(),
+                "type": "data_source",
+                "status": node_status,
+                "state": status.get("state", "unknown"),
+                "health": status.get("health", "unknown"),
+                "latency_ms": status.get("latency_ms"),
+                "fail_count": status.get("fail_count", 0),
+                "is_primary": name == current_source,
+                "is_current": name == current_source,
+                "last_check": status.get("last_fail_time"),
+            }
+        )
 
     # Build edges (fallback chain)
     # Default fallback order: tencent -> sina -> eastmoney
@@ -1891,23 +2151,27 @@ async def get_source_topology():
     for i in range(len(fallback_order) - 1):
         source = fallback_order[i]
         target = fallback_order[i + 1]
-        edges.append({
-            "source": source,
-            "target": target,
-            "type": "fallback",
-            "label": f"{source} → {target}"
-        })
+        edges.append(
+            {
+                "source": source,
+                "target": target,
+                "type": "fallback",
+                "label": f"{source} → {target}",
+            }
+        )
 
     # Add bidirectional edges for visualization
     for node in nodes:
         if node["id"] not in fallback_order:
             # Connect unknown sources to the chain
-            edges.append({
-                "source": "eastmoney",
-                "target": node["id"],
-                "type": "fallback",
-                "label": f"fallback → {node['id']}"
-            })
+            edges.append(
+                {
+                    "source": "eastmoney",
+                    "target": node["id"],
+                    "type": "fallback",
+                    "label": f"fallback → {node['id']}",
+                }
+            )
 
     return {
         "code": 0,
@@ -1915,8 +2179,8 @@ async def get_source_topology():
             "nodes": nodes,
             "edges": edges,
             "current_source": current_source,
-            "timestamp": int(time.time())
-        }
+            "timestamp": int(time.time()),
+        },
     }
 
 
@@ -1925,7 +2189,7 @@ async def get_source_topology():
 async def switch_data_source(body: SourceSwitchRequest):
     """
     Manually switch to a fallback data source.
-    
+
     This performs a hot-swap without service restart:
     1. Opens circuit breaker on the source
     2. Sets the fallback as current source
@@ -1948,7 +2212,9 @@ async def switch_data_source(body: SourceSwitchRequest):
     # Check if fallback is healthy
     fallback_status = sources.get(fallback, {})
     if fallback_status.get("state") == "open":
-        raise HTTPException(status_code=400, detail=f"Fallback '{fallback}' is currently circuit-broken")
+        raise HTTPException(
+            status_code=400, detail=f"Fallback '{fallback}' is currently circuit-broken"
+        )
 
     # Perform the switch
     try:
@@ -1966,7 +2232,7 @@ async def switch_data_source(body: SourceSwitchRequest):
             resource_id=source,
             outcome="success",
             before_state={"current_source": source},
-            after_state={"current_source": fallback}
+            after_state={"current_source": fallback},
         )
 
         logger.info(f"[Admin] Switched data source from {source} to {fallback}")
@@ -1977,8 +2243,8 @@ async def switch_data_source(body: SourceSwitchRequest):
             "data": {
                 "previous_source": source,
                 "current_source": fallback,
-                "timestamp": datetime.now().isoformat()
-            }
+                "timestamp": datetime.now().isoformat(),
+            },
         }
     except Exception as e:
         logger.error(f"[Admin] Failed to switch data source: {e}", exc_info=True)
@@ -1997,7 +2263,9 @@ async def get_source_config():
         conn = _get_conn()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT value FROM admin_config WHERE key = 'source_balance'")
+            cursor.execute(
+                "SELECT value FROM admin_config WHERE key = 'source_balance'"
+            )
             row = cursor.fetchone()
             conn.close()
             return row
@@ -2012,17 +2280,10 @@ async def get_source_config():
         config = {
             "strategy": "weighted_round_robin",
             "weights": {"tencent": 50, "sina": 30, "eastmoney": 20},
-            "health_check": {
-                "interval": 10,
-                "timeout": 3,
-                "fail_threshold": 3
-            }
+            "health_check": {"interval": 10, "timeout": 3, "fail_threshold": 3},
         }
 
-    return {
-        "code": 0,
-        "data": config
-    }
+    return {"code": 0, "data": config}
 
 
 @router.post("/sources/config")
@@ -2039,7 +2300,11 @@ async def update_source_config(config: SourceBalanceConfig):
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
-                ("source_balance", json.dumps(config.dict()), datetime.now().isoformat())
+                (
+                    "source_balance",
+                    json.dumps(config.dict()),
+                    datetime.now().isoformat(),
+                ),
             )
             conn.commit()
             conn.close()
@@ -2050,14 +2315,11 @@ async def update_source_config(config: SourceBalanceConfig):
 
     logger.info(f"[Admin] Updated source config: strategy={config.strategy}")
 
-    return {
-        "code": 0,
-        "message": "数据源配置已更新",
-        "data": config.dict()
-    }
+    return {"code": 0, "message": "数据源配置已更新", "data": config.dict()}
 
 
 # ── Error History API ───────────────────────────────────────────────────────
+
 
 @router.get("/errors/history")
 @handle_errors(module="admin")
@@ -2086,7 +2348,7 @@ async def get_error_history(
             "total": len(errors),
             "limit": limit,
             "offset": offset,
-        }
+        },
     }
 
 
@@ -2099,11 +2361,7 @@ async def get_error_stats(
 
     stats = _get_error_stats(since_hours=since_hours)
 
-    return {
-        "code": 0,
-        "message": "success",
-        "data": stats
-    }
+    return {"code": 0, "message": "success", "data": stats}
 
 
 @router.post("/errors/{error_id}/resolve")
@@ -2117,14 +2375,10 @@ async def resolve_error(error_id: int):
         return {
             "code": 0,
             "message": "错误已标记为已解决",
-            "data": {"error_id": error_id}
+            "data": {"error_id": error_id},
         }
     else:
-        return {
-            "code": 104,
-            "message": "错误记录不存在",
-            "data": None
-        }
+        return {"code": 104, "message": "错误记录不存在", "data": None}
 
 
 @router.post("/errors/cleanup")
@@ -2139,7 +2393,7 @@ async def cleanup_errors(
     return {
         "code": 0,
         "message": f"已清理 {deleted} 条过期错误记录",
-        "data": {"deleted": deleted, "days": days}
+        "data": {"deleted": deleted, "days": days},
     }
 
 
@@ -2165,7 +2419,7 @@ async def get_sina_fetcher_status():
             "last_success_time": stats.last_success_time,
             "config": {
                 "failure_threshold": _SINA_STOCK_CB.config.failure_threshold,
-                "timeout": _SINA_STOCK_CB.config.timeout
-            }
-        }
+                "timeout": _SINA_STOCK_CB.config.timeout,
+            },
+        },
     }

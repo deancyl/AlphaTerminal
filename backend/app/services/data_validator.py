@@ -10,6 +10,7 @@ data_validator.py — Pydantic 字段契约 & 行情数据强校验
 - 涨跌停数据超出 [-20%, +20%] 合理范围
 - OHLC 内部不一致（close > high）
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,20 +48,20 @@ class DataType(str, Enum):
 # key: symbol，value: (合理最低价, 合理最高价)
 # ─────────────────────────────────────────────────────────────────────────────
 CRITICAL_INDICES: dict[str, tuple[float, float]] = {
-    "sh000001": (2000.0, 6000.0),   # 上证指数
-    "sh000300": (2000.0, 6000.0),   # 沪深300
-    "sh000016": (1500.0, 8000.0),   # 上证50
-    "sh000688": (500.0,  3000.0),   # 科创50
+    "sh000001": (2000.0, 6000.0),  # 上证指数
+    "sh000300": (2000.0, 6000.0),  # 沪深300
+    "sh000016": (1500.0, 8000.0),  # 上证50
+    "sh000688": (500.0, 3000.0),  # 科创50
     "sz399001": (5000.0, 20000.0),  # 深证成指
-    "sz399006": (1000.0,  6000.0),  # 创业板指
+    "sz399006": (1000.0, 6000.0),  # 创业板指
     "sz399005": (2000.0, 10000.0),  # 中小板指
 }
 
 # A股个股价格合理范围（防止数量级错位，如 3948.55 → 3.94）
 STOCK_PRICE_RANGES: dict[str, tuple[float, float]] = {
-    "stock":   (0.01, 10000.0),   # A股普通股
-    "index":   (0.01, 100000.0),  # 指数
-    "bond":    (50.0,   200.0),   # 债券（价格100左右）
+    "stock": (0.01, 10000.0),  # A股普通股
+    "index": (0.01, 100000.0),  # 指数
+    "bond": (50.0, 200.0),  # 债券（价格100左右）
     "futures": (0.01, 100000.0),  # 期货（部分品种价格高）
 }
 
@@ -75,6 +76,7 @@ class QuoteData(BaseModel):
     - OHLC 内部必须自洽：low ≤ price/open ≤ high
     - change_pct 与 (price, prev_close) 的计算值误差 ≤ 0.01%
     """
+
     symbol: str
     name: str
     market: MarketType = MarketType.AShare
@@ -88,9 +90,9 @@ class QuoteData(BaseModel):
     volume: float = 0.0
     amount: Optional[float] = None
     turnover: Optional[float] = None
-    timestamp: int = 0          # Unix 秒
+    timestamp: int = 0  # Unix 秒
     data_type: DataType = DataType.REALTIME
-    source: str = ""            # "sina" | "tencent" | "eastmoney" | "alphavantage"
+    source: str = ""  # "sina" | "tencent" | "eastmoney" | "alphavantage"
 
     # ── 基础类型校验 ────────────────────────────────────────────────────────
 
@@ -122,13 +124,9 @@ class QuoteData(BaseModel):
         """OHLC 四价内部一致性"""
         p, o, h, l = self.price, self.open, self.high, self.low
         if not (l <= p <= h):
-            raise ValueError(
-                f"OHLC 不一致: price={p} 不在 [low={l}, high={h}] 之间"
-            )
+            raise ValueError(f"OHLC 不一致: price={p} 不在 [low={l}, high={h}] 之间")
         if not (l <= o <= h):
-            raise ValueError(
-                f"OHLC 不一致: open={o} 不在 [low={l}, high={h}] 之间"
-            )
+            raise ValueError(f"OHLC 不一致: open={o} 不在 [low={l}, high={h}] 之间")
         # 允许 open == close == low == high（科创板新股等）
         return self
 
@@ -190,6 +188,7 @@ class QuoteData(BaseModel):
 
 class IndexQuoteData(QuoteData):
     """指数行情专用 Schema"""
+
     data_type: DataType = DataType.INDEX
     market: MarketType = MarketType.AShare
 
@@ -202,9 +201,10 @@ class KlineData(BaseModel):
     - open 必须在 [low, high] 之间
     - volume 非负
     """
+
     symbol: str
-    date: str                    # "2026-04-21"
-    period: str = "day"         # "minute" | "day" | "week" | "month"
+    date: str  # "2026-04-21"
+    period: str = "day"  # "minute" | "day" | "week" | "month"
     open: float
     high: float
     low: float
@@ -212,7 +212,7 @@ class KlineData(BaseModel):
     volume: float
     amount: Optional[float] = None
     turnover_rate: Optional[float] = None
-    amplitude: Optional[float] = None   # 振幅 (high-low)/prev_close*100
+    amplitude: Optional[float] = None  # 振幅 (high-low)/prev_close*100
     timestamp: int = 0
     source: str = ""
 
@@ -245,6 +245,7 @@ class KlineData(BaseModel):
 
 class FXQuoteData(BaseModel):
     """外汇行情契约（Alphavantage FX）"""
+
     from_symbol: str
     to_symbol: str
     price: float
@@ -273,6 +274,7 @@ class FXQuoteData(BaseModel):
 # 校验入口函数（供各 fetcher 调用）
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def validate_quote(raw: dict, source: str) -> Optional[QuoteData]:
     """
     统一校验入口。
@@ -294,7 +296,9 @@ def validate_quote(raw: dict, source: str) -> Optional[QuoteData]:
 
         return data
     except Exception as e:
-        logger.error(f"[Validator] QuoteData 校验失败 (source={source}): {e}", exc_info=True)
+        logger.error(
+            f"[Validator] QuoteData 校验失败 (source={source}): {e}", exc_info=True
+        )
         return None
 
 
@@ -304,5 +308,7 @@ def validate_kline(raw: dict, source: str) -> Optional[KlineData]:
         raw["source"] = source
         return KlineData(**raw)
     except Exception as e:
-        logger.error(f"[Validator] KlineData 校验失败 (source={source}): {e}", exc_info=True)
+        logger.error(
+            f"[Validator] KlineData 校验失败 (source={source}): {e}", exc_info=True
+        )
         return None

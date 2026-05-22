@@ -12,6 +12,7 @@ import pandas as pd
 
 try:
     from scipy import stats
+
     _scipy_available = True
 except ImportError:
     _scipy_available = False
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FactorContribution:
     """Single factor contribution to returns"""
+
     factor_id: str
     factor_name: str
     category: str
@@ -36,6 +38,7 @@ class FactorContribution:
 @dataclass
 class AttributionResult:
     """Complete attribution analysis result"""
+
     total_return: Any
     factor_contributions: List[FactorContribution]
     residual: Any
@@ -78,7 +81,7 @@ class AttributionResult:
 class AttributionEngine:
     """
     Multi-factor attribution engine.
-    
+
     Uses regression-based factor model to decompose returns into factor contributions.
     """
 
@@ -95,24 +98,28 @@ class AttributionEngine:
     ) -> AttributionResult:
         """
         Calculate factor attribution for given returns.
-        
+
         Args:
             returns: Array of portfolio returns
             factor_data: DataFrame with factor values (columns = factor_ids)
             factor_ids: List of factor IDs to include
             period_start: Start date string
             period_end: End date string
-            
+
         Returns:
             AttributionResult with factor contributions
         """
         # Validate inputs
         if len(returns) < self.min_observations:
-            logger.warning(f"[Attribution] Insufficient observations: {len(returns)} < {self.min_observations}")
+            logger.warning(
+                f"[Attribution] Insufficient observations: {len(returns)} < {self.min_observations}"
+            )
             return self._empty_result(returns, period_start, period_end)
 
         # Prepare factor matrix
-        factor_matrix, valid_factor_ids = self._prepare_factor_matrix(factor_data, factor_ids)
+        factor_matrix, valid_factor_ids = self._prepare_factor_matrix(
+            factor_data, factor_ids
+        )
 
         if factor_matrix.shape[1] == 0:
             logger.warning("[Attribution] No valid factors for regression")
@@ -125,7 +132,9 @@ class AttributionEngine:
 
         # Run regression
         try:
-            result = self._run_regression(returns, factor_matrix, valid_factor_ids, factor_data)
+            result = self._run_regression(
+                returns, factor_matrix, valid_factor_ids, factor_data
+            )
             result.period_start = period_start
             result.period_end = period_end
             return result
@@ -143,22 +152,22 @@ class AttributionEngine:
     ) -> List[AttributionResult]:
         """
         Calculate rolling window attribution.
-        
+
         Args:
             returns: Array of portfolio returns
             factor_data: DataFrame with factor values
             factor_ids: List of factor IDs
             window: Rolling window size
             step: Step size between windows
-            
+
         Returns:
             List of AttributionResult for each window
         """
         results = []
 
         for i in range(window, len(returns), step):
-            window_returns = returns[i - window:i]
-            window_factor_data = factor_data.iloc[i - window:i]
+            window_returns = returns[i - window : i]
+            window_factor_data = factor_data.iloc[i - window : i]
 
             result = self.calculate_attribution(
                 window_returns,
@@ -243,12 +252,14 @@ class AttributionEngine:
         resid = y - y_pred
 
         # R-squared
-        ss_res = np.sum(resid ** 2)
+        ss_res = np.sum(resid**2)
         ss_tot = np.sum((y - np.mean(y)) ** 2)
         r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
 
         # Adjusted R-squared
-        adjusted_r_squared = 1 - (1 - r_squared) * (n - 1) / (n - k - 1) if n > k + 1 else 0
+        adjusted_r_squared = (
+            1 - (1 - r_squared) * (n - 1) / (n - k - 1) if n > k + 1 else 0
+        )
 
         # Standard errors and t-statistics
         mse = ss_res / (n - k - 1) if n > k + 1 else 0
@@ -287,19 +298,23 @@ class AttributionEngine:
             exposure = np.mean(factors_clean[:, i])
             contribution = beta[i + 1] * exposure  # +1 for intercept
 
-            factor_contributions.append(FactorContribution(
-                factor_id=fid,
-                factor_name=factor_name,
-                category=category,
-                contribution=contribution,
-                exposure=exposure,
-                return_attribution=contribution * total_return,
-                t_statistic=t_stats[i + 1] if i + 1 < len(t_stats) else 0,
-                p_value=p_values[i + 1] if i + 1 < len(p_values) else 1,
-            ))
+            factor_contributions.append(
+                FactorContribution(
+                    factor_id=fid,
+                    factor_name=factor_name,
+                    category=category,
+                    contribution=contribution,
+                    exposure=exposure,
+                    return_attribution=contribution * total_return,
+                    t_statistic=t_stats[i + 1] if i + 1 < len(t_stats) else 0,
+                    p_value=p_values[i + 1] if i + 1 < len(p_values) else 1,
+                )
+            )
 
         # Residual (unexplained return)
-        residual = total_return - sum(fc.return_attribution for fc in factor_contributions)
+        residual = total_return - sum(
+            fc.return_attribution for fc in factor_contributions
+        )
 
         return AttributionResult(
             total_return=total_return,
@@ -314,7 +329,9 @@ class AttributionEngine:
             period_end="",
         )
 
-    def _empty_result(self, returns: np.ndarray, period_start: str, period_end: str) -> AttributionResult:
+    def _empty_result(
+        self, returns: np.ndarray, period_start: str, period_end: str
+    ) -> AttributionResult:
         """Return empty attribution result"""
         total_return = np.mean(returns) * 252 if len(returns) > 0 else 0
         return AttributionResult(

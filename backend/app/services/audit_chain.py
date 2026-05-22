@@ -45,9 +45,11 @@ AUDIT_DB_PATH = Path(__file__).parent.parent.parent.parent / "database.db"
 
 # ── Data Structures ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class AuditChainRecord:
     """Audit record with hash chain fields."""
+
     id: int
     timestamp: str
     actor_id: str
@@ -66,14 +68,15 @@ class AuditChainRecord:
 
 # ── Core Hash Functions ───────────────────────────────────────────────────────
 
+
 def compute_hash(prev_hash: str, fields: Dict[str, Any]) -> str:
     """
     Compute HMAC-SHA256 of prev_hash + canonicalized fields.
-    
+
     Args:
         prev_hash: Hash of the previous record in the chain
         fields: Dictionary of audit fields to hash
-        
+
     Returns:
         Hexadecimal HMAC-SHA256 digest
     """
@@ -85,22 +88,20 @@ def compute_hash(prev_hash: str, fields: Dict[str, Any]) -> str:
 
     # Compute HMAC-SHA256
     return hmac.new(
-        AUDIT_HMAC_KEY.encode('utf-8'),
-        payload.encode('utf-8'),
-        hashlib.sha256
+        AUDIT_HMAC_KEY.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
     ).hexdigest()
 
 
 def get_prev_hash_and_index(conn: sqlite3.Connection) -> Tuple[str, int]:
     """
     Get the previous hash and chain index with row lock.
-    
+
     Uses SELECT ... ORDER BY id DESC LIMIT 1 with row lock
     to ensure atomic chain extension.
-    
+
     Args:
         conn: Database connection (must be in transaction)
-        
+
     Returns:
         Tuple of (prev_hash, chain_index)
     """
@@ -121,6 +122,7 @@ def get_prev_hash_and_index(conn: sqlite3.Connection) -> Tuple[str, int]:
 
 # ── Audit Logging with Hash Chain ─────────────────────────────────────────────
 
+
 def log_audit_event(
     actor_id: str,
     action: str,
@@ -135,12 +137,12 @@ def log_audit_event(
 ) -> int:
     """
     Insert audit event with hash chain.
-    
+
     This function:
     1. Gets the previous hash with row lock
     2. Computes the new record hash
     3. Inserts the record atomically
-    
+
     Args:
         actor_id: ID of the actor performing the action
         action: Action type (e.g., 'buy', 'sell', 'transfer')
@@ -152,7 +154,7 @@ def log_audit_event(
         ip_address: Client IP address
         user_agent: Client user agent
         conn: Optional external connection for transaction sharing
-        
+
     Returns:
         ID of the inserted audit record
     """
@@ -193,36 +195,45 @@ def log_audit_event(
         record_hash = compute_hash(prev_hash, fields)
 
         # Insert audit record
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             INSERT INTO audit_logs (
                 timestamp, agent_id, action, resource, details,
                 ip_address, user_agent, prev_hash, record_hash, chain_index
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            now_str,
-            actor_id,
-            action,
-            f"{resource_type}:{resource_id}",
-            json.dumps({
-                "resource_type": resource_type,
-                "resource_id": resource_id,
-                "outcome": outcome,
-                "before_state": before_state,
-                "after_state": after_state,
-            }, default=str, ensure_ascii=False),
-            ip_address,
-            user_agent,
-            prev_hash,
-            record_hash,
-            chain_index,
-        ))
+        """,
+            (
+                now_str,
+                actor_id,
+                action,
+                f"{resource_type}:{resource_id}",
+                json.dumps(
+                    {
+                        "resource_type": resource_type,
+                        "resource_id": resource_id,
+                        "outcome": outcome,
+                        "before_state": before_state,
+                        "after_state": after_state,
+                    },
+                    default=str,
+                    ensure_ascii=False,
+                ),
+                ip_address,
+                user_agent,
+                prev_hash,
+                record_hash,
+                chain_index,
+            ),
+        )
 
         record_id = cursor.lastrowid
 
         if manage_transaction:
             conn.commit()
 
-        logger.info(f"[AuditChain] Logged event: id={record_id}, action={action}, chain_index={chain_index}")
+        logger.info(
+            f"[AuditChain] Logged event: id={record_id}, action={action}, chain_index={chain_index}"
+        )
 
         return record_id
 
@@ -232,7 +243,10 @@ def log_audit_event(
                 conn.rollback()
             except sqlite3.Error:
                 pass
-        logger.error(f"[AuditChain] Database error logging audit event: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(
+            f"[AuditChain] Database error logging audit event: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         raise
     except Exception as e:
         if manage_transaction:
@@ -249,19 +263,22 @@ def log_audit_event(
 
 # ── Chain Verification ────────────────────────────────────────────────────────
 
-def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> Dict[str, Any]:
+
+def verify_chain(
+    from_id: Optional[int] = None, to_id: Optional[int] = None
+) -> Dict[str, Any]:
     """
     Verify hash chain integrity.
-    
+
     Checks:
     1. Each record's prev_hash matches the previous record's record_hash
     2. Each record's record_hash can be recomputed from its fields
     3. Chain index is sequential
-    
+
     Args:
         from_id: Start ID for verification (None = from beginning)
         to_id: End ID for verification (None = to end)
-        
+
     Returns:
         Dictionary with verification results:
         - valid: bool - Whether the chain is valid
@@ -301,7 +318,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                 "checked_records": 0,
                 "first_invalid_id": None,
                 "error_type": None,
-                "message": "No records to verify"
+                "message": "No records to verify",
             }
 
         # Verify chain - check ALL records with hash fields
@@ -322,11 +339,15 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                 "pre_chain_records": pre_chain_count,
                 "first_invalid_id": None,
                 "error_type": None,
-                "message": "No hash chain records found (all pre-chain)"
+                "message": "No hash chain records found (all pre-chain)",
             }
 
         # Build a map of record_hash by id for quick lookup
-        record_hash_by_id = {rows[i]["id"]: rows[i]["record_hash"] for i, _ in chain_records if rows[i]["record_hash"]}
+        record_hash_by_id = {
+            rows[i]["id"]: rows[i]["record_hash"]
+            for i, _ in chain_records
+            if rows[i]["record_hash"]
+        }
 
         # Verify each chain record
         for idx, (orig_idx, row) in enumerate(chain_records):
@@ -341,7 +362,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                             "pre_chain_records": pre_chain_count,
                             "first_invalid_id": row["id"],
                             "error_type": "genesis_hash_invalid",
-                            "message": f"Record {row['id']}: chain_index=0 but prev_hash is not GENESIS_HASH"
+                            "message": f"Record {row['id']}: chain_index=0 but prev_hash is not GENESIS_HASH",
                         }
                 else:
                     # Non-genesis record: prev_hash must equal previous record's record_hash
@@ -361,7 +382,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                             "pre_chain_records": pre_chain_count,
                             "first_invalid_id": row["id"],
                             "error_type": "prev_hash_invalid",
-                            "message": f"Record {row['id']}: no valid predecessor found for chain_index={row['chain_index']}"
+                            "message": f"Record {row['id']}: no valid predecessor found for chain_index={row['chain_index']}",
                         }
 
                     if row["prev_hash"] != prev_record["record_hash"]:
@@ -371,7 +392,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                             "pre_chain_records": pre_chain_count,
                             "first_invalid_id": row["id"],
                             "error_type": "prev_hash_mismatch",
-                            "message": f"Record {row['id']}: prev_hash does not match predecessor's record_hash"
+                            "message": f"Record {row['id']}: prev_hash does not match predecessor's record_hash",
                         }
 
             # For records with non-empty prev_hash but empty record_hash, that's also invalid
@@ -382,7 +403,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                     "pre_chain_records": pre_chain_count,
                     "first_invalid_id": row["id"],
                     "error_type": "record_hash_missing",
-                    "message": f"Record {row['id']}: has prev_hash but no record_hash"
+                    "message": f"Record {row['id']}: has prev_hash but no record_hash",
                 }
 
             # Verify the record_hash can be recomputed
@@ -396,7 +417,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                         "pre_chain_records": pre_chain_count,
                         "first_invalid_id": row["id"],
                         "error_type": "invalid_json",
-                        "message": f"Record {row['id']}: failed to parse details JSON"
+                        "message": f"Record {row['id']}: failed to parse details JSON",
                     }
 
                 fields = {
@@ -418,7 +439,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                         "pre_chain_records": pre_chain_count,
                         "first_invalid_id": row["id"],
                         "error_type": "hash_mismatch",
-                        "message": f"Record {row['id']}: computed hash does not match stored hash"
+                        "message": f"Record {row['id']}: computed hash does not match stored hash",
                     }
 
         verified_count = len(chain_records)
@@ -428,7 +449,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
             "pre_chain_records": pre_chain_count,
             "first_invalid_id": None,
             "error_type": None,
-            "message": f"Chain integrity verified successfully ({verified_count} records, {pre_chain_count} pre-chain skipped)"
+            "message": f"Chain integrity verified successfully ({verified_count} records, {pre_chain_count} pre-chain skipped)",
         }
 
     except Exception as e:
@@ -438,7 +459,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
             "checked_records": 0,
             "first_invalid_id": None,
             "error_type": "exception",
-            "message": str(e)
+            "message": str(e),
         }
     finally:
         conn.close()
@@ -447,7 +468,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
 def get_chain_stats() -> Dict[str, Any]:
     """
     Get statistics about the audit chain.
-    
+
     Returns:
         Dictionary with chain statistics
     """
@@ -496,6 +517,7 @@ def get_chain_stats() -> Dict[str, Any]:
 
 # ── Convenience Functions for Trading Operations ──────────────────────────────
 
+
 def log_buy(
     portfolio_id: int,
     symbol: str,
@@ -507,7 +529,7 @@ def log_buy(
 ) -> int:
     """
     Log a buy transaction with hash chain.
-    
+
     Args:
         portfolio_id: Portfolio ID
         symbol: Stock symbol
@@ -516,7 +538,7 @@ def log_buy(
         actor_id: Actor performing the buy
         order_id: Optional order ID
         ip_address: Client IP address
-        
+
     Returns:
         Audit record ID
     """
@@ -550,7 +572,7 @@ def log_sell(
 ) -> int:
     """
     Log a sell transaction with hash chain.
-    
+
     Args:
         portfolio_id: Portfolio ID
         symbol: Stock symbol
@@ -560,7 +582,7 @@ def log_sell(
         actor_id: Actor performing the sell
         order_id: Optional order ID
         ip_address: Client IP address
-        
+
     Returns:
         Audit record ID
     """
@@ -593,7 +615,7 @@ def log_cash_operation(
 ) -> int:
     """
     Log a cash operation with hash chain.
-    
+
     Args:
         portfolio_id: Portfolio ID
         operation: Operation type (deposit, withdraw, transfer_in, transfer_out)
@@ -601,7 +623,7 @@ def log_cash_operation(
         balance_after: Balance after operation
         actor_id: Actor performing the operation
         ip_address: Client IP address
-        
+
     Returns:
         Audit record ID
     """

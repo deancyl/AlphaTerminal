@@ -6,6 +6,7 @@ Returns 504 Gateway Timeout when requests exceed the configured timeout.
 
 Health check endpoints are exempted from timeout to allow monitoring.
 """
+
 import asyncio
 import logging
 from typing import Callable, List, Optional
@@ -34,7 +35,7 @@ EXEMPT_PATHS: List[str] = [
 class TimeoutMiddleware(BaseHTTPMiddleware):
     """
     Middleware that enforces a global request timeout.
-    
+
     If a request exceeds the timeout, returns 504 Gateway Timeout.
     Health check endpoints are exempted.
     """
@@ -60,15 +61,12 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         try:
-            return await asyncio.wait_for(
-                call_next(request),
-                timeout=self.timeout
-            )
+            return await asyncio.wait_for(call_next(request), timeout=self.timeout)
         except asyncio.TimeoutError:
             logger.warning(
                 f"[TimeoutMiddleware] Request {request.method} {request.url.path} "
                 f"exceeded {self.timeout}s timeout",
-                exc_info=True
+                exc_info=True,
             )
             return JSONResponse(
                 status_code=504,
@@ -76,7 +74,7 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
                     "code": 504,
                     "message": f"请求超时（{self.timeout}秒），请稍后重试",
                     "data": None,
-                }
+                },
             )
         except Exception as e:
             logger.error(f"[TimeoutMiddleware] Unexpected error: {e}", exc_info=True)

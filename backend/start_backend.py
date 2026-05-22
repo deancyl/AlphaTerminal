@@ -4,12 +4,15 @@ import os
 # ── 优雅关停：捕获 SIGTERM 后通知 uvicorn 退出 ──────────────────────
 _server = None
 
+
 def _sigterm_handler(signum, frame):
     """SIGTERM 信号处理：优雅关停而非被 SIGKILL"""
     import logging
+
     logging.getLogger(__name__).info("[SIGTERM] 收到终止信号，正在优雅关停...")
-    if _server and hasattr(_server, 'should_exit'):
+    if _server and hasattr(_server, "should_exit"):
         _server.should_exit = True
+
 
 signal.signal(signal.SIGTERM, _sigterm_handler)
 

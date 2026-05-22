@@ -141,9 +141,7 @@ class TestHashComputation:
         canonical = json.dumps(fields, sort_keys=True, default=str, ensure_ascii=False)
         payload = prev_hash + canonical
         expected = hmac.new(
-            AUDIT_HMAC_KEY.encode('utf-8'),
-            payload.encode('utf-8'),
-            hashlib.sha256
+            AUDIT_HMAC_KEY.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
         ).hexdigest()
 
         result = compute_hash(prev_hash, fields)
@@ -254,7 +252,7 @@ class TestLogAuditEvent:
     @pytest.fixture
     def temp_db(self):
         """Create a temporary database for testing."""
-        fd, path = tempfile.mkstemp(suffix='.db')
+        fd, path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
 
         conn = sqlite3.connect(path)
@@ -285,7 +283,7 @@ class TestLogAuditEvent:
 
     def test_log_event_returns_record_id(self, temp_db):
         """Should return the ID of the inserted record."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             record_id = log_audit_event(
                 actor_id="user1",
                 action="buy",
@@ -298,7 +296,7 @@ class TestLogAuditEvent:
 
     def test_log_event_creates_chain_record(self, temp_db):
         """Should create record with hash chain fields."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             record_id = log_audit_event(
                 actor_id="user1",
                 action="buy",
@@ -322,7 +320,7 @@ class TestLogAuditEvent:
 
     def test_log_event_chain_continuation(self, temp_db):
         """Should properly chain records together."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             # First record
             id1 = log_audit_event(
                 actor_id="user1",
@@ -344,9 +342,7 @@ class TestLogAuditEvent:
             # Get records
             conn = sqlite3.connect(temp_db)
             conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM audit_logs ORDER BY id"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM audit_logs ORDER BY id").fetchall()
             conn.close()
 
             assert len(rows) == 2
@@ -361,7 +357,7 @@ class TestVerifyChain:
     @pytest.fixture
     def temp_db(self):
         """Create a temporary database for testing."""
-        fd, path = tempfile.mkstemp(suffix='.db')
+        fd, path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
 
         conn = sqlite3.connect(path)
@@ -392,7 +388,7 @@ class TestVerifyChain:
 
     def test_verify_empty_chain(self, temp_db):
         """Should return valid for empty chain."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             result = verify_chain()
 
             assert result["valid"] is True
@@ -400,7 +396,7 @@ class TestVerifyChain:
 
     def test_verify_single_record(self, temp_db):
         """Should verify single record chain."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             log_audit_event(
                 actor_id="user1",
                 action="buy",
@@ -416,7 +412,7 @@ class TestVerifyChain:
 
     def test_verify_multiple_records(self, temp_db):
         """Should verify chain with multiple records."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             for i in range(5):
                 log_audit_event(
                     actor_id="user1",
@@ -433,7 +429,7 @@ class TestVerifyChain:
 
     def test_detect_tampered_hash(self, temp_db):
         """Should detect tampered record hash."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             log_audit_event(
                 actor_id="user1",
                 action="buy",
@@ -446,7 +442,7 @@ class TestVerifyChain:
             conn = sqlite3.connect(temp_db)
             conn.execute(
                 "UPDATE audit_logs SET record_hash = ? WHERE id = 1",
-                ("tampered_hash_00000000000000000000000000000000",)
+                ("tampered_hash_00000000000000000000000000000000",),
             )
             conn.commit()
             conn.close()
@@ -458,7 +454,7 @@ class TestVerifyChain:
 
     def test_detect_broken_chain(self, temp_db):
         """Should detect broken chain link."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             # First record
             log_audit_event(
                 actor_id="user1",
@@ -481,7 +477,7 @@ class TestVerifyChain:
             conn = sqlite3.connect(temp_db)
             conn.execute(
                 "UPDATE audit_logs SET prev_hash = ? WHERE id = 2",
-                ("broken_prev_hash_00000000000000000000000000000",)
+                ("broken_prev_hash_00000000000000000000000000000",),
             )
             conn.commit()
             conn.close()
@@ -493,7 +489,7 @@ class TestVerifyChain:
 
     def test_verify_with_from_id(self, temp_db):
         """Should verify chain starting from specified ID."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             for i in range(10):
                 log_audit_event(
                     actor_id="user1",
@@ -515,7 +511,7 @@ class TestGetChainStats:
     @pytest.fixture
     def temp_db(self):
         """Create a temporary database for testing."""
-        fd, path = tempfile.mkstemp(suffix='.db')
+        fd, path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
 
         conn = sqlite3.connect(path)
@@ -546,7 +542,7 @@ class TestGetChainStats:
 
     def test_stats_empty_chain(self, temp_db):
         """Should return correct stats for empty chain."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             stats = get_chain_stats()
 
             assert stats["total_records"] == 0
@@ -557,7 +553,7 @@ class TestGetChainStats:
 
     def test_stats_with_records(self, temp_db):
         """Should return correct stats for chain with records."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             for i in range(5):
                 log_audit_event(
                     actor_id="user1",
@@ -577,14 +573,14 @@ class TestGetChainStats:
 
     def test_stats_includes_genesis_hash(self, temp_db):
         """Stats should include genesis hash constant."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             stats = get_chain_stats()
 
             assert stats["genesis_hash"] == GENESIS_HASH
 
     def test_stats_includes_retention_days(self, temp_db):
         """Stats should include SEC retention days."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             stats = get_chain_stats()
 
             assert stats["retention_days"] == SEC_RETENTION_DAYS
@@ -596,7 +592,7 @@ class TestConvenienceFunctions:
     @pytest.fixture
     def temp_db(self):
         """Create a temporary database for testing."""
-        fd, path = tempfile.mkstemp(suffix='.db')
+        fd, path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
 
         conn = sqlite3.connect(path)
@@ -627,7 +623,7 @@ class TestConvenienceFunctions:
 
     def test_log_buy(self, temp_db):
         """Should log buy transaction with correct fields."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             record_id = log_buy(
                 portfolio_id=1,
                 symbol="sh600519",
@@ -650,7 +646,7 @@ class TestConvenienceFunctions:
 
     def test_log_sell(self, temp_db):
         """Should log sell transaction with correct fields."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             record_id = log_sell(
                 portfolio_id=1,
                 symbol="sh600519",
@@ -673,7 +669,7 @@ class TestConvenienceFunctions:
 
     def test_log_cash_operation(self, temp_db):
         """Should log cash operation with correct fields."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             record_id = log_cash_operation(
                 portfolio_id=1,
                 operation="deposit",
@@ -695,7 +691,7 @@ class TestConvenienceFunctions:
 
     def test_log_buy_with_optional_fields(self, temp_db):
         """Should include optional fields in buy log."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             record_id = log_buy(
                 portfolio_id=1,
                 symbol="sh600519",
@@ -724,7 +720,7 @@ class TestChainIntegrity:
     @pytest.fixture
     def temp_db(self):
         """Create a temporary database for testing."""
-        fd, path = tempfile.mkstemp(suffix='.db')
+        fd, path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
 
         conn = sqlite3.connect(path)
@@ -755,7 +751,7 @@ class TestChainIntegrity:
 
     def test_chain_detects_deletion(self, temp_db):
         """Should detect when a record is deleted from chain."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             # Create 3 records
             id1 = log_audit_event(
                 actor_id="user1",
@@ -792,7 +788,7 @@ class TestChainIntegrity:
 
     def test_chain_detects_insertion(self, temp_db):
         """Should detect when a record is inserted into chain."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             # Create 2 records
             log_audit_event(
                 actor_id="user1",
@@ -811,20 +807,23 @@ class TestChainIntegrity:
 
             # Insert a fake record
             conn = sqlite3.connect(temp_db)
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO audit_logs 
                 (timestamp, agent_id, action, resource, details, prev_hash, record_hash, chain_index)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                "2024-01-01T00:00:00",
-                "hacker",
-                "transfer",
-                "cash:1",
-                "{}",
-                GENESIS_HASH,
-                "fake_hash_000000000000000000000000000000000000",
-                0,
-            ))
+            """,
+                (
+                    "2024-01-01T00:00:00",
+                    "hacker",
+                    "transfer",
+                    "cash:1",
+                    "{}",
+                    GENESIS_HASH,
+                    "fake_hash_000000000000000000000000000000000000",
+                    0,
+                ),
+            )
             conn.commit()
             conn.close()
 
@@ -835,7 +834,7 @@ class TestChainIntegrity:
 
     def test_genesis_record_validation(self, temp_db):
         """Should validate genesis record has correct prev_hash."""
-        with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
+        with patch("app.services.audit_chain.AUDIT_DB_PATH", Path(temp_db)):
             # Create a record
             log_audit_event(
                 actor_id="user1",
@@ -849,7 +848,7 @@ class TestChainIntegrity:
             conn = sqlite3.connect(temp_db)
             conn.execute(
                 "UPDATE audit_logs SET prev_hash = ? WHERE chain_index = 0",
-                ("invalid_genesis_000000000000000000000000000000",)
+                ("invalid_genesis_000000000000000000000000000000",),
             )
             conn.commit()
             conn.close()
@@ -868,7 +867,7 @@ class TestEdgeCases:
         fields = {
             "timestamp": "2024-01-01T00:00:00",
             "actor_id": "用户1",  # Chinese characters
-            "action": "买入",    # Chinese characters
+            "action": "买入",  # Chinese characters
         }
         result = compute_hash(GENESIS_HASH, fields)
         assert len(result) == 64

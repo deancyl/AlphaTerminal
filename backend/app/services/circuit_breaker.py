@@ -13,6 +13,7 @@ v2 新增: 滑动窗口熔断器（SlidingWindowCircuitBreaker）
   - 在指定时间窗口内统计失败率，而非仅统计连续失败次数
   - 更精准地反映数据源的健康状态
 """
+
 import time
 import threading
 from enum import Enum
@@ -22,34 +23,39 @@ from collections import deque
 
 
 class CircuitState(Enum):
-    CLOSED = "closed"      # 正常，流量通过
-    OPEN = "open"          # 熔断，流量拒绝
+    CLOSED = "closed"  # 正常，流量通过
+    OPEN = "open"  # 熔断，流量拒绝
     HALF_OPEN = "half_open"  # 半开，只允许一个测试请求
 
 
 @dataclass
 class CircuitBreakerConfig:
     """熔断器配置"""
-    failure_threshold: int = 5       # 失败次数阈值 (OPEN)
-    success_threshold: int = 2       # 成功次数阈值 (CLOSED from HALF_OPEN)
-    timeout: float = 30.0             # OPEN 状态持续时间 (秒)
-    half_open_max_calls: int = 3     # HALF_OPEN 状态下允许的调用数（需 >= success_threshold）
+
+    failure_threshold: int = 5  # 失败次数阈值 (OPEN)
+    success_threshold: int = 2  # 成功次数阈值 (CLOSED from HALF_OPEN)
+    timeout: float = 30.0  # OPEN 状态持续时间 (秒)
+    half_open_max_calls: int = (
+        3  # HALF_OPEN 状态下允许的调用数（需 >= success_threshold）
+    )
 
 
 @dataclass
 class SlidingWindowConfig:
     """滑动窗口熔断器配置"""
-    window_size: float = 60.0        # 时间窗口大小（秒）
-    min_calls: int = 5               # 窗口内最小调用数（低于此值不触发熔断）
+
+    window_size: float = 60.0  # 时间窗口大小（秒）
+    min_calls: int = 5  # 窗口内最小调用数（低于此值不触发熔断）
     failure_rate_threshold: float = 0.5  # 失败率阈值（50%）
-    consecutive_failures: int = 5    # 连续失败次数阈值（快速熔断）
-    timeout: float = 30.0            # OPEN 状态持续时间（秒）
-    success_threshold: int = 2       # HALF_OPEN → CLOSED 成功次数阈值
+    consecutive_failures: int = 5  # 连续失败次数阈值（快速熔断）
+    timeout: float = 30.0  # OPEN 状态持续时间（秒）
+    success_threshold: int = 2  # HALF_OPEN → CLOSED 成功次数阈值
 
 
 @dataclass
 class CircuitBreakerStats:
     """熔断器统计"""
+
     total_calls: int = 0
     successful_calls: int = 0
     failed_calls: int = 0
@@ -77,22 +83,18 @@ class CircuitBreakerStats:
 class CircuitBreaker:
     """
     熔断器实现。
-    
+
     使用方式:
         cb = CircuitBreaker("sina", failure_threshold=5, timeout=30)
-        
+
         with cb:
             # 在这里执行可能失败的操作
             result = await fetcher.get_quote(symbol)
-    
+
     如果熔断器 OPEN，会抛出 CircuitBreakerOpen 异常。
     """
 
-    def __init__(
-        self,
-        name: str,
-        config: Optional[CircuitBreakerConfig] = None
-    ):
+    def __init__(self, name: str, config: Optional[CircuitBreakerConfig] = None):
         self.name = name
         self.config = config or CircuitBreakerConfig()
         self._state = CircuitState.CLOSED
@@ -110,7 +112,10 @@ class CircuitBreaker:
         """获取状态（必须在持有锁时调用）"""
         if self._state == CircuitState.OPEN:
             # 检查是否应该转换到 HALF_OPEN
-            if self._opened_at and (time.time() - self._opened_at) >= self.config.timeout:
+            if (
+                self._opened_at
+                and (time.time() - self._opened_at) >= self.config.timeout
+            ):
                 self._state = CircuitState.HALF_OPEN
                 self._half_open_calls = 0
                 self._stats.consecutive_failures = 0
@@ -118,11 +123,9 @@ class CircuitBreaker:
         return self._state
 
     def _record_state_change(self, new_state: CircuitState):
-        self._stats.state_change_times.append({
-            "time": time.time(),
-            "from": self._state.value,
-            "to": new_state.value
-        })
+        self._stats.state_change_times.append(
+            {"time": time.time(), "from": self._state.value, "to": new_state.value}
+        )
 
     def _can_execute(self) -> bool:
         """检查是否允许执行（在持有锁时调用）"""
@@ -149,7 +152,9 @@ class CircuitBreaker:
                 if self._stats.consecutive_successes >= self.config.success_threshold:
                     self._state = CircuitState.CLOSED
                     self._stats.consecutive_successes = 0
-                    self._stats.consecutive_failures = 0  # 修复: 进入 CLOSED 前必须重置失败计数
+                    self._stats.consecutive_failures = (
+                        0  # 修复: 进入 CLOSED 前必须重置失败计数
+                    )
                     self._record_state_change(CircuitState.CLOSED)
 
     def record_failure(self):
@@ -204,10 +209,7 @@ class CircuitBreaker:
         """上下文管理器入口 - 支持 with 语句"""
         if not self.is_available():
             stats = self.get_stats()
-            raise CircuitBreakerOpen(
-                self.name,
-                stats.get("timeout", 30)
-            )
+            raise CircuitBreakerOpen(self.name, stats.get("timeout", 30))
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -221,10 +223,13 @@ class CircuitBreaker:
 
 class CircuitBreakerOpen(Exception):
     """熔断器打开异常"""
+
     def __init__(self, name: str, timeout: float):
         self.name = name
         self.timeout = timeout
-        super().__init__(f"Circuit breaker '{name}' is OPEN. Try again in {timeout:.1f}s")
+        super().__init__(
+            f"Circuit breaker '{name}' is OPEN. Try again in {timeout:.1f}s"
+        )
 
 
 class CircuitContext:
@@ -236,10 +241,7 @@ class CircuitContext:
     def __enter__(self):
         if not self.breaker.is_available():
             stats = self.breaker.get_stats()
-            raise CircuitBreakerOpen(
-                self.breaker.name,
-                stats.get("timeout", 30)
-            )
+            raise CircuitBreakerOpen(self.breaker.name, stats.get("timeout", 30))
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -253,27 +255,23 @@ class CircuitContext:
 class SlidingWindowCircuitBreaker:
     """
     滑动窗口熔断器 - 基于时间窗口内的失败率触发熔断。
-    
+
     与传统熔断器的区别：
     - 传统：仅统计连续失败次数
     - 滑动窗口：统计时间窗口内的失败率，更精准反映数据源健康状态
-    
+
     触发条件（满足任一）：
     1. 连续失败次数 >= consecutive_failures（快速熔断）
     2. 窗口内失败率 >= failure_rate_threshold 且调用数 >= min_calls
-    
+
     使用方式：
         cb = SlidingWindowCircuitBreaker("sina", SlidingWindowConfig())
-        
+
         with cb:
             result = await fetcher.get_quote(symbol)
     """
 
-    def __init__(
-        self,
-        name: str,
-        config: Optional[SlidingWindowConfig] = None
-    ):
+    def __init__(self, name: str, config: Optional[SlidingWindowConfig] = None):
         self.name = name
         self.config = config or SlidingWindowConfig()
         self._state = CircuitState.CLOSED
@@ -290,7 +288,10 @@ class SlidingWindowCircuitBreaker:
         with self._state_lock:
             # 检查是否应该从 OPEN 转换到 HALF_OPEN
             if self._state == CircuitState.OPEN:
-                if self._opened_at and (time.time() - self._opened_at) >= self.config.timeout:
+                if (
+                    self._opened_at
+                    and (time.time() - self._opened_at) >= self.config.timeout
+                ):
                     self._state = CircuitState.HALF_OPEN
                     self._half_open_calls = 0
                     self._consecutive_failures = 0
@@ -361,7 +362,10 @@ class SlidingWindowCircuitBreaker:
             if self._state == CircuitState.CLOSED:
                 return True
             if self._state == CircuitState.OPEN:
-                if self._opened_at and (time.time() - self._opened_at) >= self.config.timeout:
+                if (
+                    self._opened_at
+                    and (time.time() - self._opened_at) >= self.config.timeout
+                ):
                     self._state = CircuitState.HALF_OPEN
                     self._half_open_calls = 0
                     self._consecutive_failures = 0
@@ -394,7 +398,7 @@ class SlidingWindowCircuitBreaker:
                     "failure_rate_threshold": self.config.failure_rate_threshold,
                     "consecutive_failures": self.config.consecutive_failures,
                     "timeout": self.config.timeout,
-                }
+                },
             }
 
     def reset(self):

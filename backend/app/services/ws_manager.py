@@ -3,6 +3,7 @@ WebSocket 连接管理器 — 优化版本
 使用 Dict[symbol, Set[WSConnection]] 实现 O(1) 广播查找
 支持心跳检测、死连接清理、消息批量和速率限制
 """
+
 import asyncio
 import json
 import logging
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # 心跳配置
 PING_INTERVAL = 25  # 发送 ping 间隔（秒）
-PONG_TIMEOUT = 10     # 等待 pong 响应超时（秒）
+PONG_TIMEOUT = 10  # 等待 pong 响应超时（秒）
 CLEANUP_INTERVAL = 30  # 死连接清理间隔（秒）
 LOCK_TIMEOUT = 5.0  # Async lock timeout (seconds)
 
@@ -28,13 +29,14 @@ MAX_MSG_PER_SECOND = 100  # 每秒最大消息数
 
 class WSConnection:
     """单个 WebSocket 连接及其订阅状态"""
+
     def __init__(self, ws: WebSocket):
-        self._ws         = ws
-        self._symbols    = set()
-        self._lock       = asyncio.Lock()
-        self._last_pong  = time.time()
-        self._latency    = None
-        self._msg_times  = []  # 速率限制：记录消息发送时间戳
+        self._ws = ws
+        self._symbols = set()
+        self._lock = asyncio.Lock()
+        self._last_pong = time.time()
+        self._latency = None
+        self._msg_times = []  # 速率限制：记录消息发送时间戳
 
     @property
     def ws(self) -> WebSocket:
@@ -51,7 +53,7 @@ class WSConnection:
 
     def is_alive(self) -> bool:
         """检查连接是否还活着（pong 未超时）
-        
+
         增强版：
         - 更严格的超时检查（考虑 PING_INTERVAL）
         - 记录 pong 超时日志
@@ -89,10 +91,10 @@ class WSConnection:
         elapsed = time.time() - self._last_pong
         missed_pongs = int(elapsed / PING_INTERVAL)
         return {
-            'is_alive': elapsed < PONG_TIMEOUT,
-            'last_pong_age': elapsed,
-            'latency': self._latency,
-            'missed_pongs': missed_pongs
+            "is_alive": elapsed < PONG_TIMEOUT,
+            "last_pong_age": elapsed,
+            "latency": self._latency,
+            "missed_pongs": missed_pongs,
         }
 
     def _check_rate_limit(self) -> bool:
@@ -110,7 +112,11 @@ class WSConnection:
         返回: (成功与否, 错误消息)
         """
         async with self._lock:
-            new_symbols = [s.strip().lower() for s in symbols if s.strip().lower() not in self._symbols]
+            new_symbols = [
+                s.strip().lower()
+                for s in symbols
+                if s.strip().lower() not in self._symbols
+            ]
             if len(self._symbols) + len(new_symbols) > MAX_SUBSCRIPTIONS:
                 return False, f"订阅数量超过限制（最大 {MAX_SUBSCRIPTIONS} 个）"
             for s in new_symbols:
@@ -137,11 +143,12 @@ class ConnectionManager:
     - 广播时直接通过 symbol 获取订阅者，避免遍历所有连接
     - 支持心跳检测、死连接自动清理、消息批量和速率限制
     """
+
     def __init__(self):
         self._conns: list[WSConnection] = []
         self._symbol_map: dict[str, set] = {}
-        self._conn_lock  = asyncio.Lock()
-        self._map_lock   = asyncio.Lock()
+        self._conn_lock = asyncio.Lock()
+        self._map_lock = asyncio.Lock()
         self._heartbeat_task = None
         self._cleanup_task = None
         self._batch_task = None
@@ -237,7 +244,9 @@ class ConnectionManager:
             dead = []
             for conn in subscribers:
                 if not conn._check_rate_limit():
-                    logger.warning("[WS] rate limit exceeded for connection, dropping message")
+                    logger.warning(
+                        "[WS] rate limit exceeded for connection, dropping message"
+                    )
                     continue
                 try:
                     await conn.ws.send_text(data)
@@ -263,17 +272,21 @@ class ConnectionManager:
 
     async def connect(self, ws: WebSocket) -> WSConnection:
         """注册新连接，返回 WSConnection 对象
-        
+
         如果超过 MAX_CONNECTIONS 限制，会抛出 WebSocketDisconnect(code=1013)
         """
         async with self._conn_lock:
             if len(self._conns) >= MAX_CONNECTIONS:
-                logger.warning(f"[WS] Connection limit reached: {len(self._conns)}/{MAX_CONNECTIONS}")
+                logger.warning(
+                    f"[WS] Connection limit reached: {len(self._conns)}/{MAX_CONNECTIONS}"
+                )
                 await ws.close(code=1013, reason="Connection limit exceeded")
                 raise WebSocketDisconnect(code=1013)
             conn = WSConnection(ws)
             self._conns.append(conn)
-        logger.info(f"[WS] client connected, total={len(self._conns)}/{MAX_CONNECTIONS}")
+        logger.info(
+            f"[WS] client connected, total={len(self._conns)}/{MAX_CONNECTIONS}"
+        )
         if not self._running:
             await self.start()
         return conn
@@ -310,7 +323,9 @@ class ConnectionManager:
                     if not self._symbol_map[sym]:
                         del self._symbol_map[sym]
 
-    async def subscribe(self, conn: WSConnection, symbols: list[str]) -> tuple[bool, str]:
+    async def subscribe(
+        self, conn: WSConnection, symbols: list[str]
+    ) -> tuple[bool, str]:
         """
         连接订阅 symbols
         返回: (成功与否, 错误消息)

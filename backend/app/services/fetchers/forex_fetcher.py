@@ -15,6 +15,7 @@ Forex Data Fetcher - AKShare外汇数据获取服务
 - 空值安全处理
 - 交叉汇率计算 (USD三角套利)
 """
+
 import asyncio
 import logging
 import pandas as pd
@@ -33,9 +34,11 @@ logger = logging.getLogger(__name__)
 
 try:
     from curl_cffi import requests as curl_requests
+
     HAS_CURL_CFFI = True
 except ImportError:
     import requests as curl_requests
+
     HAS_CURL_CFFI = False
     logger.warning("[Forex] curl_cffi not installed, using standard requests")
 
@@ -44,18 +47,24 @@ except ImportError:
 _spot_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forex_spot_")
 
 # Slow operations (history, detailed quotes) - can block, longer running
-_history_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forex_history_")
+_history_executor = ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="forex_history_"
+)
 
 _akshare = None
+
 
 def _get_akshare():
     global _akshare
     if _akshare is None:
         try:
             import akshare as ak
+
             _akshare = ak
         except ImportError:
-            logger.error("[Forex] akshare 未安装，请运行: pip install akshare", exc_info=True)
+            logger.error(
+                "[Forex] akshare 未安装，请运行: pip install akshare", exc_info=True
+            )
             raise
     return _akshare
 
@@ -66,6 +75,7 @@ def clean_value(val) -> Optional[float]:
     try:
         f = float(val)
         import math
+
         if pd.isna(f) or not math.isfinite(f):
             return None
         return f
@@ -85,20 +95,14 @@ _PROXIES = _get_proxies()
 
 
 def _fetch_frankfurter_history_sync(
-    from_currency: str,
-    to_currency: str,
-    start_date: str,
-    end_date: str
+    from_currency: str, to_currency: str, start_date: str, end_date: str
 ) -> List[Dict[str, Any]]:
     try:
         url = f"https://api.frankfurter.app/{start_date}..{end_date}?from={from_currency}&to={to_currency}"
 
         if HAS_CURL_CFFI:
             response = curl_requests.get(
-                url,
-                impersonate="chrome120",
-                timeout=15,
-                proxies=_PROXIES
+                url, impersonate="chrome120", timeout=15, proxies=_PROXIES
             )
         else:
             response = curl_requests.get(url, timeout=15, proxies=_PROXIES)
@@ -114,17 +118,21 @@ def _fetch_frankfurter_history_sync(
         for date in sorted(rates.keys()):
             rate = rates[date].get(to_currency)
             if rate:
-                history.append({
-                    "date": date,
-                    "open": rate,
-                    "close": rate,
-                    "high": rate,
-                    "low": rate,
-                    "amplitude": 0,
-                    "source": "frankfurter"
-                })
+                history.append(
+                    {
+                        "date": date,
+                        "open": rate,
+                        "close": rate,
+                        "high": rate,
+                        "low": rate,
+                        "amplitude": 0,
+                        "source": "frankfurter",
+                    }
+                )
 
-        logger.info(f"[Frankfurter] Fetched {len(history)} days for {from_currency}/{to_currency}")
+        logger.info(
+            f"[Frankfurter] Fetched {len(history)} days for {from_currency}/{to_currency}"
+        )
         return history
 
     except Exception as e:
@@ -135,19 +143,19 @@ def _fetch_frankfurter_history_sync(
 class ForexFetcher(BaseMarketFetcher):
     """
     Forex数据获取器
-    
+
     使用方式:
         fetcher = ForexFetcher()
-        
+
         # 获取实时报价
         quotes = await fetcher.get_spot_quotes()
-        
+
         # 获取历史K线
         history = await fetcher.get_history("USDCNH", days=30)
-        
+
         # 获取CFETS报价
         cfets = await fetcher.get_cfets_spot()
-        
+
         # 计算交叉汇率
         rate = fetcher.calculate_cross_rate("EUR", "JPY", rates_dict)
     """
@@ -188,7 +196,7 @@ class ForexFetcher(BaseMarketFetcher):
             CircuitBreakerConfig(
                 failure_threshold=5,
                 timeout=60.0,
-            )
+            ),
         )
         self._ak = None
 
@@ -216,7 +224,7 @@ class ForexFetcher(BaseMarketFetcher):
     def _get_fallback_quotes(self) -> List[Dict[str, Any]]:
         """
         返回回退数据（当电路熔断器打开时）
-        
+
         改进：优先尝试CFETS官方数据，最后才使用静态数据
         """
         ts = int(datetime.now().timestamp())
@@ -240,7 +248,9 @@ class ForexFetcher(BaseMarketFetcher):
             if df is not None and not df.empty:
                 quotes = self._parse_cfets_pair_to_quotes(df, ts)
                 if quotes:
-                    logger.info(f"[Forex] 使用CFETS交叉汇率作为回退数据: {len(quotes)} 条")
+                    logger.info(
+                        f"[Forex] 使用CFETS交叉汇率作为回退数据: {len(quotes)} 条"
+                    )
                     return quotes
         except Exception as e:
             logger.warning(f"[Forex] CFETS交叉汇率获取失败: {e}", exc_info=True)
@@ -252,7 +262,9 @@ class ForexFetcher(BaseMarketFetcher):
             if df is not None and not df.empty:
                 quotes = self._parse_boc_to_quotes(df, ts)
                 if quotes:
-                    logger.info(f"[Forex] 使用BOC官方中间价作为回退数据: {len(quotes)} 条")
+                    logger.info(
+                        f"[Forex] 使用BOC官方中间价作为回退数据: {len(quotes)} 条"
+                    )
                     return quotes
         except Exception as e:
             logger.warning(f"[Forex] BOC官方中间价获取失败: {e}", exc_info=True)
@@ -265,34 +277,52 @@ class ForexFetcher(BaseMarketFetcher):
         """解析CFETS银行间报价为标准格式"""
         quotes = []
         cfets_to_standard = {
-            "USD/CNY": "USDCNY", "EUR/CNY": "EURCNY", "GBP/CNY": "GBPCNY",
-            "JPY/CNY": "JPYCNY", "HKD/CNY": "HKDCNY", "AUD/CNY": "AUDCNY",
-            "CAD/CNY": "CADCNY", "CHF/CNY": "CHFCNY", "SGD/CNY": "SGDCNY",
+            "USD/CNY": "USDCNY",
+            "EUR/CNY": "EURCNY",
+            "GBP/CNY": "GBPCNY",
+            "JPY/CNY": "JPYCNY",
+            "HKD/CNY": "HKDCNY",
+            "AUD/CNY": "AUDCNY",
+            "CAD/CNY": "CADCNY",
+            "CHF/CNY": "CHFCNY",
+            "SGD/CNY": "SGDCNY",
             "NZD/CNY": "NZDCNY",
         }
 
         for _, row in df.iterrows():
-            pair = str(row.get('货币对', ''))
+            pair = str(row.get("货币对", ""))
             symbol = cfets_to_standard.get(pair)
             if not symbol:
                 continue
 
-            bid = clean_value(row.get('买报价'))
-            ask = clean_value(row.get('卖报价'))
-            mid = clean_value(row.get('中间价'))
+            bid = clean_value(row.get("买报价"))
+            ask = clean_value(row.get("卖报价"))
+            mid = clean_value(row.get("中间价"))
 
             if bid is None or ask is None:
                 continue
 
             latest = mid if mid else (bid + ask) / 2
 
-            quotes.append({
-                "symbol": symbol, "name": self._get_currency_name(symbol),
-                "latest": round(latest, 6), "bid": round(bid, 6), "ask": round(ask, 6),
-                "spread": round(ask - bid, 6), "change": 0.0, "change_pct": 0.0,
-                "open": round(latest, 6), "high": round(latest, 6), "low": round(latest, 6),
-                "prev_close": round(latest, 6), "source": "cfets", "is_demo": False, "timestamp": ts,
-            })
+            quotes.append(
+                {
+                    "symbol": symbol,
+                    "name": self._get_currency_name(symbol),
+                    "latest": round(latest, 6),
+                    "bid": round(bid, 6),
+                    "ask": round(ask, 6),
+                    "spread": round(ask - bid, 6),
+                    "change": 0.0,
+                    "change_pct": 0.0,
+                    "open": round(latest, 6),
+                    "high": round(latest, 6),
+                    "low": round(latest, 6),
+                    "prev_close": round(latest, 6),
+                    "source": "cfets",
+                    "is_demo": False,
+                    "timestamp": ts,
+                }
+            )
 
         return quotes
 
@@ -300,31 +330,47 @@ class ForexFetcher(BaseMarketFetcher):
         """解析CFETS交叉汇率为标准格式"""
         quotes = []
         pair_to_standard = {
-            "EUR/USD": "EURUSD", "GBP/USD": "GBPUSD", "USD/JPY": "USDJPY",
-            "AUD/USD": "AUDUSD", "USD/CAD": "USDCAD", "USD/CHF": "USDCHF",
+            "EUR/USD": "EURUSD",
+            "GBP/USD": "GBPUSD",
+            "USD/JPY": "USDJPY",
+            "AUD/USD": "AUDUSD",
+            "USD/CAD": "USDCAD",
+            "USD/CHF": "USDCHF",
         }
 
         for _, row in df.iterrows():
-            pair = str(row.get('货币对', ''))
+            pair = str(row.get("货币对", ""))
             symbol = pair_to_standard.get(pair)
             if not symbol:
                 continue
 
-            bid = clean_value(row.get('买报价'))
-            ask = clean_value(row.get('卖报价'))
+            bid = clean_value(row.get("买报价"))
+            ask = clean_value(row.get("卖报价"))
 
             if bid is None or ask is None:
                 continue
 
             latest = (bid + ask) / 2
 
-            quotes.append({
-                "symbol": symbol, "name": self._get_currency_name(symbol),
-                "latest": round(latest, 6), "bid": round(bid, 6), "ask": round(ask, 6),
-                "spread": round(ask - bid, 6), "change": 0.0, "change_pct": 0.0,
-                "open": round(latest, 6), "high": round(latest, 6), "low": round(latest, 6),
-                "prev_close": round(latest, 6), "source": "cfets", "is_demo": False, "timestamp": ts,
-            })
+            quotes.append(
+                {
+                    "symbol": symbol,
+                    "name": self._get_currency_name(symbol),
+                    "latest": round(latest, 6),
+                    "bid": round(bid, 6),
+                    "ask": round(ask, 6),
+                    "spread": round(ask - bid, 6),
+                    "change": 0.0,
+                    "change_pct": 0.0,
+                    "open": round(latest, 6),
+                    "high": round(latest, 6),
+                    "low": round(latest, 6),
+                    "prev_close": round(latest, 6),
+                    "source": "cfets",
+                    "is_demo": False,
+                    "timestamp": ts,
+                }
+            )
 
         return quotes
 
@@ -336,9 +382,14 @@ class ForexFetcher(BaseMarketFetcher):
 
         latest_row = df.iloc[-1]
         boc_to_standard = {
-            '美元': 'USDCNY', '欧元': 'EURCNY', '日元': 'JPYCNY',
-            '英镑': 'GBPCNY', '港币': 'HKDCNY', '澳大利亚元': 'AUDCNY',
-            '加拿大元': 'CADCNY', '瑞士法郎': 'CHFCNY',
+            "美元": "USDCNY",
+            "欧元": "EURCNY",
+            "日元": "JPYCNY",
+            "英镑": "GBPCNY",
+            "港币": "HKDCNY",
+            "澳大利亚元": "AUDCNY",
+            "加拿大元": "CADCNY",
+            "瑞士法郎": "CHFCNY",
         }
 
         for cn_name, symbol in boc_to_standard.items():
@@ -346,24 +397,46 @@ class ForexFetcher(BaseMarketFetcher):
             if rate is None:
                 continue
 
-            quotes.append({
-                "symbol": symbol, "name": self._get_currency_name(symbol),
-                "latest": round(rate, 6), "bid": round(rate, 6), "ask": round(rate, 6),
-                "spread": 0.0, "change": 0.0, "change_pct": 0.0,
-                "open": round(rate, 6), "high": round(rate, 6), "low": round(rate, 6),
-                "prev_close": round(rate, 6), "source": "boc", "is_demo": False, "timestamp": ts,
-            })
+            quotes.append(
+                {
+                    "symbol": symbol,
+                    "name": self._get_currency_name(symbol),
+                    "latest": round(rate, 6),
+                    "bid": round(rate, 6),
+                    "ask": round(rate, 6),
+                    "spread": 0.0,
+                    "change": 0.0,
+                    "change_pct": 0.0,
+                    "open": round(rate, 6),
+                    "high": round(rate, 6),
+                    "low": round(rate, 6),
+                    "prev_close": round(rate, 6),
+                    "source": "boc",
+                    "is_demo": False,
+                    "timestamp": ts,
+                }
+            )
 
         return quotes
 
     def _get_currency_name(self, symbol: str) -> str:
         """获取货币对中文名称"""
         names = {
-            "USDCNY": "美元/人民币", "EURCNY": "欧元/人民币", "GBPCNY": "英镑/人民币",
-            "JPYCNY": "日元/人民币", "HKDCNY": "港币/人民币", "AUDCNY": "澳元/人民币",
-            "CADCNY": "加元/人民币", "CHFCNY": "瑞郎/人民币", "SGDCNY": "新元/人民币",
-            "NZDCNY": "纽元/人民币", "EURUSD": "欧元/美元", "GBPUSD": "英镑/美元",
-            "USDJPY": "美元/日元", "AUDUSD": "澳元/美元", "USDCAD": "美元/加元",
+            "USDCNY": "美元/人民币",
+            "EURCNY": "欧元/人民币",
+            "GBPCNY": "英镑/人民币",
+            "JPYCNY": "日元/人民币",
+            "HKDCNY": "港币/人民币",
+            "AUDCNY": "澳元/人民币",
+            "CADCNY": "加元/人民币",
+            "CHFCNY": "瑞郎/人民币",
+            "SGDCNY": "新元/人民币",
+            "NZDCNY": "纽元/人民币",
+            "EURUSD": "欧元/美元",
+            "GBPUSD": "英镑/美元",
+            "USDJPY": "美元/日元",
+            "AUDUSD": "澳元/美元",
+            "USDCAD": "美元/加元",
             "USDCHF": "美元/瑞郎",
         }
         return names.get(symbol, symbol)
@@ -373,19 +446,178 @@ class ForexFetcher(BaseMarketFetcher):
         ts = int(datetime.now().timestamp())
         return [
             # CNY-based pairs (6个)
-            {"symbol": "USDCNY", "name": "美元/人民币", "latest": 7.25, "bid": 7.248, "ask": 7.252, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 7.25, "high": 7.25, "low": 7.25, "prev_close": 7.25, "source": "static", "is_demo": True, "timestamp": ts},
-            {"symbol": "EURCNY", "name": "欧元/人民币", "latest": 7.89, "bid": 7.888, "ask": 7.892, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 7.89, "high": 7.89, "low": 7.89, "prev_close": 7.89, "source": "static", "is_demo": True, "timestamp": ts},
-            {"symbol": "GBPCNY", "name": "英镑/人民币", "latest": 9.12, "bid": 9.118, "ask": 9.122, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 9.12, "high": 9.12, "low": 9.12, "prev_close": 9.12, "source": "static", "is_demo": True, "timestamp": ts},
-            {"symbol": "JPYCNY", "name": "日元/人民币", "latest": 0.0486, "bid": 0.0485, "ask": 0.0487, "spread": 0.0002, "change": 0.0, "change_pct": 0.0, "open": 0.0486, "high": 0.0486, "low": 0.0486, "prev_close": 0.0486, "source": "static", "is_demo": True, "timestamp": ts},
-            {"symbol": "HKDCNY", "name": "港币/人民币", "latest": 0.929, "bid": 0.928, "ask": 0.930, "spread": 0.002, "change": 0.0, "change_pct": 0.0, "open": 0.929, "high": 0.929, "low": 0.929, "prev_close": 0.929, "source": "static", "is_demo": True, "timestamp": ts},
-            {"symbol": "AUDCNY", "name": "澳元/人民币", "latest": 4.72, "bid": 4.718, "ask": 4.722, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 4.72, "high": 4.72, "low": 4.72, "prev_close": 4.72, "source": "static", "is_demo": True, "timestamp": ts},
+            {
+                "symbol": "USDCNY",
+                "name": "美元/人民币",
+                "latest": 7.25,
+                "bid": 7.248,
+                "ask": 7.252,
+                "spread": 0.004,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 7.25,
+                "high": 7.25,
+                "low": 7.25,
+                "prev_close": 7.25,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
+            {
+                "symbol": "EURCNY",
+                "name": "欧元/人民币",
+                "latest": 7.89,
+                "bid": 7.888,
+                "ask": 7.892,
+                "spread": 0.004,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 7.89,
+                "high": 7.89,
+                "low": 7.89,
+                "prev_close": 7.89,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
+            {
+                "symbol": "GBPCNY",
+                "name": "英镑/人民币",
+                "latest": 9.12,
+                "bid": 9.118,
+                "ask": 9.122,
+                "spread": 0.004,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 9.12,
+                "high": 9.12,
+                "low": 9.12,
+                "prev_close": 9.12,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
+            {
+                "symbol": "JPYCNY",
+                "name": "日元/人民币",
+                "latest": 0.0486,
+                "bid": 0.0485,
+                "ask": 0.0487,
+                "spread": 0.0002,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 0.0486,
+                "high": 0.0486,
+                "low": 0.0486,
+                "prev_close": 0.0486,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
+            {
+                "symbol": "HKDCNY",
+                "name": "港币/人民币",
+                "latest": 0.929,
+                "bid": 0.928,
+                "ask": 0.930,
+                "spread": 0.002,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 0.929,
+                "high": 0.929,
+                "low": 0.929,
+                "prev_close": 0.929,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
+            {
+                "symbol": "AUDCNY",
+                "name": "澳元/人民币",
+                "latest": 4.72,
+                "bid": 4.718,
+                "ask": 4.722,
+                "spread": 0.004,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 4.72,
+                "high": 4.72,
+                "low": 4.72,
+                "prev_close": 4.72,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
             # USD-based pairs for triangular arbitrage (4个)
-            {"symbol": "EURUSD", "name": "欧元/美元", "latest": 1.0876, "bid": 1.0874, "ask": 1.0878, "spread": 0.0004, "change": 0.0, "change_pct": 0.0, "open": 1.0876, "high": 1.0876, "low": 1.0876, "prev_close": 1.0876, "source": "static", "is_demo": True, "timestamp": ts},
-            {"symbol": "GBPUSD", "name": "英镑/美元", "latest": 1.2572, "bid": 1.2570, "ask": 1.2574, "spread": 0.0004, "change": 0.0, "change_pct": 0.0, "open": 1.2572, "high": 1.2572, "low": 1.2572, "prev_close": 1.2572, "source": "static", "is_demo": True, "timestamp": ts},
-            {"symbol": "USDJPY", "name": "美元/日元", "latest": 149.25, "bid": 149.23, "ask": 149.27, "spread": 0.04, "change": 0.0, "change_pct": 0.0, "open": 149.25, "high": 149.25, "low": 149.25, "prev_close": 149.25, "source": "static", "is_demo": True, "timestamp": ts},
-            {"symbol": "AUDUSD", "name": "澳元/美元", "latest": 0.6510, "bid": 0.6508, "ask": 0.6512, "spread": 0.0004, "change": 0.0, "change_pct": 0.0, "open": 0.6510, "high": 0.6510, "low": 0.6510, "prev_close": 0.6510, "source": "static", "is_demo": True, "timestamp": ts},
+            {
+                "symbol": "EURUSD",
+                "name": "欧元/美元",
+                "latest": 1.0876,
+                "bid": 1.0874,
+                "ask": 1.0878,
+                "spread": 0.0004,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 1.0876,
+                "high": 1.0876,
+                "low": 1.0876,
+                "prev_close": 1.0876,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
+            {
+                "symbol": "GBPUSD",
+                "name": "英镑/美元",
+                "latest": 1.2572,
+                "bid": 1.2570,
+                "ask": 1.2574,
+                "spread": 0.0004,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 1.2572,
+                "high": 1.2572,
+                "low": 1.2572,
+                "prev_close": 1.2572,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
+            {
+                "symbol": "USDJPY",
+                "name": "美元/日元",
+                "latest": 149.25,
+                "bid": 149.23,
+                "ask": 149.27,
+                "spread": 0.04,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 149.25,
+                "high": 149.25,
+                "low": 149.25,
+                "prev_close": 149.25,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
+            {
+                "symbol": "AUDUSD",
+                "name": "澳元/美元",
+                "latest": 0.6510,
+                "bid": 0.6508,
+                "ask": 0.6512,
+                "spread": 0.0004,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "open": 0.6510,
+                "high": 0.6510,
+                "low": 0.6510,
+                "prev_close": 0.6510,
+                "source": "static",
+                "is_demo": True,
+                "timestamp": ts,
+            },
         ]
-
 
     async def reset_circuit_breaker(self) -> dict:
         """
@@ -395,6 +627,7 @@ class ForexFetcher(BaseMarketFetcher):
             dict: {"success": bool, "state": str}
         """
         from app.services.circuit_breaker import CircuitState
+
         async with self._cache_lock:
             old_state = self.cb.state.value
             self.cb._stats._consecutive_failures = 0
@@ -407,7 +640,7 @@ class ForexFetcher(BaseMarketFetcher):
     async def get_spot_quotes(self) -> List[Dict[str, Any]]:
         """
         获取所有实时报价 (EastMoney forex_spot_em)
-        
+
         字段映射 (中文 -> 英文):
         - 代码 -> symbol
         - 名称 -> name
@@ -418,7 +651,7 @@ class ForexFetcher(BaseMarketFetcher):
         - 最高 -> high
         - 最低 -> low
         - 昨收 -> prev_close
-        
+
         Returns:
             报价列表
         """
@@ -435,7 +668,7 @@ class ForexFetcher(BaseMarketFetcher):
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(_spot_executor, self.ak.forex_spot_em),
-                timeout=30.0
+                timeout=30.0,
             )
 
             if df is None or df.empty:
@@ -446,15 +679,15 @@ class ForexFetcher(BaseMarketFetcher):
             quotes = []
             for _, row in df.iterrows():
                 quote = {
-                    "symbol": str(row.get('代码', '')),
-                    "name": str(row.get('名称', '')),
-                    "latest": clean_value(row.get('最新价')),
-                    "change": clean_value(row.get('涨跌额')),
-                    "change_pct": clean_value(row.get('涨跌幅')),
-                    "open": clean_value(row.get('今开')),
-                    "high": clean_value(row.get('最高')),
-                    "low": clean_value(row.get('最低')),
-                    "prev_close": clean_value(row.get('昨收')),
+                    "symbol": str(row.get("代码", "")),
+                    "name": str(row.get("名称", "")),
+                    "latest": clean_value(row.get("最新价")),
+                    "change": clean_value(row.get("涨跌额")),
+                    "change_pct": clean_value(row.get("涨跌幅")),
+                    "open": clean_value(row.get("今开")),
+                    "high": clean_value(row.get("最高")),
+                    "low": clean_value(row.get("最低")),
+                    "prev_close": clean_value(row.get("昨收")),
                     "source": "akshare",
                     "timestamp": int(datetime.now().timestamp()),
                 }
@@ -488,17 +721,23 @@ class ForexFetcher(BaseMarketFetcher):
 
         if not self.cb.is_available():
             cache = get_cache()
-            stale_data, is_stale = cache.get_with_stale(cache_key, fresh_ttl=0, stale_ttl=86400)
+            stale_data, is_stale = cache.get_with_stale(
+                cache_key, fresh_ttl=0, stale_ttl=86400
+            )
             if stale_data:
-                logger.warning(f"[Forex] Circuit breaker open, returning stale history: {symbol}")
+                logger.warning(
+                    f"[Forex] Circuit breaker open, returning stale history: {symbol}"
+                )
                 return stale_data[-limit:] if limit else stale_data
             return []
 
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
-                loop.run_in_executor(_history_executor, lambda: self.ak.forex_hist_em(symbol=symbol)),
-                timeout=30.0
+                loop.run_in_executor(
+                    _history_executor, lambda: self.ak.forex_hist_em(symbol=symbol)
+                ),
+                timeout=30.0,
             )
 
             if df is None or df.empty:
@@ -506,21 +745,21 @@ class ForexFetcher(BaseMarketFetcher):
 
             result_df = df.copy()
             if start_date:
-                mask = result_df['日期'] >= start_date
+                mask = result_df["日期"] >= start_date
                 result_df = result_df.loc[mask]
             if end_date:
-                mask = result_df['日期'] <= end_date
+                mask = result_df["日期"] <= end_date
                 result_df = result_df.loc[mask]
 
             history = []
             for _, row in result_df.iterrows():
                 kline = {
-                    "date": str(row.get('日期', '')),
-                    "open": clean_value(row.get('今开')),
-                    "close": clean_value(row.get('最新价')),
-                    "high": clean_value(row.get('最高')),
-                    "low": clean_value(row.get('最低')),
-                    "amplitude": clean_value(row.get('振幅')),
+                    "date": str(row.get("日期", "")),
+                    "open": clean_value(row.get("今开")),
+                    "close": clean_value(row.get("最新价")),
+                    "high": clean_value(row.get("最高")),
+                    "low": clean_value(row.get("最低")),
+                    "amplitude": clean_value(row.get("振幅")),
                 }
                 history.append(kline)
 
@@ -531,10 +770,15 @@ class ForexFetcher(BaseMarketFetcher):
 
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning(f"[Forex] 获取历史K线超时: {symbol}, 尝试Frankfurter回退", exc_info=True)
+            logger.warning(
+                f"[Forex] 获取历史K线超时: {symbol}, 尝试Frankfurter回退", exc_info=True
+            )
         except Exception as e:
             self.cb.record_failure()
-            logger.warning(f"[Forex] 获取历史K线失败: {symbol} - {e}, 尝试Frankfurter回退", exc_info=True)
+            logger.warning(
+                f"[Forex] 获取历史K线失败: {symbol} - {e}, 尝试Frankfurter回退",
+                exc_info=True,
+            )
 
         logger.info(f"[Forex] Using Frankfurter fallback for {symbol}")
 
@@ -548,12 +792,16 @@ class ForexFetcher(BaseMarketFetcher):
             if not end_date:
                 end_date = datetime.now().strftime("%Y-%m-%d")
             if not start_date:
-                start_date = (datetime.now() - timedelta(days=limit)).strftime("%Y-%m-%d")
+                start_date = (datetime.now() - timedelta(days=limit)).strftime(
+                    "%Y-%m-%d"
+                )
 
             loop = asyncio.get_running_loop()
             history = await loop.run_in_executor(
                 _history_executor,
-                lambda: _fetch_frankfurter_history_sync(from_currency, to_currency, start_date, end_date)
+                lambda: _fetch_frankfurter_history_sync(
+                    from_currency, to_currency, start_date, end_date
+                ),
             )
 
             if history:
@@ -568,12 +816,12 @@ class ForexFetcher(BaseMarketFetcher):
     async def get_cfets_spot(self) -> List[Dict[str, Any]]:
         """
         获取CFETS银行间人民币报价 (fx_spot_quote)
-        
+
         字段映射 (中文 -> 英文):
         - 货币对 -> pair
         - 买报价 -> bid
         - 卖报价 -> ask
-        
+
         Returns:
             CFETS报价列表
         """
@@ -589,7 +837,7 @@ class ForexFetcher(BaseMarketFetcher):
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(_spot_executor, self.ak.fx_spot_quote),
-                timeout=30.0
+                timeout=30.0,
             )
 
             if df is None or df.empty:
@@ -598,10 +846,10 @@ class ForexFetcher(BaseMarketFetcher):
 
             quotes = []
             for _, row in df.iterrows():
-                bid = clean_value(row.get('买报价'))
-                ask = clean_value(row.get('卖报价'))
+                bid = clean_value(row.get("买报价"))
+                ask = clean_value(row.get("卖报价"))
                 quote = {
-                    "pair": str(row.get('货币对', '')),
+                    "pair": str(row.get("货币对", "")),
                     "bid": bid,
                     "ask": ask,
                     "spread": round(ask - bid, 6) if bid and ask else None,
@@ -628,7 +876,7 @@ class ForexFetcher(BaseMarketFetcher):
     async def get_cfets_crosses(self) -> List[Dict[str, Any]]:
         """
         获取CFETS非人民币交叉汇率 (fx_pair_quote)
-        
+
         Returns:
             CFETS交叉汇率列表
         """
@@ -644,7 +892,7 @@ class ForexFetcher(BaseMarketFetcher):
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(_spot_executor, self.ak.fx_pair_quote),
-                timeout=30.0
+                timeout=30.0,
             )
 
             if df is None or df.empty:
@@ -653,10 +901,10 @@ class ForexFetcher(BaseMarketFetcher):
 
             quotes = []
             for _, row in df.iterrows():
-                bid = clean_value(row.get('买报价'))
-                ask = clean_value(row.get('卖报价'))
+                bid = clean_value(row.get("买报价"))
+                ask = clean_value(row.get("卖报价"))
                 quote = {
-                    "pair": str(row.get('货币对', '')),
+                    "pair": str(row.get("货币对", "")),
                     "bid": bid,
                     "ask": ask,
                     "spread": round(ask - bid, 6) if bid and ask else None,
@@ -683,7 +931,7 @@ class ForexFetcher(BaseMarketFetcher):
     async def get_official_rates(self, days: int = 30) -> List[Dict[str, Any]]:
         """
         获取SAFE官方人民币中间价 (currency_boc_safe)
-        
+
         Returns:
             官方中间价列表
         """
@@ -699,7 +947,7 @@ class ForexFetcher(BaseMarketFetcher):
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(_history_executor, self.ak.currency_boc_safe),
-                timeout=30.0
+                timeout=30.0,
             )
 
             if df is None or df.empty:
@@ -712,15 +960,15 @@ class ForexFetcher(BaseMarketFetcher):
             rates = []
             for _, row in df.iterrows():
                 rate = {
-                    "date": str(row.get('日期', '')),
-                    "usd": clean_value(row.get('美元')),
-                    "eur": clean_value(row.get('欧元')),
-                    "jpy": clean_value(row.get('日元')),
-                    "gbp": clean_value(row.get('英镑')),
-                    "hkd": clean_value(row.get('港币')),
-                    "aud": clean_value(row.get('澳大利亚元')),
-                    "cad": clean_value(row.get('加拿大元')),
-                    "chf": clean_value(row.get('瑞士法郎')),
+                    "date": str(row.get("日期", "")),
+                    "usd": clean_value(row.get("美元")),
+                    "eur": clean_value(row.get("欧元")),
+                    "jpy": clean_value(row.get("日元")),
+                    "gbp": clean_value(row.get("英镑")),
+                    "hkd": clean_value(row.get("港币")),
+                    "aud": clean_value(row.get("澳大利亚元")),
+                    "cad": clean_value(row.get("加拿大元")),
+                    "chf": clean_value(row.get("瑞士法郎")),
                 }
                 rates.append(rate)
 
@@ -746,19 +994,19 @@ class ForexFetcher(BaseMarketFetcher):
     ) -> Optional[Decimal]:
         """
         计算交叉汇率 (USD三角套利)
-        
+
         算法:
         - 如果 from == to，返回 1.0
         - 尝试直接获取 from/to 汇率
         - 如果没有直接汇率，通过 USD 计算:
           - EUR/JPY = EUR/USD × USD/JPY
           - GBP/AUD = GBP/USD ÷ AUD/USD
-          
+
         Args:
             from_curr: 源货币
             to_curr: 目标货币
             rates: 汇率字典，格式 {"EUR/USD": Decimal("1.08"), ...}
-            
+
         Returns:
             交叉汇率 (6位小数精度) 或 None
         """
@@ -766,7 +1014,7 @@ class ForexFetcher(BaseMarketFetcher):
         to_curr = to_curr.upper()
 
         if from_curr == to_curr:
-            return Decimal('1.0')
+            return Decimal("1.0")
 
         direct_key = f"{from_curr}/{to_curr}"
         if direct_key in rates:
@@ -774,7 +1022,7 @@ class ForexFetcher(BaseMarketFetcher):
 
         inverse_key = f"{to_curr}/{from_curr}"
         if inverse_key in rates:
-            return Decimal('1') / rates[inverse_key]
+            return Decimal("1") / rates[inverse_key]
 
         from_usd_key = f"{from_curr}/USD"
         to_usd_key = f"{to_curr}/USD"
@@ -787,22 +1035,22 @@ class ForexFetcher(BaseMarketFetcher):
         if from_usd_key in rates:
             from_rate = rates[from_usd_key]
         elif usd_from_key in rates:
-            from_rate = Decimal('1') / rates[usd_from_key]
+            from_rate = Decimal("1") / rates[usd_from_key]
 
         if to_usd_key in rates:
             to_rate = rates[to_usd_key]
         elif usd_to_key in rates:
-            to_rate = Decimal('1') / rates[usd_to_key]
+            to_rate = Decimal("1") / rates[usd_to_key]
 
         if from_curr == "USD":
             if usd_to_key in rates:
                 return rates[usd_to_key]
             elif to_usd_key in rates:
-                return Decimal('1') / rates[to_usd_key]
+                return Decimal("1") / rates[to_usd_key]
 
         if to_curr == "USD":
             if usd_from_key in rates:
-                return Decimal('1') / rates[usd_from_key]
+                return Decimal("1") / rates[usd_from_key]
             elif from_usd_key in rates:
                 return rates[from_usd_key]
 
@@ -811,7 +1059,7 @@ class ForexFetcher(BaseMarketFetcher):
 
         cross_rate = from_rate / to_rate
 
-        return cross_rate.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
+        return cross_rate.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
 
     def calculate_cross_rate_with_spread(
         self,
@@ -822,17 +1070,17 @@ class ForexFetcher(BaseMarketFetcher):
     ) -> Optional[Dict[str, Decimal]]:
         """
         计算交叉汇率 (含bid/ask精度)
-        
+
         算法:
         - EUR/JPY_bid = EUR/USD_bid × USD/JPY_bid
         - EUR/JPY_ask = EUR/USD_ask × USD/JPY_ask
-        
+
         Args:
             from_curr: 源货币
             to_curr: 目标货币
             bid_rates: 买入价字典，格式 {"EUR/USD": Decimal("1.0795"), ...}
             ask_rates: 卖出价字典，格式 {"EUR/USD": Decimal("1.0805"), ...}
-            
+
         Returns:
             dict: {"bid": Decimal, "ask": Decimal, "mid": Decimal, "spread": Decimal}
             或 None (如果无法计算)
@@ -842,10 +1090,10 @@ class ForexFetcher(BaseMarketFetcher):
 
         if from_curr == to_curr:
             return {
-                "bid": Decimal('1.0'),
-                "ask": Decimal('1.0'),
-                "mid": Decimal('1.0'),
-                "spread": Decimal('0.0')
+                "bid": Decimal("1.0"),
+                "ask": Decimal("1.0"),
+                "mid": Decimal("1.0"),
+                "spread": Decimal("0.0"),
             }
 
         # Try direct rates first
@@ -857,8 +1105,8 @@ class ForexFetcher(BaseMarketFetcher):
             ask = ask_rates[direct_key]
         elif inverse_key in bid_rates and inverse_key in ask_rates:
             # Inverse: bid becomes ask, ask becomes bid
-            bid = Decimal('1') / ask_rates[inverse_key]
-            ask = Decimal('1') / bid_rates[inverse_key]
+            bid = Decimal("1") / ask_rates[inverse_key]
+            ask = Decimal("1") / bid_rates[inverse_key]
         else:
             # Triangular arbitrage via USD
             from_usd_key = f"{from_curr}/USD"
@@ -872,11 +1120,11 @@ class ForexFetcher(BaseMarketFetcher):
                 from_ask = ask_rates[from_usd_key]
             elif usd_from_key in bid_rates and usd_from_key in ask_rates:
                 # USD/EUR inverse: EUR/USD
-                from_bid = Decimal('1') / ask_rates[usd_from_key]
-                from_ask = Decimal('1') / bid_rates[usd_from_key]
+                from_bid = Decimal("1") / ask_rates[usd_from_key]
+                from_ask = Decimal("1") / bid_rates[usd_from_key]
             elif from_curr == "USD":
-                from_bid = Decimal('1.0')
-                from_ask = Decimal('1.0')
+                from_bid = Decimal("1.0")
+                from_ask = Decimal("1.0")
             else:
                 return None
 
@@ -886,11 +1134,11 @@ class ForexFetcher(BaseMarketFetcher):
                 to_ask = ask_rates[to_usd_key]
             elif usd_to_key in bid_rates and usd_to_key in ask_rates:
                 # USD/JPY inverse: JPY/USD
-                to_bid = Decimal('1') / ask_rates[usd_to_key]
-                to_ask = Decimal('1') / bid_rates[usd_to_key]
+                to_bid = Decimal("1") / ask_rates[usd_to_key]
+                to_ask = Decimal("1") / bid_rates[usd_to_key]
             elif to_curr == "USD":
-                to_bid = Decimal('1.0')
-                to_ask = Decimal('1.0')
+                to_bid = Decimal("1.0")
+                to_ask = Decimal("1.0")
             else:
                 return None
 
@@ -902,20 +1150,20 @@ class ForexFetcher(BaseMarketFetcher):
 
         # Calculate mid and spread
         mid = (bid + ask) / 2
-        spread_pct = ((ask - bid) / mid * 100) if mid > 0 else Decimal('0.0')
+        spread_pct = ((ask - bid) / mid * 100) if mid > 0 else Decimal("0.0")
 
         return {
-            "bid": bid.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP),
-            "ask": ask.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP),
-            "mid": mid.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP),
-            "spread": spread_pct.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+            "bid": bid.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
+            "ask": ask.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
+            "mid": mid.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
+            "spread": spread_pct.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP),
         }
 
     async def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
         """获取单个货币对报价 (BaseMarketFetcher接口)"""
         quotes = await self.get_spot_quotes()
         for q in quotes:
-            if q.get('symbol') == symbol:
+            if q.get("symbol") == symbol:
                 return q
         return None
 
@@ -947,7 +1195,12 @@ class ForexFetcher(BaseMarketFetcher):
         try:
             quotes = await self.get_spot_quotes()
             return len(quotes) > 0
-        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError) as e:
+        except (
+            httpx.HTTPError,
+            asyncio.TimeoutError,
+            ConnectionError,
+            ValueError,
+        ) as e:
             logger.debug(f"[Forex] ping error: {type(e).__name__}: {e}")
             return False
 
@@ -955,7 +1208,7 @@ class ForexFetcher(BaseMarketFetcher):
 def get_circuit_breaker_status() -> dict:
     """
     返回熔断器状态
-    
+
     Returns:
         dict: {
             "is_open": bool,           # 熔断器是否打开

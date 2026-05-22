@@ -1,4 +1,5 @@
 import signal
+
 signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
 from app.main import app

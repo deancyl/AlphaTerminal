@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 # 使用 PORTFOLIO_API_KEY 环境变量保护敏感操作
 # 未配置时保持开放（开发环境）
 
+
 def verify_portfolio_key(api_key: str = None, x_forwarded_for: str = Header(None)):
     """Portfolio API 密钥校验（可选）"""
     configured_key = os.environ.get("PORTFOLIO_API_KEY", "")
@@ -49,6 +50,7 @@ def require_auth_for_sensitive_ops(api_key: str = None):
 
 
 # ── 事务流水工具 ─────────────────────────────────────────────
+
 
 def _insert_transaction(
     conn,
@@ -68,8 +70,17 @@ def _insert_transaction(
            (portfolio_id, type, amount, balance_after, counterparty_id,
             related_symbol, note, created_at, operator)
            VALUES (?,?,?,?,?,?,?,?,?)""",
-        (portfolio_id, txn_type, amount, balance_after,
-         counterparty_id, related_symbol, note, now, operator),
+        (
+            portfolio_id,
+            txn_type,
+            amount,
+            balance_after,
+            counterparty_id,
+            related_symbol,
+            note,
+            now,
+            operator,
+        ),
     )
     txn_id = cur.lastrowid
 
@@ -77,6 +88,7 @@ def _insert_transaction(
     # Use deferred import to avoid circular dependency
     try:
         from app.services.audit_chain import log_audit_event
+
         log_audit_event(
             actor_id=operator,
             action=txn_type,
@@ -115,13 +127,13 @@ def _transfer_between_accounts(
 
             balance_map = {r[0]: r[1] for r in rows}
             bal_from = balance_map[from_pid]
-            bal_to   = balance_map[to_pid]
+            bal_to = balance_map[to_pid]
 
             if bal_from < amount:
                 raise ValueError(f"账户 {from_pid} 现金余额 ({bal_from}) 不足")
 
             new_bal_from = bal_from - amount
-            new_bal_to   = bal_to   + amount
+            new_bal_to = bal_to + amount
 
             conn.execute(
                 "UPDATE portfolios SET cash_balance=? WHERE id=?",
@@ -133,21 +145,41 @@ def _transfer_between_accounts(
             )
 
             # 写流水（from 侧）
-            _insert_transaction(conn, from_pid, "transfer_out",
-                                amount, new_bal_from, counterparty_id=to_pid, note=note)
+            _insert_transaction(
+                conn,
+                from_pid,
+                "transfer_out",
+                amount,
+                new_bal_from,
+                counterparty_id=to_pid,
+                note=note,
+            )
             # 写流水（to 侧）
-            _insert_transaction(conn, to_pid, "transfer_in",
-                                amount, new_bal_to, counterparty_id=from_pid, note=note)
+            _insert_transaction(
+                conn,
+                to_pid,
+                "transfer_in",
+                amount,
+                new_bal_to,
+                counterparty_id=from_pid,
+                note=note,
+            )
 
             conn.commit()
         finally:
             conn.close()
 
-    return {"from": from_pid, "to": to_pid, "amount": amount,
-            "balance_from": new_bal_from, "balance_to": new_bal_to}
+    return {
+        "from": from_pid,
+        "to": to_pid,
+        "amount": amount,
+        "balance_from": new_bal_from,
+        "balance_to": new_bal_to,
+    }
 
 
 # ── 数据库工具 ────────────────────────────────────────────────
+
 
 def _row2dict(rows, cols):
     """Convert database rows to list of dictionaries."""
@@ -165,7 +197,9 @@ def _get_all_descendants(conn, portfolio_id: int, visited: set = None) -> list:
         return []
     visited.add(portfolio_id)
     result = []
-    cursor = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,))
+    cursor = conn.execute(
+        "SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,)
+    )
     children = [row[0] for row in cursor.fetchall()]
     for child_id in children:
         result.append(child_id)
@@ -175,6 +209,7 @@ def _get_all_descendants(conn, portfolio_id: int, visited: set = None) -> list:
 
 # ── 资产分类工具 ────────────────────────────────────────────────
 
+
 def _classify_asset(symbol: str, name: str = "") -> dict:
     """
     根据 symbol + name 推断底层资产类型与细分板块。
@@ -182,19 +217,65 @@ def _classify_asset(symbol: str, name: str = "") -> dict:
     """
     sym = symbol.strip().lower()
     name_lower = name.lower()
-    raw_code = sym.removeprefix("sh").removeprefix("sz").removeprefix("hk").removeprefix("us").removeprefix("jp").removeprefix("bj")
+    raw_code = (
+        sym.removeprefix("sh")
+        .removeprefix("sz")
+        .removeprefix("hk")
+        .removeprefix("us")
+        .removeprefix("jp")
+        .removeprefix("bj")
+    )
 
     # ── 固收：国债/国开债/地方债 ────────────────────────────────
-    if any(kw in name_lower for kw in ["国债", "国开", "地方债", "政金债", "债券", "债"]):
+    if any(
+        kw in name_lower for kw in ["国债", "国开", "地方债", "政金债", "债券", "债"]
+    ):
         return {"category": "bond", "sub_category": "利率债", "is_index": False}
 
     # ── 商品期货 ────────────────────────────────────────────────
-    if raw_code.upper() in ("AU", "AG", "CU", "AL", "ZN", "PB", "NI", "SN",
-                             "RU", "RB", "HC", "I", "J", "JM", "焦煤",
-                             "原油", "燃油", "沥青", "棕榈", "豆油", "菜油",
-                             "棉花", "白糖", "苹果", "红枣"):
+    if raw_code.upper() in (
+        "AU",
+        "AG",
+        "CU",
+        "AL",
+        "ZN",
+        "PB",
+        "NI",
+        "SN",
+        "RU",
+        "RB",
+        "HC",
+        "I",
+        "J",
+        "JM",
+        "焦煤",
+        "原油",
+        "燃油",
+        "沥青",
+        "棕榈",
+        "豆油",
+        "菜油",
+        "棉花",
+        "白糖",
+        "苹果",
+        "红枣",
+    ):
         return {"category": "futures", "sub_category": "商品期货", "is_index": False}
-    if any(kw in name_lower for kw in ["黄金", "白银", "铜", "铝", "锌", "镍", "螺纹", "铁矿石", "焦炭", "原油"]):
+    if any(
+        kw in name_lower
+        for kw in [
+            "黄金",
+            "白银",
+            "铜",
+            "铝",
+            "锌",
+            "镍",
+            "螺纹",
+            "铁矿石",
+            "焦炭",
+            "原油",
+        ]
+    ):
         return {"category": "futures", "sub_category": "商品期货", "is_index": False}
 
     # ── 货币基金 / 现金管理 ────────────────────────────────────
@@ -202,10 +283,25 @@ def _classify_asset(symbol: str, name: str = "") -> dict:
         return {"category": "money_fund", "sub_category": "货币基金", "is_index": False}
 
     # ── 宽基指数 ETF（代码特征）─────────────────────────────────
-    if raw_code.startswith("51") or raw_code.startswith("15") or raw_code.startswith("56"):
+    if (
+        raw_code.startswith("51")
+        or raw_code.startswith("15")
+        or raw_code.startswith("56")
+    ):
         return {"category": "etf", "sub_category": "宽基ETF", "is_index": True}
-    if raw_code in ("000001", "000300", "000016", "000688", "000905", "000852",
-                    "399001", "399006", "399100", "399005", "399673"):
+    if raw_code in (
+        "000001",
+        "000300",
+        "000016",
+        "000688",
+        "000905",
+        "000852",
+        "399001",
+        "399006",
+        "399100",
+        "399005",
+        "399673",
+    ):
         return {"category": "index", "sub_category": "A股指数", "is_index": True}
 
     # ── 港股 ────────────────────────────────────────────────────
@@ -221,6 +317,7 @@ def _classify_asset(symbol: str, name: str = "") -> dict:
 
 # ── 快照保存实现 ────────────────────────────────────────────────
 
+
 def _save_snapshot_impl(portfolio_id: int):
     """
     保存当日净值快照（同步函数，供 scheduler 直接调用）
@@ -234,13 +331,13 @@ def _save_snapshot_impl(portfolio_id: int):
         conn = _get_conn()
         rows = conn.execute(
             "SELECT symbol, total_shares as shares, avg_cost FROM position_summary WHERE portfolio_id=? AND total_shares > 0",
-            (portfolio_id,)
+            (portfolio_id,),
         ).fetchall()
 
         if not rows:
             rows = conn.execute(
                 "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
-                (portfolio_id,)
+                (portfolio_id,),
             ).fetchall()
         conn.close()
 
@@ -249,32 +346,40 @@ def _save_snapshot_impl(portfolio_id: int):
 
     # 从 market_data_realtime（SpotCache 刷新的实时表）取最新价格
     from app.db.database import get_latest_prices
+
     symbols = [r[0] for r in rows]
-    prices  = {s["symbol"]: s["price"] for s in get_latest_prices(symbols)}
+    prices = {s["symbol"]: s["price"] for s in get_latest_prices(symbols)}
 
     total_asset = 0.0
-    total_cost  = 0.0
+    total_cost = 0.0
     for symbol, shares, avg_cost in rows:
         price = prices.get(symbol, avg_cost)
         total_asset += shares * price
-        total_cost  += shares * avg_cost
+        total_cost += shares * avg_cost
 
     with _lock:
         conn = _get_conn()
         conn.execute(
             "INSERT OR REPLACE INTO portfolio_snapshots (portfolio_id, date, total_asset, total_cost) "
             "VALUES (?,?,?,?)",
-            (portfolio_id, today, round(total_asset, 2), round(total_cost, 2))
+            (portfolio_id, today, round(total_asset, 2), round(total_cost, 2)),
         )
         conn.commit()
         conn.close()
 
-    return success_response({
-        "ok": True, "date": today,
-        "total_asset": round(total_asset, 2),
-        "total_cost": round(total_cost, 2),
-        "pnl_pct": round((total_asset-total_cost)/total_cost*100, 2) if total_cost else 0.0
-    })
+    return success_response(
+        {
+            "ok": True,
+            "date": today,
+            "total_asset": round(total_asset, 2),
+            "total_cost": round(total_cost, 2),
+            "pnl_pct": (
+                round((total_asset - total_cost) / total_cost * 100, 2)
+                if total_cost
+                else 0.0
+            ),
+        }
+    )
 
 
 # ── 导出符号 ────────────────────────────────────────────────

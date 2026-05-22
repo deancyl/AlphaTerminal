@@ -1,6 +1,7 @@
 """
 Performance Analysis API Router
 """
+
 import asyncio
 import logging
 from fastapi import APIRouter, HTTPException
@@ -46,7 +47,7 @@ async def generate_tearsheet(req: TearsheetRequest):
         analyzer.calculate_tearsheet_metrics,
         returns=req.returns,
         dates=req.dates,
-        benchmark_returns=req.benchmark_returns
+        benchmark_returns=req.benchmark_returns,
     )
 
     if result["code"] != 0:
@@ -69,7 +70,7 @@ async def generate_tearsheet_from_equity(req: EquityCurveRequest):
     result = await asyncio.to_thread(
         analyzer.calculate_from_equity_curve,
         equity_curve=req.equity_curve,
-        initial_capital=req.initial_capital
+        initial_capital=req.initial_capital,
     )
 
     if result["code"] != 0:
@@ -94,7 +95,7 @@ async def generate_tearsheet_from_trades(req: TradesRequest):
         trades=req.trades,
         initial_capital=req.initial_capital,
         start_date=req.start_date,
-        end_date=req.end_date
+        end_date=req.end_date,
     )
 
     if result["code"] != 0:

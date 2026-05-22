@@ -14,6 +14,7 @@ Environment Variables:
     DATABASE_PATH: Path to SQLite database file
     LOG_LEVEL: Logging level (debug, info, warning, error)
 """
+
 from typing import List, Optional
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
@@ -73,7 +74,13 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
-    @field_validator("DEBUG_MODE", "AGENT_DB_DEBUG", "AGENT_AUTH_DEBUG", "FOREX_ALLOW_MOCK_DATA", mode="before")
+    @field_validator(
+        "DEBUG_MODE",
+        "AGENT_DB_DEBUG",
+        "AGENT_AUTH_DEBUG",
+        "FOREX_ALLOW_MOCK_DATA",
+        mode="before",
+    )
     @classmethod
     def validate_bool_from_str(cls, v):
         """Convert string 'true'/'false' to boolean."""
@@ -93,7 +100,11 @@ class Settings(BaseSettings):
         """Parse ALLOWED_ORIGINS into a list."""
         if self.ALLOWED_ORIGINS == "*":
             return ["*"]
-        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
+        return [
+            origin.strip()
+            for origin in self.ALLOWED_ORIGINS.split(",")
+            if origin.strip()
+        ]
 
     def is_production(self) -> bool:
         """Check if running in production environment."""
@@ -109,7 +120,10 @@ class Settings(BaseSettings):
 
     def has_alpha_vantage_key(self) -> bool:
         """Check if Alpha Vantage API key is configured."""
-        return bool(self.ALPHA_VANTAGE_API_KEY and self.ALPHA_VANTAGE_API_KEY != "your_api_key_here")
+        return bool(
+            self.ALPHA_VANTAGE_API_KEY
+            and self.ALPHA_VANTAGE_API_KEY != "your_api_key_here"
+        )
 
 
 # Global settings instance (singleton pattern)

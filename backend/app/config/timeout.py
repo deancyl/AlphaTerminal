@@ -14,9 +14,9 @@ Environment Variables:
     SEARCH_TIMEOUT: Timeout for search endpoints (default: 5.0)
     QUOTE_TIMEOUT: Timeout for quote endpoints (default: 10.0)
 """
+
 import os
 from typing import Final
-
 
 # ── HTTP Client Timeout Settings ──────────────────────────────────────────────
 
@@ -57,6 +57,7 @@ KEEPALIVE_EXPIRY: Final[float] = float(os.getenv("API_KEEPALIVE_EXPIRY", "5.0"))
 
 # ── Helper Functions ───────────────────────────────────────────────────────────
 
+
 def get_timeout_config() -> dict:
     """Return all timeout settings as a dictionary for logging/debugging"""
     return {
@@ -76,19 +77,21 @@ def get_timeout_config() -> dict:
     }
 
 
-def validate_timeout(value: float, name: str, min_val: float = 1.0, max_val: float = 300.0) -> float:
+def validate_timeout(
+    value: float, name: str, min_val: float = 1.0, max_val: float = 300.0
+) -> float:
     """
     Validate timeout value is within acceptable range.
-    
+
     Args:
         value: Timeout value to validate
         name: Name of the timeout setting (for error messages)
         min_val: Minimum acceptable value (default: 1.0)
         max_val: Maximum acceptable value (default: 300.0)
-    
+
     Returns:
         Validated timeout value (clamped to range)
-    
+
     Raises:
         ValueError: If value is invalid (negative or non-numeric)
     """
@@ -100,6 +103,7 @@ def validate_timeout(value: float, name: str, min_val: float = 1.0, max_val: flo
 
     if clamped != value:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"{name} clamped from {value} to {clamped}")
 

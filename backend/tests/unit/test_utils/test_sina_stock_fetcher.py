@@ -18,35 +18,33 @@ class TestGetProxies:
 
     def test_no_proxy_settings(self):
         """Test when no proxy is configured."""
-        with patch('app.config.settings.get_settings') as mock_settings:
+        with patch("app.config.settings.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(HTTP_PROXY=None, http_proxy=None)
             result = _get_proxies()
             assert result is None
 
     def test_with_http_proxy(self):
         """Test when HTTP_PROXY is configured."""
-        with patch('app.config.settings.get_settings') as mock_settings:
+        with patch("app.config.settings.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
-                HTTP_PROXY="http://192.168.1.50:7897",
-                http_proxy=None
+                HTTP_PROXY="http://192.168.1.50:7897", http_proxy=None
             )
             result = _get_proxies()
             assert result == {
                 "http": "http://192.168.1.50:7897",
-                "https": "http://192.168.1.50:7897"
+                "https": "http://192.168.1.50:7897",
             }
 
     def test_with_lowercase_proxy(self):
         """Test when http_proxy (lowercase) is configured."""
-        with patch('app.config.settings.get_settings') as mock_settings:
+        with patch("app.config.settings.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
-                HTTP_PROXY=None,
-                http_proxy="http://proxy.example.com:8080"
+                HTTP_PROXY=None, http_proxy="http://proxy.example.com:8080"
             )
             result = _get_proxies()
             assert result == {
                 "http": "http://proxy.example.com:8080",
-                "https": "http://proxy.example.com:8080"
+                "https": "http://proxy.example.com:8080",
             }
 
 
@@ -71,7 +69,7 @@ class TestFetchAllStocksSina:
                 "turnoverratio": "0.12687",
                 "high": "1311.91",
                 "low": "1296.6",
-                "settlement": "1311"
+                "settlement": "1311",
             }
         ]
         mock_sz_stocks = [
@@ -90,12 +88,13 @@ class TestFetchAllStocksSina:
                 "turnoverratio": "0.13355",
                 "high": "10.71",
                 "low": "10.65",
-                "settlement": "10.7"
+                "settlement": "10.7",
             }
         ]
 
-        with patch('app.utils.sina_stock_fetcher.curl_requests') as mock_requests:
+        with patch("app.utils.sina_stock_fetcher.curl_requests") as mock_requests:
             call_count = [0]
+
             def get_side_effect(*args, **kwargs):
                 call_count[0] += 1
                 mock_resp = MagicMock()
@@ -128,7 +127,7 @@ class TestFetchAllStocksSina:
 
     def test_fetch_all_stocks_empty_response(self):
         """Test handling empty response from API."""
-        with patch('app.utils.sina_stock_fetcher.curl_requests') as mock_requests:
+        with patch("app.utils.sina_stock_fetcher.curl_requests") as mock_requests:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.text = "[]"
@@ -142,7 +141,7 @@ class TestFetchAllStocksSina:
 
     def test_fetch_all_stocks_api_error(self):
         """Test handling API error."""
-        with patch('app.utils.sina_stock_fetcher.curl_requests') as mock_requests:
+        with patch("app.utils.sina_stock_fetcher.curl_requests") as mock_requests:
             mock_requests.get.side_effect = Exception("Network error")
 
             _SINA_STOCK_CB._state = CircuitState.CLOSED
@@ -169,7 +168,7 @@ class TestFetchAllStocksSina:
                 "turnoverratio": "0.1",
                 "high": "10.5",
                 "low": "9.5",
-                "settlement": "10"
+                "settlement": "10",
             },
             {
                 "symbol": "sh600519",
@@ -186,12 +185,13 @@ class TestFetchAllStocksSina:
                 "turnoverratio": "0.12687",
                 "high": "1311.91",
                 "low": "1296.6",
-                "settlement": "1311"
-            }
+                "settlement": "1311",
+            },
         ]
 
-        with patch('app.utils.sina_stock_fetcher.curl_requests') as mock_requests:
+        with patch("app.utils.sina_stock_fetcher.curl_requests") as mock_requests:
             call_count = [0]
+
             def get_side_effect(*args, **kwargs):
                 call_count[0] += 1
                 mock_resp = MagicMock()
@@ -248,12 +248,13 @@ class TestDataTransformation:
                 "turnoverratio": "0.12687",
                 "high": "1311.91",
                 "low": "1296.6",
-                "settlement": "1311"
+                "settlement": "1311",
             }
         ]
 
-        with patch('app.utils.sina_stock_fetcher.curl_requests') as mock_requests:
+        with patch("app.utils.sina_stock_fetcher.curl_requests") as mock_requests:
             call_count = [0]
+
             def get_side_effect(*args, **kwargs):
                 call_count[0] += 1
                 mock_resp = MagicMock()
@@ -296,12 +297,13 @@ class TestDataTransformation:
                 "turnoverratio": "",
                 "high": "",
                 "low": "",
-                "settlement": ""
+                "settlement": "",
             }
         ]
 
-        with patch('app.utils.sina_stock_fetcher.curl_requests') as mock_requests:
+        with patch("app.utils.sina_stock_fetcher.curl_requests") as mock_requests:
             call_count = [0]
+
             def get_side_effect(*args, **kwargs):
                 call_count[0] += 1
                 mock_resp = MagicMock()

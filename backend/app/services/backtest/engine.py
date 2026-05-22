@@ -16,6 +16,7 @@ Debug Cycles:
   9. Error handling
   10. Performance summary
 """
+
 import logging
 import pandas as pd
 import numpy as np
@@ -32,8 +33,10 @@ logger = logging.getLogger(__name__)
 # Enums
 # ═══════════════════════════════════════════════════════════════
 
+
 class TimeFrame(Enum):
     """Supported timeframes for backtesting"""
+
     M1 = "1m"
     M5 = "5m"
     M15 = "15m"
@@ -45,6 +48,7 @@ class TimeFrame(Enum):
 
 class OrderType(Enum):
     """Order types"""
+
     MARKET = "market"
     LIMIT = "limit"
     STOP = "stop"
@@ -53,18 +57,21 @@ class OrderType(Enum):
 
 class OrderSide(Enum):
     """Order side (buy/sell)"""
+
     BUY = "buy"
     SELL = "sell"
 
 
 class PositionSide(Enum):
     """Position side (long/short)"""
+
     LONG = "long"
     SHORT = "short"
 
 
 class TradeDirection(Enum):
     """Trade direction filter"""
+
     LONG_ONLY = "long_only"
     SHORT_ONLY = "short_only"
     BOTH = "both"
@@ -74,11 +81,12 @@ class TradeDirection(Enum):
 # Dataclasses
 # ═══════════════════════════════════════════════════════════════
 
+
 @dataclass
 class BacktestConfig:
     """
     Backtest configuration parameters
-    
+
     Attributes:
         initial_capital: Starting capital for backtest
         commission: Commission rate (e.g., 0.0003 = 0.03%)
@@ -92,9 +100,10 @@ class BacktestConfig:
         timeframe: Data timeframe
         warmup_bars: Number of bars for indicator warmup
     """
+
     initial_capital: float = 100000.0
     commission: float = 0.0003  # 0.03%
-    slippage: float = 0.0001   # 0.01%
+    slippage: float = 0.0001  # 0.01%
     leverage: float = 1.0
     trade_direction: TradeDirection = TradeDirection.BOTH
     stop_loss_pct: float = 0.0
@@ -107,7 +116,9 @@ class BacktestConfig:
     def __post_init__(self):
         """Validate configuration parameters"""
         if self.initial_capital <= 0:
-            raise ValueError(f"initial_capital must be positive, got {self.initial_capital}")
+            raise ValueError(
+                f"initial_capital must be positive, got {self.initial_capital}"
+            )
         if not 0 <= self.commission < 1:
             raise ValueError(f"commission must be in [0, 1), got {self.commission}")
         if not 0 <= self.slippage < 1:
@@ -115,7 +126,9 @@ class BacktestConfig:
         if self.leverage < 1:
             raise ValueError(f"leverage must be >= 1, got {self.leverage}")
         if not 0 <= self.position_size_pct <= 1:
-            raise ValueError(f"position_size_pct must be in [0, 1], got {self.position_size_pct}")
+            raise ValueError(
+                f"position_size_pct must be in [0, 1], got {self.position_size_pct}"
+            )
         if self.max_positions < 1:
             raise ValueError(f"max_positions must be >= 1, got {self.max_positions}")
 
@@ -124,7 +137,7 @@ class BacktestConfig:
 class Order:
     """
     Order representation
-    
+
     Attributes:
         symbol: Trading symbol
         side: Buy or sell
@@ -136,6 +149,7 @@ class Order:
         filled_price: Actual fill price
         filled_quantity: Actually filled quantity
     """
+
     symbol: str
     side: OrderSide
     order_type: OrderType
@@ -157,7 +171,7 @@ class Order:
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
             "status": self.status,
             "filled_price": self.filled_price,
-            "filled_quantity": self.filled_quantity
+            "filled_quantity": self.filled_quantity,
         }
 
 
@@ -165,7 +179,7 @@ class Order:
 class Position:
     """
     Position tracking
-    
+
     Attributes:
         symbol: Trading symbol
         side: Long or short
@@ -176,6 +190,7 @@ class Position:
         stop_loss: Stop loss price
         take_profit: Take profit price
     """
+
     symbol: str
     side: PositionSide
     quantity: int
@@ -202,7 +217,7 @@ class Position:
             "entry_time": self.entry_time.isoformat() if self.entry_time else None,
             "unrealized_pnl": round(self.unrealized_pnl, 2),
             "stop_loss": round(self.stop_loss, 2) if self.stop_loss else None,
-            "take_profit": round(self.take_profit, 2) if self.take_profit else None
+            "take_profit": round(self.take_profit, 2) if self.take_profit else None,
         }
 
 
@@ -210,7 +225,7 @@ class Position:
 class Trade:
     """
     Completed trade representation
-    
+
     Attributes:
         symbol: Trading symbol
         side: Long or short
@@ -224,6 +239,7 @@ class Trade:
         commission: Total commission paid
         exit_reason: Reason for exit (signal, stop_loss, take_profit, etc.)
     """
+
     symbol: str
     side: PositionSide
     entry_price: float
@@ -246,9 +262,13 @@ class Trade:
 
         if self.pnl_pct == 0.0 and self.entry_price > 0:
             if self.side == PositionSide.LONG:
-                self.pnl_pct = ((self.exit_price - self.entry_price) / self.entry_price) * 100
+                self.pnl_pct = (
+                    (self.exit_price - self.entry_price) / self.entry_price
+                ) * 100
             else:
-                self.pnl_pct = ((self.entry_price - self.exit_price) / self.entry_price) * 100
+                self.pnl_pct = (
+                    (self.entry_price - self.exit_price) / self.entry_price
+                ) * 100
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -263,7 +283,7 @@ class Trade:
             "pnl": round(self.pnl, 2),
             "pnl_pct": round(self.pnl_pct, 2),
             "commission": round(self.commission, 4),
-            "exit_reason": self.exit_reason
+            "exit_reason": self.exit_reason,
         }
 
 
@@ -271,7 +291,7 @@ class Trade:
 class EquityPoint:
     """
     Single point on equity curve
-    
+
     Attributes:
         timestamp: Time of equity snapshot
         equity: Total portfolio equity
@@ -280,6 +300,7 @@ class EquityPoint:
         drawdown: Current drawdown from peak
         drawdown_pct: Drawdown percentage
     """
+
     timestamp: datetime
     equity: float
     cash: float
@@ -295,7 +316,7 @@ class EquityPoint:
             "cash": round(self.cash, 2),
             "position_value": round(self.position_value, 2),
             "drawdown": round(self.drawdown, 2),
-            "drawdown_pct": round(self.drawdown_pct, 2)
+            "drawdown_pct": round(self.drawdown_pct, 2),
         }
 
 
@@ -303,7 +324,7 @@ class EquityPoint:
 class PerformanceMetrics:
     """
     Comprehensive performance metrics
-    
+
     Attributes:
         total_return: Total return in currency
         total_return_pct: Total return percentage
@@ -328,6 +349,7 @@ class PerformanceMetrics:
         volatility_annualized: Annualized volatility
         calmar_ratio: Calmar ratio (return / max drawdown)
     """
+
     total_return: float = 0.0
     total_return_pct: float = 0.0
     annualized_return_pct: float = 0.0
@@ -375,7 +397,7 @@ class PerformanceMetrics:
             "max_consecutive_losses": self.max_consecutive_losses,
             "avg_holding_period": round(self.avg_holding_period, 1),
             "volatility_annualized": round(self.volatility_annualized, 2),
-            "calmar_ratio": round(self.calmar_ratio, 3)
+            "calmar_ratio": round(self.calmar_ratio, 3),
         }
 
 
@@ -383,7 +405,7 @@ class PerformanceMetrics:
 class BacktestResult:
     """
     Complete backtest result
-    
+
     Attributes:
         config: Backtest configuration used
         trades: List of completed trades
@@ -396,6 +418,7 @@ class BacktestResult:
         execution_time_ms: Total execution time in milliseconds
         debug_log: Debug messages from all cycles
     """
+
     config: BacktestConfig
     trades: List[Trade] = field(default_factory=list)
     equity_curve: List[EquityPoint] = field(default_factory=list)
@@ -420,7 +443,7 @@ class BacktestResult:
                 "take_profit_pct": self.config.take_profit_pct,
                 "position_size_pct": self.config.position_size_pct,
                 "max_positions": self.config.max_positions,
-                "timeframe": self.config.timeframe.value
+                "timeframe": self.config.timeframe.value,
             },
             "trades": [t.to_dict() for t in self.trades],
             "equity_curve": [e.to_dict() for e in self.equity_curve],
@@ -430,7 +453,7 @@ class BacktestResult:
             "benchmark_return_pct": round(self.benchmark_return_pct, 2),
             "data_info": self.data_info,
             "execution_time_ms": round(self.execution_time_ms, 2),
-            "debug_log": self.debug_log
+            "debug_log": self.debug_log,
         }
 
 
@@ -438,14 +461,15 @@ class BacktestResult:
 # Strategy Context
 # ═══════════════════════════════════════════════════════════════
 
+
 class StrategyContext:
     """
     Context object passed to strategy on each bar
-    
+
     Provides access to current market data, portfolio state, and order methods.
     """
 
-    def __init__(self, engine: 'BacktestEngine', bar_data: Dict[str, Any]):
+    def __init__(self, engine: "BacktestEngine", bar_data: Dict[str, Any]):
         self._engine = engine
         self._bar_data = bar_data
         self._orders_to_place: List[Order] = []
@@ -458,37 +482,37 @@ class StrategyContext:
     @property
     def timestamp(self) -> datetime:
         """Current timestamp"""
-        return self._bar_data.get('timestamp', datetime.now())
+        return self._bar_data.get("timestamp", datetime.now())
 
     @property
     def open(self) -> float:
         """Current bar open price"""
-        return self._bar_data.get('open', 0.0)
+        return self._bar_data.get("open", 0.0)
 
     @property
     def high(self) -> float:
         """Current bar high price"""
-        return self._bar_data.get('high', 0.0)
+        return self._bar_data.get("high", 0.0)
 
     @property
     def low(self) -> float:
         """Current bar low price"""
-        return self._bar_data.get('low', 0.0)
+        return self._bar_data.get("low", 0.0)
 
     @property
     def close(self) -> float:
         """Current bar close price"""
-        return self._bar_data.get('close', 0.0)
+        return self._bar_data.get("close", 0.0)
 
     @property
     def volume(self) -> float:
         """Current bar volume"""
-        return self._bar_data.get('volume', 0.0)
+        return self._bar_data.get("volume", 0.0)
 
     @property
     def symbol(self) -> str:
         """Current symbol"""
-        return self._bar_data.get('symbol', '')
+        return self._bar_data.get("symbol", "")
 
     @property
     def cash(self) -> float:
@@ -520,17 +544,22 @@ class StrategyContext:
         """Get position for symbol"""
         return self._engine._positions.get(symbol)
 
-    def buy(self, symbol: str, quantity: int = None, price: float = None,
-            order_type: OrderType = OrderType.MARKET) -> Order:
+    def buy(
+        self,
+        symbol: str,
+        quantity: int = None,
+        price: float = None,
+        order_type: OrderType = OrderType.MARKET,
+    ) -> Order:
         """
         Place buy order
-        
+
         Args:
             symbol: Symbol to buy
             quantity: Number of shares (None = auto-calculate)
             price: Limit price (for limit orders)
             order_type: Order type
-            
+
         Returns:
             Order object
         """
@@ -546,23 +575,28 @@ class StrategyContext:
             order_type=order_type,
             quantity=quantity,
             price=price,
-            timestamp=self.timestamp
+            timestamp=self.timestamp,
         )
 
         self._orders_to_place.append(order)
         return order
 
-    def sell(self, symbol: str, quantity: int = None, price: float = None,
-             order_type: OrderType = OrderType.MARKET) -> Order:
+    def sell(
+        self,
+        symbol: str,
+        quantity: int = None,
+        price: float = None,
+        order_type: OrderType = OrderType.MARKET,
+    ) -> Order:
         """
         Place sell order
-        
+
         Args:
             symbol: Symbol to sell
             quantity: Number of shares (None = close entire position)
             price: Limit price (for limit orders)
             order_type: Order type
-            
+
         Returns:
             Order object
         """
@@ -577,7 +611,7 @@ class StrategyContext:
             order_type=order_type,
             quantity=quantity,
             price=price,
-            timestamp=self.timestamp
+            timestamp=self.timestamp,
         )
 
         self._orders_to_place.append(order)
@@ -596,10 +630,11 @@ class StrategyContext:
 # Backtest Engine
 # ═══════════════════════════════════════════════════════════════
 
+
 class BacktestEngine:
     """
     Event-Driven Backtest Engine with Comprehensive Debug Logging
-    
+
     Features:
     - Multiple timeframe support (1m, 5m, 15m, 30m, 1H, 4H, 1D)
     - Commission and slippage modeling
@@ -608,7 +643,7 @@ class BacktestEngine:
     - Position and portfolio tracking
     - Comprehensive performance metrics
     - 10 debug cycles for detailed logging
-    
+
     Usage:
         config = BacktestConfig(initial_capital=100000)
         engine = BacktestEngine(config)
@@ -618,7 +653,7 @@ class BacktestEngine:
     def __init__(self, config: BacktestConfig):
         """
         Initialize backtest engine
-        
+
         Args:
             config: Backtest configuration
         """
@@ -673,16 +708,16 @@ class BacktestEngine:
         self,
         strategy_func: Callable[[StrategyContext], None],
         data: pd.DataFrame,
-        symbol: str = "ASSET"
+        symbol: str = "ASSET",
     ) -> BacktestResult:
         """
         Run backtest with given strategy and data
-        
+
         Args:
             strategy_func: Strategy function that takes StrategyContext
             data: DataFrame with columns [timestamp, open, high, low, close, volume]
             symbol: Symbol name for the data
-            
+
         Returns:
             BacktestResult with trades, equity curve, and metrics
         """
@@ -702,7 +737,9 @@ class BacktestEngine:
             self._strategy_func = strategy_func
             self._strategy_compiled = True
 
-            self._log_debug(f"Strategy Function: {strategy_func.__name__ if hasattr(strategy_func, '__name__') else 'lambda'}")
+            self._log_debug(
+                f"Strategy Function: {strategy_func.__name__ if hasattr(strategy_func, '__name__') else 'lambda'}"
+            )
             self._log_debug("✓ Strategy compiled successfully")
             self._log_debug("")
 
@@ -717,34 +754,48 @@ class BacktestEngine:
             if data is None or len(data) == 0:
                 raise ValueError("Data cannot be empty")
 
-            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            required_cols = ["open", "high", "low", "close", "volume"]
             missing_cols = [col for col in required_cols if col not in data.columns]
             if missing_cols:
                 raise ValueError(f"Missing required columns: {missing_cols}")
 
             # Ensure timestamp column
-            if 'timestamp' not in data.columns:
+            if "timestamp" not in data.columns:
                 if isinstance(data.index, pd.DatetimeIndex):
                     data = data.reset_index()
-                    data.rename(columns={'index': 'timestamp'}, inplace=True)
+                    data.rename(columns={"index": "timestamp"}, inplace=True)
                 else:
-                    data['timestamp'] = pd.date_range(start='2020-01-01', periods=len(data), freq='D')
+                    data["timestamp"] = pd.date_range(
+                        start="2020-01-01", periods=len(data), freq="D"
+                    )
 
             self._data = data.copy()
-            self._data['symbol'] = symbol
+            self._data["symbol"] = symbol
 
-            self._log_debug(f"Data Shape: {data.shape[0]} rows × {data.shape[1]} columns")
-            self._log_debug(f"Date Range: {data['timestamp'].min()} to {data['timestamp'].max()}")
-            self._log_debug(f"Price Range: ${data['close'].min():.2f} to ${data['close'].max():.2f}")
-            self._log_debug(f"Volume Range: {data['volume'].min():,.0f} to {data['volume'].max():,.0f}")
+            self._log_debug(
+                f"Data Shape: {data.shape[0]} rows × {data.shape[1]} columns"
+            )
+            self._log_debug(
+                f"Date Range: {data['timestamp'].min()} to {data['timestamp'].max()}"
+            )
+            self._log_debug(
+                f"Price Range: ${data['close'].min():.2f} to ${data['close'].max():.2f}"
+            )
+            self._log_debug(
+                f"Volume Range: {data['volume'].min():,.0f} to {data['volume'].max():,.0f}"
+            )
             self._log_debug(f"Symbol: {symbol}")
             self._log_debug("✓ Data loaded successfully")
             self._log_debug("")
 
             # Calculate benchmark return
-            first_close = data['close'].iloc[0]
-            last_close = data['close'].iloc[-1]
-            benchmark_return_pct = ((last_close - first_close) / first_close) * 100 if first_close > 0 else 0
+            first_close = data["close"].iloc[0]
+            last_close = data["close"].iloc[-1]
+            benchmark_return_pct = (
+                ((last_close - first_close) / first_close) * 100
+                if first_close > 0
+                else 0
+            )
 
             # ═════════════════════════════════════════════════════════
             # Main Backtest Loop
@@ -767,12 +818,16 @@ class BacktestEngine:
                 if idx < self._config.warmup_bars:
                     # Skip warmup period
                     if idx == 0:
-                        self._log_debug(f"Skipping warmup period (bars 0-{self._config.warmup_bars-1})")
+                        self._log_debug(
+                            f"Skipping warmup period (bars 0-{self._config.warmup_bars-1})"
+                        )
                     continue
 
                 # Log progress every 100 bars
                 if idx % 100 == 0:
-                    self._log_debug(f"Processing bar {idx}/{len(data)} ({idx/len(data)*100:.1f}%)")
+                    self._log_debug(
+                        f"Processing bar {idx}/{len(data)} ({idx/len(data)*100:.1f}%)"
+                    )
 
                 # Create strategy context
                 context = StrategyContext(self, bar_data)
@@ -814,15 +869,21 @@ class BacktestEngine:
 
             metrics = self._calculate_metrics()
 
-            self._log_debug(f"Total Return: ${metrics.total_return:,.2f} ({metrics.total_return_pct:.2f}%)")
+            self._log_debug(
+                f"Total Return: ${metrics.total_return:,.2f} ({metrics.total_return_pct:.2f}%)"
+            )
             self._log_debug(f"Annualized Return: {metrics.annualized_return_pct:.2f}%")
             self._log_debug(f"Sharpe Ratio: {metrics.sharpe_ratio:.3f}")
             self._log_debug(f"Sortino Ratio: {metrics.sortino_ratio:.3f}")
-            self._log_debug(f"Max Drawdown: ${metrics.max_drawdown:,.2f} ({metrics.max_drawdown_pct:.2f}%)")
+            self._log_debug(
+                f"Max Drawdown: ${metrics.max_drawdown:,.2f} ({metrics.max_drawdown_pct:.2f}%)"
+            )
             self._log_debug(f"Win Rate: {metrics.win_rate:.2f}%")
             self._log_debug(f"Profit Factor: {metrics.profit_factor:.2f}")
             self._log_debug(f"Total Trades: {metrics.total_trades}")
-            self._log_debug(f"Winning/Losing: {metrics.winning_trades}/{metrics.losing_trades}")
+            self._log_debug(
+                f"Winning/Losing: {metrics.winning_trades}/{metrics.losing_trades}"
+            )
             self._log_debug("✓ Metrics calculated successfully")
             self._log_debug("")
 
@@ -845,13 +906,13 @@ class BacktestEngine:
                 benchmark_return_pct=benchmark_return_pct,
                 data_info={
                     "symbol": symbol,
-                    "start_date": str(data['timestamp'].min()),
-                    "end_date": str(data['timestamp'].max()),
+                    "start_date": str(data["timestamp"].min()),
+                    "end_date": str(data["timestamp"].max()),
                     "total_bars": len(data),
-                    "timeframe": self._config.timeframe.value
+                    "timeframe": self._config.timeframe.value,
                 },
                 execution_time_ms=execution_time_ms,
-                debug_log=self._debug_log
+                debug_log=self._debug_log,
             )
 
             self._log_debug(f"Result generated with {len(self._trades)} trades")
@@ -868,9 +929,13 @@ class BacktestEngine:
             self._log_debug("=" * 70)
             self._log_debug(f"Initial Capital: ${self._config.initial_capital:,.2f}")
             self._log_debug(f"Final Equity: ${self._equity:,.2f}")
-            self._log_debug(f"Total Return: ${metrics.total_return:,.2f} ({metrics.total_return_pct:.2f}%)")
+            self._log_debug(
+                f"Total Return: ${metrics.total_return:,.2f} ({metrics.total_return_pct:.2f}%)"
+            )
             self._log_debug(f"Benchmark Return: {benchmark_return_pct:.2f}%")
-            self._log_debug(f"Excess Return: {metrics.total_return_pct - benchmark_return_pct:.2f}%")
+            self._log_debug(
+                f"Excess Return: {metrics.total_return_pct - benchmark_return_pct:.2f}%"
+            )
             self._log_debug(f"Sharpe Ratio: {metrics.sharpe_ratio:.3f}")
             self._log_debug(f"Max Drawdown: {metrics.max_drawdown_pct:.2f}%")
             self._log_debug(f"Win Rate: {metrics.win_rate:.2f}%")
@@ -907,7 +972,7 @@ class BacktestEngine:
                 benchmark_return_pct=0.0,
                 data_info={"error": str(e), "traceback": traceback.format_exc()},
                 execution_time_ms=execution_time_ms,
-                debug_log=self._debug_log
+                debug_log=self._debug_log,
             )
 
             return result
@@ -915,23 +980,29 @@ class BacktestEngine:
     def _execute_order(self, order: Order, bar_data: Dict[str, Any]):
         """
         Execute an order
-        
+
         Args:
             order: Order to execute
             bar_data: Current bar data
         """
         symbol = order.symbol
-        current_price = bar_data['close']
+        current_price = bar_data["close"]
 
         # Check trade direction
-        if self._config.trade_direction == TradeDirection.LONG_ONLY and order.side == OrderSide.SELL:
+        if (
+            self._config.trade_direction == TradeDirection.LONG_ONLY
+            and order.side == OrderSide.SELL
+        ):
             # Allow sell only to close long positions
             if symbol not in self._positions:
                 order.status = "rejected"
                 self._orders.append(order)
                 return
 
-        if self._config.trade_direction == TradeDirection.SHORT_ONLY and order.side == OrderSide.BUY:
+        if (
+            self._config.trade_direction == TradeDirection.SHORT_ONLY
+            and order.side == OrderSide.BUY
+        ):
             # Allow buy only to close short positions
             if symbol not in self._positions:
                 order.status = "rejected"
@@ -954,7 +1025,9 @@ class BacktestEngine:
             required_cash = trade_value + commission
             if required_cash > self._cash:
                 # Adjust quantity to available cash
-                max_quantity = int(self._cash / (exec_price * (1 + self._config.commission)))
+                max_quantity = int(
+                    self._cash / (exec_price * (1 + self._config.commission))
+                )
                 if max_quantity <= 0:
                     order.status = "rejected"
                     self._orders.append(order)
@@ -968,7 +1041,9 @@ class BacktestEngine:
                 # Add to existing position
                 pos = self._positions[symbol]
                 total_quantity = pos.quantity + order.quantity
-                avg_price = (pos.entry_price * pos.quantity + exec_price * order.quantity) / total_quantity
+                avg_price = (
+                    pos.entry_price * pos.quantity + exec_price * order.quantity
+                ) / total_quantity
                 pos.quantity = total_quantity
                 pos.entry_price = avg_price
             else:
@@ -978,19 +1053,23 @@ class BacktestEngine:
                     side=PositionSide.LONG,
                     quantity=order.quantity,
                     entry_price=exec_price,
-                    entry_time=order.timestamp
+                    entry_time=order.timestamp,
                 )
 
                 # Set stop loss / take profit
                 if self._config.stop_loss_pct > 0:
-                    position.stop_loss = exec_price * (1 - self._config.stop_loss_pct / 100)
+                    position.stop_loss = exec_price * (
+                        1 - self._config.stop_loss_pct / 100
+                    )
                 if self._config.take_profit_pct > 0:
-                    position.take_profit = exec_price * (1 + self._config.take_profit_pct / 100)
+                    position.take_profit = exec_price * (
+                        1 + self._config.take_profit_pct / 100
+                    )
 
                 self._positions[symbol] = position
 
             # Deduct cash
-            self._cash -= (trade_value + commission)
+            self._cash -= trade_value + commission
 
         else:  # SELL
             # Check if we have position
@@ -1001,19 +1080,23 @@ class BacktestEngine:
                     side=PositionSide.SHORT,
                     quantity=order.quantity,
                     entry_price=exec_price,
-                    entry_time=order.timestamp
+                    entry_time=order.timestamp,
                 )
 
                 # Set stop loss / take profit for short
                 if self._config.stop_loss_pct > 0:
-                    position.stop_loss = exec_price * (1 + self._config.stop_loss_pct / 100)
+                    position.stop_loss = exec_price * (
+                        1 + self._config.stop_loss_pct / 100
+                    )
                 if self._config.take_profit_pct > 0:
-                    position.take_profit = exec_price * (1 - self._config.take_profit_pct / 100)
+                    position.take_profit = exec_price * (
+                        1 - self._config.take_profit_pct / 100
+                    )
 
                 self._positions[symbol] = position
 
                 # Add cash from short sale
-                self._cash += (trade_value - commission)
+                self._cash += trade_value - commission
             else:
                 # Close existing position
                 pos = self._positions[symbol]
@@ -1035,7 +1118,7 @@ class BacktestEngine:
                     entry_time=pos.entry_time,
                     exit_time=order.timestamp,
                     pnl=pnl,
-                    commission=commission
+                    commission=commission,
                 )
                 self._trades.append(trade)
 
@@ -1045,7 +1128,7 @@ class BacktestEngine:
                     del self._positions[symbol]
 
                 # Add cash from sale
-                self._cash += (exec_price * close_quantity - commission)
+                self._cash += exec_price * close_quantity - commission
 
         # Update order status
         order.status = "filled"
@@ -1056,11 +1139,11 @@ class BacktestEngine:
     def _update_positions(self, bar_data: Dict[str, Any]):
         """
         Update all positions with current prices
-        
+
         Args:
             bar_data: Current bar data
         """
-        current_price = bar_data['close']
+        current_price = bar_data["close"]
 
         for symbol, pos in self._positions.items():
             pos.update_pnl(current_price)
@@ -1068,16 +1151,16 @@ class BacktestEngine:
     def _check_exit_orders(self, bar_data: Dict[str, Any]):
         """
         Check and execute stop loss / take profit orders
-        
+
         Args:
             bar_data: Current bar data
         """
         symbols_to_close = []
 
         for symbol, pos in self._positions.items():
-            current_price = bar_data['close']
-            low = bar_data['low']
-            high = bar_data['high']
+            current_price = bar_data["close"]
+            low = bar_data["low"]
+            high = bar_data["high"]
 
             # Check stop loss
             if pos.stop_loss:
@@ -1108,7 +1191,7 @@ class BacktestEngine:
                 order_type=OrderType.MARKET,
                 quantity=pos.quantity,
                 price=price,
-                timestamp=bar_data.get('timestamp', datetime.now())
+                timestamp=bar_data.get("timestamp", datetime.now()),
             )
 
             # Execute with exit price
@@ -1133,12 +1216,12 @@ class BacktestEngine:
                 exit_time=order.timestamp,
                 pnl=pnl,
                 commission=commission,
-                exit_reason=reason
+                exit_reason=reason,
             )
             self._trades.append(trade)
 
             # Update cash
-            self._cash += (trade_value - commission)
+            self._cash += trade_value - commission
 
             # Remove position
             del self._positions[symbol]
@@ -1152,12 +1235,12 @@ class BacktestEngine:
     def _update_equity_curve(self, bar_data: Dict[str, Any]):
         """
         Update equity curve with current state
-        
+
         Args:
             bar_data: Current bar data
         """
-        current_price = bar_data['close']
-        timestamp = bar_data.get('timestamp', datetime.now())
+        current_price = bar_data["close"]
+        timestamp = bar_data.get("timestamp", datetime.now())
 
         # Calculate position value
         position_value = 0.0
@@ -1176,7 +1259,9 @@ class BacktestEngine:
 
         # Calculate drawdown
         drawdown = self._peak_equity - self._equity
-        drawdown_pct = (drawdown / self._peak_equity * 100) if self._peak_equity > 0 else 0
+        drawdown_pct = (
+            (drawdown / self._peak_equity * 100) if self._peak_equity > 0 else 0
+        )
 
         # Add to equity curve
         equity_point = EquityPoint(
@@ -1185,14 +1270,14 @@ class BacktestEngine:
             cash=self._cash,
             position_value=position_value,
             drawdown=drawdown,
-            drawdown_pct=drawdown_pct
+            drawdown_pct=drawdown_pct,
         )
         self._equity_curve.append(equity_point)
 
     def _calculate_metrics(self) -> PerformanceMetrics:
         """
         Calculate comprehensive performance metrics
-        
+
         Returns:
             PerformanceMetrics object
         """
@@ -1212,19 +1297,33 @@ class BacktestEngine:
         metrics.losing_trades = len(losing_trades)
 
         # Win rate
-        metrics.win_rate = (metrics.winning_trades / metrics.total_trades * 100) if metrics.total_trades > 0 else 0
+        metrics.win_rate = (
+            (metrics.winning_trades / metrics.total_trades * 100)
+            if metrics.total_trades > 0
+            else 0
+        )
 
         # Total return
         metrics.total_return = self._equity - self._config.initial_capital
-        metrics.total_return_pct = (metrics.total_return / self._config.initial_capital * 100) if self._config.initial_capital > 0 else 0
+        metrics.total_return_pct = (
+            (metrics.total_return / self._config.initial_capital * 100)
+            if self._config.initial_capital > 0
+            else 0
+        )
 
         # Annualized return
         if len(self._equity_curve) > 0:
             start_date = self._equity_curve[0].timestamp
             end_date = self._equity_curve[-1].timestamp
-            days = (end_date - start_date).days if hasattr(end_date, 'days') else len(self._equity_curve)
-            years = max(days / 365, 1/365)
-            metrics.annualized_return_pct = ((self._equity / self._config.initial_capital) ** (1 / years) - 1) * 100
+            days = (
+                (end_date - start_date).days
+                if hasattr(end_date, "days")
+                else len(self._equity_curve)
+            )
+            years = max(days / 365, 1 / 365)
+            metrics.annualized_return_pct = (
+                (self._equity / self._config.initial_capital) ** (1 / years) - 1
+            ) * 100
 
         # Max drawdown
         if self._equity_curve:
@@ -1245,7 +1344,11 @@ class BacktestEngine:
         # Profit factor
         gross_profit = sum(t.pnl for t in winning_trades)
         gross_loss = abs(sum(t.pnl for t in losing_trades))
-        metrics.profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float('inf') if gross_profit > 0 else 0
+        metrics.profit_factor = (
+            (gross_profit / gross_loss)
+            if gross_loss > 0
+            else float("inf") if gross_profit > 0 else 0
+        )
 
         # Sharpe ratio
         if len(self._trades) >= 2:
@@ -1262,13 +1365,15 @@ class BacktestEngine:
                     TimeFrame.M30: 252 * 24 * 2,
                     TimeFrame.H1: 252 * 24,
                     TimeFrame.H4: 252 * 6,
-                    TimeFrame.D1: 252
+                    TimeFrame.D1: 252,
                 }
                 periods = periods_per_year.get(self._config.timeframe, 252)
 
                 annualized_return = avg_return * periods
                 annualized_vol = std_return * np.sqrt(periods)
-                metrics.sharpe_ratio = annualized_return / annualized_vol if annualized_vol > 0 else 0
+                metrics.sharpe_ratio = (
+                    annualized_return / annualized_vol if annualized_vol > 0 else 0
+                )
 
                 # Volatility
                 metrics.volatility_annualized = annualized_vol * 100
@@ -1287,17 +1392,21 @@ class BacktestEngine:
                     TimeFrame.M30: 252 * 24 * 2,
                     TimeFrame.H1: 252 * 24,
                     TimeFrame.H4: 252 * 6,
-                    TimeFrame.D1: 252
+                    TimeFrame.D1: 252,
                 }
                 periods = periods_per_year.get(self._config.timeframe, 252)
 
                 annualized_return = np.mean(returns) * periods
                 downside_vol = downside_std * np.sqrt(periods)
-                metrics.sortino_ratio = annualized_return / downside_vol if downside_vol > 0 else 0
+                metrics.sortino_ratio = (
+                    annualized_return / downside_vol if downside_vol > 0 else 0
+                )
 
         # Calmar ratio
         if metrics.max_drawdown_pct > 0:
-            metrics.calmar_ratio = metrics.annualized_return_pct / metrics.max_drawdown_pct
+            metrics.calmar_ratio = (
+                metrics.annualized_return_pct / metrics.max_drawdown_pct
+            )
 
         # Consecutive wins/losses
         if self._trades:
@@ -1324,8 +1433,12 @@ class BacktestEngine:
             holding_periods = []
             for t in self._trades:
                 if t.entry_time and t.exit_time:
-                    if hasattr(t.exit_time, 'timestamp') and hasattr(t.entry_time, 'timestamp'):
-                        period = (t.exit_time - t.entry_time).total_seconds() / 3600  # hours
+                    if hasattr(t.exit_time, "timestamp") and hasattr(
+                        t.entry_time, "timestamp"
+                    ):
+                        period = (
+                            t.exit_time - t.entry_time
+                        ).total_seconds() / 3600  # hours
                         holding_periods.append(period)
 
             if holding_periods:

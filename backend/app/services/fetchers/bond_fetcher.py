@@ -8,6 +8,7 @@ Fallback 3: CFETS fx_spot_quote (RMB bond yields)
 Fallback 4: Chinabond API (via httpx)
 Last Resort: Static mock data
 """
+
 import logging
 import asyncio
 from datetime import datetime, timedelta
@@ -18,14 +19,16 @@ logger = logging.getLogger(__name__)
 
 # Constants
 STALE_DATA_THRESHOLD_DAYS = 7
-CFETS_BOND_API = "https://www.chinamoney.com.cn/r/cms/www/chinamoney/data/fx/ccpr-today.json"
+CFETS_BOND_API = (
+    "https://www.chinamoney.com.cn/r/cms/www/chinamoney/data/fx/ccpr-today.json"
+)
 CHINABOND_API = "https://www.chinabond.com.cn/cbweb/market/yield-curves"
 
 
 class BondDataFetcher:
     """
     Multi-source bond yield data fetcher with automatic fallback.
-    
+
     Fallback chain:
     1. bond_spot_quote (real-time dealer quotes) - PRIMARY
     2. bond_spot_deal (real-time deals)
@@ -46,7 +49,7 @@ class BondDataFetcher:
     async def fetch_yield_curve(self) -> Dict[str, Any]:
         """
         Fetch bond yield curve with fallback sources.
-        
+
         Returns:
             {
                 "yield_curve": {tenor: rate},
@@ -99,19 +102,20 @@ class BondDataFetcher:
     async def _fetch_from_bond_zh_us_rate(self) -> Optional[Dict[str, Any]]:
         """
         Fetch Chinese government bond yields from bond_zh_us_rate.
-        
+
         This provides daily updated yield curve data with multiple tenors.
         """
         try:
             import akshare as ak
             import warnings
-            warnings.filterwarnings('ignore')
+
+            warnings.filterwarnings("ignore")
 
             if self._executor:
                 loop = asyncio.get_running_loop()
                 df = await asyncio.wait_for(
                     loop.run_in_executor(self._executor, ak.bond_zh_us_rate),
-                    timeout=15.0
+                    timeout=15.0,
                 )
             else:
                 df = await asyncio.to_thread(ak.bond_zh_us_rate)
@@ -129,15 +133,15 @@ class BondDataFetcher:
 
     def _parse_bond_zh_us_rate_df(self, df) -> Dict[str, Any]:
         """Parse bond_zh_us_rate DataFrame into yield curve format."""
-        df = df.sort_values('日期').reset_index(drop=True)
+        df = df.sort_values("日期").reset_index(drop=True)
         latest_row = df.iloc[-1]
 
         yield_curve = {}
         tenor_map = {
-            '中国国债收益率2年': '2年',
-            '中国国债收益率5年': '5年',
-            '中国国债收益率10年': '10年',
-            '中国国债收益率30年': '30年',
+            "中国国债收益率2年": "2年",
+            "中国国债收益率5年": "5年",
+            "中国国债收益率10年": "10年",
+            "中国国债收益率30年": "30年",
         }
 
         for col, tenor in tenor_map.items():
@@ -149,23 +153,26 @@ class BondDataFetcher:
 
         # Linear interpolation for missing tenors (1Y, 3Y, 7Y)
         import numpy as np
+
         known_years = []
         known_rates = []
         for tenor, rate in yield_curve.items():
-            year = int(tenor.replace('年', ''))
+            year = int(tenor.replace("年", ""))
             known_years.append(year)
             known_rates.append(rate)
 
         if len(known_years) >= 2:
             for missing_year in [1, 3, 7]:
-                missing_tenor = f'{missing_year}年'
+                missing_tenor = f"{missing_year}年"
                 if missing_tenor not in yield_curve:
-                    interpolated = float(np.interp(missing_year, known_years, known_rates))
+                    interpolated = float(
+                        np.interp(missing_year, known_years, known_rates)
+                    )
                     yield_curve[missing_tenor] = round(interpolated, 4)
 
-        last_update = str(latest_row['日期'])
-        if hasattr(latest_row['日期'], 'strftime'):
-            last_update = latest_row['日期'].strftime("%Y-%m-%d")
+        last_update = str(latest_row["日期"])
+        if hasattr(latest_row["日期"], "strftime"):
+            last_update = latest_row["日期"].strftime("%Y-%m-%d")
 
         return {
             "yield_curve": yield_curve,
@@ -182,19 +189,20 @@ class BondDataFetcher:
     async def _fetch_from_bond_spot(self) -> Optional[Dict[str, Any]]:
         """
         Fetch real-time bond yield data from akshare bond_spot_quote.
-        
+
         This is a working alternative to bond_china_yield which stopped updating 2021-01-22.
         """
         try:
             import akshare as ak
             import warnings
-            warnings.filterwarnings('ignore')
+
+            warnings.filterwarnings("ignore")
 
             if self._executor:
                 loop = asyncio.get_running_loop()
                 df = await asyncio.wait_for(
                     loop.run_in_executor(self._executor, ak.bond_spot_quote),
-                    timeout=15.0
+                    timeout=15.0,
                 )
             else:
                 df = await asyncio.to_thread(ak.bond_spot_quote)
@@ -213,19 +221,20 @@ class BondDataFetcher:
     async def _fetch_from_bond_spot_deal(self) -> Optional[Dict[str, Any]]:
         """
         Fetch real-time bond deal data from akshare bond_spot_deal.
-        
+
         bond_spot_deal returns recent bond transactions with yield rates.
         """
         try:
             import akshare as ak
             import warnings
-            warnings.filterwarnings('ignore')
+
+            warnings.filterwarnings("ignore")
 
             if self._executor:
                 loop = asyncio.get_running_loop()
                 df = await asyncio.wait_for(
                     loop.run_in_executor(self._executor, ak.bond_spot_deal),
-                    timeout=15.0
+                    timeout=15.0,
                 )
             else:
                 df = await asyncio.to_thread(ak.bond_spot_deal)
@@ -246,13 +255,14 @@ class BondDataFetcher:
         try:
             import akshare as ak
             import warnings
+
             warnings.filterwarnings("ignore")
 
             if self._executor:
                 loop = asyncio.get_running_loop()
                 df = await asyncio.wait_for(
                     loop.run_in_executor(self._executor, ak.bond_china_yield),
-                    timeout=30.0
+                    timeout=30.0,
                 )
             else:
                 df = await asyncio.to_thread(ak.bond_china_yield)
@@ -317,7 +327,7 @@ class BondDataFetcher:
 
         # Get the actual date from data
         last_update = str(latest_date)
-        if hasattr(latest_date, 'strftime'):
+        if hasattr(latest_date, "strftime"):
             last_update = latest_date.strftime("%Y-%m-%d")
 
         return {
@@ -335,36 +345,38 @@ class BondDataFetcher:
     def _parse_bond_spot_df(self, df) -> Dict[str, Any]:
         """
         Parse bond_spot_quote DataFrame into yield curve format.
-        
+
         bond_spot_quote returns dealer quotes with yield rates.
         We extract government bond yields and calculate spreads.
         """
         # Filter for government bonds (国债)
-        gov_bonds = df[df['债券简称'].str.contains('国债', na=False)]
+        gov_bonds = df[df["债券简称"].str.contains("国债", na=False)]
 
         # Build yield curve from quotes
         yield_curve = {}
         for _, row in gov_bonds.iterrows():
-            tenor = self._extract_tenor_from_bond_name(row['债券简称'])
+            tenor = self._extract_tenor_from_bond_name(row["债券简称"])
             if tenor:
                 # Use average of buy/sell yield
-                avg_yield = (row['买入收益率'] + row['卖出收益率']) / 2
+                avg_yield = (row["买入收益率"] + row["卖出收益率"]) / 2
                 yield_curve[tenor] = round(float(avg_yield), 4)
 
         # Also get policy bank bonds (农发, 国开, 进出)
-        policy_bonds = df[df['债券简称'].str.contains('农发|国开|进出', na=False)]
+        policy_bonds = df[df["债券简称"].str.contains("农发|国开|进出", na=False)]
         comm_yield = {}
         for _, row in policy_bonds.iterrows():
-            tenor = self._extract_tenor_from_bond_name(row['债券简称'])
+            tenor = self._extract_tenor_from_bond_name(row["债券简称"])
             if tenor:
-                avg_yield = (row['买入收益率'] + row['卖出收益率']) / 2
+                avg_yield = (row["买入收益率"] + row["卖出收益率"]) / 2
                 comm_yield[tenor] = round(float(avg_yield), 4)
 
         # Calculate spreads
         spreads = {}
         for tenor in yield_curve:
             if tenor in comm_yield:
-                spreads[tenor] = round((comm_yield[tenor] - yield_curve[tenor]) * 100, 2)
+                spreads[tenor] = round(
+                    (comm_yield[tenor] - yield_curve[tenor]) * 100, 2
+                )
 
         return {
             "yield_curve": yield_curve,
@@ -381,35 +393,37 @@ class BondDataFetcher:
     def _parse_bond_spot_deal_df(self, df) -> Dict[str, Any]:
         """
         Parse bond_spot_deal DataFrame into yield curve format.
-        
+
         bond_spot_deal returns recent bond transactions with yield rates.
         """
         # Filter for government bonds (国债)
-        gov_bonds = df[df['债券简称'].str.contains('国债', na=False)]
+        gov_bonds = df[df["债券简称"].str.contains("国债", na=False)]
 
         # Build yield curve from recent deals
         yield_curve = {}
         for _, row in gov_bonds.iterrows():
-            tenor = self._extract_tenor_from_bond_name(row['债券简称'])
+            tenor = self._extract_tenor_from_bond_name(row["债券简称"])
             if tenor:
                 # Use latest yield from deals
-                if '最新收益率' in row and row['最新收益率'] is not None:
-                    yield_curve[tenor] = round(float(row['最新收益率']), 4)
+                if "最新收益率" in row and row["最新收益率"] is not None:
+                    yield_curve[tenor] = round(float(row["最新收益率"]), 4)
 
         # Also get policy bank bonds (农发, 国开, 进出)
-        policy_bonds = df[df['债券简称'].str.contains('农发|国开|进出', na=False)]
+        policy_bonds = df[df["债券简称"].str.contains("农发|国开|进出", na=False)]
         comm_yield = {}
         for _, row in policy_bonds.iterrows():
-            tenor = self._extract_tenor_from_bond_name(row['债券简称'])
+            tenor = self._extract_tenor_from_bond_name(row["债券简称"])
             if tenor:
-                if '最新收益率' in row and row['最新收益率'] is not None:
-                    comm_yield[tenor] = round(float(row['最新收益率']), 4)
+                if "最新收益率" in row and row["最新收益率"] is not None:
+                    comm_yield[tenor] = round(float(row["最新收益率"]), 4)
 
         # Calculate spreads
         spreads = {}
         for tenor in yield_curve:
             if tenor in comm_yield:
-                spreads[tenor] = round((comm_yield[tenor] - yield_curve[tenor]) * 100, 2)
+                spreads[tenor] = round(
+                    (comm_yield[tenor] - yield_curve[tenor]) * 100, 2
+                )
 
         return {
             "yield_curve": yield_curve,
@@ -426,7 +440,7 @@ class BondDataFetcher:
     def _extract_tenor_from_bond_name(self, name: str) -> Optional[str]:
         """
         Extract tenor from bond name.
-        
+
         Examples:
         - "20抗疫国债02" -> "2年"
         - "21农发清发04" -> "4年"
@@ -435,7 +449,7 @@ class BondDataFetcher:
         import re
 
         # Try to extract year number from bond name
-        match = re.search(r'(\d{2})$', name)
+        match = re.search(r"(\d{2})$", name)
         if match:
             year_num = int(match.group(1))
             # Map to standard tenors
@@ -457,7 +471,7 @@ class BondDataFetcher:
     async def _fetch_from_cfets(self) -> Optional[Dict[str, Any]]:
         """
         Fetch from CFETS (China Foreign Exchange Trade System).
-        
+
         CFETS provides RMB bond yield data via their public API.
         """
         try:
@@ -484,7 +498,9 @@ class BondDataFetcher:
                     continue
 
                 # Try to extract tenor from bond code or name
-                tenor = self._map_cfets_code_to_tenor(bond_code, record.get("bondName", ""))
+                tenor = self._map_cfets_code_to_tenor(
+                    bond_code, record.get("bondName", "")
+                )
                 if tenor:
                     if "国债" in record.get("bondName", ""):
                         yield_curve[tenor] = round(float(yield_val), 4)
@@ -497,7 +513,9 @@ class BondDataFetcher:
             # Calculate spreads
             for tenor in yield_curve:
                 if tenor in comm_yield:
-                    spreads[tenor] = round((comm_yield[tenor] - yield_curve[tenor]) * 100, 2)
+                    spreads[tenor] = round(
+                        (comm_yield[tenor] - yield_curve[tenor]) * 100, 2
+                    )
 
             return {
                 "yield_curve": yield_curve,
@@ -517,14 +535,13 @@ class BondDataFetcher:
     async def _fetch_from_chinabond(self) -> Optional[Dict[str, Any]]:
         """
         Fetch from Chinabond (China Central Depository & Clearing).
-        
+
         Chinabond provides official bond yield curves.
         """
         try:
             # Chinabond API endpoint for yield curves
             response = await self._http_client.get(
-                CHINABOND_API,
-                params={"type": "gov"}  # Government bonds
+                CHINABOND_API, params={"type": "gov"}  # Government bonds
             )
 
             if response.status_code != 200:
@@ -613,24 +630,44 @@ class BondDataFetcher:
 
         return {
             "yield_curve": {
-                "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,
-                "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
-                "10年": 3.1185, "30年": 3.7156,
+                "3月": 2.0316,
+                "6月": 2.1355,
+                "1年": 2.4525,
+                "3年": 2.7645,
+                "5年": 2.9373,
+                "7年": 3.1112,
+                "10年": 3.1185,
+                "30年": 3.7156,
             },
             "yield_curve_1m": {
-                "3月": 2.0816, "6月": 2.1955, "1年": 2.5225,
-                "3年": 2.8345, "5年": 3.0273, "7年": 3.2012,
-                "10年": 3.1985, "30年": 3.7956,
+                "3月": 2.0816,
+                "6月": 2.1955,
+                "1年": 2.5225,
+                "3年": 2.8345,
+                "5年": 3.0273,
+                "7年": 3.2012,
+                "10年": 3.1985,
+                "30年": 3.7956,
             },
             "yield_curve_1y": {
-                "3月": 2.2316, "6月": 2.3355, "1年": 2.6525,
-                "3年": 2.9645, "5年": 3.1373, "7年": 3.3112,
-                "10年": 3.2185, "30年": 3.9156,
+                "3月": 2.2316,
+                "6月": 2.3355,
+                "1年": 2.6525,
+                "3年": 2.9645,
+                "5年": 3.1373,
+                "7年": 3.3112,
+                "10年": 3.2185,
+                "30年": 3.9156,
             },
             "comm_yield": {
-                "3月": 2.5210, "6月": 2.6557, "1年": 2.8580,
-                "3年": 3.3284, "5年": 3.5453, "7年": 3.6985,
-                "10年": 3.8367, "30年": 4.4626,
+                "3月": 2.5210,
+                "6月": 2.6557,
+                "1年": 2.8580,
+                "3年": 3.3284,
+                "5年": 3.5453,
+                "7年": 3.6985,
+                "10年": 3.8367,
+                "30年": 4.4626,
             },
             "spreads_bps": {},
             "update_time": now_str,

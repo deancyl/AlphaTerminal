@@ -9,6 +9,7 @@
 - ✅ Circuit Breaker 保护每个数据源，防止级联故障
 - ✅ v2: 支持优先级路由（通过 fetch_by_priority）
 """
+
 import asyncio
 import logging
 import os
@@ -20,12 +21,16 @@ logger = logging.getLogger(__name__)
 
 # 延迟导入避免循环依赖
 _proxy_config = None
+
+
 def _get_proxy_config():
     global _proxy_config
     if _proxy_config is None:
         from app.services import proxy_config
+
         _proxy_config = proxy_config
     return _proxy_config
+
 
 # ========== 数据源配置 ==========
 DATA_SOURCES = {
@@ -64,7 +69,7 @@ DATA_SOURCES = {
         "name_cn": "东财",
         "type": "backup",
         "proxy": True,
-        "proxy_url": None,   # 从 proxy_config.py 动态读取，永不硬编码
+        "proxy_url": None,  # 从 proxy_config.py 动态读取，永不硬编码
         "timeout": 10,
         "weight": 50,
         "has_pepb": True,
@@ -95,17 +100,38 @@ DATA_SOURCES = {
 
 _current_source = "tencent"
 MAX_HISTORY = 5
-_source_status = {k: {"status": "unknown", "latency": None, "fail_count": 0, "history": [], "state": "closed"} for k in DATA_SOURCES}
+_source_status = {
+    k: {
+        "status": "unknown",
+        "latency": None,
+        "fail_count": 0,
+        "history": [],
+        "state": "closed",
+    }
+    for k in DATA_SOURCES
+}
 
 # ========== Circuit Breaker 实例 ==========
 # 每个数据源一个熔断器，防止级联故障
 _circuit_breakers = {
-    "tencent": CircuitBreaker("tencent", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)),
-    "sina": CircuitBreaker("sina", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)),
-    "sina_kline": CircuitBreaker("sina_kline", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)),
-    "eastmoney": CircuitBreaker("eastmoney", CircuitBreakerConfig(failure_threshold=3, timeout=60.0)),
-    "tencent_hk": CircuitBreaker("tencent_hk", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)),
-    "alpha_vantage": CircuitBreaker("alpha_vantage", CircuitBreakerConfig(failure_threshold=3, timeout=120.0)),
+    "tencent": CircuitBreaker(
+        "tencent", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)
+    ),
+    "sina": CircuitBreaker(
+        "sina", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)
+    ),
+    "sina_kline": CircuitBreaker(
+        "sina_kline", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)
+    ),
+    "eastmoney": CircuitBreaker(
+        "eastmoney", CircuitBreakerConfig(failure_threshold=3, timeout=60.0)
+    ),
+    "tencent_hk": CircuitBreaker(
+        "tencent_hk", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)
+    ),
+    "alpha_vantage": CircuitBreaker(
+        "alpha_vantage", CircuitBreakerConfig(failure_threshold=3, timeout=120.0)
+    ),
 }
 
 
@@ -116,6 +142,7 @@ def get_circuit_breaker_status() -> dict:
 
 def _get_proxy(source_name: str) -> dict | None:
     from app.services.proxy_config import get_proxy_url, build_httpx_proxies
+
     source = DATA_SOURCES.get(source_name, {})
     if source.get("proxy"):
         proxy_url = source.get("proxy_url") or get_proxy_url()
@@ -124,6 +151,7 @@ def _get_proxy(source_name: str) -> dict | None:
 
 
 # ========== 解析函数 ==========
+
 
 def _parse_tencent_quote(symbol: str) -> dict | None:
     """腾讯A股（同步，抓取用完即弃连接池）"""
@@ -141,7 +169,7 @@ def _parse_tencent_quote(symbol: str) -> dict | None:
         if r.status_code != 200 or '"' not in r.text:
             breaker.record_failure()
             return None
-        parts = r.text.split('"')[1].split('~')
+        parts = r.text.split('"')[1].split("~")
         if len(parts) < 40:
             breaker.record_failure()
             return None
@@ -149,9 +177,13 @@ def _parse_tencent_quote(symbol: str) -> dict | None:
         return {
             "source": "tencent",
             "latency_ms": round(latency, 1),
-            "pe_static": float(parts[38]) if parts[38] not in ('0', '-', '') else None,
-            "pe_ttm": float(parts[46]) if len(parts) > 46 and parts[46] not in ('0', '-', '') else None,
-            "pb": float(parts[39]) if parts[39] not in ('0', '-', '') else None,
+            "pe_static": float(parts[38]) if parts[38] not in ("0", "-", "") else None,
+            "pe_ttm": (
+                float(parts[46])
+                if len(parts) > 46 and parts[46] not in ("0", "-", "")
+                else None
+            ),
+            "pb": float(parts[39]) if parts[39] not in ("0", "-", "") else None,
             "price": float(parts[3]) if parts[3] else None,
             "prev_close": float(parts[4]) if parts[4] else None,
             "open": float(parts[5]) if parts[5] else None,
@@ -172,16 +204,16 @@ def _parse_sina_quote(symbol: str) -> dict | None:
         return None
 
     url = f"https://hq.sinajs.cn/list={symbol}"
-    headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.sina.com.cn'}
+    headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://finance.sina.com.cn"}
     try:
         start = time.time()
         with httpx.Client(timeout=10.0, headers=headers) as client:
             r = client.get(url)
         latency = (time.time() - start) * 1000
-        if '=' not in r.text:
+        if "=" not in r.text:
             breaker.record_failure()
             return None
-        parts = r.text.split('=')[1].split(',')
+        parts = r.text.split("=")[1].split(",")
         if len(parts) < 10:
             breaker.record_failure()
             return None
@@ -194,7 +226,9 @@ def _parse_sina_quote(symbol: str) -> dict | None:
             "open": float(parts[3]) if parts[3] else None,
             "high": float(parts[4]) if parts[4] else None,
             "low": float(parts[5]) if parts[5] else None,
-            "pe_static": None, "pe_ttm": None, "pb": None,
+            "pe_static": None,
+            "pe_ttm": None,
+            "pb": None,
         }
     except Exception as e:
         breaker.record_failure()
@@ -212,13 +246,16 @@ def _parse_sina_kline_60min(symbol: str) -> dict | None:
     url = f"http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={symbol}&scale=60&ma=no&datalen=100"
     try:
         start = time.time()
-        with httpx.Client(timeout=15.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
+        with httpx.Client(
+            timeout=15.0, headers={"User-Agent": "Mozilla/5.0"}
+        ) as client:
             r = client.get(url)
         latency = (time.time() - start) * 1000
         if r.status_code != 200:
             breaker.record_failure()
             return None
         import json
+
         data = json.loads(r.text)
         if not isinstance(data, list) or len(data) == 0:
             breaker.record_failure()
@@ -245,21 +282,21 @@ def _parse_eastmoney_quote(symbol: str) -> dict | None:
         logger.warning(f"[Eastmoney] Circuit breaker OPEN, skipping {symbol}")
         return None
 
-    if symbol.startswith('sh'):
-        secid = '1.' + symbol[2:]
-    elif symbol.startswith('sz'):
-        secid = '0.' + symbol[2:]
+    if symbol.startswith("sh"):
+        secid = "1." + symbol[2:]
+    elif symbol.startswith("sz"):
+        secid = "0." + symbol[2:]
     else:
         return None
     url = "https://push2.eastmoney.com/api/qt/stock/get"
-    params = {'secid': secid, 'fields': 'f2,f3,f4,f5,f6,f7,f12,f14,f57,f58,f116,f117'}
+    params = {"secid": secid, "fields": "f2,f3,f4,f5,f6,f7,f12,f14,f57,f58,f116,f117"}
     proxy = _get_proxy("eastmoney")
     try:
         start = time.time()
         with httpx.Client(timeout=10.0, proxies=proxy) as client:
             r = client.get(url, params=params)
         latency = (time.time() - start) * 1000
-        d = r.json().get('data', {})
+        d = r.json().get("data", {})
         if not d:
             breaker.record_failure()
             return None
@@ -267,11 +304,11 @@ def _parse_eastmoney_quote(symbol: str) -> dict | None:
         return {
             "source": "eastmoney",
             "latency_ms": round(latency, 1),
-            "price": d.get('f2'),
-            "change_pct": d.get('f3'),
-            "pe_static": d.get('f116'),
-            "pe_ttm": d.get('f57'),
-            "pb": d.get('f58') or d.get('f117'),
+            "price": d.get("f2"),
+            "change_pct": d.get("f3"),
+            "pe_static": d.get("f116"),
+            "pe_ttm": d.get("f57"),
+            "pb": d.get("f58") or d.get("f117"),
         }
     except Exception as e:
         breaker.record_failure()
@@ -295,7 +332,7 @@ def _parse_tencent_hk_quote(symbol: str) -> dict | None:
         if r.status_code != 200 or '"' not in r.text:
             breaker.record_failure()
             return None
-        parts = r.text.split('"')[1].split('~')
+        parts = r.text.split('"')[1].split("~")
         if len(parts) < 40:
             breaker.record_failure()
             return None
@@ -308,8 +345,8 @@ def _parse_tencent_hk_quote(symbol: str) -> dict | None:
             "open": float(parts[5]) if parts[5] else None,
             "high": float(parts[6]) if parts[6] else None,
             "low": float(parts[7]) if parts[7] else None,
-            "pe_static": float(parts[38]) if parts[38] not in ('0', '-', '') else None,
-            "pb": float(parts[39]) if parts[39] not in ('0', '-', '') else None,
+            "pe_static": float(parts[38]) if parts[38] not in ("0", "-", "") else None,
+            "pb": float(parts[39]) if parts[39] not in ("0", "-", "") else None,
         }
     except Exception as e:
         breaker.record_failure()
@@ -332,7 +369,10 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
 
     # 获取代理配置
     proxy_cfg = _get_proxy_config()
-    proxy_url = DATA_SOURCES.get("alpha_vantage", {}).get("proxy_url") or proxy_cfg.get_proxy_url()
+    proxy_url = (
+        DATA_SOURCES.get("alpha_vantage", {}).get("proxy_url")
+        or proxy_cfg.get_proxy_url()
+    )
     proxies = proxy_cfg.build_httpx_proxies(proxy_url) if proxy_url else None
 
     # 重试1次，超时缩短到5秒（避免阻塞ping）
@@ -351,7 +391,10 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
         except Exception as e:
             if attempt == 1:
                 breaker.record_failure()
-                logger.warning(f"[AlphaVantage] {symbol} failed after 2 attempts: {e}", exc_info=True)
+                logger.warning(
+                    f"[AlphaVantage] {symbol} failed after 2 attempts: {e}",
+                    exc_info=True,
+                )
                 return None
             time.sleep(0.5)
 
@@ -371,7 +414,11 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
         "source": "alpha_vantage",
         "latency_ms": round(latency, 1),
         "price": float(quote.get("05. price")) if quote.get("05. price") else None,
-        "prev_close": float(quote.get("08. previous close")) if quote.get("08. previous close") else None,
+        "prev_close": (
+            float(quote.get("08. previous close"))
+            if quote.get("08. previous close")
+            else None
+        ),
         "open": float(quote.get("02. open")) if quote.get("02. open") else None,
         "high": float(quote.get("03. high")) if quote.get("03. high") else None,
         "low": float(quote.get("04. low")) if quote.get("04. low") else None,
@@ -381,12 +428,13 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
 
 # ========== 主接口（同步版，给 ping 等同步上下文用）============
 
+
 def get_quote_with_fallback(symbol: str) -> dict:
     global _current_source
 
-    if symbol.startswith('sh') or symbol.startswith('sz'):
+    if symbol.startswith("sh") or symbol.startswith("sz"):
         sources_order = ["tencent", "eastmoney", "sina"]
-    elif symbol.startswith('hk'):
+    elif symbol.startswith("hk"):
         sources_order = ["tencent_hk"]
     else:
         sources_order = ["tencent"]
@@ -410,20 +458,34 @@ def get_quote_with_fallback(symbol: str) -> dict:
 
         if result:
             _current_source = source_name
-            _source_status[source_name] = {"status": "ok", "latency": result.get("latency_ms"), "fail_count": 0}
-            logger.info(f"[Quote] {symbol} -> {source_name}, {result.get('latency_ms')}ms")
+            _source_status[source_name] = {
+                "status": "ok",
+                "latency": result.get("latency_ms"),
+                "fail_count": 0,
+            }
+            logger.info(
+                f"[Quote] {symbol} -> {source_name}, {result.get('latency_ms')}ms"
+            )
             return result
 
-    return {"source": "none", "error": "所有数据源均失败", "pe_static": None, "pe_ttm": None, "pb": None}
+    return {
+        "source": "none",
+        "error": "所有数据源均失败",
+        "pe_static": None,
+        "pe_ttm": None,
+        "pb": None,
+    }
 
 
 # ========== 主接口（异步版，给 FastAPI async 路由用）============
 # 策略：底层解析函数保持同步（httpx.Client context manager），避免连接池泄漏；
 #       async 路由通过 asyncio.to_thread() 调用同步解析器，不阻塞事件循环。
 
+
 async def _thread_parse(parser_fn, symbol: str):
     """在线程池中执行同步解析函数，避免阻塞事件循环。"""
     return parser_fn(symbol)
+
 
 async def get_quote_with_fallback_async(symbol: str) -> dict:
     """
@@ -432,11 +494,13 @@ async def get_quote_with_fallback_async(symbol: str) -> dict:
     """
     global _current_source
 
-    if symbol.startswith('sh') or symbol.startswith('sz'):
-        sources_order = [("tencent", _parse_tencent_quote),
-                         ("eastmoney", _parse_eastmoney_quote),
-                         ("sina", _parse_sina_quote)]
-    elif symbol.startswith('hk'):
+    if symbol.startswith("sh") or symbol.startswith("sz"):
+        sources_order = [
+            ("tencent", _parse_tencent_quote),
+            ("eastmoney", _parse_eastmoney_quote),
+            ("sina", _parse_sina_quote),
+        ]
+    elif symbol.startswith("hk"):
         sources_order = [("tencent_hk", _parse_tencent_hk_quote)]
     else:
         sources_order = [("tencent", _parse_tencent_quote)]
@@ -448,25 +512,44 @@ async def get_quote_with_fallback_async(symbol: str) -> dict:
         logger.debug(f"[Quote/async] 尝试: {source_name}")
         try:
             result = await asyncio.wait_for(
-                asyncio.to_thread(parser, symbol),
-                timeout=15.0
+                asyncio.to_thread(parser, symbol), timeout=15.0
             )
         except asyncio.TimeoutError:
             logger.warning(f"[Quote/async] {source_name} 超时 15s", exc_info=True)
-            _source_status[source_name] = {"status": "timeout", "latency": None, "fail_count": _source_status[source_name]["fail_count"] + 1}
+            _source_status[source_name] = {
+                "status": "timeout",
+                "latency": None,
+                "fail_count": _source_status[source_name]["fail_count"] + 1,
+            }
             continue
         except Exception as e:
             logger.warning(f"[Quote/async] {source_name} 异常: {e}", exc_info=True)
-            _source_status[source_name] = {"status": "error", "latency": None, "fail_count": _source_status[source_name]["fail_count"] + 1}
+            _source_status[source_name] = {
+                "status": "error",
+                "latency": None,
+                "fail_count": _source_status[source_name]["fail_count"] + 1,
+            }
             continue
 
         if result:
             _current_source = source_name
-            _source_status[source_name] = {"status": "ok", "latency": result.get("latency_ms"), "fail_count": 0}
-            logger.info(f"[Quote/async] {symbol} -> {source_name}, {result.get('latency_ms')}ms")
+            _source_status[source_name] = {
+                "status": "ok",
+                "latency": result.get("latency_ms"),
+                "fail_count": 0,
+            }
+            logger.info(
+                f"[Quote/async] {symbol} -> {source_name}, {result.get('latency_ms')}ms"
+            )
             return result
 
-    return {"source": "none", "error": "所有数据源均失败", "pe_static": None, "pe_ttm": None, "pb": None}
+    return {
+        "source": "none",
+        "error": "所有数据源均失败",
+        "pe_static": None,
+        "pe_ttm": None,
+        "pb": None,
+    }
 
 
 async def test_source_async(source_name: str, symbol: str = None) -> dict:
@@ -495,10 +578,7 @@ async def test_source_async(source_name: str, symbol: str = None) -> dict:
     if not parser:
         return {"status": "unknown", "latency": None}
     try:
-        result = await asyncio.wait_for(
-            asyncio.to_thread(parser, symbol),
-            timeout=10.0
-        )
+        result = await asyncio.wait_for(asyncio.to_thread(parser, symbol), timeout=10.0)
         if result:
             _update_history(source_name, "ok", result.get("latency_ms"))
             return {"status": "ok", "latency": result.get("latency_ms")}
@@ -515,13 +595,10 @@ async def test_source_async(source_name: str, symbol: str = None) -> dict:
 def _update_history(source_name: str, status: str, latency: float):
     """更新探测历史记录"""
     import time
+
     if source_name not in _source_status:
         return
-    entry = {
-        "status": status,
-        "latency": latency,
-        "timestamp": int(time.time())
-    }
+    entry = {"status": status, "latency": latency, "timestamp": int(time.time())}
     _source_status[source_name]["history"].append(entry)
     # 只保留最近 MAX_HISTORY 条
     if len(_source_status[source_name]["history"]) > MAX_HISTORY:
@@ -535,7 +612,17 @@ def get_source_status() -> dict:
     return {
         "current": _current_source,
         "sources": _source_status,
-        "config": {k: {"name": v["name"], "name_cn": v.get("name_cn"), "type": v["type"], "proxy": v.get("proxy"), "has_pepb": v.get("has_pepb", False), "has_realtime": v.get("has_realtime", False)} for k, v in DATA_SOURCES.items()},
+        "config": {
+            k: {
+                "name": v["name"],
+                "name_cn": v.get("name_cn"),
+                "type": v["type"],
+                "proxy": v.get("proxy"),
+                "has_pepb": v.get("has_pepb", False),
+                "has_realtime": v.get("has_realtime", False),
+            }
+            for k, v in DATA_SOURCES.items()
+        },
     }
 
 
@@ -572,7 +659,7 @@ def clear_cache():
             "latency": None,
             "fail_count": 0,
             "history": [],
-            "state": "closed"
+            "state": "closed",
         }
     logger.info("[QuoteSource] Cache cleared - all source statuses reset")
 
@@ -592,20 +679,29 @@ async def warmup():
                 "state": current_state.get("state", "unknown"),
                 "fail_count": current_state.get("fail_count", 0),
                 "is_primary": name == current_source_name,
-                "history": history[-5:] if history else []
+                "history": history[-5:] if history else [],
             }
         except Exception as e:
-            results[name] = {"status": "error", "latency": None, "state": "unknown", "fail_count": 0, "is_primary": name == current_source_name, "history": [], "error": str(e)}
+            results[name] = {
+                "status": "error",
+                "latency": None,
+                "state": "unknown",
+                "fail_count": 0,
+                "is_primary": name == current_source_name,
+                "history": [],
+                "error": str(e),
+            }
     logger.info(f"[QuoteSource] Warmup complete: {len(results)} sources probed")
     return results
 
 
 # ========== 优先级路由桥接（v2 新接口）============
 
+
 async def get_quote_by_priority_async(symbol: str) -> dict:
     """
     使用优先级路由获取行情数据（推荐使用）。
-    
+
     优先级顺序由 FetcherPriority 配置决定：
     - A股 realtime: Sina → Tencent → EastMoney
     - 港股 hk_stocks: Tencent
@@ -613,9 +709,9 @@ async def get_quote_by_priority_async(symbol: str) -> dict:
     """
     from app.services.fetchers import get_quote_by_priority
 
-    if symbol.startswith('hk'):
+    if symbol.startswith("hk"):
         data_type = "hk_stocks"
-    elif symbol.startswith('sh') or symbol.startswith('sz'):
+    elif symbol.startswith("sh") or symbol.startswith("sz"):
         data_type = "realtime"
     else:
         data_type = "us_stocks"
@@ -636,7 +732,9 @@ async def get_quote_by_priority_async(symbol: str) -> dict:
                 "pb": result.get("pb"),
             }
     except Exception as e:
-        logger.warning(f"[priority] {symbol} 失败: {e}，回退到旧版 fallback", exc_info=True)
+        logger.warning(
+            f"[priority] {symbol} 失败: {e}，回退到旧版 fallback", exc_info=True
+        )
 
     return await get_quote_with_fallback_async(symbol)
 
@@ -644,7 +742,7 @@ async def get_quote_by_priority_async(symbol: str) -> dict:
 async def get_kline_by_priority_async(symbol: str, period: str = "day") -> dict:
     """
     使用优先级路由获取K线数据（推荐使用）。
-    
+
     优先级顺序：AkShare → EastMoney → Sina
     """
     from app.services.fetchers import get_kline_by_priority

@@ -1,6 +1,7 @@
 """
 AlphaTerminal Backend - FastAPI Application Entry Point
 """
+
 import asyncio
 import logging
 import os
@@ -14,10 +15,49 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics, attribution, agentic, cost_attribution, audit_playback, data_gaps, market_radar, factor_sandbox, timemachine
+from app.routers import (
+    market,
+    copilot,
+    news,
+    sentiment,
+    bond,
+    futures,
+    portfolio,
+    stocks,
+    websocket as ws_router,
+    admin,
+    admin_source,
+    fund,
+    export,
+    macro,
+    agent,
+    mcp,
+    performance,
+    f9_deep,
+    health,
+    research,
+    forex,
+    audit,
+    oms,
+    options,
+    ml,
+    metrics,
+    attribution,
+    agentic,
+    cost_attribution,
+    audit_playback,
+    data_gaps,
+    market_radar,
+    factor_sandbox,
+    timemachine,
+)
 from app.routers.macro import warmup_macro_cache
 from app.routers.market_radar import warmup_market_radar_cache
-from app.services.scheduler import start_scheduler, stop_scheduler, run_initial_data_fetch
+from app.services.scheduler import (
+    start_scheduler,
+    stop_scheduler,
+    run_initial_data_fetch,
+)
 from app.services.logging_queue import init_logging_queue
 from app.db.db_writer import start_writer, stop_writer
 from app.services.watchdog import init_watchdog, stop_watchdog
@@ -34,6 +74,7 @@ try:
     from app.services.incremental_fetcher import get_incremental_fetcher
     from app.services.warmup_strategy import get_warmup_strategy
     from app.services.adaptive_circuit_breaker import get_adaptive_breaker_manager
+
     _optimization_services_available = True
 except ImportError as e:
     logger.warning(f"[Main] Optimization services not available: {e}", exc_info=True)
@@ -61,17 +102,23 @@ async def lifespan(app: FastAPI):
     start_scheduler()
 
     # 注册核心服务到 ExecutorManager
-    executor_manager.register("scheduler", type('SchedulerProxy', (), {
-        'shutdown': lambda: stop_scheduler()
-    })(), shutdown_method="shutdown")
+    executor_manager.register(
+        "scheduler",
+        type("SchedulerProxy", (), {"shutdown": lambda: stop_scheduler()})(),
+        shutdown_method="shutdown",
+    )
 
-    executor_manager.register("db_writer", type('DBWriterProxy', (), {
-        'shutdown': lambda: stop_writer()
-    })(), shutdown_method="shutdown")
+    executor_manager.register(
+        "db_writer",
+        type("DBWriterProxy", (), {"shutdown": lambda: stop_writer()})(),
+        shutdown_method="shutdown",
+    )
 
-    executor_manager.register("watchdog", type('WatchdogProxy', (), {
-        'shutdown': lambda: stop_watchdog()
-    })(), shutdown_method="shutdown")
+    executor_manager.register(
+        "watchdog",
+        type("WatchdogProxy", (), {"shutdown": lambda: stop_watchdog()})(),
+        shutdown_method="shutdown",
+    )
 
     # ── 初始化优化服务 ─────────────────────────────────────────────────────────────
     # 这些服务是可选增强，初始化失败不影响核心功能
@@ -99,7 +146,10 @@ async def lifespan(app: FastAPI):
             logger.info("[Lifespan] WarmupStrategy started in background")
 
         except Exception as e:
-            logger.warning(f"[Lifespan] Optimization services initialization failed: {e}", exc_info=True)
+            logger.warning(
+                f"[Lifespan] Optimization services initialization failed: {e}",
+                exc_info=True,
+            )
 
     yield
 
@@ -109,9 +159,13 @@ async def lifespan(app: FastAPI):
     # 使用 ExecutorManager 统一管理关闭
     shutdown_results = await executor_manager.shutdown_all(timeout=30.0)
 
-    failed_shutdowns = [name for name, success in shutdown_results.items() if not success]
+    failed_shutdowns = [
+        name for name, success in shutdown_results.items() if not success
+    ]
     if failed_shutdowns:
-        logger.warning(f"[Lifespan] Some executors failed to shutdown: {failed_shutdowns}")
+        logger.warning(
+            f"[Lifespan] Some executors failed to shutdown: {failed_shutdowns}"
+        )
     else:
         logger.info("[Lifespan] All executors shutdown successfully")
 
@@ -140,9 +194,7 @@ audit_middleware(app)
 # Can be disabled via RATE_LIMIT_ENABLED=false environment variable
 _rate_limit_enabled = os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
 rate_limit_config = RateLimitConfig(
-    global_limit=200,
-    global_period=60,
-    enabled=_rate_limit_enabled
+    global_limit=200, global_period=60, enabled=_rate_limit_enabled
 )
 setup_rate_limiting(app, config=rate_limit_config)
 
@@ -155,7 +207,9 @@ _cors_origins = settings.get_allowed_origins_list()
 if settings.is_production():
     # 生产环境必须配置 ALLOWED_ORIGINS，否则只允许 localhost
     if _cors_origins == ["*"]:
-        logger.warning("Production mode with wildcard CORS is insecure. Please set ALLOWED_ORIGINS environment variable.")
+        logger.warning(
+            "Production mode with wildcard CORS is insecure. Please set ALLOWED_ORIGINS environment variable."
+        )
         _cors_origins = [
             "http://localhost:60100",
             "http://127.0.0.1:60100",
@@ -178,9 +232,12 @@ from app.utils.exception_handlers import setup_exception_handlers
 # 配置新的全局异常处理器
 setup_exception_handlers(app)
 
+
 # 保留原有的异常处理器作为兼容（会被新的处理器覆盖）
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler_legacy(request: Request, exc: RequestValidationError):
+async def validation_exception_handler_legacy(
+    request: Request, exc: RequestValidationError
+):
     """422: 参数校验失败 — 返回统一格式 (兼容旧版本)"""
     body = {}
     try:
@@ -190,8 +247,10 @@ async def validation_exception_handler_legacy(request: Request, exc: RequestVali
     errors = exc.errors()
     first = errors[0] if errors else {}
     field = ".".join(str(l) for l in (first.get("loc") or []))
-    msg   = first.get("msg", "") or str(exc)
-    logger.warning(f"[422 ValidationError] path={request.url.path} field={field} msg={msg}")
+    msg = first.get("msg", "") or str(exc)
+    logger.warning(
+        f"[422 ValidationError] path={request.url.path} field={field} msg={msg}"
+    )
 
     def sanitize_value(v):
         if isinstance(v, Exception):
@@ -216,10 +275,13 @@ async def validation_exception_handler_legacy(request: Request, exc: RequestVali
         },
     )
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler_legacy(request: Request, exc: HTTPException):
     """4xx: HTTP异常 — 返回统一格式 (兼容旧版本)"""
-    logger.warning(f"[HTTP {exc.status_code}] path={request.url.path} detail={exc.detail}")
+    logger.warning(
+        f"[HTTP {exc.status_code}] path={request.url.path} detail={exc.detail}"
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -228,10 +290,12 @@ async def http_exception_handler_legacy(request: Request, exc: HTTPException):
         },
     )
 
+
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     """500: 未捕获异常 — 不泄露堆栈"""
     import traceback
+
     tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     logger.error(f"[500 InternalError] path={request.url.path}\n{tb}")
     return JSONResponse(
@@ -241,6 +305,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
             "message": "服务器内部错误，请稍后重试",
         },
     )
+
 
 # ── 路由注册 ─────────────────────────────────────────────────────────────────
 app.include_router(market.router, prefix="/api/v1", tags=["market"])
@@ -259,7 +324,9 @@ app.include_router(export.router, prefix="/api/v1", tags=["export"])
 app.include_router(macro.router, prefix="/api/v1", tags=["macro"])
 app.include_router(f9_deep.router, prefix="/api/v1", tags=["f9_deep_data"])
 app.include_router(mcp.router, prefix="/api/v1", tags=["mcp"])
-app.include_router(performance.router, prefix="/api/v1/performance", tags=["performance"])
+app.include_router(
+    performance.router, prefix="/api/v1/performance", tags=["performance"]
+)
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(forex.router, prefix="/api/v1", tags=["forex"])
 app.include_router(options.router, prefix="/api/v1", tags=["options"])
@@ -268,20 +335,35 @@ app.include_router(research.router, tags=["research"])
 app.include_router(oms.router, tags=["oms"])  # Order Management System
 app.include_router(ml.router, prefix="/api/v1/ml", tags=["ml"])
 app.include_router(metrics.router, prefix="/api/v1", tags=["monitoring"])
-app.include_router(attribution.router, prefix="/api/v1", tags=["attribution"])  # Multi-factor attribution sandbox
-app.include_router(audit_playback.router, prefix="/api/v1", tags=["audit_playback"])  # Audit playback & rollback
-app.include_router(agentic.router, prefix="/api/v1/agentic", tags=["agentic"])  # Agentic workflow engine
-app.include_router(cost_attribution.router, prefix="/api/v1", tags=["cost_attribution"])  # LLM cost attribution
-app.include_router(data_gaps.router, prefix="/api/v1", tags=["data_gaps"])  # Data gap radar
+app.include_router(
+    attribution.router, prefix="/api/v1", tags=["attribution"]
+)  # Multi-factor attribution sandbox
+app.include_router(
+    audit_playback.router, prefix="/api/v1", tags=["audit_playback"]
+)  # Audit playback & rollback
+app.include_router(
+    agentic.router, prefix="/api/v1/agentic", tags=["agentic"]
+)  # Agentic workflow engine
+app.include_router(
+    cost_attribution.router, prefix="/api/v1", tags=["cost_attribution"]
+)  # LLM cost attribution
+app.include_router(
+    data_gaps.router, prefix="/api/v1", tags=["data_gaps"]
+)  # Data gap radar
 app.include_router(market_radar.router, tags=["market_radar"])  # Market heat radar
-app.include_router(factor_sandbox.router, prefix="/api/v1", tags=["factor_sandbox"])  # Factor sandbox screening
-app.include_router(timemachine.router, tags=["timemachine"])  # Time-machine K-line replay
+app.include_router(
+    factor_sandbox.router, prefix="/api/v1", tags=["factor_sandbox"]
+)  # Factor sandbox screening
+app.include_router(
+    timemachine.router, tags=["timemachine"]
+)  # Time-machine K-line replay
 app.include_router(ws_router.router)  # WebSocket: /ws/market/{symbol}
 app.include_router(agent.router)  # Agent Gateway: /api/agent/v1
 
 # 回测模块
 try:
     from app.routers import backtest
+
     app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
 except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning(f"Backtest module not loaded: {e}", exc_info=True)
@@ -291,15 +373,23 @@ except Exception as e:
 # 回测监控模块
 try:
     from app.routers import backtest_monitor
-    app.include_router(backtest_monitor.router, prefix="/api/v1/backtest_monitor", tags=["backtest_monitor"])
+
+    app.include_router(
+        backtest_monitor.router,
+        prefix="/api/v1/backtest_monitor",
+        tags=["backtest_monitor"],
+    )
 except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning(f"Backtest monitor module not loaded: {e}", exc_info=True)
 except Exception as e:
-    logger.error(f"Unexpected error loading backtest monitor module: {e}", exc_info=True)
+    logger.error(
+        f"Unexpected error loading backtest monitor module: {e}", exc_info=True
+    )
 
 # 策略模块
 try:
     from app.routers import strategy
+
     app.include_router(strategy.router)
 except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning(f"Strategy module not loaded: {e}", exc_info=True)
@@ -330,7 +420,11 @@ FRONTEND_DIST = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend", "dist")
 
 # 如果 dist 目录存在，挂载静态文件服务
 if os.path.exists(FRONTEND_DIST):
-    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")),
+        name="assets",
+    )
 
     @app.get("/")
     async def root():
@@ -346,5 +440,6 @@ if os.path.exists(FRONTEND_DIST):
         if os.path.exists(index_file):
             return FileResponse(index_file)
         raise HTTPException(status_code=404, detail="Not Found")
+
 else:
     logger.warning(f"Frontend dist not found at {FRONTEND_DIST}")

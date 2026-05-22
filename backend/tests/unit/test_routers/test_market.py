@@ -1,9 +1,9 @@
 """Tests for market router."""
+
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
 from app.main import app
-
 
 client = TestClient(app)
 
@@ -11,17 +11,59 @@ client = TestClient(app)
 class TestMarketOverview:
     """Test cases for market overview endpoint."""
 
-    @patch('app.routers.market.overview.get_latest_prices')
+    @patch("app.routers.market.overview.get_latest_prices")
     def test_market_overview_endpoint(self, mock_get_latest_prices):
         """Test GET /market/overview endpoint."""
         # Mock get_latest_prices to return sample data
         mock_get_latest_prices.return_value = [
-            {'symbol': '000001', 'name': '上证指数', 'price': 3000.0, 'change_pct': 1.5, 'volume': 1000000, 'market': 'AShare'},
-            {'symbol': '000300', 'name': '沪深300', 'price': 4000.0, 'change_pct': 2.0, 'volume': 2000000, 'market': 'AShare'},
-            {'symbol': '399001', 'name': '深证成指', 'price': 10000.0, 'change_pct': 1.8, 'volume': 1500000, 'market': 'AShare'},
-            {'symbol': '399006', 'name': '创业板指', 'price': 2000.0, 'change_pct': 2.5, 'volume': 1200000, 'market': 'AShare'},
-            {'symbol': 'HSI', 'name': '恒生指数', 'price': 25000.0, 'change_pct': 1.2, 'volume': 5000000, 'market': 'HK'},
-            {'symbol': 'IXIC', 'name': '纳斯达克', 'price': 15000.0, 'change_pct': 3.0, 'volume': 8000000, 'market': 'US'},
+            {
+                "symbol": "000001",
+                "name": "上证指数",
+                "price": 3000.0,
+                "change_pct": 1.5,
+                "volume": 1000000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "000300",
+                "name": "沪深300",
+                "price": 4000.0,
+                "change_pct": 2.0,
+                "volume": 2000000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "399001",
+                "name": "深证成指",
+                "price": 10000.0,
+                "change_pct": 1.8,
+                "volume": 1500000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "399006",
+                "name": "创业板指",
+                "price": 2000.0,
+                "change_pct": 2.5,
+                "volume": 1200000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "HSI",
+                "name": "恒生指数",
+                "price": 25000.0,
+                "change_pct": 1.2,
+                "volume": 5000000,
+                "market": "HK",
+            },
+            {
+                "symbol": "IXIC",
+                "name": "纳斯达克",
+                "price": 15000.0,
+                "change_pct": 3.0,
+                "volume": 8000000,
+                "market": "US",
+            },
         ]
 
         response = client.get("/api/v1/market/overview")
@@ -33,17 +75,59 @@ class TestMarketOverview:
             assert data.get("code") == 0
             assert "data" in data
 
-    @patch('app.routers.market.overview.get_latest_prices')
+    @patch("app.routers.market.overview.get_latest_prices")
     def test_market_overview_response_structure(self, mock_get_latest_prices):
         """Test that overview response has correct structure."""
         # Mock get_latest_prices to return sample data
         mock_get_latest_prices.return_value = [
-            {'symbol': '000001', 'name': '上证指数', 'price': 3000.0, 'change_pct': 1.5, 'volume': 1000000, 'market': 'AShare'},
-            {'symbol': '000300', 'name': '沪深300', 'price': 4000.0, 'change_pct': 2.0, 'volume': 2000000, 'market': 'AShare'},
-            {'symbol': '399001', 'name': '深证成指', 'price': 10000.0, 'change_pct': 1.8, 'volume': 1500000, 'market': 'AShare'},
-            {'symbol': '399006', 'name': '创业板指', 'price': 2000.0, 'change_pct': 2.5, 'volume': 1200000, 'market': 'AShare'},
-            {'symbol': 'HSI', 'name': '恒生指数', 'price': 25000.0, 'change_pct': 1.2, 'volume': 5000000, 'market': 'HK'},
-            {'symbol': 'IXIC', 'name': '纳斯达克', 'price': 15000.0, 'change_pct': 3.0, 'volume': 8000000, 'market': 'US'},
+            {
+                "symbol": "000001",
+                "name": "上证指数",
+                "price": 3000.0,
+                "change_pct": 1.5,
+                "volume": 1000000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "000300",
+                "name": "沪深300",
+                "price": 4000.0,
+                "change_pct": 2.0,
+                "volume": 2000000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "399001",
+                "name": "深证成指",
+                "price": 10000.0,
+                "change_pct": 1.8,
+                "volume": 1500000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "399006",
+                "name": "创业板指",
+                "price": 2000.0,
+                "change_pct": 2.5,
+                "volume": 1200000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "HSI",
+                "name": "恒生指数",
+                "price": 25000.0,
+                "change_pct": 1.2,
+                "volume": 5000000,
+                "market": "HK",
+            },
+            {
+                "symbol": "IXIC",
+                "name": "纳斯达克",
+                "price": 15000.0,
+                "change_pct": 3.0,
+                "volume": 8000000,
+                "market": "US",
+            },
         ]
 
         response = client.get("/api/v1/market/overview")
@@ -57,17 +141,59 @@ class TestMarketOverview:
                 meta = result["meta"]
                 assert "markets" in meta
 
-    @patch('app.routers.market.overview.get_latest_prices')
+    @patch("app.routers.market.overview.get_latest_prices")
     def test_market_overview_wind_symbols(self, mock_get_latest_prices):
         """Test that overview includes all wind symbols."""
         # Mock get_latest_prices to return sample data
         mock_get_latest_prices.return_value = [
-            {'symbol': '000001', 'name': '上证指数', 'price': 3000.0, 'change_pct': 1.5, 'volume': 1000000, 'market': 'AShare'},
-            {'symbol': '000300', 'name': '沪深300', 'price': 4000.0, 'change_pct': 2.0, 'volume': 2000000, 'market': 'AShare'},
-            {'symbol': '399001', 'name': '深证成指', 'price': 10000.0, 'change_pct': 1.8, 'volume': 1500000, 'market': 'AShare'},
-            {'symbol': '399006', 'name': '创业板指', 'price': 2000.0, 'change_pct': 2.5, 'volume': 1200000, 'market': 'AShare'},
-            {'symbol': 'HSI', 'name': '恒生指数', 'price': 25000.0, 'change_pct': 1.2, 'volume': 5000000, 'market': 'HK'},
-            {'symbol': 'IXIC', 'name': '纳斯达克', 'price': 15000.0, 'change_pct': 3.0, 'volume': 8000000, 'market': 'US'},
+            {
+                "symbol": "000001",
+                "name": "上证指数",
+                "price": 3000.0,
+                "change_pct": 1.5,
+                "volume": 1000000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "000300",
+                "name": "沪深300",
+                "price": 4000.0,
+                "change_pct": 2.0,
+                "volume": 2000000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "399001",
+                "name": "深证成指",
+                "price": 10000.0,
+                "change_pct": 1.8,
+                "volume": 1500000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "399006",
+                "name": "创业板指",
+                "price": 2000.0,
+                "change_pct": 2.5,
+                "volume": 1200000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "HSI",
+                "name": "恒生指数",
+                "price": 25000.0,
+                "change_pct": 1.2,
+                "volume": 5000000,
+                "market": "HK",
+            },
+            {
+                "symbol": "IXIC",
+                "name": "纳斯达克",
+                "price": 15000.0,
+                "change_pct": 3.0,
+                "volume": 8000000,
+                "market": "US",
+            },
         ]
 
         response = client.get("/api/v1/market/overview")
@@ -80,17 +206,59 @@ class TestMarketOverview:
                 for symbol in expected:
                     assert symbol in wind
 
-    @patch('app.routers.market.overview.get_latest_prices')
+    @patch("app.routers.market.overview.get_latest_prices")
     def test_market_overview_market_status(self, mock_get_latest_prices):
         """Test that overview includes market status."""
         # Mock get_latest_prices to return sample data
         mock_get_latest_prices.return_value = [
-            {'symbol': '000001', 'name': '上证指数', 'price': 3000.0, 'change_pct': 1.5, 'volume': 1000000, 'market': 'AShare'},
-            {'symbol': '000300', 'name': '沪深300', 'price': 4000.0, 'change_pct': 2.0, 'volume': 2000000, 'market': 'AShare'},
-            {'symbol': '399001', 'name': '深证成指', 'price': 10000.0, 'change_pct': 1.8, 'volume': 1500000, 'market': 'AShare'},
-            {'symbol': '399006', 'name': '创业板指', 'price': 2000.0, 'change_pct': 2.5, 'volume': 1200000, 'market': 'AShare'},
-            {'symbol': 'HSI', 'name': '恒生指数', 'price': 25000.0, 'change_pct': 1.2, 'volume': 5000000, 'market': 'HK'},
-            {'symbol': 'IXIC', 'name': '纳斯达克', 'price': 15000.0, 'change_pct': 3.0, 'volume': 8000000, 'market': 'US'},
+            {
+                "symbol": "000001",
+                "name": "上证指数",
+                "price": 3000.0,
+                "change_pct": 1.5,
+                "volume": 1000000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "000300",
+                "name": "沪深300",
+                "price": 4000.0,
+                "change_pct": 2.0,
+                "volume": 2000000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "399001",
+                "name": "深证成指",
+                "price": 10000.0,
+                "change_pct": 1.8,
+                "volume": 1500000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "399006",
+                "name": "创业板指",
+                "price": 2000.0,
+                "change_pct": 2.5,
+                "volume": 1200000,
+                "market": "AShare",
+            },
+            {
+                "symbol": "HSI",
+                "name": "恒生指数",
+                "price": 25000.0,
+                "change_pct": 1.2,
+                "volume": 5000000,
+                "market": "HK",
+            },
+            {
+                "symbol": "IXIC",
+                "name": "纳斯达克",
+                "price": 15000.0,
+                "change_pct": 3.0,
+                "volume": 8000000,
+                "market": "US",
+            },
         ]
 
         response = client.get("/api/v1/market/overview")
@@ -227,13 +395,23 @@ class TestMarketLookup:
 class TestMarketQuote:
     """Test cases for market quote endpoint."""
 
-    @patch('app.routers.market.quotes.get_price_history')
+    @patch("app.routers.market.quotes.get_price_history")
     def test_market_quote_endpoint(self, mock_get_price_history):
         """Test GET /market/quote endpoint with mocked data."""
         # Mock get_price_history to return sample data
         mock_get_price_history.return_value = [
-            {'symbol': '000001', 'close': 3000.0, 'volume': 1000000, 'timestamp': '2024-01-01'},
-            {'symbol': '000001', 'close': 2980.0, 'volume': 900000, 'timestamp': '2023-12-31'},
+            {
+                "symbol": "000001",
+                "close": 3000.0,
+                "volume": 1000000,
+                "timestamp": "2024-01-01",
+            },
+            {
+                "symbol": "000001",
+                "close": 2980.0,
+                "volume": 900000,
+                "timestamp": "2023-12-31",
+            },
         ]
 
         response = client.get("/api/v1/market/quote/sh000001")
@@ -245,12 +423,22 @@ class TestMarketQuote:
             assert data.get("code") == 0
             assert "data" in data
 
-    @patch('app.routers.market.quotes.get_price_history')
+    @patch("app.routers.market.quotes.get_price_history")
     def test_market_quote_response_structure(self, mock_get_price_history):
         """Test that quote response has correct structure."""
         mock_get_price_history.return_value = [
-            {'symbol': '000001', 'close': 3000.0, 'volume': 1000000, 'timestamp': '2024-01-01'},
-            {'symbol': '000001', 'close': 2980.0, 'volume': 900000, 'timestamp': '2023-12-31'},
+            {
+                "symbol": "000001",
+                "close": 3000.0,
+                "volume": 1000000,
+                "timestamp": "2024-01-01",
+            },
+            {
+                "symbol": "000001",
+                "close": 2980.0,
+                "volume": 900000,
+                "timestamp": "2023-12-31",
+            },
         ]
 
         response = client.get("/api/v1/market/quote/sh000001")
@@ -308,19 +496,35 @@ class TestMarketStocks:
             assert "code" in data
 
     def test_market_stocks_search_with_filters(self):
-        response = client.get("/api/v1/market/stocks/search?min_price=10&max_price=100&sort_by=change_pct")
+        response = client.get(
+            "/api/v1/market/stocks/search?min_price=10&max_price=100&sort_by=change_pct"
+        )
         assert response.status_code in [200, 500]
 
 
 class TestMarketHistory:
     """Test cases for market history endpoint."""
 
-    @patch('app.routers.market.history.get_daily_history')
+    @patch("app.routers.market.history.get_daily_history")
     def test_market_history_daily(self, mock_get_daily_history):
         """Test GET /market/history endpoint with daily period."""
         mock_get_daily_history.return_value = [
-            {'date': '2024-01-01', 'open': 3000, 'high': 3050, 'low': 2980, 'close': 3020, 'volume': 1000000},
-            {'date': '2023-12-31', 'open': 2980, 'high': 3000, 'low': 2950, 'close': 2990, 'volume': 900000},
+            {
+                "date": "2024-01-01",
+                "open": 3000,
+                "high": 3050,
+                "low": 2980,
+                "close": 3020,
+                "volume": 1000000,
+            },
+            {
+                "date": "2023-12-31",
+                "open": 2980,
+                "high": 3000,
+                "low": 2950,
+                "close": 2990,
+                "volume": 900000,
+            },
         ]
 
         response = client.get("/api/v1/market/history/sh000001?period=daily&limit=30")
@@ -331,7 +535,7 @@ class TestMarketHistory:
             assert "code" in data
             assert data.get("code") == 0
 
-    @patch('app.routers.market.history.get_daily_history')
+    @patch("app.routers.market.history.get_daily_history")
     def test_market_history_weekly(self, mock_get_daily_history):
         """Test GET /market/history endpoint with weekly period."""
         mock_get_daily_history.return_value = []
@@ -343,7 +547,7 @@ class TestMarketHistory:
             data = response.json()
             assert "code" in data
 
-    @patch('app.routers.market.history.get_daily_history')
+    @patch("app.routers.market.history.get_daily_history")
     def test_market_history_monthly(self, mock_get_daily_history):
         """Test GET /market/history endpoint with monthly period."""
         mock_get_daily_history.return_value = []
@@ -355,11 +559,18 @@ class TestMarketHistory:
             data = response.json()
             assert "code" in data
 
-    @patch('app.routers.market.history.get_daily_history')
+    @patch("app.routers.market.history.get_daily_history")
     def test_market_history_response_structure(self, mock_get_daily_history):
         """Test that history response has correct structure."""
         mock_get_daily_history.return_value = [
-            {'date': '2024-01-01', 'open': 3000, 'high': 3050, 'low': 2980, 'close': 3020, 'volume': 1000000},
+            {
+                "date": "2024-01-01",
+                "open": 3000,
+                "high": 3050,
+                "low": 2980,
+                "close": 3020,
+                "volume": 1000000,
+            },
         ]
 
         response = client.get("/api/v1/market/history/sh000001?period=daily&limit=10")
@@ -373,12 +584,14 @@ class TestMarketHistory:
                 assert "period" in result
                 assert "history" in result
 
-    @patch('app.routers.market.history.get_daily_history')
+    @patch("app.routers.market.history.get_daily_history")
     def test_market_history_pagination(self, mock_get_daily_history):
         """Test that history endpoint supports pagination."""
         mock_get_daily_history.return_value = []
 
-        response = client.get("/api/v1/market/history/sh000001?period=daily&limit=10&offset=10")
+        response = client.get(
+            "/api/v1/market/history/sh000001?period=daily&limit=10&offset=10"
+        )
         assert response.status_code in [200, 500]
 
         if response.status_code == 200:

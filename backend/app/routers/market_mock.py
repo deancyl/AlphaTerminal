@@ -1,6 +1,7 @@
 """
 Mock 市场数据接口 - Phase 2 前后端联调专用
 """
+
 from datetime import datetime
 from fastapi import APIRouter
 from app.utils.error_decorator import handle_errors
@@ -68,9 +69,33 @@ async def watchlist():
     return {
         "timestamp": datetime.now().isoformat(),
         "stocks": [
-            {"symbol": "000001", "name": "平安银行", "price": 12.34, "change_pct": +0.82, "volume": 3.2e7},
-            {"symbol": "600519", "name": "贵州茅台", "price": 1688.0, "change_pct": -1.23, "volume": 1.1e6},
-            {"symbol": "NVDA", "name": "NVIDIA", "price": 875.32, "change_pct": +2.14, "volume": 4.5e7},
-            {"symbol": "BTC", "name": "Bitcoin", "price": 67432.50, "change_pct": +1.88, "volume": 2.83e10},
+            {
+                "symbol": "000001",
+                "name": "平安银行",
+                "price": 12.34,
+                "change_pct": +0.82,
+                "volume": 3.2e7,
+            },
+            {
+                "symbol": "600519",
+                "name": "贵州茅台",
+                "price": 1688.0,
+                "change_pct": -1.23,
+                "volume": 1.1e6,
+            },
+            {
+                "symbol": "NVDA",
+                "name": "NVIDIA",
+                "price": 875.32,
+                "change_pct": +2.14,
+                "volume": 4.5e7,
+            },
+            {
+                "symbol": "BTC",
+                "name": "Bitcoin",
+                "price": 67432.50,
+                "change_pct": +1.88,
+                "volume": 2.83e10,
+            },
         ],
     }

@@ -6,6 +6,7 @@
 - P1: 错误消息、加载状态、键盘导航、熔断器状态、金额验证
 - P2: ARIA、货币对切换防抖
 """
+
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -38,7 +39,7 @@ class TestForexRouter:
         """测试金额超过最大值 (le=1000000000)"""
         response = client.get(
             "/api/v1/forex/convert",
-            params={"amount": 9999999999, "from_currency": "USD", "to_currency": "CNY"}
+            params={"amount": 9999999999, "from_currency": "USD", "to_currency": "CNY"},
         )
         assert response.status_code == 422
 
@@ -46,7 +47,7 @@ class TestForexRouter:
         """测试金额为负数 (gt=0)"""
         response = client.get(
             "/api/v1/forex/convert",
-            params={"amount": -100, "from_currency": "USD", "to_currency": "CNY"}
+            params={"amount": -100, "from_currency": "USD", "to_currency": "CNY"},
         )
         assert response.status_code == 422
 
@@ -54,7 +55,7 @@ class TestForexRouter:
         """测试金额为零 (gt=0)"""
         response = client.get(
             "/api/v1/forex/convert",
-            params={"amount": 0, "from_currency": "USD", "to_currency": "CNY"}
+            params={"amount": 0, "from_currency": "USD", "to_currency": "CNY"},
         )
         assert response.status_code == 422
 
@@ -67,7 +68,7 @@ class TestForexRouter:
         """测试货币转换成功"""
         response = client.get(
             "/api/v1/forex/convert",
-            params={"amount": 100, "from_currency": "USD", "to_currency": "CNY"}
+            params={"amount": 100, "from_currency": "USD", "to_currency": "CNY"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -125,7 +126,7 @@ class TestForexRouter:
         """测试交叉汇率计算端点"""
         response = client.post(
             "/api/v1/forex/cross-rate",
-            json={"from_currency": "USD", "to_currency": "EUR", "amount": 100}
+            json={"from_currency": "USD", "to_currency": "EUR", "amount": 100},
         )
         assert response.status_code == 200
         data = response.json()
@@ -135,7 +136,7 @@ class TestForexRouter:
         """测试相同货币转换"""
         response = client.get(
             "/api/v1/forex/convert",
-            params={"amount": 100, "from_currency": "USD", "to_currency": "USD"}
+            params={"amount": 100, "from_currency": "USD", "to_currency": "USD"},
         )
         assert response.status_code == 200
         data = response.json()

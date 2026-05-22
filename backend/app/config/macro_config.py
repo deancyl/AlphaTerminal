@@ -2,6 +2,7 @@
 Macro Module Configuration
 Configurable via environment variables
 """
+
 import os
 from typing import Final
 
@@ -9,7 +10,9 @@ from typing import Final
 MACRO_THREAD_POOL_SIZE: Final[int] = int(os.getenv("MACRO_THREAD_POOL_SIZE", "8"))
 
 # Cache duration in seconds (default: 5 minutes)
-MACRO_CACHE_DURATION: Final[int] = int(os.getenv("MACRO_CACHE_DURATION", "600"))  # 10 minutes for better performance
+MACRO_CACHE_DURATION: Final[int] = int(
+    os.getenv("MACRO_CACHE_DURATION", "600")
+)  # 10 minutes for better performance
 
 # Maximum cache entries
 MACRO_MAX_CACHE_SIZE: Final[int] = int(os.getenv("MACRO_MAX_CACHE_SIZE", "50"))

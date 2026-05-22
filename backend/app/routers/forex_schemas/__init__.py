@@ -1,4 +1,5 @@
 """Forex Schemas Package"""
+
 from .schemas import (
     ForexSpotQuote,
     ForexSpotQuoteList,

@@ -23,8 +23,10 @@ async def market_sectors():
     """
     try:
         from app.services.sectors_cache import get_sectors, _SECTORS_CACHE_TS
+
         sectors = get_sectors()
         import time
+
         cache_age = int(time.time() - _SECTORS_CACHE_TS) if _SECTORS_CACHE_TS else 0
         return success_response({"sectors": sectors, "cache_age_seconds": cache_age})
     except Exception as e:
@@ -40,11 +42,15 @@ async def market_sectors_refresh():
     """
     try:
         from app.services.sectors_cache import refresh_sectors_cache
+
         sectors = await refresh_sectors_cache()
         import time
         from app.services.sectors_cache import _SECTORS_CACHE_TS
+
         cache_age = int(time.time() - _SECTORS_CACHE_TS) if _SECTORS_CACHE_TS else 0
-        return success_response({"sectors": sectors, "cache_age_seconds": cache_age, "refreshed": True})
+        return success_response(
+            {"sectors": sectors, "cache_age_seconds": cache_age, "refreshed": True}
+        )
     except Exception as e:
         logger.error(f"[market_sectors_refresh] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"刷新行业板块失败: {str(e)}")

@@ -54,10 +54,10 @@ class FieldPriority(BaseModel):
     def get_priority(self, field: str) -> List[str]:
         """
         获取指定字段的优先级列表
-        
+
         Args:
             field: 字段名
-            
+
         Returns:
             数据源优先级列表
         """
@@ -66,11 +66,25 @@ class FieldPriority(BaseModel):
     def get_all_fields(self) -> List[str]:
         """获取所有已配置的字段名"""
         return [
-            'price', 'open', 'high', 'low', 'prev_close',
-            'pe_ttm', 'pe_lyr', 'pb', 'ps', 'total_mv', 'circ_mv',
-            'volume', 'amount', 'turnover',
-            'change_pct', 'chg', 'chg_pct',
-            'amplitude', 'turnover_rate'
+            "price",
+            "open",
+            "high",
+            "low",
+            "prev_close",
+            "pe_ttm",
+            "pe_lyr",
+            "pb",
+            "ps",
+            "total_mv",
+            "circ_mv",
+            "volume",
+            "amount",
+            "turnover",
+            "change_pct",
+            "chg",
+            "chg_pct",
+            "amplitude",
+            "turnover_rate",
         ]
 
 

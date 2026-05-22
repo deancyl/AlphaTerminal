@@ -39,7 +39,9 @@ logger.setLevel(logging.DEBUG)
 if not logger.handlers:
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] [ExecutionEngine] %(message)s')
+    formatter = logging.Formatter(
+        "[%(asctime)s] [%(levelname)s] [ExecutionEngine] %(message)s"
+    )
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
@@ -48,8 +50,10 @@ if not logger.handlers:
 # Enums
 # ============================================================================
 
+
 class ExecutionStatus(Enum):
     """Execution status"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -59,6 +63,7 @@ class ExecutionStatus(Enum):
 
 class ExecutionType(Enum):
     """Execution type"""
+
     BACKTEST = "backtest"
     PAPER_TRADING = "paper_trading"
     LIVE_TRADING = "live_trading"
@@ -68,11 +73,12 @@ class ExecutionType(Enum):
 # Data Classes
 # ============================================================================
 
+
 @dataclass
 class ExecutionMetrics:
     """
     Execution performance metrics
-    
+
     Attributes:
         execution_time_ms: Total execution time in milliseconds
         bars_processed: Number of bars processed
@@ -81,6 +87,7 @@ class ExecutionMetrics:
         peak_memory_mb: Peak memory usage in MB
         cpu_usage_pct: CPU usage percentage
     """
+
     execution_time_ms: float = 0.0
     bars_processed: int = 0
     trades_executed: int = 0
@@ -91,12 +98,12 @@ class ExecutionMetrics:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
-            'execution_time_ms': round(self.execution_time_ms, 2),
-            'bars_processed': self.bars_processed,
-            'trades_executed': self.trades_executed,
-            'avg_bar_time_ms': round(self.avg_bar_time_ms, 4),
-            'peak_memory_mb': round(self.peak_memory_mb, 2),
-            'cpu_usage_pct': round(self.cpu_usage_pct, 2),
+            "execution_time_ms": round(self.execution_time_ms, 2),
+            "bars_processed": self.bars_processed,
+            "trades_executed": self.trades_executed,
+            "avg_bar_time_ms": round(self.avg_bar_time_ms, 4),
+            "peak_memory_mb": round(self.peak_memory_mb, 2),
+            "cpu_usage_pct": round(self.cpu_usage_pct, 2),
         }
 
 
@@ -104,7 +111,7 @@ class ExecutionMetrics:
 class ExecutionResult:
     """
     Complete execution result
-    
+
     Attributes:
         execution_id: Unique execution identifier
         strategy_id: Strategy identifier
@@ -121,6 +128,7 @@ class ExecutionResult:
         warnings: List of warnings
         debug_log: Debug messages from all cycles
     """
+
     execution_id: str
     strategy_id: str
     strategy_name: str
@@ -139,20 +147,20 @@ class ExecutionResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
-            'execution_id': self.execution_id,
-            'strategy_id': self.strategy_id,
-            'strategy_name': self.strategy_name,
-            'execution_type': self.execution_type.value,
-            'status': self.status.value,
-            'start_time': self.start_time.isoformat() if self.start_time else None,
-            'end_time': self.end_time.isoformat() if self.end_time else None,
-            'metrics': self.metrics.to_dict(),
-            'trades': self.trades,
-            'equity_curve': self.equity_curve,
-            'backtest_result': self.backtest_result,
-            'errors': self.errors,
-            'warnings': self.warnings,
-            'debug_log': self.debug_log,
+            "execution_id": self.execution_id,
+            "strategy_id": self.strategy_id,
+            "strategy_name": self.strategy_name,
+            "execution_type": self.execution_type.value,
+            "status": self.status.value,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "metrics": self.metrics.to_dict(),
+            "trades": self.trades,
+            "equity_curve": self.equity_curve,
+            "backtest_result": self.backtest_result,
+            "errors": self.errors,
+            "warnings": self.warnings,
+            "debug_log": self.debug_log,
         }
 
 
@@ -160,7 +168,7 @@ class ExecutionResult:
 class ExecutionConfig:
     """
     Execution configuration
-    
+
     Attributes:
         initial_capital: Starting capital
         commission: Commission rate
@@ -173,6 +181,7 @@ class ExecutionConfig:
         enable_debug_logging: Enable comprehensive debug logging
         debug_level: Debug level (1-5)
     """
+
     initial_capital: float = 100000.0
     commission: float = 0.0003
     slippage: float = 0.0001
@@ -187,16 +196,16 @@ class ExecutionConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
-            'initial_capital': self.initial_capital,
-            'commission': self.commission,
-            'slippage': self.slippage,
-            'leverage': self.leverage,
-            'max_positions': self.max_positions,
-            'position_size_pct': self.position_size_pct,
-            'stop_loss_pct': self.stop_loss_pct,
-            'take_profit_pct': self.take_profit_pct,
-            'enable_debug_logging': self.enable_debug_logging,
-            'debug_level': self.debug_level,
+            "initial_capital": self.initial_capital,
+            "commission": self.commission,
+            "slippage": self.slippage,
+            "leverage": self.leverage,
+            "max_positions": self.max_positions,
+            "position_size_pct": self.position_size_pct,
+            "stop_loss_pct": self.stop_loss_pct,
+            "take_profit_pct": self.take_profit_pct,
+            "enable_debug_logging": self.enable_debug_logging,
+            "debug_level": self.debug_level,
         }
 
 
@@ -204,17 +213,18 @@ class ExecutionConfig:
 # Strategy Execution Engine
 # ============================================================================
 
+
 class StrategyExecutionEngine:
     """
     Unified Strategy Execution Engine with Comprehensive Debug Logging
-    
+
     Features:
     - Execute compiled strategies with real-time tracking
     - Integrate with BacktestEngine and StrategyCompiler
     - Manage execution lifecycle (start, monitor, cancel)
     - Performance tracking and metrics
     - 5 comprehensive debug cycles
-    
+
     Usage:
         engine = StrategyExecutionEngine()
         result = engine.execute_strategy(compiled_strategy, data)
@@ -223,7 +233,7 @@ class StrategyExecutionEngine:
     def __init__(self, config: Optional[ExecutionConfig] = None):
         """
         Initialize execution engine.
-        
+
         Args:
             config: Execution configuration
         """
@@ -246,10 +256,14 @@ class StrategyExecutionEngine:
         self._log_debug(f"Slippage Rate: {self._config.slippage * 100:.4f}%")
         self._log_debug(f"Leverage: {self._config.leverage}x")
         self._log_debug(f"Max Positions: {self._config.max_positions}")
-        self._log_debug(f"Position Size: {self._config.position_size_pct * 100}% of capital")
+        self._log_debug(
+            f"Position Size: {self._config.position_size_pct * 100}% of capital"
+        )
         self._log_debug(f"Stop Loss: {self._config.stop_loss_pct}% (0 = disabled)")
         self._log_debug(f"Take Profit: {self._config.take_profit_pct}% (0 = disabled)")
-        self._log_debug(f"Debug Logging: {'Enabled' if self._config.enable_debug_logging else 'Disabled'}")
+        self._log_debug(
+            f"Debug Logging: {'Enabled' if self._config.enable_debug_logging else 'Disabled'}"
+        )
         self._log_debug(f"Debug Level: {self._config.debug_level}/5")
         self._log_debug("-" * 80)
         self._log_debug("✓ Execution engine initialized successfully")
@@ -263,7 +277,13 @@ class StrategyExecutionEngine:
     def _get_backtest_engine(self):
         """Lazy load BacktestEngine"""
         if self._backtest_engine is None:
-            from ..backtest.engine import BacktestEngine, BacktestConfig, TimeFrame, TradeDirection
+            from ..backtest.engine import (
+                BacktestEngine,
+                BacktestConfig,
+                TimeFrame,
+                TradeDirection,
+            )
+
             self._BacktestEngine = BacktestEngine
             self._BacktestConfig = BacktestConfig
             self._TimeFrame = TimeFrame
@@ -275,6 +295,7 @@ class StrategyExecutionEngine:
         """Lazy load StrategyCompiler"""
         if self._strategy_compiler is None:
             from .compiler import StrategyCompiler, CompilationResult
+
             self._StrategyCompiler = StrategyCompiler
             self._CompilationResult = CompilationResult
             self._strategy_compiler = True
@@ -287,11 +308,11 @@ class StrategyExecutionEngine:
         strategy_id: Optional[str] = None,
         strategy_name: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
-        symbol: str = "ASSET"
+        symbol: str = "ASSET",
     ) -> ExecutionResult:
         """
         Execute a compiled strategy.
-        
+
         Args:
             compiled_strategy: Compiled strategy (CompilationResult or execute function)
             data: DataFrame with OHLCV data
@@ -299,7 +320,7 @@ class StrategyExecutionEngine:
             strategy_name: Strategy name
             params: Strategy parameters
             symbol: Symbol name
-            
+
         Returns:
             ExecutionResult with execution details
         """
@@ -332,19 +353,25 @@ class StrategyExecutionEngine:
             spec = None
 
             # Check if compiled_strategy is a CompilationResult
-            if hasattr(compiled_strategy, 'execute_func'):
+            if hasattr(compiled_strategy, "execute_func"):
                 # It's a CompilationResult
                 if not compiled_strategy.success:
-                    raise ValueError(f"Strategy compilation failed: {compiled_strategy.errors}")
+                    raise ValueError(
+                        f"Strategy compilation failed: {compiled_strategy.errors}"
+                    )
 
                 execute_func = compiled_strategy.execute_func
                 spec = compiled_strategy.spec
 
                 self._log_debug("Strategy Type: CompilationResult")
                 self._log_debug(f"Strategy Name: {spec.name if spec else 'Unknown'}")
-                self._log_debug(f"Strategy Type: {spec.strategy_type if spec else 'Unknown'}")
+                self._log_debug(
+                    f"Strategy Type: {spec.strategy_type if spec else 'Unknown'}"
+                )
                 self._log_debug("Compilation Success: True")
-                self._log_debug(f"Parameters: {list(spec.parameters.keys()) if spec else []}")
+                self._log_debug(
+                    f"Parameters: {list(spec.parameters.keys()) if spec else []}"
+                )
 
             elif callable(compiled_strategy):
                 # It's already an execute function
@@ -352,7 +379,9 @@ class StrategyExecutionEngine:
 
                 self._log_debug("Strategy Type: Callable Function")
                 self._log_debug(f"Strategy Name: {strategy_name}")
-                self._log_debug(f"Function: {execute_func.__name__ if hasattr(execute_func, '__name__') else 'lambda'}")
+                self._log_debug(
+                    f"Function: {execute_func.__name__ if hasattr(execute_func, '__name__') else 'lambda'}"
+                )
 
             else:
                 raise ValueError(f"Invalid strategy type: {type(compiled_strategy)}")
@@ -374,23 +403,33 @@ class StrategyExecutionEngine:
             if data is None or len(data) == 0:
                 raise ValueError("Data cannot be empty")
 
-            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            required_cols = ["open", "high", "low", "close", "volume"]
             missing_cols = [col for col in required_cols if col not in data.columns]
             if missing_cols:
                 raise ValueError(f"Missing required columns: {missing_cols}")
 
             # Ensure timestamp column
-            if 'timestamp' not in data.columns:
+            if "timestamp" not in data.columns:
                 if isinstance(data.index, pd.DatetimeIndex):
                     data = data.reset_index()
-                    data.rename(columns={'index': 'timestamp'}, inplace=True)
+                    data.rename(columns={"index": "timestamp"}, inplace=True)
                 else:
-                    data['timestamp'] = pd.date_range(start='2020-01-01', periods=len(data), freq='D')
+                    data["timestamp"] = pd.date_range(
+                        start="2020-01-01", periods=len(data), freq="D"
+                    )
 
-            self._log_debug(f"Data Shape: {data.shape[0]} rows × {data.shape[1]} columns")
-            self._log_debug(f"Date Range: {data['timestamp'].min()} to {data['timestamp'].max()}")
-            self._log_debug(f"Price Range: ${data['close'].min():.2f} to ${data['close'].max():.2f}")
-            self._log_debug(f"Volume Range: {data['volume'].min():,.0f} to {data['volume'].max():,.0f}")
+            self._log_debug(
+                f"Data Shape: {data.shape[0]} rows × {data.shape[1]} columns"
+            )
+            self._log_debug(
+                f"Date Range: {data['timestamp'].min()} to {data['timestamp'].max()}"
+            )
+            self._log_debug(
+                f"Price Range: ${data['close'].min():.2f} to ${data['close'].max():.2f}"
+            )
+            self._log_debug(
+                f"Volume Range: {data['volume'].min():,.0f} to {data['volume'].max():,.0f}"
+            )
             self._log_debug(f"Symbol: {symbol}")
             self._log_debug("✓ Data validated successfully")
             self._log_debug("")
@@ -419,7 +458,9 @@ class StrategyExecutionEngine:
             )
 
             self._log_debug("Backtest Config Created:")
-            self._log_debug(f"  Initial Capital: ${backtest_config.initial_capital:,.2f}")
+            self._log_debug(
+                f"  Initial Capital: ${backtest_config.initial_capital:,.2f}"
+            )
             self._log_debug(f"  Commission: {backtest_config.commission * 100:.4f}%")
             self._log_debug(f"  Slippage: {backtest_config.slippage * 100:.4f}%")
 
@@ -436,12 +477,12 @@ class StrategyExecutionEngine:
                 try:
                     # Create bar data dict
                     bar_data = {
-                        'open': ctx.open,
-                        'high': ctx.high,
-                        'low': ctx.low,
-                        'close': ctx.close,
-                        'volume': ctx.volume,
-                        'timestamp': ctx.timestamp,
+                        "open": ctx.open,
+                        "high": ctx.high,
+                        "low": ctx.low,
+                        "close": ctx.close,
+                        "volume": ctx.volume,
+                        "timestamp": ctx.timestamp,
                     }
 
                     # Create single-row DataFrame
@@ -454,12 +495,12 @@ class StrategyExecutionEngine:
                         output = execute_func(bar_df, params_dict)
 
                         # Process signals
-                        if output and 'signals' in output:
-                            signals = output['signals']
-                            if signals.get('buy', False):
+                        if output and "signals" in output:
+                            signals = output["signals"]
+                            if signals.get("buy", False):
                                 if not ctx.has_position():
                                     ctx.buy(symbol)
-                            elif signals.get('sell', False):
+                            elif signals.get("sell", False):
                                 if ctx.has_position(symbol):
                                     ctx.close_position(symbol)
                     else:
@@ -467,12 +508,12 @@ class StrategyExecutionEngine:
                         output = execute_func(bar_df)
 
                         # Process output
-                        if output and 'signals' in output:
-                            signals = output['signals']
-                            if signals.get('buy', False):
+                        if output and "signals" in output:
+                            signals = output["signals"]
+                            if signals.get("buy", False):
                                 if not ctx.has_position():
                                     ctx.buy(symbol)
-                            elif signals.get('sell', False):
+                            elif signals.get("sell", False):
                                 if ctx.has_position(symbol):
                                     ctx.close_position(symbol)
 
@@ -539,7 +580,9 @@ class StrategyExecutionEngine:
 
                 self._log_debug("")
                 self._log_debug("Performance Summary:")
-                self._log_debug(f"  Total Return: ${total_return:,.2f} ({total_return_pct:.2f}%)")
+                self._log_debug(
+                    f"  Total Return: ${total_return:,.2f} ({total_return_pct:.2f}%)"
+                )
                 self._log_debug(f"  Sharpe Ratio: {sharpe:.3f}")
                 self._log_debug(f"  Max Drawdown: {max_dd:.2f}%")
                 self._log_debug(f"  Win Rate: {win_rate:.2f}%")
@@ -577,17 +620,17 @@ class StrategyExecutionEngine:
         strategy_code: str,
         data: pd.DataFrame,
         config: Optional[Dict[str, Any]] = None,
-        symbol: str = "ASSET"
+        symbol: str = "ASSET",
     ) -> ExecutionResult:
         """
         Run backtest with strategy code.
-        
+
         Args:
             strategy_code: Strategy DSL code
             data: DataFrame with OHLCV data
             config: Backtest configuration
             symbol: Symbol name
-            
+
         Returns:
             ExecutionResult with backtest results
         """
@@ -602,7 +645,11 @@ class StrategyExecutionEngine:
             return ExecutionResult(
                 execution_id=execution_id,
                 strategy_id=f"strategy_{int(time.time())}",
-                strategy_name=compilation_result.spec.name if compilation_result.spec else "Unknown",
+                strategy_name=(
+                    compilation_result.spec.name
+                    if compilation_result.spec
+                    else "Unknown"
+                ),
                 execution_type=ExecutionType.BACKTEST,
                 status=ExecutionStatus.FAILED,
                 start_time=datetime.now(),
@@ -612,7 +659,9 @@ class StrategyExecutionEngine:
             )
 
         # Execute strategy
-        strategy_name = compilation_result.spec.name if compilation_result.spec else "Unnamed"
+        strategy_name = (
+            compilation_result.spec.name if compilation_result.spec else "Unnamed"
+        )
 
         return self.execute_strategy(
             compiled_strategy=compilation_result,
@@ -625,31 +674,33 @@ class StrategyExecutionEngine:
     def get_execution_status(self, execution_id: str) -> Optional[Dict[str, Any]]:
         """
         Get execution status by ID.
-        
+
         Args:
             execution_id: Execution identifier
-            
+
         Returns:
             Execution status dict or None if not found
         """
         if execution_id in self._active_executions:
             result = self._active_executions[execution_id]
             return {
-                'execution_id': result.execution_id,
-                'strategy_id': result.strategy_id,
-                'strategy_name': result.strategy_name,
-                'status': result.status.value,
-                'start_time': result.start_time.isoformat() if result.start_time else None,
+                "execution_id": result.execution_id,
+                "strategy_id": result.strategy_id,
+                "strategy_name": result.strategy_name,
+                "status": result.status.value,
+                "start_time": (
+                    result.start_time.isoformat() if result.start_time else None
+                ),
             }
         return None
 
     def cancel_execution(self, execution_id: str) -> bool:
         """
         Cancel active execution.
-        
+
         Args:
             execution_id: Execution identifier
-            
+
         Returns:
             True if cancelled, False if not found
         """
@@ -664,17 +715,19 @@ class StrategyExecutionEngine:
     def get_active_executions(self) -> List[Dict[str, Any]]:
         """
         Get all active executions.
-        
+
         Returns:
             List of active execution status dicts
         """
         return [
             {
-                'execution_id': result.execution_id,
-                'strategy_id': result.strategy_id,
-                'strategy_name': result.strategy_name,
-                'status': result.status.value,
-                'start_time': result.start_time.isoformat() if result.start_time else None,
+                "execution_id": result.execution_id,
+                "strategy_id": result.strategy_id,
+                "strategy_name": result.strategy_name,
+                "status": result.status.value,
+                "start_time": (
+                    result.start_time.isoformat() if result.start_time else None
+                ),
             }
             for result in self._active_executions.values()
         ]
@@ -683,6 +736,7 @@ class StrategyExecutionEngine:
 # ============================================================================
 # Convenience Functions
 # ============================================================================
+
 
 def create_execution_engine(
     initial_capital: float = 100000.0,
@@ -693,14 +747,14 @@ def create_execution_engine(
 ) -> StrategyExecutionEngine:
     """
     Create execution engine with configuration.
-    
+
     Args:
         initial_capital: Starting capital
         commission: Commission rate
         slippage: Slippage rate
         enable_debug_logging: Enable debug logging
         debug_level: Debug level (1-5)
-    
+
     Returns:
         Configured StrategyExecutionEngine
     """
@@ -722,12 +776,12 @@ def execute_strategy_simple(
 ) -> ExecutionResult:
     """
     Execute strategy with simple configuration.
-    
+
     Args:
         strategy_code: Strategy DSL code
         data: DataFrame with OHLCV data
         initial_capital: Starting capital
-    
+
     Returns:
         ExecutionResult
     """
@@ -739,7 +793,7 @@ def execute_strategy_simple(
 # Example Usage
 # ============================================================================
 
-EXAMPLE_STRATEGY_CODE = '''
+EXAMPLE_STRATEGY_CODE = """
 # @name 简单均线策略
 # @description 短期均线上穿长期均线时买入
 # @param fast_period int 5 短期均线周期
@@ -755,7 +809,7 @@ output = {
     'indicators': {'ma_fast': ma_fast, 'ma_slow': ma_slow},
     'signals': {'buy': buy, 'sell': sell}
 }
-'''
+"""
 
 
 # ============================================================================
@@ -770,20 +824,22 @@ if __name__ == "__main__":
     import numpy as np
 
     np.random.seed(42)
-    dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
+    dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
 
     # Generate random price data with trend
     returns = np.random.randn(100) * 0.02
     price_data = 100 * (1 + returns).cumprod()
 
-    data = pd.DataFrame({
-        'timestamp': dates,
-        'open': price_data * (1 + np.random.randn(100) * 0.005),
-        'high': price_data * (1 + np.abs(np.random.randn(100) * 0.01)),
-        'low': price_data * (1 - np.abs(np.random.randn(100) * 0.01)),
-        'close': price_data,
-        'volume': np.random.randint(1000000, 5000000, 100),
-    })
+    data = pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": price_data * (1 + np.random.randn(100) * 0.005),
+            "high": price_data * (1 + np.abs(np.random.randn(100) * 0.01)),
+            "low": price_data * (1 - np.abs(np.random.randn(100) * 0.01)),
+            "close": price_data,
+            "volume": np.random.randint(1000000, 5000000, 100),
+        }
+    )
 
     # Create execution engine
     engine = create_execution_engine(
@@ -803,7 +859,7 @@ if __name__ == "__main__":
     print(f"Trades: {result.metrics.trades_executed}")
 
     if result.backtest_result:
-        metrics = result.backtest_result.get('metrics', {})
+        metrics = result.backtest_result.get("metrics", {})
         print("\nPerformance:")
         print(f"  Total Return: {metrics.get('total_return_pct', 0):.2f}%")
         print(f"  Sharpe Ratio: {metrics.get('sharpe_ratio', 0):.3f}")

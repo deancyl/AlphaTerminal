@@ -16,6 +16,7 @@ Modules:
 
 Total: 30+ endpoints
 """
+
 from fastapi import APIRouter
 
 from .dependencies import (

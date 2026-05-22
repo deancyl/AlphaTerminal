@@ -8,6 +8,7 @@ Tests cover all 5 debug cycles:
 - Cycle 4: Momentum regime detection
 - Cycle 5: Overall regime classification
 """
+
 import pytest
 import pandas as pd
 import numpy as np
@@ -30,7 +31,7 @@ class TestRegimeResult:
             overall_regime="bull",
             confidence=0.85,
             indicators={"rsi": 65.0, "adx": 30.0},
-            timestamp="2024-01-01T00:00:00"
+            timestamp="2024-01-01T00:00:00",
         )
 
         assert result.trend_regime == "bull"
@@ -49,7 +50,7 @@ class TestRegimeResult:
             overall_regime="bear",
             confidence=0.75,
             indicators={"rsi": 25.0},
-            timestamp="2024-01-01T00:00:00"
+            timestamp="2024-01-01T00:00:00",
         )
 
         result_dict = result.to_dict()
@@ -71,7 +72,7 @@ class TestMarketRegimeDetector:
     @pytest.fixture
     def bull_market_prices(self):
         """Create sample bull market price series"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # Strong uptrend: 50% gain over 300 days
         trend = np.linspace(100, 150, 300)
         noise = np.random.normal(0, 1, 300)
@@ -81,7 +82,7 @@ class TestMarketRegimeDetector:
     @pytest.fixture
     def bear_market_prices(self):
         """Create sample bear market price series"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # Strong downtrend: 30% loss over 300 days
         trend = np.linspace(100, 70, 300)
         noise = np.random.normal(0, 1, 300)
@@ -91,10 +92,10 @@ class TestMarketRegimeDetector:
     @pytest.fixture
     def sideways_market_prices(self):
         """Create sample sideways market price series"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # Range-bound: oscillating around 100
         base = np.ones(300) * 100
-        oscillation = 5 * np.sin(np.linspace(0, 10*np.pi, 300))
+        oscillation = 5 * np.sin(np.linspace(0, 10 * np.pi, 300))
         noise = np.random.normal(0, 1, 300)
         prices = base + oscillation + noise
         return pd.Series(prices, index=dates)
@@ -102,7 +103,7 @@ class TestMarketRegimeDetector:
     @pytest.fixture
     def high_volatility_prices(self):
         """Create sample high volatility price series"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # High volatility: large daily swings
         trend = np.linspace(100, 105, 300)
         noise = np.random.normal(0, 5, 300)  # Large noise
@@ -140,23 +141,27 @@ class TestMarketRegimeDetector:
 
     def test_cycle1_validate_inf_values(self, detector):
         """Test Cycle 1: Infinite values should fail validation"""
-        dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
-        prices = pd.Series([100, np.inf, 102, 103, 104] + [100+i for i in range(95)], index=dates)
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
+        prices = pd.Series(
+            [100, np.inf, 102, 103, 104] + [100 + i for i in range(95)], index=dates
+        )
         is_valid, error, cleaned = detector._validate_inputs(prices, 50)
         assert is_valid is False
         assert "infinite" in error.lower()
 
     def test_cycle1_validate_nan_values(self, detector):
         """Test Cycle 1: NaN values should be handled"""
-        dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
-        prices = pd.Series([100, np.nan, 102, 103, 104] + [100+i for i in range(95)], index=dates)
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
+        prices = pd.Series(
+            [100, np.nan, 102, 103, 104] + [100 + i for i in range(95)], index=dates
+        )
         is_valid, error, cleaned = detector._validate_inputs(prices, 50)
         assert is_valid is True
         assert len(cleaned) == 99  # NaN dropped
 
     def test_cycle1_validate_constant_prices(self, detector):
         """Test Cycle 1: Constant prices should fail validation"""
-        dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
         prices = pd.Series([100] * 100, index=dates)
         is_valid, error, cleaned = detector._validate_inputs(prices, 50)
         assert is_valid is False
@@ -182,7 +187,7 @@ class TestMarketRegimeDetector:
 
     def test_cycle2_ma_alignment_bull(self, detector):
         """Test Cycle 2: Golden cross (bullish MA alignment)"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # Create prices where SMA20 > SMA50 > SMA200
         prices = pd.Series(np.linspace(50, 150, 300), index=dates)
         trend_regime = detector.detect_trend_regime(prices)
@@ -190,7 +195,7 @@ class TestMarketRegimeDetector:
 
     def test_cycle2_ma_alignment_bear(self, detector):
         """Test Cycle 2: Death cross (bearish MA alignment)"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # Create prices where SMA20 < SMA50 < SMA200
         prices = pd.Series(np.linspace(150, 50, 300), index=dates)
         trend_regime = detector.detect_trend_regime(prices)
@@ -213,7 +218,7 @@ class TestMarketRegimeDetector:
 
     def test_cycle3_detect_low_volatility(self, detector):
         """Test Cycle 3: Low volatility should be detected"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # Very stable prices
         trend = np.linspace(100, 102, 300)
         noise = np.random.normal(0, 0.1, 300)  # Tiny noise
@@ -231,7 +236,7 @@ class TestMarketRegimeDetector:
 
     def test_cycle3_volatility_percentile(self, detector):
         """Test Cycle 3: Volatility percentile calculation"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # Create returns with known volatility
         returns = pd.Series(np.random.normal(0.001, 0.02, 300), index=dates)
         vol_regime = detector.detect_volatility_regime(returns)
@@ -258,7 +263,7 @@ class TestMarketRegimeDetector:
 
     def test_cycle4_rsi_overbought(self, detector):
         """Test Cycle 4: RSI overbought condition"""
-        dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
         # Strong uptrend should push RSI high
         prices = pd.Series(np.linspace(50, 150, 100), index=dates)
         rsi = detector._calculate_rsi(prices)
@@ -266,7 +271,7 @@ class TestMarketRegimeDetector:
 
     def test_cycle4_rsi_oversold(self, detector):
         """Test Cycle 4: RSI oversold condition"""
-        dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
         # Strong downtrend should push RSI low
         prices = pd.Series(np.linspace(150, 50, 100), index=dates)
         rsi = detector._calculate_rsi(prices)
@@ -377,13 +382,15 @@ class TestMarketRegimeDetector:
 
     def test_analyze_regime_transitions(self, detector):
         """Test regime transition analysis"""
-        dates = pd.date_range(start='2022-01-01', periods=500, freq='D')
+        dates = pd.date_range(start="2022-01-01", periods=500, freq="D")
         # Create prices that transition from bear to bull
-        trend = np.concatenate([
-            np.linspace(100, 70, 200),   # Bear phase
-            np.linspace(70, 70, 50),     # Consolidation
-            np.linspace(70, 120, 250)    # Bull phase
-        ])
+        trend = np.concatenate(
+            [
+                np.linspace(100, 70, 200),  # Bear phase
+                np.linspace(70, 70, 50),  # Consolidation
+                np.linspace(70, 120, 250),  # Bull phase
+            ]
+        )
         noise = np.random.normal(0, 1, 500)
         prices = pd.Series(trend + noise, index=dates)
 
@@ -402,7 +409,7 @@ class TestMarketRegimeDetector:
 
     def test_edge_case_minimum_data_points(self, detector):
         """Test edge case: Minimum data points"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         prices = pd.Series(np.linspace(100, 110, 300), index=dates)
 
         result = detector.detect_regime(prices)
@@ -412,7 +419,7 @@ class TestMarketRegimeDetector:
 
     def test_edge_case_very_volatile(self, detector):
         """Test edge case: Extremely volatile prices"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # Random walk with large steps
         changes = np.random.choice([-5, 5], size=300) * np.random.random(300)
         prices = pd.Series(100 + np.cumsum(changes), index=dates)
@@ -425,7 +432,7 @@ class TestMarketRegimeDetector:
 
     def test_edge_case_gap_up(self, detector):
         """Test edge case: Price gap up"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         prices = np.linspace(100, 120, 300)
         # Add a gap
         prices[150:] += 20
@@ -437,7 +444,7 @@ class TestMarketRegimeDetector:
 
     def test_edge_case_single_direction(self, detector):
         """Test edge case: Single direction movement"""
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         # Only upward movement
         prices = pd.Series(np.linspace(100, 200, 300), index=dates)
 
@@ -458,7 +465,7 @@ class TestMarketRegimeDetectorIntegration:
         """Test complete workflow with bull market data"""
         # Generate realistic bull market data
         np.random.seed(42)
-        dates = pd.date_range(start='2023-01-01', periods=252, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=252, freq="D")
         returns = np.random.normal(0.001, 0.015, 252)  # Positive drift
         prices = 100 * (1 + returns).cumprod()
         prices = pd.Series(prices, index=dates)
@@ -475,7 +482,7 @@ class TestMarketRegimeDetectorIntegration:
     def test_full_workflow_bear_market(self, detector):
         """Test complete workflow with bear market data"""
         np.random.seed(42)
-        dates = pd.date_range(start='2023-01-01', periods=252, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=252, freq="D")
         returns = np.random.normal(-0.001, 0.02, 252)  # Negative drift
         prices = 100 * (1 + returns).cumprod()
         prices = pd.Series(prices, index=dates)
@@ -488,7 +495,7 @@ class TestMarketRegimeDetectorIntegration:
     def test_comparison_with_known_values(self, detector):
         """Test against known regime values"""
         # Create a known bull market pattern
-        dates = pd.date_range(start='2023-01-01', periods=252, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=252, freq="D")
 
         # Strong consistent uptrend
         prices = pd.Series(np.linspace(100, 150, 252), index=dates)
@@ -502,11 +509,12 @@ class TestMarketRegimeDetectorIntegration:
     def test_debug_logging_all_cycles(self, detector, caplog):
         """Test that all 5 debug cycles produce logging output"""
         import logging
+
         caplog.set_level(logging.DEBUG)
 
         # Create sample data
         np.random.seed(42)
-        dates = pd.date_range(start='2023-01-01', periods=300, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=300, freq="D")
         returns = np.random.normal(0.0005, 0.02, 300)
         prices = 100 * (1 + returns).cumprod()
         prices = pd.Series(prices, index=dates)
@@ -525,7 +533,7 @@ class TestMarketRegimeDetectorIntegration:
     def test_regime_stability_over_time(self, detector):
         """Test that regime detection is stable over time"""
         # Create stable bull market
-        dates = pd.date_range(start='2023-01-01', periods=500, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=500, freq="D")
         prices = pd.Series(np.linspace(100, 200, 500), index=dates)
 
         # Detect regime at different points
@@ -540,13 +548,12 @@ class TestMarketRegimeDetectorIntegration:
 
     def test_regime_change_detection(self, detector):
         """Test detection of regime changes"""
-        dates = pd.date_range(start='2023-01-01', periods=500, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=500, freq="D")
 
         # Bear market followed by bull market
-        prices = np.concatenate([
-            np.linspace(100, 70, 250),   # Bear
-            np.linspace(70, 120, 250)    # Bull
-        ])
+        prices = np.concatenate(
+            [np.linspace(100, 70, 250), np.linspace(70, 120, 250)]  # Bear  # Bull
+        )
         prices = pd.Series(prices, index=dates)
 
         # Detect at different points (need enough data for lookback)

@@ -7,6 +7,7 @@ Tests cover:
 - Recovery mechanism
 - Adaptive timeout adjustment
 """
+
 import time
 from datetime import datetime
 
@@ -14,7 +15,7 @@ from app.services.adaptive_circuit_breaker import (
     AdaptiveCircuitBreaker,
     AdaptiveBreakerManager,
     RecoveryRecord,
-    get_adaptive_breaker_manager
+    get_adaptive_breaker_manager,
 )
 from app.services.circuit_breaker import CircuitState
 
@@ -54,11 +55,7 @@ class TestCircuitBreakerStates:
 
     def test_transitions_to_closed_on_success(self):
         """Test HALF_OPEN -> CLOSED transition on success"""
-        cb = AdaptiveCircuitBreaker(
-            "test",
-            failure_threshold=2,
-            base_timeout=0.1
-        )
+        cb = AdaptiveCircuitBreaker("test", failure_threshold=2, base_timeout=0.1)
 
         # Trigger OPEN state
         cb.record_failure()
@@ -77,11 +74,7 @@ class TestCircuitBreakerStates:
 
     def test_stays_open_on_failure_in_half_open(self):
         """Test HALF_OPEN -> OPEN on failure"""
-        cb = AdaptiveCircuitBreaker(
-            "test",
-            failure_threshold=2,
-            base_timeout=0.1
-        )
+        cb = AdaptiveCircuitBreaker("test", failure_threshold=2, base_timeout=0.1)
 
         # Trigger OPEN state
         cb.record_failure()
@@ -159,11 +152,7 @@ class TestCircuitBreakerRecovery:
 
     def test_half_open_allows_limited_requests(self):
         """Test that HALF_OPEN state allows limited requests"""
-        cb = AdaptiveCircuitBreaker(
-            "test",
-            failure_threshold=2,
-            base_timeout=0.1
-        )
+        cb = AdaptiveCircuitBreaker("test", failure_threshold=2, base_timeout=0.1)
 
         # Trigger OPEN
         cb.record_failure()
@@ -179,11 +168,7 @@ class TestCircuitBreakerRecovery:
 
     def test_success_in_half_open_closes_circuit(self):
         """Test that success in HALF_OPEN closes the circuit"""
-        cb = AdaptiveCircuitBreaker(
-            "test",
-            failure_threshold=2,
-            base_timeout=0.1
-        )
+        cb = AdaptiveCircuitBreaker("test", failure_threshold=2, base_timeout=0.1)
 
         # Trigger OPEN -> HALF_OPEN
         cb.record_failure()
@@ -199,11 +184,7 @@ class TestCircuitBreakerRecovery:
 
     def test_failure_in_half_open_reopens_circuit(self):
         """Test that failure in HALF_OPEN reopens the circuit"""
-        cb = AdaptiveCircuitBreaker(
-            "test",
-            failure_threshold=2,
-            base_timeout=0.1
-        )
+        cb = AdaptiveCircuitBreaker("test", failure_threshold=2, base_timeout=0.1)
 
         # Trigger OPEN -> HALF_OPEN
         cb.record_failure()
@@ -235,10 +216,7 @@ class TestCircuitBreakerAdaptiveTimeout:
     def test_timeout_increases_on_failures(self):
         """Test that timeout increases with consecutive failures"""
         cb = AdaptiveCircuitBreaker(
-            "test",
-            base_timeout=30.0,
-            min_timeout=10.0,
-            max_timeout=120.0
+            "test", base_timeout=30.0, min_timeout=10.0, max_timeout=120.0
         )
 
         # Add recovery history to enable adaptive calculation
@@ -254,10 +232,7 @@ class TestCircuitBreakerAdaptiveTimeout:
     def test_timeout_decreases_on_success(self):
         """Test that timeout decreases with high success rate"""
         cb = AdaptiveCircuitBreaker(
-            "test",
-            base_timeout=30.0,
-            min_timeout=10.0,
-            max_timeout=120.0
+            "test", base_timeout=30.0, min_timeout=10.0, max_timeout=120.0
         )
 
         # Add recovery history with high success rate
@@ -273,10 +248,7 @@ class TestCircuitBreakerAdaptiveTimeout:
     def test_timeout_has_min_max_bounds(self):
         """Test that timeout stays within min/max bounds"""
         cb = AdaptiveCircuitBreaker(
-            "test",
-            base_timeout=30.0,
-            min_timeout=10.0,
-            max_timeout=120.0
+            "test", base_timeout=30.0, min_timeout=10.0, max_timeout=120.0
         )
 
         # Add many failures to push timeout up
@@ -299,10 +271,7 @@ class TestCircuitBreakerAdaptiveTimeout:
     def test_adaptive_timeout_disabled_with_insufficient_history(self):
         """Test that adaptive timeout returns base_timeout with insufficient history"""
         cb = AdaptiveCircuitBreaker(
-            "test",
-            base_timeout=30.0,
-            min_timeout=10.0,
-            max_timeout=120.0
+            "test", base_timeout=30.0, min_timeout=10.0, max_timeout=120.0
         )
 
         # No history - should return base_timeout
@@ -344,11 +313,7 @@ class TestCircuitBreakerIsAvailable:
 
     def test_is_available_limited_when_half_open(self):
         """Test is_available returns True when HALF_OPEN"""
-        cb = AdaptiveCircuitBreaker(
-            "test",
-            failure_threshold=2,
-            base_timeout=0.1
-        )
+        cb = AdaptiveCircuitBreaker("test", failure_threshold=2, base_timeout=0.1)
 
         # Trigger OPEN -> HALF_OPEN
         cb.record_failure()
@@ -458,9 +423,7 @@ class TestRecoveryRecord:
     def test_recovery_record_creation(self):
         """Test RecoveryRecord creation"""
         record = RecoveryRecord(
-            timestamp=datetime.now(),
-            success=True,
-            recovery_time=5.5
+            timestamp=datetime.now(), success=True, recovery_time=5.5
         )
 
         assert record.success is True
@@ -470,9 +433,7 @@ class TestRecoveryRecord:
     def test_recovery_record_failure(self):
         """Test RecoveryRecord for failure case"""
         record = RecoveryRecord(
-            timestamp=datetime.now(),
-            success=False,
-            recovery_time=10.0
+            timestamp=datetime.now(), success=False, recovery_time=10.0
         )
 
         assert record.success is False
@@ -539,11 +500,7 @@ class TestAdaptiveCircuitBreakerStats:
 
     def test_get_stats_returns_correct_structure(self):
         """Test that get_stats returns correct structure"""
-        cb = AdaptiveCircuitBreaker(
-            "test",
-            failure_threshold=5,
-            base_timeout=30.0
-        )
+        cb = AdaptiveCircuitBreaker("test", failure_threshold=5, base_timeout=30.0)
 
         stats = cb.get_stats()
 

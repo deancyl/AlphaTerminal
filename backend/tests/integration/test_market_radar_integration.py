@@ -20,21 +20,41 @@ class TestMarketRadarAPIIntegration:
         from app.services.market_radar.treemap_builder import build_treemap_data
 
         # Mock the underlying data fetchers
-        with patch('app.services.market_radar.treemap_builder._fetch_sectors') as mock_sectors:
-            with patch('app.services.market_radar.treemap_builder._fetch_all_stocks') as mock_stocks:
-                with patch('app.services.market_radar.treemap_builder._fetch_sector_stocks_batch') as mock_batch:
+        with patch(
+            "app.services.market_radar.treemap_builder._fetch_sectors"
+        ) as mock_sectors:
+            with patch(
+                "app.services.market_radar.treemap_builder._fetch_all_stocks"
+            ) as mock_stocks:
+                with patch(
+                    "app.services.market_radar.treemap_builder._fetch_sector_stocks_batch"
+                ) as mock_batch:
                     # Setup mock data
                     mock_sectors.return_value = [
                         {"name": "白酒", "code": "bk001"},
                         {"name": "银行", "code": "bk002"},
                     ]
                     mock_stocks.return_value = [
-                        {"symbol": "600519", "name": "贵州茅台", "market_cap": 2e12, "change_pct": 2.5},
-                        {"symbol": "601398", "name": "工商银行", "market_cap": 1e12, "change_pct": 1.0},
+                        {
+                            "symbol": "600519",
+                            "name": "贵州茅台",
+                            "market_cap": 2e12,
+                            "change_pct": 2.5,
+                        },
+                        {
+                            "symbol": "601398",
+                            "name": "工商银行",
+                            "market_cap": 1e12,
+                            "change_pct": 1.0,
+                        },
                     ]
                     mock_batch.return_value = {
-                        "白酒": [{"symbol": "600519", "name": "贵州茅台", "market_cap": 2e12}],
-                        "银行": [{"symbol": "601398", "name": "工商银行", "market_cap": 1e12}],
+                        "白酒": [
+                            {"symbol": "600519", "name": "贵州茅台", "market_cap": 2e12}
+                        ],
+                        "银行": [
+                            {"symbol": "601398", "name": "工商银行", "market_cap": 1e12}
+                        ],
                     }
 
                     # Execute
@@ -53,22 +73,41 @@ class TestMarketRadarAPIIntegration:
         """Test complete anomaly detection flow."""
         from app.services.market_radar.anomaly_detector import detect_anomalies
 
-        with patch('app.services.market_radar.anomaly_detector._fetch_all_stocks') as mock_stocks:
-            with patch('app.services.market_radar.anomaly_detector._fetch_capital_flow') as mock_flow:
-                with patch('app.services.market_radar.anomaly_detector._fetch_institution_research') as mock_research:
+        with patch(
+            "app.services.market_radar.anomaly_detector._fetch_all_stocks"
+        ) as mock_stocks:
+            with patch(
+                "app.services.market_radar.anomaly_detector._fetch_capital_flow"
+            ) as mock_flow:
+                with patch(
+                    "app.services.market_radar.anomaly_detector._fetch_institution_research"
+                ) as mock_research:
                     mock_stocks.return_value = [
-                        {"symbol": "600519", "name": "贵州茅台", "price": 1800,
-                         "high": 1850, "low": 1750, "pre_close": 1780, "change_pct": 1.12,
-                         "amount": 1e9},
+                        {
+                            "symbol": "600519",
+                            "name": "贵州茅台",
+                            "price": 1800,
+                            "high": 1850,
+                            "low": 1750,
+                            "pre_close": 1780,
+                            "change_pct": 1.12,
+                            "amount": 1e9,
+                        },
                     ]
                     mock_flow.return_value = [
-                        {"symbol": "600519", "name": "贵州茅台", "main_net_inflow": -1e8},
+                        {
+                            "symbol": "600519",
+                            "name": "贵州茅台",
+                            "main_net_inflow": -1e8,
+                        },
                     ]
                     mock_research.return_value = [
                         {"symbol": "600519", "name": "贵州茅台", "research_count": 5},
                     ]
 
-                    result = await detect_anomalies(anomaly_type=None, top_n=10, timeout=15.0)
+                    result = await detect_anomalies(
+                        anomaly_type=None, top_n=10, timeout=15.0
+                    )
 
                     assert "anomalies" in result
                     assert "last_update" in result
@@ -80,7 +119,9 @@ class TestMarketRadarAPIIntegration:
         from app.services.market_radar.treemap_builder import build_treemap_data
 
         # Force timeout
-        with patch('app.services.market_radar.treemap_builder._build_sector_treemap') as mock_build:
+        with patch(
+            "app.services.market_radar.treemap_builder._build_sector_treemap"
+        ) as mock_build:
             mock_build.side_effect = asyncio.TimeoutError()
 
             result = await build_treemap_data(level="sector", timeout=15.0)
@@ -98,11 +139,22 @@ class TestMarketRadarPerformance:
         """Test that treemap builds within acceptable time."""
         from app.services.market_radar.treemap_builder import build_treemap_data
 
-        with patch('app.services.market_radar.treemap_builder._fetch_sectors') as mock_sectors:
-            with patch('app.services.market_radar.treemap_builder._fetch_all_stocks') as mock_stocks:
-                with patch('app.services.market_radar.treemap_builder._fetch_sector_stocks_batch') as mock_batch:
-                    mock_sectors.return_value = [{"name": f"板块{i}", "code": f"bk{i}"} for i in range(30)]
-                    mock_stocks.return_value = [{"symbol": f"600{i}", "name": f"股票{i}", "market_cap": 1e10} for i in range(500)]
+        with patch(
+            "app.services.market_radar.treemap_builder._fetch_sectors"
+        ) as mock_sectors:
+            with patch(
+                "app.services.market_radar.treemap_builder._fetch_all_stocks"
+            ) as mock_stocks:
+                with patch(
+                    "app.services.market_radar.treemap_builder._fetch_sector_stocks_batch"
+                ) as mock_batch:
+                    mock_sectors.return_value = [
+                        {"name": f"板块{i}", "code": f"bk{i}"} for i in range(30)
+                    ]
+                    mock_stocks.return_value = [
+                        {"symbol": f"600{i}", "name": f"股票{i}", "market_cap": 1e10}
+                        for i in range(500)
+                    ]
                     mock_batch.return_value = {f"板块{i}": [] for i in range(30)}
 
                     start_time = time.time()
@@ -122,7 +174,7 @@ class TestMarketRadarPerformance:
             await asyncio.sleep(0.1)
             return (name, [{"symbol": "test", "name": name}])
 
-        with patch('asyncio.get_running_loop') as mock_loop:
+        with patch("asyncio.get_running_loop") as mock_loop:
             mock_executor = MagicMock()
 
             async def mock_run_in_executor(executor, func, name):
@@ -148,15 +200,24 @@ class TestMarketRadarConcurrency:
         """Test handling multiple concurrent requests."""
         from app.services.market_radar.treemap_builder import build_treemap_data
 
-        with patch('app.services.market_radar.treemap_builder._fetch_sectors') as mock_sectors:
-            with patch('app.services.market_radar.treemap_builder._fetch_all_stocks') as mock_stocks:
-                with patch('app.services.market_radar.treemap_builder._fetch_sector_stocks_batch') as mock_batch:
+        with patch(
+            "app.services.market_radar.treemap_builder._fetch_sectors"
+        ) as mock_sectors:
+            with patch(
+                "app.services.market_radar.treemap_builder._fetch_all_stocks"
+            ) as mock_stocks:
+                with patch(
+                    "app.services.market_radar.treemap_builder._fetch_sector_stocks_batch"
+                ) as mock_batch:
                     mock_sectors.return_value = [{"name": "白酒", "code": "bk001"}]
                     mock_stocks.return_value = []
                     mock_batch.return_value = {}
 
                     # Simulate 10 concurrent requests
-                    tasks = [build_treemap_data(level="sector", timeout=15.0) for _ in range(10)]
+                    tasks = [
+                        build_treemap_data(level="sector", timeout=15.0)
+                        for _ in range(10)
+                    ]
                     results = await asyncio.gather(*tasks)
 
                     # All should complete successfully

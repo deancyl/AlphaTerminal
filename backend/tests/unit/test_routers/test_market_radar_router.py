@@ -17,6 +17,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 def app():
     """Create test FastAPI app."""
     from app.routers.market_radar import router
+
     app = FastAPI()
     app.include_router(router)
     return app
@@ -50,15 +51,17 @@ class TestMarketRadarTreemapEndpoint:
         mock_response = {
             "data": [{"name": "白酒", "value": 100}],
             "last_update": "2024-01-01T00:00:00",
-            "data_source": "akshare"
+            "data_source": "akshare",
         }
 
-        with patch('app.routers.market_radar.get_cache') as mock_cache:
+        with patch("app.routers.market_radar.get_cache") as mock_cache:
             mock_cache_instance = MagicMock()
             mock_cache_instance.get.return_value = None  # No cache hit
             mock_cache.return_value = mock_cache_instance
 
-            with patch('app.routers.market_radar.build_treemap_data', new_callable=AsyncMock) as mock_build:
+            with patch(
+                "app.routers.market_radar.build_treemap_data", new_callable=AsyncMock
+            ) as mock_build:
                 mock_build.return_value = mock_response
 
                 response = client.get("/api/v1/market_radar/treemap")
@@ -72,15 +75,17 @@ class TestMarketRadarTreemapEndpoint:
         mock_response = {
             "data": [{"name": "贵州茅台", "value": 200}],
             "last_update": "2024-01-01T00:00:00",
-            "data_source": "akshare"
+            "data_source": "akshare",
         }
 
-        with patch('app.routers.market_radar.get_cache') as mock_cache:
+        with patch("app.routers.market_radar.get_cache") as mock_cache:
             mock_cache_instance = MagicMock()
             mock_cache_instance.get.return_value = None
             mock_cache.return_value = mock_cache_instance
 
-            with patch('app.routers.market_radar.build_treemap_data', new_callable=AsyncMock) as mock_build:
+            with patch(
+                "app.routers.market_radar.build_treemap_data", new_callable=AsyncMock
+            ) as mock_build:
                 mock_build.return_value = mock_response
 
                 response = client.get("/api/v1/market_radar/treemap?level=stock")
@@ -89,17 +94,16 @@ class TestMarketRadarTreemapEndpoint:
 
     def test_treemap_timeout_returns_504(self, client):
         """Test that timeout returns 504 status."""
-        with patch('app.routers.market_radar.get_cache') as mock_cache:
+        with patch("app.routers.market_radar.get_cache") as mock_cache:
             mock_cache_instance = MagicMock()
             mock_cache_instance.get.return_value = None  # No cache hit
             mock_cache.return_value = mock_cache_instance
 
-            with patch('app.routers.market_radar.build_treemap_data', new_callable=AsyncMock) as mock_build:
+            with patch(
+                "app.routers.market_radar.build_treemap_data", new_callable=AsyncMock
+            ) as mock_build:
                 # Return response with error key to trigger 504
-                mock_build.return_value = {
-                    "error": "timeout",
-                    "data": []
-                }
+                mock_build.return_value = {"error": "timeout", "data": []}
 
                 response = client.get("/api/v1/market_radar/treemap")
 
@@ -112,18 +116,18 @@ class TestMarketRadarAnomaliesEndpoint:
     def test_anomalies_returns_list(self, client):
         """Test that anomalies endpoint returns list."""
         mock_response = {
-            "anomalies": [
-                {"type": "volatility", "title": "振幅最大", "stocks": []}
-            ],
-            "last_update": "2024-01-01T00:00:00"
+            "anomalies": [{"type": "volatility", "title": "振幅最大", "stocks": []}],
+            "last_update": "2024-01-01T00:00:00",
         }
 
-        with patch('app.routers.market_radar.get_cache') as mock_cache:
+        with patch("app.routers.market_radar.get_cache") as mock_cache:
             mock_cache_instance = MagicMock()
             mock_cache_instance.get.return_value = None
             mock_cache.return_value = mock_cache_instance
 
-            with patch('app.routers.market_radar.detect_anomalies', new_callable=AsyncMock) as mock_detect:
+            with patch(
+                "app.routers.market_radar.detect_anomalies", new_callable=AsyncMock
+            ) as mock_detect:
                 mock_detect.return_value = mock_response
 
                 response = client.get("/api/v1/market_radar/anomalies")
@@ -136,18 +140,18 @@ class TestMarketRadarAnomaliesEndpoint:
     def test_anomaly_by_type_valid(self, client):
         """Test anomaly by type with valid type."""
         mock_response = {
-            "anomalies": [
-                {"type": "volatility", "title": "振幅最大", "stocks": []}
-            ],
-            "last_update": "2024-01-01T00:00:00"
+            "anomalies": [{"type": "volatility", "title": "振幅最大", "stocks": []}],
+            "last_update": "2024-01-01T00:00:00",
         }
 
-        with patch('app.routers.market_radar.get_cache') as mock_cache:
+        with patch("app.routers.market_radar.get_cache") as mock_cache:
             mock_cache_instance = MagicMock()
             mock_cache_instance.get.return_value = None
             mock_cache.return_value = mock_cache_instance
 
-            with patch('app.routers.market_radar.detect_anomalies', new_callable=AsyncMock) as mock_detect:
+            with patch(
+                "app.routers.market_radar.detect_anomalies", new_callable=AsyncMock
+            ) as mock_detect:
                 mock_detect.return_value = mock_response
 
                 response = client.get("/api/v1/market_radar/anomalies/volatility")
@@ -169,14 +173,18 @@ class TestMarketRadarErrorMessages:
 
     def test_error_message_sanitized(self, client):
         """Test that error messages don't expose internal details."""
-        with patch('app.routers.market_radar.get_cache') as mock_cache:
+        with patch("app.routers.market_radar.get_cache") as mock_cache:
             mock_cache_instance = MagicMock()
             mock_cache_instance.get.return_value = None  # No cache hit
             mock_cache.return_value = mock_cache_instance
 
-            with patch('app.routers.market_radar.build_treemap_data', new_callable=AsyncMock) as mock_build:
+            with patch(
+                "app.routers.market_radar.build_treemap_data", new_callable=AsyncMock
+            ) as mock_build:
                 # Raise exception directly to trigger error handler
-                mock_build.side_effect = Exception("Internal database connection string: mysql://user:pass@host")
+                mock_build.side_effect = Exception(
+                    "Internal database connection string: mysql://user:pass@host"
+                )
 
                 response = client.get("/api/v1/market_radar/treemap")
 
@@ -225,16 +233,18 @@ class TestMarketRadarFallback:
             "source_detail": {
                 "name": "热门股票 (市值排名)",
                 "type": "实时",
-                "api": "top_stocks_by_market_cap"
-            }
+                "api": "top_stocks_by_market_cap",
+            },
         }
 
-        with patch('app.routers.market_radar.get_cache') as mock_cache:
+        with patch("app.routers.market_radar.get_cache") as mock_cache:
             mock_cache_instance = MagicMock()
             mock_cache_instance.get.return_value = None
             mock_cache.return_value = mock_cache_instance
 
-            with patch('app.routers.market_radar.build_treemap_data', new_callable=AsyncMock) as mock_build:
+            with patch(
+                "app.routers.market_radar.build_treemap_data", new_callable=AsyncMock
+            ) as mock_build:
                 mock_build.return_value = mock_response
 
                 response = client.get("/api/v1/market_radar/treemap")
@@ -249,15 +259,17 @@ class TestMarketRadarFallback:
         mock_response = {
             "data": [{"name": "热门股票", "value": 100}],
             "last_update": "2024-01-01T00:00:00",
-            "data_source": "fallback"
+            "data_source": "fallback",
         }
 
-        with patch('app.routers.market_radar.get_cache') as mock_cache:
+        with patch("app.routers.market_radar.get_cache") as mock_cache:
             mock_cache_instance = MagicMock()
             mock_cache_instance.get.return_value = None
             mock_cache.return_value = mock_cache_instance
 
-            with patch('app.routers.market_radar.build_treemap_data', new_callable=AsyncMock) as mock_build:
+            with patch(
+                "app.routers.market_radar.build_treemap_data", new_callable=AsyncMock
+            ) as mock_build:
                 mock_build.return_value = mock_response
 
                 response = client.get("/api/v1/market_radar/treemap")
@@ -279,11 +291,11 @@ class TestMarketRadarCacheFormat:
             "data": {
                 "data": [{"name": "白酒", "value": 100}],
                 "last_update": "2024-01-01T00:00:00",
-                "data_source": "akshare"
-            }
+                "data_source": "akshare",
+            },
         }
 
-        with patch('app.routers.market_radar.get_cache') as mock_cache:
+        with patch("app.routers.market_radar.get_cache") as mock_cache:
             mock_cache_instance = MagicMock()
             mock_cache_instance.get.return_value = cached_response
             mock_cache.return_value = mock_cache_instance
@@ -301,14 +313,14 @@ class TestMarketRadarTemperature:
 
     def test_temperature_returns_score(self, client):
         """Test that temperature endpoint returns a score."""
-        with patch('app.services.sentiment_engine.get_histogram') as mock_histogram:
+        with patch("app.services.sentiment_engine.get_histogram") as mock_histogram:
             mock_histogram.return_value = {
                 "advance": 100,
                 "decline": 50,
                 "limit_up": 10,
                 "limit_down": 5,
                 "unchanged": 20,
-                "timestamp": "2024-01-01T00:00:00"
+                "timestamp": "2024-01-01T00:00:00",
             }
 
             response = client.get("/api/v1/market_radar/temperature")

@@ -4,6 +4,7 @@ Model Loader for Qlib Integration
 Loads and manages Qlib ML models (LightGBM, HIST, GATE, etc.)
 with fallback to scikit-learn when Qlib is not available.
 """
+
 import logging
 import json
 import pickle
@@ -54,7 +55,7 @@ class ModelInfo:
 class ModelLoader:
     """
     Load and manage ML models for trading strategies.
-    
+
     Supports:
         - Qlib models: LightGBM, HIST, GATE, GRU, LSTM
         - Scikit-learn models: RandomForest, GradientBoosting
@@ -87,12 +88,12 @@ class ModelLoader:
     ) -> Optional[Any]:
         """
         Load a model by ID.
-        
+
         Args:
             model_id: Unique model identifier
             model_type: Type of model
             provider: Model provider (qlib, sklearn, custom)
-            
+
         Returns:
             Loaded model or None if failed
         """
@@ -125,7 +126,9 @@ class ModelLoader:
             return model
 
         except Exception as e:
-            logger.error(f"[ModelLoader] Failed to load model {model_id}: {e}", exc_info=True)
+            logger.error(
+                f"[ModelLoader] Failed to load model {model_id}: {e}", exc_info=True
+            )
             return None
 
     def save_model(
@@ -140,7 +143,7 @@ class ModelLoader:
     ) -> bool:
         """
         Save a model to disk.
-        
+
         Args:
             model: Model object to save
             model_id: Unique model identifier
@@ -149,7 +152,7 @@ class ModelLoader:
             feature_set: Feature set used (Alpha158, Alpha360, etc.)
             metrics: Performance metrics
             params: Model parameters
-            
+
         Returns:
             True if saved successfully
         """
@@ -181,7 +184,9 @@ class ModelLoader:
             return True
 
         except Exception as e:
-            logger.error(f"[ModelLoader] Failed to save model {model_id}: {e}", exc_info=True)
+            logger.error(
+                f"[ModelLoader] Failed to save model {model_id}: {e}", exc_info=True
+            )
             return False
 
     def predict(
@@ -191,11 +196,11 @@ class ModelLoader:
     ) -> Optional[np.ndarray]:
         """
         Generate predictions using a loaded model.
-        
+
         Args:
             model_id: Model identifier
             features: Feature DataFrame
-            
+
         Returns:
             Prediction array or None if failed
         """
@@ -211,8 +216,11 @@ class ModelLoader:
                 predictions = model.predict(features)
             elif hasattr(model, "forward"):
                 import torch
+
                 with torch.no_grad():
-                    predictions = model.forward(torch.tensor(features.values, dtype=torch.float32))
+                    predictions = model.forward(
+                        torch.tensor(features.values, dtype=torch.float32)
+                    )
                     predictions = predictions.numpy()
             else:
                 logger.error(f"[ModelLoader] Model {model_id} has no predict method")
@@ -221,7 +229,9 @@ class ModelLoader:
             return predictions
 
         except Exception as e:
-            logger.error(f"[ModelLoader] Prediction failed for {model_id}: {e}", exc_info=True)
+            logger.error(
+                f"[ModelLoader] Prediction failed for {model_id}: {e}", exc_info=True
+            )
             return None
 
     def train_model(
@@ -234,18 +244,20 @@ class ModelLoader:
     ) -> Optional[Any]:
         """
         Train a new model.
-        
+
         Args:
             model_type: Type of model to train
             X_train: Training features
             y_train: Training labels
             params: Model parameters
             model_id: Optional model ID (auto-generated if None)
-            
+
         Returns:
             Trained model or None if failed
         """
-        model_id = model_id or f"{model_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        model_id = (
+            model_id or f"{model_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
 
         try:
             if model_type == ModelType.LIGHTGBM:
@@ -299,7 +311,11 @@ class ModelLoader:
             self._model_info[model_id] = ModelInfo(
                 model_id=model_id,
                 model_type=model_type,
-                provider=ModelProvider.SKLEARN if model_type == ModelType.MLP else ModelProvider.CUSTOM,
+                provider=(
+                    ModelProvider.SKLEARN
+                    if model_type == ModelType.MLP
+                    else ModelProvider.CUSTOM
+                ),
                 feature_set="custom",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -349,7 +365,9 @@ class ModelLoader:
             return True
 
         except Exception as e:
-            logger.error(f"[ModelLoader] Failed to delete model {model_id}: {e}", exc_info=True)
+            logger.error(
+                f"[ModelLoader] Failed to delete model {model_id}: {e}", exc_info=True
+            )
             return False
 
     def _save_model_metadata(self, model_id: str, info: ModelInfo):

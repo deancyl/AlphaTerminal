@@ -19,6 +19,7 @@ from .order_status import OrderStatus
 @dataclass
 class ExecutionReport:
     """Execution report from broker after order submission."""
+
     order_id: str
     status: OrderStatus
     broker_order_id: Optional[str] = None
@@ -33,7 +34,7 @@ class ExecutionReport:
 class BrokerAdapter(Protocol):
     """
     Broker adapter interface for order execution.
-    
+
     All broker adapters must implement this Protocol for OMS compatibility.
     This enables future integration with real brokers (IBKR, XTP, etc.)
     """
@@ -49,7 +50,7 @@ class BrokerAdapter(Protocol):
     ) -> ExecutionReport:
         """
         Submit order to broker.
-        
+
         Args:
             order_id: Internal order ID
             symbol: Stock symbol
@@ -57,7 +58,7 @@ class BrokerAdapter(Protocol):
             order_type: 'market', 'limit', or 'stop'
             quantity: Order quantity
             price: Limit price (None for market orders)
-            
+
         Returns:
             ExecutionReport with broker response
         """
@@ -66,11 +67,11 @@ class BrokerAdapter(Protocol):
     def cancel_order(self, order_id: str, broker_order_id: Optional[str]) -> bool:
         """
         Cancel order at broker.
-        
+
         Args:
             order_id: Internal order ID
             broker_order_id: Broker's order ID
-            
+
         Returns:
             True if cancellation successful
         """
@@ -79,10 +80,10 @@ class BrokerAdapter(Protocol):
     def get_order_status(self, broker_order_id: str) -> OrderStatus:
         """
         Query order status from broker.
-        
+
         Args:
             broker_order_id: Broker's order ID
-            
+
         Returns:
             Current OrderStatus
         """
@@ -91,10 +92,10 @@ class BrokerAdapter(Protocol):
     def get_execution_reports(self, broker_order_id: str) -> List[ExecutionReport]:
         """
         Get all execution reports for an order.
-        
+
         Args:
             broker_order_id: Broker's order ID
-            
+
         Returns:
             List of ExecutionReport objects
         """
@@ -103,10 +104,10 @@ class BrokerAdapter(Protocol):
     def get_market_price(self, symbol: str) -> float:
         """
         Get current market price for a symbol.
-        
+
         Args:
             symbol: Stock symbol
-            
+
         Returns:
             Current market price
         """
@@ -116,7 +117,7 @@ class BrokerAdapter(Protocol):
 class MockBrokerAdapter:
     """
     Mock broker adapter for testing and development.
-    
+
     Simulates broker behavior:
     - Market orders: Immediate fill at market price
     - Limit orders: Fill if price matches
@@ -146,11 +147,17 @@ class MockBrokerAdapter:
         market_price = self.get_market_price(symbol)
 
         if order_type == "market":
-            filled_qty = quantity if self.fill_rate >= 1.0 else int(quantity * self.fill_rate)
+            filled_qty = (
+                quantity if self.fill_rate >= 1.0 else int(quantity * self.fill_rate)
+            )
             return ExecutionReport(
                 order_id=order_id,
                 broker_order_id=f"MOCK-{order_id}",
-                status=OrderStatus.FILLED if filled_qty == quantity else OrderStatus.PARTIAL_FILLED,
+                status=(
+                    OrderStatus.FILLED
+                    if filled_qty == quantity
+                    else OrderStatus.PARTIAL_FILLED
+                ),
                 filled_quantity=filled_qty,
                 avg_fill_price=market_price,
                 timestamp=datetime.now().isoformat(),
@@ -166,15 +173,24 @@ class MockBrokerAdapter:
                     timestamp=datetime.now().isoformat(),
                 )
 
-            fill_condition = (side == "buy" and price >= market_price) or \
-                            (side == "sell" and price <= market_price)
+            fill_condition = (side == "buy" and price >= market_price) or (
+                side == "sell" and price <= market_price
+            )
 
             if fill_condition:
-                filled_qty = quantity if self.fill_rate >= 1.0 else int(quantity * self.fill_rate)
+                filled_qty = (
+                    quantity
+                    if self.fill_rate >= 1.0
+                    else int(quantity * self.fill_rate)
+                )
                 return ExecutionReport(
                     order_id=order_id,
                     broker_order_id=f"MOCK-{order_id}",
-                    status=OrderStatus.FILLED if filled_qty == quantity else OrderStatus.PARTIAL_FILLED,
+                    status=(
+                        OrderStatus.FILLED
+                        if filled_qty == quantity
+                        else OrderStatus.PARTIAL_FILLED
+                    ),
                     filled_quantity=filled_qty,
                     avg_fill_price=price,
                     timestamp=datetime.now().isoformat(),

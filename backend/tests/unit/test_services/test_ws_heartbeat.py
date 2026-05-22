@@ -7,6 +7,7 @@ WebSocket Heartbeat 测试套件
 3. 死连接自动清理
 4. 客户端重连机制
 """
+
 import asyncio
 import json
 import pytest
@@ -17,6 +18,7 @@ from app.services.ws_manager import ConnectionManager, WSConnection, ws_manager
 
 class MockWebSocket:
     """Mock WebSocket for testing"""
+
     def __init__(self):
         self.closed = False
         self.close_code = None
@@ -117,11 +119,9 @@ class TestConnectionManager:
         # Mock the send_text to avoid errors
         conn.ws.send_text = AsyncMock()
 
-        await manager.broadcast_tick("600519", {
-            "type": "tick",
-            "symbol": "600519",
-            "price": 1800.0
-        })
+        await manager.broadcast_tick(
+            "600519", {"type": "tick", "symbol": "600519", "price": 1800.0}
+        )
 
         # Manually trigger batch send (normally done by _batch_loop)
         async with manager._batch_lock:
@@ -161,11 +161,9 @@ class TestConnectionManager:
         ws1.send_text = AsyncMock()
         ws2.send_text = AsyncMock()
 
-        await manager.broadcast_tick("600519", {
-            "type": "tick",
-            "symbol": "600519",
-            "price": 1800.0
-        })
+        await manager.broadcast_tick(
+            "600519", {"type": "tick", "symbol": "600519", "price": 1800.0}
+        )
 
         # Manually trigger batch send (normally done by _batch_loop)
         async with manager._batch_lock:
@@ -192,13 +190,12 @@ class TestConnectionManager:
         # Make ws1.send_text raise an exception (simulating dead connection)
         async def raise_error(*args):
             raise Exception("Connection dead")
+
         ws1.send_text = raise_error
 
-        await manager.broadcast_tick("600519", {
-            "type": "tick",
-            "symbol": "600519",
-            "price": 1800.0
-        })
+        await manager.broadcast_tick(
+            "600519", {"type": "tick", "symbol": "600519", "price": 1800.0}
+        )
 
         # Manually trigger batch send (normally done by _batch_loop)
         async with manager._batch_lock:
@@ -354,11 +351,9 @@ class TestHeartbeatIntegration:
         mock_ws.send_text = tracking_send
 
         # Simulate broadcast
-        await manager.broadcast_tick("600519", {
-            "type": "tick",
-            "symbol": "600519",
-            "price": 1800.0
-        })
+        await manager.broadcast_tick(
+            "600519", {"type": "tick", "symbol": "600519", "price": 1800.0}
+        )
 
         # Manually trigger batch send (normally done by _batch_loop)
         async with manager._batch_lock:
@@ -384,10 +379,7 @@ class TestHeartbeatIntegration:
             conn = await manager.connect(ws)
             conns.append(conn)
 
-        tasks = [
-            manager.subscribe(conn, ["600519"])
-            for conn in conns
-        ]
+        tasks = [manager.subscribe(conn, ["600519"]) for conn in conns]
         await asyncio.gather(*tasks)
 
         symbols = await conns[0].get_symbols()
@@ -397,11 +389,9 @@ class TestHeartbeatIntegration:
         for ws in connections:
             ws.send_text = AsyncMock()
 
-        await manager.broadcast_tick("600519", {
-            "type": "tick",
-            "symbol": "600519",
-            "price": 1800.0
-        })
+        await manager.broadcast_tick(
+            "600519", {"type": "tick", "symbol": "600519", "price": 1800.0}
+        )
 
         # Manually trigger batch send (normally done by _batch_loop)
         async with manager._batch_lock:

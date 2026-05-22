@@ -4,6 +4,7 @@ Backtest Worker Registry - Track and monitor running backtest workers.
 This module provides a singleton registry to track all active backtest workers,
 collect real-time CPU/memory metrics, and allow killing runaway processes.
 """
+
 import asyncio
 import logging
 import time
@@ -18,15 +19,20 @@ logger = logging.getLogger(__name__)
 # Try to import psutil for CPU/memory monitoring
 try:
     import psutil
+
     HAS_PSUTIL = True
 except ImportError:
     HAS_PSUTIL = False
-    logger.warning("[BacktestWorkerRegistry] psutil not installed, CPU/memory metrics will be unavailable", exc_info=True)
+    logger.warning(
+        "[BacktestWorkerRegistry] psutil not installed, CPU/memory metrics will be unavailable",
+        exc_info=True,
+    )
 
 
 @dataclass
 class BacktestWorker:
     """Represents a running backtest worker."""
+
     id: str
     task: asyncio.Task
     symbol: str
@@ -60,7 +66,7 @@ class BacktestWorker:
 class BacktestWorkerRegistry:
     """
     Singleton registry to track running backtest workers.
-    
+
     Features:
     - Register/unregister workers
     - Get real-time CPU/memory metrics
@@ -94,17 +100,17 @@ class BacktestWorkerRegistry:
         task: asyncio.Task,
         symbol: str,
         strategy_type: str,
-        worker_id: Optional[str] = None
+        worker_id: Optional[str] = None,
     ) -> str:
         """
         Register a new backtest worker.
-        
+
         Args:
             task: The asyncio.Task running the backtest
             symbol: Stock symbol being backtested
             strategy_type: Strategy type (ma_crossover, rsi_oversold, etc.)
             worker_id: Optional custom ID (auto-generated if None)
-        
+
         Returns:
             The worker ID
         """
@@ -117,7 +123,7 @@ class BacktestWorkerRegistry:
             symbol=symbol,
             strategy_type=strategy_type,
             start_time=time.time(),
-            thread_id=threading.current_thread().ident
+            thread_id=threading.current_thread().ident,
         )
 
         with self._workers_lock:
@@ -126,7 +132,9 @@ class BacktestWorkerRegistry:
         # Add done callback to auto-unregister
         task.add_done_callback(lambda t: self._on_task_done(worker_id, t))
 
-        logger.info(f"[BacktestWorkerRegistry] Registered worker {worker_id} for {symbol} ({strategy_type})")
+        logger.info(
+            f"[BacktestWorkerRegistry] Registered worker {worker_id} for {symbol} ({strategy_type})"
+        )
         return worker_id
 
     def _on_task_done(self, worker_id: str, task: asyncio.Task):
@@ -147,7 +155,9 @@ class BacktestWorkerRegistry:
                 worker.status = "failed"
                 worker.error = str(e)
 
-            logger.info(f"[BacktestWorkerRegistry] Worker {worker_id} finished with status: {worker.status}")
+            logger.info(
+                f"[BacktestWorkerRegistry] Worker {worker_id} finished with status: {worker.status}"
+            )
 
     def unregister(self, worker_id: str):
         """Unregister a completed worker."""
@@ -176,7 +186,7 @@ class BacktestWorkerRegistry:
     def get_metrics(self) -> List[Dict[str, Any]]:
         """
         Get metrics for all workers.
-        
+
         Returns:
             List of worker metrics with CPU/memory usage
         """
@@ -206,22 +216,30 @@ class BacktestWorkerRegistry:
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
 
-                avg_cpu = sum(worker._cpu_samples) / len(worker._cpu_samples) if worker._cpu_samples else 0.0
+                avg_cpu = (
+                    sum(worker._cpu_samples) / len(worker._cpu_samples)
+                    if worker._cpu_samples
+                    else 0.0
+                )
 
-                metrics.append({
-                    "id": worker.id,
-                    "symbol": worker.symbol,
-                    "strategy_type": worker.strategy_type,
-                    "status": worker.status,
-                    "progress": round(worker.progress * 100, 1),
-                    "duration_seconds": round(worker.duration_seconds, 1),
-                    "duration_str": worker.duration_str,
-                    "cpu_percent": round(cpu_percent, 1),
-                    "avg_cpu_percent": round(avg_cpu, 1),
-                    "memory_mb": round(memory_mb, 1),
-                    "start_time": datetime.fromtimestamp(worker.start_time).isoformat(),
-                    "error": worker.error
-                })
+                metrics.append(
+                    {
+                        "id": worker.id,
+                        "symbol": worker.symbol,
+                        "strategy_type": worker.strategy_type,
+                        "status": worker.status,
+                        "progress": round(worker.progress * 100, 1),
+                        "duration_seconds": round(worker.duration_seconds, 1),
+                        "duration_str": worker.duration_str,
+                        "cpu_percent": round(cpu_percent, 1),
+                        "avg_cpu_percent": round(avg_cpu, 1),
+                        "memory_mb": round(memory_mb, 1),
+                        "start_time": datetime.fromtimestamp(
+                            worker.start_time
+                        ).isoformat(),
+                        "error": worker.error,
+                    }
+                )
 
         return metrics
 
@@ -237,7 +255,7 @@ class BacktestWorkerRegistry:
                 "failed": 0,
                 "cancelled": 0,
                 "total_cpu_percent": 0.0,
-                "total_memory_mb": 0.0
+                "total_memory_mb": 0.0,
             }
 
         running = sum(1 for m in metrics if m["status"] == "running")
@@ -252,16 +270,16 @@ class BacktestWorkerRegistry:
             "failed": failed,
             "cancelled": cancelled,
             "total_cpu_percent": round(sum(m["cpu_percent"] for m in metrics), 1),
-            "total_memory_mb": round(sum(m["memory_mb"] for m in metrics), 1)
+            "total_memory_mb": round(sum(m["memory_mb"] for m in metrics), 1),
         }
 
     async def kill(self, worker_id: str) -> bool:
         """
         Kill a specific worker.
-        
+
         Args:
             worker_id: The worker ID to kill
-        
+
         Returns:
             True if killed successfully, False otherwise
         """
@@ -272,7 +290,9 @@ class BacktestWorkerRegistry:
                 return False
 
             if worker.status != "running":
-                logger.warning(f"[BacktestWorkerRegistry] Worker {worker_id} is not running (status: {worker.status})")
+                logger.warning(
+                    f"[BacktestWorkerRegistry] Worker {worker_id} is not running (status: {worker.status})"
+                )
                 return False
 
             try:
@@ -282,13 +302,16 @@ class BacktestWorkerRegistry:
                 logger.info(f"[BacktestWorkerRegistry] Killed worker {worker_id}")
                 return True
             except Exception as e:
-                logger.error(f"[BacktestWorkerRegistry] Failed to kill worker {worker_id}: {e}", exc_info=True)
+                logger.error(
+                    f"[BacktestWorkerRegistry] Failed to kill worker {worker_id}: {e}",
+                    exc_info=True,
+                )
                 return False
 
     def cleanup_completed(self, max_age_seconds: int = 300):
         """
         Remove completed/failed workers older than max_age_seconds.
-        
+
         Args:
             max_age_seconds: Maximum age in seconds (default 5 minutes)
         """
@@ -305,7 +328,9 @@ class BacktestWorkerRegistry:
                 del self._workers[worker_id]
 
         if to_remove:
-            logger.info(f"[BacktestWorkerRegistry] Cleaned up {len(to_remove)} old workers")
+            logger.info(
+                f"[BacktestWorkerRegistry] Cleaned up {len(to_remove)} old workers"
+            )
 
     def add_ws_client(self, client):
         """Add a WebSocket client for broadcasting."""
@@ -328,14 +353,19 @@ class BacktestWorkerRegistry:
             "type": "backtest_metrics",
             "timestamp": datetime.now().isoformat(),
             "workers": metrics,
-            "summary": summary
+            "summary": summary,
         }
 
-        for client in self._ws_clients[:]:  # Copy to avoid modification during iteration
+        for client in self._ws_clients[
+            :
+        ]:  # Copy to avoid modification during iteration
             try:
                 await client.send_json(message)
             except Exception as e:
-                logger.warning(f"[BacktestWorkerRegistry] Failed to send to WS client: {e}", exc_info=True)
+                logger.warning(
+                    f"[BacktestWorkerRegistry] Failed to send to WS client: {e}",
+                    exc_info=True,
+                )
                 self.remove_ws_client(client)
 
 

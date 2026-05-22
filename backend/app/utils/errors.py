@@ -3,18 +3,19 @@
 
 使用方式:
     from app.utils.errors import ErrorCode, error_response, success_response, APIException
-    
+
     # 成功响应
     return success_response(data={"key": "value"})
-    
+
     # 错误响应
     return error_response(ErrorCode.BAD_REQUEST, "参数错误")
-    
+
     # 抛出异常
     raise APIException(ErrorCode.NOT_FOUND, "资源不存在")
 
 v0.6.68: 审计报告任务 4 - error_response 自动调用 error_history_db.py 入库
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -26,7 +27,7 @@ from app.db.error_history_db import log_error_to_db
 
 class ErrorCode:
     """标准错误码枚举
-    
+
     错误码规则:
     - 0: 成功
     - 1xx: 客户端错误 (参数、认证等)
@@ -39,36 +40,37 @@ class ErrorCode:
     SUCCESS = 0
 
     # 客户端错误 (1xx)
-    BAD_REQUEST = 100           # 请求参数错误
-    UNAUTHORIZED = 101            # 未授权
-    FORBIDDEN = 102               # 禁止访问
-    NOT_FOUND = 104               # 资源不存在
-    METHOD_NOT_ALLOWED = 105      # 方法不允许
-    VALIDATION_ERROR = 110        # 数据验证错误
-    RATE_LIMITED = 120            # 请求频率限制
+    BAD_REQUEST = 100  # 请求参数错误
+    UNAUTHORIZED = 101  # 未授权
+    FORBIDDEN = 102  # 禁止访问
+    NOT_FOUND = 104  # 资源不存在
+    METHOD_NOT_ALLOWED = 105  # 方法不允许
+    VALIDATION_ERROR = 110  # 数据验证错误
+    RATE_LIMITED = 120  # 请求频率限制
 
     # 服务端错误 (2xx)
-    INTERNAL_ERROR = 200          # 内部服务器错误
-    DATABASE_ERROR = 210          # 数据库错误
-    CACHE_ERROR = 220             # 缓存错误
-    CONFIG_ERROR = 230            # 配置错误
+    INTERNAL_ERROR = 200  # 内部服务器错误
+    DATABASE_ERROR = 210  # 数据库错误
+    CACHE_ERROR = 220  # 缓存错误
+    CONFIG_ERROR = 230  # 配置错误
 
     # 第三方服务错误 (3xx)
-    THIRD_PARTY_ERROR = 302       # 第三方服务通用错误
-    TIMEOUT_ERROR = 310           # 请求超时
-    API_ERROR = 320               # API调用错误
-    DATA_SOURCE_ERROR = 330       # 数据源错误
-    SERVICE_UNAVAILABLE = 340     # 服务暂不可用
+    THIRD_PARTY_ERROR = 302  # 第三方服务通用错误
+    TIMEOUT_ERROR = 310  # 请求超时
+    API_ERROR = 320  # API调用错误
+    DATA_SOURCE_ERROR = 330  # 数据源错误
+    SERVICE_UNAVAILABLE = 340  # 服务暂不可用
 
     # 业务逻辑错误 (4xx)
-    BUSINESS_ERROR = 400          # 业务通用错误
-    INSUFFICIENT_DATA = 410       # 数据不足
-    CALCULATION_ERROR = 420       # 计算错误
-    STRATEGY_ERROR = 430          # 策略错误
+    BUSINESS_ERROR = 400  # 业务通用错误
+    INSUFFICIENT_DATA = 410  # 数据不足
+    CALCULATION_ERROR = 420  # 计算错误
+    STRATEGY_ERROR = 430  # 策略错误
 
 
 class ErrorCodeMessage:
     """错误码对应的消息模板"""
+
     MESSAGES = {
         ErrorCode.SUCCESS: "success",
         ErrorCode.BAD_REQUEST: "请求参数错误",
@@ -101,9 +103,9 @@ class ErrorCodeMessage:
 
 class APIException(Exception):
     """API异常类
-    
+
     用于在业务逻辑中抛出异常，由全局异常处理器捕获并转换为标准响应
-    
+
     Attributes:
         code: 错误码
         message: 错误消息
@@ -116,7 +118,7 @@ class APIException(Exception):
         code: int = ErrorCode.INTERNAL_ERROR,
         message: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None
+        trace_id: Optional[str] = None,
     ):
         self.code = code
         self.message = message or ErrorCodeMessage.get_message(code)
@@ -134,20 +136,19 @@ class APIException(Exception):
                 "details": self.details,
                 "trace_id": self.trace_id,
                 "timestamp": datetime.now().isoformat(),
-            }
+            },
         }
 
 
 def success_response(
-    data: Optional[Dict[str, Any]] = None,
-    message: str = "success"
+    data: Optional[Dict[str, Any]] = None, message: str = "success"
 ) -> Dict[str, Any]:
     """创建标准成功响应
-    
+
     Args:
         data: 响应数据
         message: 成功消息
-        
+
     Returns:
         标准响应格式字典
     """
@@ -204,16 +205,16 @@ def error_response(
             "details": details or {},
             "trace_id": trace_id,
             "timestamp": datetime.now().isoformat(),
-        }
+        },
     }
 
 
 def http_exception_handler(exc: HTTPException) -> Dict[str, Any]:
     """转换FastAPI HTTPException为标准响应
-    
+
     Args:
         exc: FastAPI HTTPException
-        
+
     Returns:
         标准错误响应
     """
@@ -234,29 +235,45 @@ def http_exception_handler(exc: HTTPException) -> Dict[str, Any]:
 
 class ValidationError(APIException):
     """数据验证错误"""
-    def __init__(self, message: str = "数据验证失败", details: Optional[Dict[str, Any]] = None):
+
+    def __init__(
+        self, message: str = "数据验证失败", details: Optional[Dict[str, Any]] = None
+    ):
         super().__init__(ErrorCode.VALIDATION_ERROR, message, details)
 
 
 class NotFoundError(APIException):
     """资源不存在错误"""
-    def __init__(self, resource: str = "资源", details: Optional[Dict[str, Any]] = None):
+
+    def __init__(
+        self, resource: str = "资源", details: Optional[Dict[str, Any]] = None
+    ):
         super().__init__(ErrorCode.NOT_FOUND, f"{resource}不存在", details)
 
 
 class DatabaseError(APIException):
     """数据库错误"""
-    def __init__(self, message: str = "数据库操作失败", details: Optional[Dict[str, Any]] = None):
+
+    def __init__(
+        self, message: str = "数据库操作失败", details: Optional[Dict[str, Any]] = None
+    ):
         super().__init__(ErrorCode.DATABASE_ERROR, message, details)
 
 
 class ThirdPartyError(APIException):
     """第三方服务错误"""
-    def __init__(self, service: str = "第三方服务", message: str = "服务调用失败", details: Optional[Dict[str, Any]] = None):
+
+    def __init__(
+        self,
+        service: str = "第三方服务",
+        message: str = "服务调用失败",
+        details: Optional[Dict[str, Any]] = None,
+    ):
         super().__init__(ErrorCode.THIRD_PARTY_ERROR, f"{service}: {message}", details)
 
 
 class TimeoutError(APIException):
     """超时错误"""
+
     def __init__(self, service: str = "服务", details: Optional[Dict[str, Any]] = None):
         super().__init__(ErrorCode.TIMEOUT_ERROR, f"{service}请求超时", details)

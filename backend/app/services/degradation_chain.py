@@ -4,6 +4,7 @@
 定义每种数据类型的完整降级链:
 - 主数据源 → 备用数据源 → 本地缓存 → 静态fallback
 """
+
 from typing import List, Dict, Optional, Callable, Any
 from dataclasses import dataclass
 from enum import Enum
@@ -14,20 +15,22 @@ logger = logging.getLogger(__name__)
 
 class DataType(Enum):
     """数据类型枚举"""
-    KLINE = "kline"           # K线数据
-    QUOTE = "quote"           # 实时行情
-    FOREX = "forex"           # 外汇数据
-    NEWS = "news"             # 新闻数据
-    MACRO = "macro"           # 宏观数据
-    SECTOR = "sector"         # 板块数据
+
+    KLINE = "kline"  # K线数据
+    QUOTE = "quote"  # 实时行情
+    FOREX = "forex"  # 外汇数据
+    NEWS = "news"  # 新闻数据
+    MACRO = "macro"  # 宏观数据
+    SECTOR = "sector"  # 板块数据
 
 
 @dataclass
 class DegradationLevel:
     """降级级别"""
-    source: str               # 数据源名称
+
+    source: str  # 数据源名称
     fetch_fn: Optional[Callable] = None  # 获取函数
-    is_fallback: bool = False # 是否为fallback数据
+    is_fallback: bool = False  # 是否为fallback数据
 
 
 class DegradationChain:
@@ -67,7 +70,9 @@ class DegradationChain:
         if current < len(sources) - 1:
             self._current_level[data_type] = current + 1
             new_source = sources[current + 1]
-            logger.warning(f"[DegradationChain] {data_type.value} 降级: {sources[current]} → {new_source}")
+            logger.warning(
+                f"[DegradationChain] {data_type.value} 降级: {sources[current]} → {new_source}"
+            )
             return new_source
         return None
 
@@ -86,7 +91,7 @@ class DegradationChain:
             data_type.value: {
                 "current_source": self.get_current_source(data_type),
                 "level": self._current_level.get(data_type, 0),
-                "chain": self.get_sources(data_type)
+                "chain": self.get_sources(data_type),
             }
             for data_type in DataType
         }

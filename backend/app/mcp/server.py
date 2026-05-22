@@ -283,9 +283,7 @@ class MCPServer:
             logger.warning(f"[MCP] get_klines failed: {e}", exc_info=True)
             return {"success": False, "error": str(e), "data": []}
 
-    def _get_realtime_quote(
-        self, arguments: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _get_realtime_quote(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """获取实时行情"""
         import asyncio
 
@@ -399,9 +397,7 @@ class MCPServer:
             asyncio.set_event_loop(loop)
             try:
                 if portfolio_id:
-                    result = loop.run_until_complete(
-                        portfolio_detail(portfolio_id)
-                    )
+                    result = loop.run_until_complete(portfolio_detail(portfolio_id))
                 else:
                     result = loop.run_until_complete(portfolio_detail(None))
             finally:
@@ -483,9 +479,7 @@ class MCPServer:
                         "price": o.price,
                         "status": o.status.value,
                         "created_at": o.created_at.isoformat(),
-                        "filled_at": o.filled_at.isoformat()
-                        if o.filled_at
-                        else None,
+                        "filled_at": o.filled_at.isoformat() if o.filled_at else None,
                     }
                     for o in orders
                 ],
@@ -506,7 +500,10 @@ class MCPServer:
             if success:
                 return {"success": True, "message": "Order cancelled"}
             else:
-                return {"success": False, "error": "Order not found or cannot be cancelled"}
+                return {
+                    "success": False,
+                    "error": "Order not found or cannot be cancelled",
+                }
         except Exception as e:
             logger.warning(f"[MCP] cancel_order failed: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
@@ -517,9 +514,7 @@ class MCPServer:
         """返回所有工具的元信息"""
         return [tool.to_dict() for tool in self._tools.values()]
 
-    def call_tool(
-        self, name: str, arguments: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """调用指定工具"""
         if name not in self._tools:
             return {"success": False, "error": f"Unknown tool: {name}"}

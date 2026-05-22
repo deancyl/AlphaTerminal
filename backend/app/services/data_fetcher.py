@@ -4,6 +4,7 @@
 - 利率：akshare.macro_china_shibor_all（可用）
 关键：国内域名不走代理（NO_PROXY）
 """
+
 import os
 import re
 import time
@@ -12,25 +13,34 @@ import traceback
 import httpx
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen
+from app.services.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerOpen,
+)
 
 logger = logging.getLogger(__name__)
 
 # ── ThreadPoolExecutor for async I/O ───────────────────────────────────────
-_fetcher_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="data_fetcher_")
+_fetcher_executor = ThreadPoolExecutor(
+    max_workers=10, thread_name_prefix="data_fetcher_"
+)
+
 
 def _sync_fetch(url, params=None, headers=None, timeout=10):
     """同步 HTTP 请求（在 executor 中运行）"""
     import requests
+
     return requests.get(url, params=params, headers=headers, timeout=timeout)
+
 
 async def async_fetch(url, params=None, headers=None, timeout=10):
     """异步 HTTP 请求包装"""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
-        _fetcher_executor,
-        lambda: _sync_fetch(url, params, headers, timeout)
+        _fetcher_executor, lambda: _sync_fetch(url, params, headers, timeout)
     )
+
 
 def _run_async_or_sync(coro):
     """
@@ -42,6 +52,7 @@ def _run_async_or_sync(coro):
         loop = asyncio.get_running_loop()
         # 已有事件循环运行，在新线程中运行
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(asyncio.run, coro)
             return future.result()
@@ -49,13 +60,11 @@ def _run_async_or_sync(coro):
         # 没有事件循环运行，直接运行
         return asyncio.run(coro)
 
+
 # ── AkShare 熔断器（全局单例）─────────────────────────────────────────────
 # 配置：3次连续失败触发熔断，60秒恢复超时
 _akshare_breaker_config = CircuitBreakerConfig(
-    failure_threshold=3,
-    success_threshold=2,
-    timeout=60.0,
-    half_open_max_calls=3
+    failure_threshold=3, success_threshold=2, timeout=60.0, half_open_max_calls=3
 )
 akshare_breaker = CircuitBreaker("akshare", config=_akshare_breaker_config)
 
@@ -78,20 +87,32 @@ SINA_HEADERS = {
 }
 
 
-def _row(symbol: str, name: str, market: str,
-         price, change_pct, volume, data_type: str = "index",
-         amount=None, turnover=None) -> dict:
+def _row(
+    symbol: str,
+    name: str,
+    market: str,
+    price,
+    change_pct,
+    volume,
+    data_type: str = "index",
+    amount=None,
+    turnover=None,
+) -> dict:
     return {
-        "symbol":     symbol,
-        "name":       name,
-        "market":     market,
-        "price":      float(price) if price not in (None, "", "NA", "NaN") else None,
-        "change_pct": float(change_pct) if change_pct not in (None, "", "NA", "NaN") else None,
-        "volume":     float(volume) if volume not in (None, "", "NA", "NaN") else None,
-        "amount":     float(amount) if amount not in (None, "", "NA", "NaN") else None,
-        "turnover":   float(turnover) if turnover not in (None, "", "NA", "NaN") else None,
-        "timestamp":  int(time.time()),
-        "data_type":  data_type,
+        "symbol": symbol,
+        "name": name,
+        "market": market,
+        "price": float(price) if price not in (None, "", "NA", "NaN") else None,
+        "change_pct": (
+            float(change_pct) if change_pct not in (None, "", "NA", "NaN") else None
+        ),
+        "volume": float(volume) if volume not in (None, "", "NA", "NaN") else None,
+        "amount": float(amount) if amount not in (None, "", "NA", "NaN") else None,
+        "turnover": (
+            float(turnover) if turnover not in (None, "", "NA", "NaN") else None
+        ),
+        "timestamp": int(time.time()),
+        "data_type": data_type,
     }
 
 
@@ -112,13 +133,13 @@ def _parse_sina_hq(raw: str) -> dict | None:
         return None
     try:
         return {
-            "name":       parts[0],
-            "price":      float(parts[1]),
-            "change":     float(parts[2]),
+            "name": parts[0],
+            "price": float(parts[1]),
+            "change": float(parts[2]),
             "change_pct": float(parts[3]),
-            "volume":     float(parts[8]) if len(parts) > 8 else 0,   # 成交量(股)
-            "amount":     float(parts[9]) if len(parts) > 9 else 0,   # 成交额(元)
-            "turnover":   float(parts[10]) if len(parts) > 10 else 0, # 换手率(%)
+            "volume": float(parts[8]) if len(parts) > 8 else 0,  # 成交量(股)
+            "amount": float(parts[9]) if len(parts) > 9 else 0,  # 成交额(元)
+            "turnover": float(parts[10]) if len(parts) > 10 else 0,  # 换手率(%)
         }
     except (ValueError, IndexError):
         return None
@@ -134,19 +155,19 @@ def _parse_sina_index(raw: str) -> dict | None:
     if not m:
         return None
     parts = m.group(1).split(",")
-    if len(parts) < 6:   # Sina指数简版=6字段
+    if len(parts) < 6:  # Sina指数简版=6字段
         return None
     try:
-        current       = float(parts[1])    # 当前价
-        change_amount = float(parts[2])    # 涨跌额（不是昨收！）
-        chg_pct       = float(parts[3]) if parts[3] else 0.0   # 涨跌幅%
-        volume        = float(parts[4]) if len(parts) > 4 else 0  # 成交量
+        current = float(parts[1])  # 当前价
+        change_amount = float(parts[2])  # 涨跌额（不是昨收！）
+        chg_pct = float(parts[3]) if parts[3] else 0.0  # 涨跌幅%
+        volume = float(parts[4]) if len(parts) > 4 else 0  # 成交量
         return {
-            "name":       parts[0],
-            "price":      current,
-            "change":     round(change_amount, 3),  # 涨跌额
+            "name": parts[0],
+            "price": current,
+            "change": round(change_amount, 3),  # 涨跌额
             "change_pct": round(chg_pct, 2),
-            "volume":     volume,
+            "volume": volume,
         }
     except (ValueError, IndexError):
         return None
@@ -161,10 +182,10 @@ def fetch_china_indices() -> list[dict]:
     rows = []
     codes = "s_sh000001,s_sh000300,s_sz399001,s_sz399006"
     sym_map = {
-        "s_sh000001": ("000001", "上证指数",  "AShare"),
-        "s_sh000300": ("000300", "沪深300",  "AShare"),
-        "s_sz399001": ("399001", "深证成指",  "AShare"),
-        "s_sz399006": ("399006", "创业板指",  "AShare"),
+        "s_sh000001": ("000001", "上证指数", "AShare"),
+        "s_sh000300": ("000300", "沪深300", "AShare"),
+        "s_sz399001": ("399001", "深证成指", "AShare"),
+        "s_sz399006": ("399006", "创业板指", "AShare"),
     }
 
     try:
@@ -187,18 +208,26 @@ def fetch_china_indices() -> list[dict]:
             sym, display_name, market = sym_map[code_key]
             parsed = _parse_sina_index(line)  # 用指数专用解析器（字段顺序不同）
             if parsed:
-                rows.append(_row(
-                    symbol=sym, name=display_name, market=market,
-                    price=parsed["price"],
-                    change_pct=parsed["change_pct"],
-                    volume=parsed["volume"],
-                ))
-                logger.info(f"[Sina] {display_name}: {parsed['price']} "
-                            f"({parsed['change_pct']:+.2f}%)")
+                rows.append(
+                    _row(
+                        symbol=sym,
+                        name=display_name,
+                        market=market,
+                        price=parsed["price"],
+                        change_pct=parsed["change_pct"],
+                        volume=parsed["volume"],
+                    )
+                )
+                logger.info(
+                    f"[Sina] {display_name}: {parsed['price']} "
+                    f"({parsed['change_pct']:+.2f}%)"
+                )
             else:
                 logger.warning(f"[Sina] 解析失败: {line[:80]}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP]_china_indices 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(
+            f"[HTTP]_china_indices 失败: {type(e).__name__}: {e}", exc_info=True
+        )
         traceback.print_exc()
 
     return rows
@@ -218,6 +247,7 @@ def fetch_shibor() -> list[dict]:
 
     try:
         import akshare as ak
+
         with akshare_breaker:
             df = ak.macro_china_shibor_all()
         df.columns = [c.strip() for c in df.columns]
@@ -226,24 +256,26 @@ def fetch_shibor() -> list[dict]:
         latest = df.iloc[-1]
         fields = [
             ("O/N-定价", "shibor_1d", "SHIBOR 隔夜"),
-            ("1W-定价",  "shibor_1w", "SHIBOR 1周"),
-            ("1M-定价",  "shibor_1m", "SHIBOR 1月"),
-            ("3M-定价",  "shibor_3m", "SHIBOR 3月"),
-            ("1Y-定价",  "shibor_1y", "SHIBOR 1年"),
+            ("1W-定价", "shibor_1w", "SHIBOR 1周"),
+            ("1M-定价", "shibor_1m", "SHIBOR 1月"),
+            ("3M-定价", "shibor_3m", "SHIBOR 3月"),
+            ("1Y-定价", "shibor_1y", "SHIBOR 1年"),
         ]
         for col_key, sym_key, name in fields:
             val = latest.get(col_key)
             if val is not None and str(val).replace(".", "").replace("-", "").isdigit():
-                rows.append({
-                    "symbol":    sym_key,
-                    "name":      name,
-                    "market":    "FUND",
-                    "price":     float(val),
-                    "change_pct": None,
-                    "volume":    None,
-                    "timestamp": int(time.time()),
-                    "data_type": "rate",
-                })
+                rows.append(
+                    {
+                        "symbol": sym_key,
+                        "name": name,
+                        "market": "FUND",
+                        "price": float(val),
+                        "change_pct": None,
+                        "volume": None,
+                        "timestamp": int(time.time()),
+                        "data_type": "rate",
+                    }
+                )
                 logger.info(f"[AkShare] {name}: {val}%")
         # LPR
         try:
@@ -257,19 +289,23 @@ def fetch_shibor() -> list[dict]:
                     lpr1y = lpr_latest[col]
                     break
             if lpr1y:
-                rows.append({
-                    "symbol":    "lpr_1y",
-                    "name":      "LPR 1年",
-                    "market":    "FUND",
-                    "price":     float(lpr1y),
-                    "change_pct": None,
-                    "volume":    None,
-                    "timestamp": int(time.time()),
-                    "data_type": "rate",
-                })
+                rows.append(
+                    {
+                        "symbol": "lpr_1y",
+                        "name": "LPR 1年",
+                        "market": "FUND",
+                        "price": float(lpr1y),
+                        "change_pct": None,
+                        "volume": None,
+                        "timestamp": int(time.time()),
+                        "data_type": "rate",
+                    }
+                )
                 logger.info(f"[AkShare] LPR 1年: {lpr1y}%")
         except Exception as e:
-            logger.error(f"[AkShare] LPR 获取失败: {type(e).__name__}: {e}", exc_info=True)
+            logger.error(
+                f"[AkShare] LPR 获取失败: {type(e).__name__}: {e}", exc_info=True
+            )
             traceback.print_exc()
 
     except CircuitBreakerOpen as e:
@@ -305,10 +341,10 @@ def fetch_global_indices() -> list[dict]:
         logger.info(f"[Tencent] 全球指数响应: {text[:150]}")
 
         sym_map = {
-            "hkHSI":  ("HSI",  "恒生指数",   "HK"),
-            "usIXIC": ("IXIC", "纳斯达克",   "US"),
-            "usDJI":  ("DJI",  "道琼斯",     "US"),
-            "usSPX":  ("SPX",  "标普500",    "US"),
+            "hkHSI": ("HSI", "恒生指数", "HK"),
+            "usIXIC": ("IXIC", "纳斯达克", "US"),
+            "usDJI": ("DJI", "道琼斯", "US"),
+            "usSPX": ("SPX", "标普500", "US"),
         }
         for line in text.strip().split("\n"):
             m = re.search(r'v_(\w+)="([^"]+)"', line)
@@ -325,33 +361,41 @@ def fetch_global_indices() -> list[dict]:
                 # 腾讯指数格式：f[3]=当前价, f[32]=涨跌幅%, f[6]=成交量
                 # HSI: f[6]是成交量（万股），需要*100转成股
                 # US indices: f[6]是成交量（股），直接使用
-                price   = float(parts[3]) if parts[3] else None
+                price = float(parts[3]) if parts[3] else None
                 chg_pct = float(parts[32]) if len(parts) > 32 and parts[32] else 0.0
                 raw_vol = float(parts[6]) if parts[6] else 0.0
-                volume  = int(raw_vol * 100) if "HSI" in code_key.upper() else int(raw_vol)
+                volume = (
+                    int(raw_vol * 100) if "HSI" in code_key.upper() else int(raw_vol)
+                )
                 if price:
                     rows.append(_row(sym, disp, mkt, price, chg_pct, volume, "global"))
-                    logger.info(f"[Tencent] {disp}: {price} ({chg_pct:+.2f}%) vol={volume}")
+                    logger.info(
+                        f"[Tencent] {disp}: {price} ({chg_pct:+.2f}%) vol={volume}"
+                    )
             except (ValueError, IndexError) as e:
                 logger.warning(f"[Tencent] 解析 {disp} 失败: {e}", exc_info=True)
         if rows:
             logger.info(f"[Tencent] 全球指数拉取成功 {len(rows)} 只")
             return rows
     except Exception as e:
-        logger.warning(f"[Tencent] 全球指数失败，退补Sina: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[Tencent] 全球指数失败，退补Sina: {type(e).__name__}: {e}", exc_info=True
+        )
         traceback.print_exc()
 
     # 策略B（退补）：Sina 国际行情
     try:
         codes_map = {
-            "int_hf_HSI":  ("HSI",  "恒生指数",  "HK"),
-            "int_hf_DJI":  ("DJI",  "道琼斯",    "US"),
-            "int_hf_IXIC": ("IXIC", "纳斯达克",   "US"),
-            "int_hf_SPX":  ("SPX",  "标普500",   "US"),
-            "int_hf_N225": ("N225", "日经225",   "JP"),
+            "int_hf_HSI": ("HSI", "恒生指数", "HK"),
+            "int_hf_DJI": ("DJI", "道琼斯", "US"),
+            "int_hf_IXIC": ("IXIC", "纳斯达克", "US"),
+            "int_hf_SPX": ("SPX", "标普500", "US"),
+            "int_hf_N225": ("N225", "日经225", "JP"),
         }
         codes = ",".join(codes_map.keys())
-        r = httpx.get(f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=8)
+        r = httpx.get(
+            f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=8
+        )
         if r.status_code == 200:
             for line in r.text.strip().split("\n"):
                 m = re.search(r'hq_str_int_hf_(\w+)="([^"]+)"', line)
@@ -365,14 +409,16 @@ def fetch_global_indices() -> list[dict]:
                 if len(parts) >= 4 and parts[3]:
                     try:
                         price = float(parts[3])
-                        prev  = float(parts[2]) if parts[2] else price
-                        chg   = (price - prev) / prev * 100 if prev else 0
+                        prev = float(parts[2]) if parts[2] else price
+                        chg = (price - prev) / prev * 100 if prev else 0
                         rows.append(_row(sym, disp, mkt, price, chg, None, "global"))
                         logger.info(f"[Sina] {disp}: {price} ({chg:+.2f}%)")
                     except (ValueError, IndexError):
                         pass
     except Exception as e:
-        logger.warning(f"[Sina] 全局指数退补失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[Sina] 全局指数退补失败: {type(e).__name__}: {e}", exc_info=True
+        )
 
     return rows
 
@@ -387,16 +433,19 @@ def fetch_industry_sectors() -> list[dict]:
     try:
         import re
         import json
-        r = _run_async_or_sync(async_fetch(
-            "https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php",
-            params={"param": "class=hy", "type": "1"},
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                "Referer": "https://finance.sina.com.cn",
-                "Accept-Encoding": "gzip, deflate",
-            },
-            timeout=10,
-        ))
+
+        r = _run_async_or_sync(
+            async_fetch(
+                "https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php",
+                params={"param": "class=hy", "type": "1"},
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                    "Referer": "https://finance.sina.com.cn",
+                    "Accept-Encoding": "gzip, deflate",
+                },
+                timeout=10,
+            )
+        )
         r.encoding = "gbk"
         text = r.text
 
@@ -419,18 +468,22 @@ def fetch_industry_sectors() -> list[dict]:
         top5 = board_list[:5]
         board_json = json.dumps(top5, ensure_ascii=False)
         logger.info(f"[Sina] 行业板块Top5: {top5}")
-        return [{
-            "symbol":    "board_top5",
-            "name":      "行业板块Top5",
-            "market":    "BOARD",
-            "price":     board_json,
-            "change_pct": None,
-            "volume":    None,
-            "timestamp": int(time.time()),
-            "data_type": "board_top5",
-        }]
+        return [
+            {
+                "symbol": "board_top5",
+                "name": "行业板块Top5",
+                "market": "BOARD",
+                "price": board_json,
+                "change_pct": None,
+                "volume": None,
+                "timestamp": int(time.time()),
+                "data_type": "board_top5",
+            }
+        ]
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP]_industry_sectors 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(
+            f"[HTTP]_industry_sectors 失败: {type(e).__name__}: {e}", exc_info=True
+        )
         traceback.print_exc()
     return []
 
@@ -447,27 +500,38 @@ def fetch_derivatives() -> list[dict]:
     if akshare_breaker.is_available():
         try:
             import akshare as ak
+
             with akshare_breaker:
                 df_gold = ak.spot_golden_benchmark_sge()
             if not df_gold.empty:
                 latest = df_gold.iloc[-1]
-                price  = float(latest["晚盘价"]) if "晚盘价" in latest and latest["晚盘价"] else None
+                price = (
+                    float(latest["晚盘价"])
+                    if "晚盘价" in latest and latest["晚盘价"]
+                    else None
+                )
                 if price:
-                    rows.append({
-                        "symbol":    "GC",
-                        "name":     "SGE黄金",
-                        "market":   "COMEX",
-                        "price":    price,
-                        "change_pct": None,
-                        "volume":   None,
-                        "timestamp": int(time.time()),
-                        "data_type": "derivative",
-                    })
+                    rows.append(
+                        {
+                            "symbol": "GC",
+                            "name": "SGE黄金",
+                            "market": "COMEX",
+                            "price": price,
+                            "change_pct": None,
+                            "volume": None,
+                            "timestamp": int(time.time()),
+                            "data_type": "derivative",
+                        }
+                    )
                     logger.info(f"[SGE] 黄金基准价: {price}")
         except CircuitBreakerOpen as e:
-            logger.warning(f"[AkShare] Circuit breaker OPEN for gold: {e}", exc_info=True)
+            logger.warning(
+                f"[AkShare] Circuit breaker OPEN for gold: {e}", exc_info=True
+            )
         except Exception as e:
-            logger.warning(f"[SGE] 黄金拉取失败: {type(e).__name__}: {e}", exc_info=True)
+            logger.warning(
+                f"[SGE] 黄金拉取失败: {type(e).__name__}: {e}", exc_info=True
+            )
     else:
         logger.warning("[AkShare] Circuit breaker OPEN, skipping gold fetch")
 
@@ -475,6 +539,7 @@ def fetch_derivatives() -> list[dict]:
     if akshare_breaker.is_available():
         try:
             import akshare as ak
+
             with akshare_breaker:
                 df_energy = ak.macro_china_energy_index()
             if not df_energy.empty:
@@ -482,33 +547,41 @@ def fetch_derivatives() -> list[dict]:
                 val = latest.get("最新值")
                 chg = latest.get("涨跌幅", 0)
                 if val:
-                    rows.append({
-                        "symbol":    "EC",
-                        "name":     "能源指数",
-                        "market":   "CHINA",
-                        "price":    float(val),
-                        "change_pct": float(chg) if chg else None,
-                        "volume":   None,
-                        "timestamp": int(time.time()),
-                        "data_type": "derivative",
-                    })
+                    rows.append(
+                        {
+                            "symbol": "EC",
+                            "name": "能源指数",
+                            "market": "CHINA",
+                            "price": float(val),
+                            "change_pct": float(chg) if chg else None,
+                            "volume": None,
+                            "timestamp": int(time.time()),
+                            "data_type": "derivative",
+                        }
+                    )
                     logger.info(f"[能源指数] 最新值: {val} 涨跌幅: {chg}")
         except CircuitBreakerOpen as e:
-            logger.warning(f"[AkShare] Circuit breaker OPEN for energy: {e}", exc_info=True)
+            logger.warning(
+                f"[AkShare] Circuit breaker OPEN for energy: {e}", exc_info=True
+            )
         except Exception as e:
-            logger.warning(f"[能源指数] 拉取失败: {type(e).__name__}: {e}", exc_info=True)
+            logger.warning(
+                f"[能源指数] 拉取失败: {type(e).__name__}: {e}", exc_info=True
+            )
     else:
         logger.warning("[AkShare] Circuit breaker OPEN, skipping energy fetch")
 
     # ③ Sina 期货（IF期指 / 黄金 / 原油）退补
     try:
         codes_map = {
-            "nf_IFL":  ("IF",  "IF当月主力",  "FUTURE"),
-            "nf_GCFL": ("GC2", "Sina黄金",    "COMEX"),
-            "nf_CLFL": ("CL2", "Sina原油",    "NYMEX"),
+            "nf_IFL": ("IF", "IF当月主力", "FUTURE"),
+            "nf_GCFL": ("GC2", "Sina黄金", "COMEX"),
+            "nf_CLFL": ("CL2", "Sina原油", "NYMEX"),
         }
         codes = ",".join(codes_map.keys())
-        r = httpx.get(f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=8)
+        r = httpx.get(
+            f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=8
+        )
         if r.status_code == 200:
             for line in r.text.strip().split("\n"):
                 m_key = re.search(r'hq_str_nf_(\w+)="([^"]+)"', line)
@@ -522,18 +595,20 @@ def fetch_derivatives() -> list[dict]:
                 if len(fields) >= 11 and fields[3]:
                     try:
                         price = float(fields[3])
-                        chg   = float(fields[10]) if fields[10] else 0
-                        vol   = float(fields[9])  if fields[9]  else None
-                        rows.append({
-                            "symbol":    sym,
-                            "name":     disp,
-                            "market":   mkt,
-                            "price":    price,
-                            "change_pct": chg,
-                            "volume":   vol,
-                            "timestamp": int(time.time()),
-                            "data_type": "derivative",
-                        })
+                        chg = float(fields[10]) if fields[10] else 0
+                        vol = float(fields[9]) if fields[9] else None
+                        rows.append(
+                            {
+                                "symbol": sym,
+                                "name": disp,
+                                "market": mkt,
+                                "price": price,
+                                "change_pct": chg,
+                                "volume": vol,
+                                "timestamp": int(time.time()),
+                                "data_type": "derivative",
+                            }
+                        )
                         logger.info(f"[Sina期货] {disp}: {price} ({chg:+.2f}%)")
                     except (ValueError, IndexError):
                         pass
@@ -553,22 +628,24 @@ def fetch_china_all_indices() -> list[dict]:
     # Sina HQ 代码: s_sh=上证, s_sz=深证
     codes = (
         "s_sh000001,s_sh000300,s_sh000688,s_sh000905,s_sh000852,s_sh000016,"  # 上证系
-        "s_sz399001,s_sz399006,s_sz000510,s_sz399100"                          # 深证系
+        "s_sz399001,s_sz399006,s_sz000510,s_sz399100"  # 深证系
     )
     sym_map = {
-        "s_sh000001": ("000001", "上证指数",  "AShare"),
-        "s_sh000300": ("000300", "沪深300",  "AShare"),
-        "s_sh000688": ("000688", "科创50",   "AShare"),
-        "s_sh000905": ("000905", "中证500",  "AShare"),
+        "s_sh000001": ("000001", "上证指数", "AShare"),
+        "s_sh000300": ("000300", "沪深300", "AShare"),
+        "s_sh000688": ("000688", "科创50", "AShare"),
+        "s_sh000905": ("000905", "中证500", "AShare"),
         "s_sh000852": ("000852", "中证1000", "AShare"),
-        "s_sh000016": ("000016", "上证50",   "AShare"),
+        "s_sh000016": ("000016", "上证50", "AShare"),
         "s_sz399001": ("399001", "深证成指", "AShare"),
         "s_sz399006": ("399006", "创业板指", "AShare"),
-        "s_sz000510": ("000510", "上证380",  "AShare"),
-        "s_sz399100": ("399100", "深证A指",  "AShare"),
+        "s_sz000510": ("000510", "上证380", "AShare"),
+        "s_sz399100": ("399100", "深证A指", "AShare"),
     }
     try:
-        r = httpx.get(f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=10)
+        r = httpx.get(
+            f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=10
+        )
         if r.status_code != 200:
             raise RuntimeError(f"Sina 返回 {r.status_code}")
         for line in r.text.strip().split("\n"):
@@ -579,14 +656,29 @@ def fetch_china_all_indices() -> list[dict]:
             if code_key not in sym_map:
                 continue
             sym, disp, mkt = sym_map[code_key]
-            parsed = _parse_sina_index(line)   # ← 指数用指数专用解析器，不是 _parse_sina_hq（那是给个股用的）
+            parsed = _parse_sina_index(
+                line
+            )  # ← 指数用指数专用解析器，不是 _parse_sina_hq（那是给个股用的）
             if parsed:
-                rows.append(_row(sym, disp, mkt,
-                                  parsed["price"], parsed["change_pct"], parsed["volume"],
-                                  amount=parsed.get("amount"), turnover=parsed.get("turnover")))
-                logger.info(f"[Sina] {disp}: {parsed['price']} ({parsed['change_pct']:+.2f}%)")
+                rows.append(
+                    _row(
+                        sym,
+                        disp,
+                        mkt,
+                        parsed["price"],
+                        parsed["change_pct"],
+                        parsed["volume"],
+                        amount=parsed.get("amount"),
+                        turnover=parsed.get("turnover"),
+                    )
+                )
+                logger.info(
+                    f"[Sina] {disp}: {parsed['price']} ({parsed['change_pct']:+.2f}%)"
+                )
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP]_china_all_indices 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(
+            f"[HTTP]_china_all_indices 失败: {type(e).__name__}: {e}", exc_info=True
+        )
     return rows
 
 
@@ -598,7 +690,9 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
     注意: AkShare DataFrame 列名直接用英文字符串访问
     """
     if not akshare_breaker.is_available():
-        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_china_index_history for {symbol}")
+        logger.warning(
+            f"[AkShare] Circuit breaker OPEN, skipping fetch_china_index_history for {symbol}"
+        )
         return []
 
     try:
@@ -631,34 +725,36 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
         prev_close = None  # 前一行收盘价，用于计算 change_pct 和 amplitude
         for i in range(len(df)):
             try:
-                dt     = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
-                open_  = float(df.iloc[i]["open"])
-                high   = float(df.iloc[i]["high"])
-                low    = float(df.iloc[i]["low"])
-                close  = float(df.iloc[i]["close"])
+                dt = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
+                open_ = float(df.iloc[i]["open"])
+                high = float(df.iloc[i]["high"])
+                low = float(df.iloc[i]["low"])
+                close = float(df.iloc[i]["close"])
                 volume = int(df.iloc[i]["volume"]) if "volume" in df.columns else 0
                 # AkShare stock_zh_index_daily 不含涨跌幅列，自己用相邻 close 计算
                 if prev_close is not None and prev_close != 0:
-                    pct       = (close - prev_close) / prev_close * 100
+                    pct = (close - prev_close) / prev_close * 100
                     amplitude = round((high - low) / prev_close * 100, 4)
                 else:
-                    pct       = 0.0
+                    pct = 0.0
                     amplitude = 0.0
-                rows.append({
-                    "symbol":       symbol,
-                    "date":         str(df.iloc[i][date_col])[:10],
-                    "open":         open_,
-                    "high":         high,
-                    "low":          low,
-                    "close":        close,
-                    "volume":       volume,
-                    "amount":       0.0,          # 指数无成交额字段
-                    "turnover_rate": 0.0,         # 指数无换手率字段
-                    "amplitude":    amplitude,
-                    "change_pct":   pct,
-                    "timestamp":    dt,
-                    "data_type":    "daily",
-                })
+                rows.append(
+                    {
+                        "symbol": symbol,
+                        "date": str(df.iloc[i][date_col])[:10],
+                        "open": open_,
+                        "high": high,
+                        "low": low,
+                        "close": close,
+                        "volume": volume,
+                        "amount": 0.0,  # 指数无成交额字段
+                        "turnover_rate": 0.0,  # 指数无换手率字段
+                        "amplitude": amplitude,
+                        "change_pct": pct,
+                        "timestamp": dt,
+                        "data_type": "daily",
+                    }
+                )
                 prev_close = close
             except Exception as e:
                 logger.warning(f"[AkShare] 解析第{i}行失败: {e}", exc_info=True)
@@ -666,39 +762,55 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
 
         if rows:
             from app.db import buffer_insert_daily, buffer_insert_periodic
+
             buffer_insert_daily(rows)
             logger.info(f"[AkShare] {symbol} 历史K线写入 {len(rows)} 条")
 
             # ── 周线聚合（从日线计算，不依赖外部 API）────────────────
             if fill_periodic:
                 import pandas as pd
+
                 df_d = pd.DataFrame(rows)
                 df_d["date"] = pd.to_datetime(df_d["date"])
 
                 # Weekly
-                df_d["year_wk"] = df_d["date"].dt.isocalendar().year.astype(str) + "_" + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2)
+                df_d["year_wk"] = (
+                    df_d["date"].dt.isocalendar().year.astype(str)
+                    + "_"
+                    + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2)
+                )
                 periodic_rows = []
                 prev_period_close = None
                 for yw, grp in df_d.groupby("year_wk", sort=True):
                     grp_sorted = grp.sort_values("date")
-                    open_   = float(grp_sorted.iloc[0]["open"])
-                    close_  = float(grp_sorted.iloc[-1]["close"])
-                    high_   = float(grp["high"].max())
-                    low_    = float(grp["low"].min())
-                    pct     = (close_ - open_) / open_ * 100 if open_ else 0.0
-                    dt_str  = str(grp_sorted.iloc[0]["date"])[:10]
-                    amplitude = round((high_ - low_) / prev_period_close * 100, 4) if prev_period_close else 0.0
-                    periodic_rows.append({
-                        "symbol": symbol, "date": dt_str,
-                        "period": "weekly",
-                        "open": open_, "high": high_, "low": low_,
-                        "close": close_,
-                        "volume": float(grp["volume"].sum()),
-                        "amount": 0.0, "turnover_rate": 0.0,
-                        "amplitude": amplitude,
-                        "change_pct": round(pct, 4),
-                        "timestamp": int(pd.Timestamp(dt_str).timestamp()),
-                    })
+                    open_ = float(grp_sorted.iloc[0]["open"])
+                    close_ = float(grp_sorted.iloc[-1]["close"])
+                    high_ = float(grp["high"].max())
+                    low_ = float(grp["low"].min())
+                    pct = (close_ - open_) / open_ * 100 if open_ else 0.0
+                    dt_str = str(grp_sorted.iloc[0]["date"])[:10]
+                    amplitude = (
+                        round((high_ - low_) / prev_period_close * 100, 4)
+                        if prev_period_close
+                        else 0.0
+                    )
+                    periodic_rows.append(
+                        {
+                            "symbol": symbol,
+                            "date": dt_str,
+                            "period": "weekly",
+                            "open": open_,
+                            "high": high_,
+                            "low": low_,
+                            "close": close_,
+                            "volume": float(grp["volume"].sum()),
+                            "amount": 0.0,
+                            "turnover_rate": 0.0,
+                            "amplitude": amplitude,
+                            "change_pct": round(pct, 4),
+                            "timestamp": int(pd.Timestamp(dt_str).timestamp()),
+                        }
+                    )
                     prev_period_close = close_
 
                 # Monthly
@@ -706,36 +818,54 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
                 prev_period_close = None
                 for ym, grp in df_d.groupby("ym", sort=True):
                     grp_sorted = grp.sort_values("date")
-                    open_   = float(grp_sorted.iloc[0]["open"])
-                    close_  = float(grp_sorted.iloc[-1]["close"])
-                    high_   = float(grp["high"].max())
-                    low_    = float(grp["low"].min())
-                    pct     = (close_ - open_) / open_ * 100 if open_ else 0.0
-                    dt_str  = str(grp_sorted.iloc[0]["date"])[:10]
-                    amplitude = round((high_ - low_) / prev_period_close * 100, 4) if prev_period_close else 0.0
-                    periodic_rows.append({
-                        "symbol": symbol, "date": dt_str,
-                        "period": "monthly",
-                        "open": open_, "high": high_, "low": low_,
-                        "close": close_,
-                        "volume": float(grp["volume"].sum()),
-                        "amount": 0.0, "turnover_rate": 0.0,
-                        "amplitude": amplitude,
-                        "change_pct": round(pct, 4),
-                        "timestamp": int(pd.Timestamp(dt_str).timestamp()),
-                    })
+                    open_ = float(grp_sorted.iloc[0]["open"])
+                    close_ = float(grp_sorted.iloc[-1]["close"])
+                    high_ = float(grp["high"].max())
+                    low_ = float(grp["low"].min())
+                    pct = (close_ - open_) / open_ * 100 if open_ else 0.0
+                    dt_str = str(grp_sorted.iloc[0]["date"])[:10]
+                    amplitude = (
+                        round((high_ - low_) / prev_period_close * 100, 4)
+                        if prev_period_close
+                        else 0.0
+                    )
+                    periodic_rows.append(
+                        {
+                            "symbol": symbol,
+                            "date": dt_str,
+                            "period": "monthly",
+                            "open": open_,
+                            "high": high_,
+                            "low": low_,
+                            "close": close_,
+                            "volume": float(grp["volume"].sum()),
+                            "amount": 0.0,
+                            "turnover_rate": 0.0,
+                            "amplitude": amplitude,
+                            "change_pct": round(pct, 4),
+                            "timestamp": int(pd.Timestamp(dt_str).timestamp()),
+                        }
+                    )
                     prev_period_close = close_
 
                 if periodic_rows:
                     buffer_insert_periodic(periodic_rows)
-                    logger.info(f"[AkShare] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
+                    logger.info(
+                        f"[AkShare] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组"
+                    )
 
         return rows[-100:]
     except CircuitBreakerOpen as e:
-        logger.warning(f"[AkShare] Circuit breaker OPEN for index history {symbol}: {e}", exc_info=True)
+        logger.warning(
+            f"[AkShare] Circuit breaker OPEN for index history {symbol}: {e}",
+            exc_info=True,
+        )
         return []
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP]_china_index_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(
+            f"[HTTP]_china_index_history({symbol}) 失败: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         traceback.print_exc()
         return []
 
@@ -753,7 +883,7 @@ def fetch_index_minute_history(
     frequency: 1=1分钟, 5=5分钟(默认), 15=15分钟, 30=30分钟, 60=60分钟
     offset:    分页偏移量（每页 limit 根）
     trade_date: 指定交易日（YYYYMMDD），用于历史分时下钻
-    
+
     2026-04-13 更新: 从 Eastmoney 切换到 Sina API（Eastmoney 服务不稳定）
     Sina 支持 5/15/30/60 分钟，不支持 1 分钟
     """
@@ -767,22 +897,23 @@ def fetch_index_minute_history(
         return []
 
     # 将 symbol 转换为 Sina 格式（带 sh/sz 前缀）
-    symbol_clean = symbol.upper().replace('SH', '').replace('SZ', '')
+    symbol_clean = symbol.upper().replace("SH", "").replace("SZ", "")
 
     # 指数代码前缀映射
-    if symbol_clean in ('000001', '000300', '000688', '000016', '000905'):
+    if symbol_clean in ("000001", "000300", "000688", "000016", "000905"):
         sina_symbol = f"sh{symbol_clean}"
-    elif symbol_clean in ('399001', '399006', '399005'):
+    elif symbol_clean in ("399001", "399006", "399005"):
         sina_symbol = f"sz{symbol_clean}"
     else:
         # 默认根据首位判断
-        if symbol_clean.startswith('6') or symbol_clean.startswith('0'):
+        if symbol_clean.startswith("6") or symbol_clean.startswith("0"):
             sina_symbol = f"sh{symbol_clean}"
         else:
             sina_symbol = f"sz{symbol_clean}"
 
     try:
         import httpx
+
         # Sina API: scale=分钟数, datalen=数据条数
         url = (
             f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
@@ -794,6 +925,7 @@ def fetch_index_minute_history(
         )
 
         from app.services.proxy_config import get_proxies
+
         proxies = get_proxies()
 
         # 重试逻辑
@@ -809,17 +941,22 @@ def fetch_index_minute_history(
                         http1=True,
                         http2=False,
                     ) as client:
-                        resp = client.get(url, headers={
-                            "Referer": "https://finance.sina.com.cn/",
-                            "User-Agent": "Mozilla/5.0",
-                        })
+                        resp = client.get(
+                            url,
+                            headers={
+                                "Referer": "https://finance.sina.com.cn/",
+                                "User-Agent": "Mozilla/5.0",
+                            },
+                        )
                         # Sina 返回的是 JSON 数组字符串，需要解析
                         text = resp.text
-                        if text and text != 'null':
+                        if text and text != "null":
                             data = resp.json()
                         break
                 except Exception as e:
-                    logger.debug(f"[Sina] {symbol} {'代理' if use_proxy else '直连'}第{attempt+1}次重试: {type(e).__name__}")
+                    logger.debug(
+                        f"[Sina] {symbol} {'代理' if use_proxy else '直连'}第{attempt+1}次重试: {type(e).__name__}"
+                    )
                     time.sleep(0.5 * (attempt + 1))
             if data is not None:
                 break
@@ -832,20 +969,22 @@ def fetch_index_minute_history(
         rows = []
         for item in data:
             try:
-                rows.append({
-                    "time":     item.get("day", ""),
-                    "open":     float(item.get("open", 0)),
-                    "close":    float(item.get("close", 0)),
-                    "high":     float(item.get("high", 0)),
-                    "low":      float(item.get("low", 0)),
-                    "volume":   float(item.get("volume", 0)),
-                    "price":    float(item.get("close", 0)),
-                    "timestamp": int(
-                        time.mktime(
-                            time.strptime(item.get("day", ""), "%Y-%m-%d %H:%M:%S")
-                        )
-                    ),
-                })
+                rows.append(
+                    {
+                        "time": item.get("day", ""),
+                        "open": float(item.get("open", 0)),
+                        "close": float(item.get("close", 0)),
+                        "high": float(item.get("high", 0)),
+                        "low": float(item.get("low", 0)),
+                        "volume": float(item.get("volume", 0)),
+                        "price": float(item.get("close", 0)),
+                        "timestamp": int(
+                            time.mktime(
+                                time.strptime(item.get("day", ""), "%Y-%m-%d %H:%M:%S")
+                            )
+                        ),
+                    }
+                )
             except (ValueError, IndexError, OSError, TypeError):
                 continue
 
@@ -863,24 +1002,33 @@ def fetch_index_minute_history(
         # 分页：Eastmoney 已按升序（ oldest → newest）返回
         total = len(rows)
         if offset > 0:
-            rows = rows[offset:offset + limit]
+            rows = rows[offset : offset + limit]
         elif limit:
-            rows = rows[-limit:]   # 保留最后 limit 条（最新数据）
-        logger.info(f"[Sina] {symbol} {frequency}minK线: {len(rows)} 条 (offset={offset}, total={total})")
+            rows = rows[-limit:]  # 保留最后 limit 条（最新数据）
+        logger.info(
+            f"[Sina] {symbol} {frequency}minK线: {len(rows)} 条 (offset={offset}, total={total})"
+        )
         return rows
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP]_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[HTTP]_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         return []
 
 
-def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str = None) -> list[dict]:
+def fetch_stock_history(
+    symbol: str, start_date: str = "19900101", end_date: str = None
+) -> list[dict]:
     """
     按需穿透拉取A股个股日K线历史（全部上市至今数据），写入 market_data_daily 表。
     支持前复权/后复权/不复权。
     akshare stock_zh_a_daily: symbol 如 "sh600519"（沪深）或 "sz000001"（深圳）
     """
     if not akshare_breaker.is_available():
-        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_stock_history for {symbol}")
+        logger.warning(
+            f"[AkShare] Circuit breaker OPEN, skipping fetch_stock_history for {symbol}"
+        )
         return []
 
     try:
@@ -896,20 +1044,30 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
         ak_sym = symbol
         if not any(symbol.startswith(p) for p in ("sh", "sz", "SH", "SZ")):
             # 推算交易所：6/9开头=上海（科创板），0/1/2/3开头=深圳；直接补足6位
-            numeric = symbol.strip().zfill(6)   # "1"→"000001"，"600519"→"600519"
-            prefix = "sh" if numeric.startswith("6") or numeric.startswith("9") else "sz"
+            numeric = symbol.strip().zfill(6)  # "1"→"000001"，"600519"→"600519"
+            prefix = (
+                "sh" if numeric.startswith("6") or numeric.startswith("9") else "sz"
+            )
             ak_sym = f"{prefix}{numeric}"
 
         logger.info(f"[AkShare Stock] 开始拉取 {ak_sym} ({start_date}~{end_date})")
         with akshare_breaker:
-            df = ak.stock_zh_a_daily(symbol=ak_sym, start_date=start_date, end_date=end_date, adjust="qfq")
+            df = ak.stock_zh_a_daily(
+                symbol=ak_sym, start_date=start_date, end_date=end_date, adjust="qfq"
+            )
         if df is None or df.empty:
             logger.warning(f"[AkShare Stock] {ak_sym} 无数据返回")
             return []
 
         date_col = df.columns[0]
-        _pct_col = next((c for c in df.columns
-                        if 'pct' in c.lower() or 'change' in c.lower() or c == '涨跌幅'), None)
+        _pct_col = next(
+            (
+                c
+                for c in df.columns
+                if "pct" in c.lower() or "change" in c.lower() or c == "涨跌幅"
+            ),
+            None,
+        )
         rows = []
         prev_close = None
 
@@ -925,43 +1083,54 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
 
         for i in range(len(df)):
             try:
-                dt    = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
+                dt = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
                 open_ = get_col_val(df.iloc[i], ["open", "开盘", "Open"])
-                high  = get_col_val(df.iloc[i], ["high", "最高", "High"])
-                low   = get_col_val(df.iloc[i], ["low", "最低", "Low"])
+                high = get_col_val(df.iloc[i], ["high", "最高", "High"])
+                low = get_col_val(df.iloc[i], ["low", "最低", "Low"])
                 close = get_col_val(df.iloc[i], ["close", "收盘", "Close"])
-                vol   = get_col_val(df.iloc[i], ["volume", "成交量", "Volume"])
-                pct   = float(df.iloc[i][_pct_col]) if _pct_col and _pct_col in df.columns else 0.0
+                vol = get_col_val(df.iloc[i], ["volume", "成交量", "Volume"])
+                pct = (
+                    float(df.iloc[i][_pct_col])
+                    if _pct_col and _pct_col in df.columns
+                    else 0.0
+                )
                 amount = get_col_val(df.iloc[i], ["amount", "成交额", "Amount"])
-                raw_turnover = get_col_val(df.iloc[i], ["turnover", "换手率", "Turnover"], default=None)
-                turnover_rate = round(raw_turnover * 100, 4) if raw_turnover is not None else 0.0
+                raw_turnover = get_col_val(
+                    df.iloc[i], ["turnover", "换手率", "Turnover"], default=None
+                )
+                turnover_rate = (
+                    round(raw_turnover * 100, 4) if raw_turnover is not None else 0.0
+                )
                 # amplitude: 振幅(%) = (high - low) / prev_close * 100
                 if prev_close and prev_close != 0:
                     amplitude = round((high - low) / prev_close * 100, 4)
                 else:
                     amplitude = 0.0
                 prev_close = close
-                rows.append({
-                    "symbol":       symbol,
-                    "date":         str(df.iloc[i][date_col])[:10],
-                    "open":         open_,
-                    "high":         high,
-                    "low":          low,
-                    "close":        close,
-                    "volume":       vol,
-                    "amount":       amount,
-                    "turnover_rate": turnover_rate,
-                    "amplitude":    amplitude,
-                    "change_pct":   pct,
-                    "timestamp":    dt,
-                    "data_type":    "daily",
-                })
+                rows.append(
+                    {
+                        "symbol": symbol,
+                        "date": str(df.iloc[i][date_col])[:10],
+                        "open": open_,
+                        "high": high,
+                        "low": low,
+                        "close": close,
+                        "volume": vol,
+                        "amount": amount,
+                        "turnover_rate": turnover_rate,
+                        "amplitude": amplitude,
+                        "change_pct": pct,
+                        "timestamp": dt,
+                        "data_type": "daily",
+                    }
+                )
             except Exception as e:
                 logger.warning(f"[AkShare Stock] 解析第{i}行失败: {e}", exc_info=True)
                 continue
 
         if rows:
             from app.db import buffer_insert_daily, buffer_insert_periodic
+
             buffer_insert_daily(rows)
             logger.info(f"[AkShare Stock] {symbol} 日K写入 {len(rows)} 条")
 
@@ -971,46 +1140,75 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
             periodic_rows = []
 
             # Weekly
-            df_d["year_wk"] = (df_d["date"].dt.isocalendar().year.astype(str) + "_"
-                               + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2))
+            df_d["year_wk"] = (
+                df_d["date"].dt.isocalendar().year.astype(str)
+                + "_"
+                + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2)
+            )
             for yw, grp in df_d.groupby("year_wk", sort=True):
-                open_  = float(grp.iloc[0]["open"])
+                open_ = float(grp.iloc[0]["open"])
                 close_ = float(grp.iloc[-1]["close"])
-                periodic_rows.append({
-                    "symbol": symbol, "date": str(grp.iloc[0]["date"])[:10],
-                    "period": "weekly",
-                    "open": open_, "high": float(grp["high"].max()),
-                    "low":  float(grp["low"].min()), "close": close_,
-                    "volume": float(grp["volume"].sum()),
-                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
-                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
-                })
+                periodic_rows.append(
+                    {
+                        "symbol": symbol,
+                        "date": str(grp.iloc[0]["date"])[:10],
+                        "period": "weekly",
+                        "open": open_,
+                        "high": float(grp["high"].max()),
+                        "low": float(grp["low"].min()),
+                        "close": close_,
+                        "volume": float(grp["volume"].sum()),
+                        "change_pct": round(
+                            (close_ - open_) / open_ * 100 if open_ else 0, 4
+                        ),
+                        "timestamp": int(
+                            pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()
+                        ),
+                    }
+                )
 
             # Monthly
             df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
             for ym, grp in df_d.groupby("ym", sort=True):
-                open_  = float(grp.iloc[0]["open"])
+                open_ = float(grp.iloc[0]["open"])
                 close_ = float(grp.iloc[-1]["close"])
-                periodic_rows.append({
-                    "symbol": symbol, "date": str(grp.iloc[0]["date"])[:10],
-                    "period": "monthly",
-                    "open": open_, "high": float(grp["high"].max()),
-                    "low":  float(grp["low"].min()), "close": close_,
-                    "volume": float(grp["volume"].sum()),
-                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
-                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
-                })
+                periodic_rows.append(
+                    {
+                        "symbol": symbol,
+                        "date": str(grp.iloc[0]["date"])[:10],
+                        "period": "monthly",
+                        "open": open_,
+                        "high": float(grp["high"].max()),
+                        "low": float(grp["low"].min()),
+                        "close": close_,
+                        "volume": float(grp["volume"].sum()),
+                        "change_pct": round(
+                            (close_ - open_) / open_ * 100 if open_ else 0, 4
+                        ),
+                        "timestamp": int(
+                            pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()
+                        ),
+                    }
+                )
 
             if periodic_rows:
                 buffer_insert_periodic(periodic_rows)
-                logger.info(f"[AkShare Stock] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
+                logger.info(
+                    f"[AkShare Stock] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组"
+                )
 
         return rows
     except CircuitBreakerOpen as e:
-        logger.warning(f"[AkShare] Circuit breaker OPEN for stock history {symbol}: {e}", exc_info=True)
+        logger.warning(
+            f"[AkShare] Circuit breaker OPEN for stock history {symbol}: {e}",
+            exc_info=True,
+        )
         return []
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP]_stock_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(
+            f"[HTTP]_stock_history({symbol}) 失败: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         traceback.print_exc()
         return []
 
@@ -1022,7 +1220,9 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
     akshare stock_zh_index_daily: symbol 如 "sh000001", "sz399001"
     """
     if not akshare_breaker.is_available():
-        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_index_daily_history for {symbol}")
+        logger.warning(
+            f"[AkShare] Circuit breaker OPEN, skipping fetch_index_daily_history for {symbol}"
+        )
         return []
 
     try:
@@ -1035,7 +1235,9 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
         if not any(symbol.startswith(p) for p in ("sh", "sz", "SH", "SZ")):
             # 推算交易所：6/9开头=上海，0/1/2/3开头=深圳；直接补足6位
             numeric = symbol.strip().zfill(6)
-            prefix = "sh" if numeric.startswith("6") or numeric.startswith("9") else "sz"
+            prefix = (
+                "sh" if numeric.startswith("6") or numeric.startswith("9") else "sz"
+            )
             ak_sym = f"{prefix}{numeric}"
 
         logger.info(f"[AkShare Index] 开始拉取指数 {ak_sym}")
@@ -1050,35 +1252,42 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
         rows = []
         for i in range(len(df)):
             try:
-                dt    = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
+                dt = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
                 open_ = float(df.iloc[i]["open"])
-                high  = float(df.iloc[i]["high"])
-                low   = float(df.iloc[i]["low"])
+                high = float(df.iloc[i]["high"])
+                low = float(df.iloc[i]["low"])
                 close = float(df.iloc[i]["close"])
-                vol   = float(df.iloc[i]["volume"]) if "volume" in df.columns else 0.0
+                vol = float(df.iloc[i]["volume"]) if "volume" in df.columns else 0.0
                 # 计算涨跌幅
                 prev_close = float(df.iloc[i - 1]["close"]) if i > 0 else open_
-                pct = round((close - prev_close) / prev_close * 100, 4) if prev_close else 0.0
+                pct = (
+                    round((close - prev_close) / prev_close * 100, 4)
+                    if prev_close
+                    else 0.0
+                )
 
-                rows.append({
-                    "symbol":     symbol,  # 存无前缀格式如 "000001"
-                    "date":       str(df.iloc[i][date_col])[:10],
-                    "open":       open_,
-                    "high":       high,
-                    "low":        low,
-                    "close":      close,
-                    "volume":     vol,
-                    "amount":     0.0,  # 指数无成交额字段
-                    "change_pct": pct,
-                    "timestamp":  dt,
-                    "data_type":  "daily",
-                })
+                rows.append(
+                    {
+                        "symbol": symbol,  # 存无前缀格式如 "000001"
+                        "date": str(df.iloc[i][date_col])[:10],
+                        "open": open_,
+                        "high": high,
+                        "low": low,
+                        "close": close,
+                        "volume": vol,
+                        "amount": 0.0,  # 指数无成交额字段
+                        "change_pct": pct,
+                        "timestamp": dt,
+                        "data_type": "daily",
+                    }
+                )
             except Exception as e:
                 logger.warning(f"[AkShare Index] 解析第{i}行失败: {e}", exc_info=True)
                 continue
 
         if rows:
             from app.db import buffer_insert_daily, buffer_insert_periodic
+
             buffer_insert_daily(rows)
             logger.info(f"[AkShare Index] {symbol} 日K写入 {len(rows)} 条")
 
@@ -1088,46 +1297,75 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
             periodic_rows = []
 
             # Weekly
-            df_d["year_wk"] = (df_d["date"].dt.isocalendar().year.astype(str) + "_"
-                               + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2))
+            df_d["year_wk"] = (
+                df_d["date"].dt.isocalendar().year.astype(str)
+                + "_"
+                + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2)
+            )
             for yw, grp in df_d.groupby("year_wk", sort=True):
-                open_  = float(grp.iloc[0]["open"])
+                open_ = float(grp.iloc[0]["open"])
                 close_ = float(grp.iloc[-1]["close"])
-                periodic_rows.append({
-                    "symbol": symbol, "date": str(grp.iloc[0]["date"])[:10],
-                    "period": "weekly",
-                    "open": open_, "high": float(grp["high"].max()),
-                    "low":  float(grp["low"].min()), "close": close_,
-                    "volume": float(grp["volume"].sum()),
-                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
-                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
-                })
+                periodic_rows.append(
+                    {
+                        "symbol": symbol,
+                        "date": str(grp.iloc[0]["date"])[:10],
+                        "period": "weekly",
+                        "open": open_,
+                        "high": float(grp["high"].max()),
+                        "low": float(grp["low"].min()),
+                        "close": close_,
+                        "volume": float(grp["volume"].sum()),
+                        "change_pct": round(
+                            (close_ - open_) / open_ * 100 if open_ else 0, 4
+                        ),
+                        "timestamp": int(
+                            pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()
+                        ),
+                    }
+                )
 
             # Monthly
             df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
             for ym, grp in df_d.groupby("ym", sort=True):
-                open_  = float(grp.iloc[0]["open"])
+                open_ = float(grp.iloc[0]["open"])
                 close_ = float(grp.iloc[-1]["close"])
-                periodic_rows.append({
-                    "symbol": symbol, "date": str(grp.iloc[0]["date"])[:10],
-                    "period": "monthly",
-                    "open": open_, "high": float(grp["high"].max()),
-                    "low":  float(grp["low"].min()), "close": close_,
-                    "volume": float(grp["volume"].sum()),
-                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
-                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
-                })
+                periodic_rows.append(
+                    {
+                        "symbol": symbol,
+                        "date": str(grp.iloc[0]["date"])[:10],
+                        "period": "monthly",
+                        "open": open_,
+                        "high": float(grp["high"].max()),
+                        "low": float(grp["low"].min()),
+                        "close": close_,
+                        "volume": float(grp["volume"].sum()),
+                        "change_pct": round(
+                            (close_ - open_) / open_ * 100 if open_ else 0, 4
+                        ),
+                        "timestamp": int(
+                            pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()
+                        ),
+                    }
+                )
 
             if periodic_rows:
                 buffer_insert_periodic(periodic_rows)
-                logger.info(f"[AkShare Index] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
+                logger.info(
+                    f"[AkShare Index] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组"
+                )
 
         return rows
     except CircuitBreakerOpen as e:
-        logger.warning(f"[AkShare] Circuit breaker OPEN for index daily history {symbol}: {e}", exc_info=True)
+        logger.warning(
+            f"[AkShare] Circuit breaker OPEN for index daily history {symbol}: {e}",
+            exc_info=True,
+        )
         return []
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP]_index_daily_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(
+            f"[HTTP]_index_daily_history({symbol}) 失败: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         traceback.print_exc()
         return []
 
@@ -1150,11 +1388,16 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
 
     # Alpha Vantage → 实际 Symbol 映射
     av_symbols = {
-        "ixic":  "NASDAQ", "usixic":  "NASDAQ",
-        "ndx":   "NASDAQ", "usndx":   "NASDAQ",
-        "spx":   "S&P500", "usspx":   "S&P500",
-        "dji":   "DJI",    "usdji":   "DJI",
-        "hsi":   "HSI",    "hkhsi":   "HSI",
+        "ixic": "NASDAQ",
+        "usixic": "NASDAQ",
+        "ndx": "NASDAQ",
+        "usndx": "NASDAQ",
+        "spx": "S&P500",
+        "usspx": "S&P500",
+        "dji": "DJI",
+        "usdji": "DJI",
+        "hsi": "HSI",
+        "hkhsi": "HSI",
         # 港股/日经暂不支持（Alpha Vantage 无此品类）
     }
     av_sym = av_symbols.get(symbol.lower(), "")
@@ -1166,11 +1409,16 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
 
     # 获取数据源名称并标准化符号
     symbol_name = {
-        "ixic": "纳斯达克", "usixic": "纳斯达克",
-        "ndx": "纳指100", "usndx": "纳指100",
-        "spx": "标普500", "usspx": "标普500",
-        "dji": "道指", "usdji": "道指",
-        "hkhsi": "恒生指数", "hsi": "恒生指数"
+        "ixic": "纳斯达克",
+        "usixic": "纳斯达克",
+        "ndx": "纳指100",
+        "usndx": "纳指100",
+        "spx": "标普500",
+        "usspx": "标普500",
+        "dji": "道指",
+        "usdji": "道指",
+        "hkhsi": "恒生指数",
+        "hsi": "恒生指数",
     }.get(symbol.lower(), symbol.upper())
 
     url = (
@@ -1190,8 +1438,10 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
             data = json.loads(raw)
 
             if "Note" in data or "Information" in data:
-                logger.warning(f"[AlphaVantage] 频率受限: {data.get('Note', data.get('Information', ''))[:80]}")
-                time.sleep(12)   # 等待 1 分钟窗口
+                logger.warning(
+                    f"[AlphaVantage] 频率受限: {data.get('Note', data.get('Information', ''))[:80]}"
+                )
+                time.sleep(12)  # 等待 1 分钟窗口
                 continue
 
             ts = data.get("Time Series (Daily)", {})
@@ -1204,37 +1454,45 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
             for date_str in sorted(ts.keys(), reverse=True)[:limit]:
                 day = ts[date_str]
                 try:
-                    open_  = float(day["1. open"])
-                    high   = float(day["2. high"])
-                    low    = float(day["3. low"])
-                    close  = float(day["4. close"])
-                    vol    = float(day["5. volume"])
+                    open_ = float(day["1. open"])
+                    high = float(day["2. high"])
+                    low = float(day["3. low"])
+                    close = float(day["4. close"])
+                    vol = float(day["5. volume"])
 
-                    pct    = (close - prev_close) / prev_close * 100 if prev_close else 0.0
-                    rows.append({
-                        "symbol":     symbol.lower(),
-                        "name":       symbol_name,
-                        "date":       date_str,
-                        "open":       round(open_, 4),
-                        "high":       round(high, 4),
-                        "low":        round(low, 4),
-                        "close":      round(close, 4),
-                        "volume":     int(vol),
-                        "change_pct": round(pct, 4),
-                        "timestamp":  int(time.mktime(time.strptime(date_str, "%Y-%m-%d"))),
-                        "data_type":  "daily",
-                        "normalized": False,  # 明确标记未标准化
-                    })
+                    pct = (close - prev_close) / prev_close * 100 if prev_close else 0.0
+                    rows.append(
+                        {
+                            "symbol": symbol.lower(),
+                            "name": symbol_name,
+                            "date": date_str,
+                            "open": round(open_, 4),
+                            "high": round(high, 4),
+                            "low": round(low, 4),
+                            "close": round(close, 4),
+                            "volume": int(vol),
+                            "change_pct": round(pct, 4),
+                            "timestamp": int(
+                                time.mktime(time.strptime(date_str, "%Y-%m-%d"))
+                            ),
+                            "data_type": "daily",
+                            "normalized": False,  # 明确标记未标准化
+                        }
+                    )
                     prev_close = close
                 except Exception as e:
-                    logger.warning(f"[AlphaVantage] 解析 {date_str} 失败: {e}", exc_info=True)
+                    logger.warning(
+                        f"[AlphaVantage] 解析 {date_str} 失败: {e}", exc_info=True
+                    )
                     continue
 
             logger.info(f"[AlphaVantage] {av_sym} 获取 {len(rows)} 条日K")
             return rows
 
         except Exception as e:
-            logger.warning(f"[AlphaVantage] attempt {attempt+1} 失败: {e}", exc_info=True)
+            logger.warning(
+                f"[AlphaVantage] attempt {attempt+1} 失败: {e}", exc_info=True
+            )
             time.sleep(3)
 
     return []
@@ -1251,15 +1509,27 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
 
     tencent_codes = {
         # 全球指数（key = clean_sym，即 lowercase 规范化后的 symbol）
-        "usixic": "usIXIC", "ixic":  "usIXIC",
-        "usndx":  "usNDX",  "ndx":   "usNDX",
-        "usspx":  "usSPX",  "spx":   "usSPX",
-        "usdji":  "usDJI",  "dji":   "usDJI",
-        "hkhsi":  "hkHSI",  "hk hsi": "hkHSI", "hsi": "hkHSI",
-        "jpn225": "jpN225", "n225":  "jpN225",
+        "usixic": "usIXIC",
+        "ixic": "usIXIC",
+        "usndx": "usNDX",
+        "ndx": "usNDX",
+        "usspx": "usSPX",
+        "spx": "usSPX",
+        "usdji": "usDJI",
+        "dji": "usDJI",
+        "hkhsi": "hkHSI",
+        "hk hsi": "hkHSI",
+        "hsi": "hkHSI",
+        "jpn225": "jpN225",
+        "n225": "jpN225",
         # 宏观大宗（黄金/原油）
-        "gold": "hf_XAU", "gld": "hf_XAU", "xau": "hf_XAU", "gc": "hf_XAU",
-        "wti":   "hf_CL",  "wtic": "hf_CL",  "cl":  "hf_CL",
+        "gold": "hf_XAU",
+        "gld": "hf_XAU",
+        "xau": "hf_XAU",
+        "gc": "hf_XAU",
+        "wti": "hf_CL",
+        "wtic": "hf_CL",
+        "cl": "hf_CL",
         # VIX 恐慌指数（无可靠腾讯代码，用 ^VIX Yahoo Finance）
     }
     tc = tencent_codes.get(symbol.lower().replace(" ", ""))
@@ -1290,48 +1560,52 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
         today = time.strftime("%Y-%m-%d")
         if is_standard:
             # 标准格式（35+ 字段，index-based）
-            price   = float(parts[3]) if parts[3] else 0
-            yclose  = float(parts[4]) if parts[4] else price
-            open_   = float(parts[5]) if parts[5] else price
-            high    = float(parts[33]) if len(parts) > 33 and parts[33] else price
-            low     = float(parts[34]) if len(parts) > 34 and parts[34] else price
+            price = float(parts[3]) if parts[3] else 0
+            yclose = float(parts[4]) if parts[4] else price
+            open_ = float(parts[5]) if parts[5] else price
+            high = float(parts[33]) if len(parts) > 33 and parts[33] else price
+            low = float(parts[34]) if len(parts) > 34 and parts[34] else price
             # 成交量处理：统一存储为"股"单位
             # HSI: parts[6] 是成交量（万股），需要 * 100 转成股
             # US indices: parts[6] 直接是成交量（股），不需要转换
             raw_vol = float(parts[6]) if parts[6] else 0.0
             if "HSI" in tc.upper():
-                vol = int(raw_vol * 100)   # 万股 -> 股
+                vol = int(raw_vol * 100)  # 万股 -> 股
             else:
-                vol = int(raw_vol)         # 直接是股
+                vol = int(raw_vol)  # 直接是股
             pct = float(parts[32]) if len(parts) > 32 and parts[32] else 0.0
         else:
             # 大宗商品 comma-separated（hf_XAU, hf_CL 等）
             # parts[0]=price, parts[1]=change_pct, parts[2]=open, parts[3]=high, parts[4]=low
-            price   = float(parts[0]) if parts[0] else 0
-            pct     = float(parts[1]) if len(parts) > 1 and parts[1] else 0.0
-            open_   = float(parts[2]) if len(parts) > 2 and parts[2] else price
-            high    = float(parts[3]) if len(parts) > 3 and parts[3] else price
-            low     = float(parts[4]) if len(parts) > 4 and parts[4] else price
-            yclose  = price  # 昨收无法从单点数据推断
-            vol     = 0.0
-        return [{
-            "symbol":     symbol.lower(),
-            "date":       today,
-            "open":       open_,
-            "high":       high,
-            "low":        low,
-            "close":      price,
-            "volume":     vol,
-            "change_pct": pct,
-            "timestamp":  int(time.time()),
-            "data_type":  "daily",
-        }]
+            price = float(parts[0]) if parts[0] else 0
+            pct = float(parts[1]) if len(parts) > 1 and parts[1] else 0.0
+            open_ = float(parts[2]) if len(parts) > 2 and parts[2] else price
+            high = float(parts[3]) if len(parts) > 3 and parts[3] else price
+            low = float(parts[4]) if len(parts) > 4 and parts[4] else price
+            yclose = price  # 昨收无法从单点数据推断
+            vol = 0.0
+        return [
+            {
+                "symbol": symbol.lower(),
+                "date": today,
+                "open": open_,
+                "high": high,
+                "low": low,
+                "close": price,
+                "volume": vol,
+                "change_pct": pct,
+                "timestamp": int(time.time()),
+                "data_type": "daily",
+            }
+        ]
     except Exception as e:
         logger.warning(f"[Tencent] 今日K线 {tc} 失败: {e}", exc_info=True)
         return []
 
 
-def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000) -> list[dict]:
+def fetch_us_stock_history(
+    symbol: str, period: str = "daily", limit: int = 5000
+) -> list[dict]:
     """
     按需穿透拉取美股/港股/日经指数历史K线，写入 market_data_daily 表。
     数据源优先级：
@@ -1347,14 +1621,20 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
 
     def _fetch_with_timeout(target, args=(), timeout=20):
         """在后台线程执行目标函数，超时则中止（使用线程池限制并发）"""
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+        from concurrent.futures import (
+            ThreadPoolExecutor,
+            TimeoutError as FutureTimeoutError,
+        )
 
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(target, *args)
             try:
                 return future.result(timeout=timeout)
             except FutureTimeoutError:
-                logger.warning(f"[{target.__name__}] 调用超时（{timeout}秒），强制跳过", exc_info=True)
+                logger.warning(
+                    f"[{target.__name__}] 调用超时（{timeout}秒），强制跳过",
+                    exc_info=True,
+                )
                 return None
 
     # 策略 1: AkShare 港股指数 (对标恒生指数 HSI)
@@ -1362,35 +1642,47 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
         try:
             import akshare as ak
             import pandas as pd
+
             logger.info("[AkShare HK] 开始拉取恒生指数历史...")
-            df = _fetch_with_timeout(ak.stock_hk_index_daily_sina, args=("HSI",), timeout=25)
+            df = _fetch_with_timeout(
+                ak.stock_hk_index_daily_sina, args=("HSI",), timeout=25
+            )
             if df is not None and not df.empty:
                 all_rows = []
                 for _, r in df.iterrows():
                     dt_str = str(r["date"])
-                    all_rows.append({
-                        "symbol": clean_sym,
-                        "date": dt_str,
-                        "open": float(r["open"]),
-                        "high": float(r["high"]),
-                        "low": float(r["low"]),
-                        "close": float(r["close"]),
-                        "volume": int(r["volume"]),   # DB schema: INTEGER
-                        "change_pct": 0.0,
-                        "timestamp": int(pd.Timestamp(dt_str).timestamp()),
-                        "data_type": "daily"
-                    })
+                    all_rows.append(
+                        {
+                            "symbol": clean_sym,
+                            "date": dt_str,
+                            "open": float(r["open"]),
+                            "high": float(r["high"]),
+                            "low": float(r["low"]),
+                            "close": float(r["close"]),
+                            "volume": int(r["volume"]),  # DB schema: INTEGER
+                            "change_pct": 0.0,
+                            "timestamp": int(pd.Timestamp(dt_str).timestamp()),
+                            "data_type": "daily",
+                        }
+                    )
                 all_rows.sort(key=lambda x: x["date"])
                 for i in range(1, len(all_rows)):
-                    prev = all_rows[i-1]["close"]; curr = all_rows[i]["close"]
-                    all_rows[i]["change_pct"] = round((curr - prev) / prev * 100, 4) if prev else 0.0
+                    prev = all_rows[i - 1]["close"]
+                    curr = all_rows[i]["close"]
+                    all_rows[i]["change_pct"] = (
+                        round((curr - prev) / prev * 100, 4) if prev else 0.0
+                    )
 
                 try:
                     from app.db import buffer_insert_daily
+
                     buffer_insert_daily(all_rows)
                     logger.info(f"[AkShare HK] 恒生指数入库成功: {len(all_rows)} 条")
                 except Exception as db_err:
-                    logger.warning(f"[AkShare HK] DB写入失败（不影响返回）: {db_err}", exc_info=True)
+                    logger.warning(
+                        f"[AkShare HK] DB写入失败（不影响返回）: {db_err}",
+                        exc_info=True,
+                    )
 
                 return all_rows
             else:
@@ -1401,42 +1693,58 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
     # 策略 2: AkShare 美股指数 (IXIC, SPX, DJI)
     # 注意: clean_sym 可能是 "usixic" 或 "ixic"，需要去掉 "us" 前缀后再查表
     ak_us_map = {"ixic": ".IXIC", "spx": ".INX", "dji": ".DJI"}
-    lookup_sym = clean_sym.replace("us", "", 1) if clean_sym.startswith("us") else clean_sym
+    lookup_sym = (
+        clean_sym.replace("us", "", 1) if clean_sym.startswith("us") else clean_sym
+    )
     if lookup_sym in ak_us_map:
         try:
             import akshare as ak
             import pandas as pd
+
             ak_code = ak_us_map[lookup_sym]
             logger.info(f"[AkShare US] 开始拉取美股指数 {ak_code}...")
-            df = _fetch_with_timeout(ak.index_us_stock_sina, args=(ak_code,), timeout=25)
+            df = _fetch_with_timeout(
+                ak.index_us_stock_sina, args=(ak_code,), timeout=25
+            )
             if df is not None and not df.empty:
                 all_rows = []
                 for _, r in df.iterrows():
                     dt_str = str(r["date"])
-                    all_rows.append({
-                        "symbol": clean_sym,   # 存成 usixic / spx / dji
-                        "date": dt_str,
-                        "open": float(r["open"]),
-                        "high": float(r["high"]),
-                        "low": float(r["low"]),
-                        "close": float(r["close"]),
-                        "volume": int(r["volume"]),  # DB schema: INTEGER
-                        "change_pct": 0.0,
-                        "timestamp": int(pd.Timestamp(dt_str).timestamp()),
-                        "data_type": "daily"
-                    })
+                    all_rows.append(
+                        {
+                            "symbol": clean_sym,  # 存成 usixic / spx / dji
+                            "date": dt_str,
+                            "open": float(r["open"]),
+                            "high": float(r["high"]),
+                            "low": float(r["low"]),
+                            "close": float(r["close"]),
+                            "volume": int(r["volume"]),  # DB schema: INTEGER
+                            "change_pct": 0.0,
+                            "timestamp": int(pd.Timestamp(dt_str).timestamp()),
+                            "data_type": "daily",
+                        }
+                    )
                 all_rows.sort(key=lambda x: x["date"])
                 for i in range(1, len(all_rows)):
-                    prev = all_rows[i-1]["close"]; curr = all_rows[i]["close"]
-                    all_rows[i]["change_pct"] = round((curr - prev) / prev * 100, 4) if prev else 0.0
+                    prev = all_rows[i - 1]["close"]
+                    curr = all_rows[i]["close"]
+                    all_rows[i]["change_pct"] = (
+                        round((curr - prev) / prev * 100, 4) if prev else 0.0
+                    )
 
                 # 直接写入 DB，不抛异常（即使 DB 锁失败也不阻断返回）
                 try:
                     from app.db import buffer_insert_daily
+
                     buffer_insert_daily(all_rows)
-                    logger.info(f"[AkShare US] {clean_sym} 入库成功: {len(all_rows)} 条")
+                    logger.info(
+                        f"[AkShare US] {clean_sym} 入库成功: {len(all_rows)} 条"
+                    )
                 except Exception as db_err:
-                    logger.warning(f"[AkShare US] DB写入失败（不影响返回）: {db_err}", exc_info=True)
+                    logger.warning(
+                        f"[AkShare US] DB写入失败（不影响返回）: {db_err}",
+                        exc_info=True,
+                    )
 
                 # 无论如何都返回数据（即使 DB 写入失败，用户仍能看到图表）
                 return all_rows
@@ -1449,6 +1757,7 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
     av_rows = _fetch_alpha_vantage_daily(clean_sym, limit=limit)
     if av_rows:
         from app.db import buffer_insert_daily
+
         buffer_insert_daily(av_rows)
         return av_rows
 
@@ -1456,21 +1765,20 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
     today_rows = _fetch_tencent_today(clean_sym)
     if today_rows:
         from app.db import buffer_insert_daily
+
         buffer_insert_daily(today_rows)
     return today_rows
-
-
 
 
 def fetch_all_and_buffer():
     """聚合拉取 + 写入 write_buffer（供 APScheduler 调用）"""
     all_rows = []
-    idx_rows      = fetch_china_indices()
-    china_all_rows = fetch_china_all_indices()   # Phase 7: 国内10+指数
-    shibor_rows   = fetch_shibor()
-    global_rows   = fetch_global_indices()
-    board_rows    = fetch_industry_sectors()
-    deriv_rows    = fetch_derivatives()
+    idx_rows = fetch_china_indices()
+    china_all_rows = fetch_china_all_indices()  # Phase 7: 国内10+指数
+    shibor_rows = fetch_shibor()
+    global_rows = fetch_global_indices()
+    board_rows = fetch_industry_sectors()
+    deriv_rows = fetch_derivatives()
 
     all_rows.extend(idx_rows)
     all_rows.extend(china_all_rows)
@@ -1481,32 +1789,40 @@ def fetch_all_and_buffer():
 
     if all_rows:
         from app.db import buffer_insert
+
         try:
             buffer_insert(all_rows)
-            logger.info(f"[DataFetcher] 写入 {len(all_rows)} 条 "
-                        f"(A股 {len(idx_rows)}, 国内 {len(china_all_rows)}, "
-                        f"利率 {len(shibor_rows)}, 全球 {len(global_rows)}, "
-                        f"板块 {len(board_rows)}, 商品 {len(deriv_rows)})")
+            logger.info(
+                f"[DataFetcher] 写入 {len(all_rows)} 条 "
+                f"(A股 {len(idx_rows)}, 国内 {len(china_all_rows)}, "
+                f"利率 {len(shibor_rows)}, 全球 {len(global_rows)}, "
+                f"板块 {len(board_rows)}, 商品 {len(deriv_rows)})"
+            )
         except Exception as e:
-            logger.error(f"[DataFetcher] buffer_insert 失败: {type(e).__name__}: {e}", exc_info=True)
+            logger.error(
+                f"[DataFetcher] buffer_insert 失败: {type(e).__name__}: {e}",
+                exc_info=True,
+            )
             traceback.print_exc()
     else:
         logger.warning("[DataFetcher] 本次未拉到任何数据（所有接口均失败）")
+
 
 # ═══════════════════════════════════════════════════════════════
 # 全市场A股抓取 (Sina HQ API，分页获取)
 # ═══════════════════════════════════════════════════════════════
 
+
 def fetch_all_china_stocks(max_pages=60):
     """
     Fetch all A-share stocks using Sina API.
-    
+
     Uses shared Sina fetcher utility with CircuitBreaker protection.
     Fetches from both Shanghai (sh_a) and Shenzhen (sz_a) markets.
-    
+
     Args:
         max_pages: Maximum pages to fetch per market (default 60)
-    
+
     Returns:
         List of dicts compatible with upsert_all_stocks():
         - symbol, code, name, trade, changepercent, per, pb, mktcap, etc.
@@ -1515,32 +1831,30 @@ def fetch_all_china_stocks(max_pages=60):
         from app.utils.sina_stock_fetcher import fetch_all_stocks_sina
 
         stocks = fetch_all_stocks_sina(
-            page_size=100,
-            max_pages=max_pages,
-            timeout=15,
-            exclude_bj=True,
-            delay=0.3
+            page_size=100, max_pages=max_pages, timeout=15, exclude_bj=True, delay=0.3
         )
 
         rows = []
         for s in stocks:
-            rows.append({
-                'symbol': s['symbol'],
-                'code': s['code'],
-                'name': s['name'],
-                'trade': s['price'],
-                'changepercent': s['change_pct'],
-                'per': s.get('pe'),
-                'pb': s.get('pb'),
-                'mktcap': s['market_cap'] / 10000,
-                'nmc': s['market_cap'] / 10000,
-                'volume': s['volume'],
-                'amount': s['amount'],
-                'turnoverratio': s.get('turnover', 0),
-                'high': s['high'],
-                'low': s['low'],
-                'open': s['pre_close'],
-            })
+            rows.append(
+                {
+                    "symbol": s["symbol"],
+                    "code": s["code"],
+                    "name": s["name"],
+                    "trade": s["price"],
+                    "changepercent": s["change_pct"],
+                    "per": s.get("pe"),
+                    "pb": s.get("pb"),
+                    "mktcap": s["market_cap"] / 10000,
+                    "nmc": s["market_cap"] / 10000,
+                    "volume": s["volume"],
+                    "amount": s["amount"],
+                    "turnoverratio": s.get("turnover", 0),
+                    "high": s["high"],
+                    "low": s["low"],
+                    "open": s["pre_close"],
+                }
+            )
 
         logger.info(f"[DataFetcher] Fetched {len(rows)} stocks")
         return rows
@@ -1567,7 +1881,12 @@ def fetch_today_daily_from_sina(symbol: str) -> dict:
         proxies = {"http": os.environ["http_proxy"], "https": os.environ["https_proxy"]}
 
     try:
-        resp = httpx.get(url, timeout=5.0, proxies=proxies, headers={"Referer": "https://finance.sina.com.cn"})
+        resp = httpx.get(
+            url,
+            timeout=5.0,
+            proxies=proxies,
+            headers={"Referer": "https://finance.sina.com.cn"},
+        )
         raw = resp.text
 
         if "=" not in raw:
@@ -1582,14 +1901,15 @@ def fetch_today_daily_from_sina(symbol: str) -> dict:
             return None
 
         import time
+
         return {
             "symbol": symbol,
             "name": parts[0],
             "date": time.strftime("%Y-%m-%d"),
-            "open": float(parts[2]) if parts[2] else 0,   # 开盘
-            "high": float(parts[4]) if parts[4] else 0,   # 最高
-            "low": float(parts[5]) if parts[5] else 0,    # 最低
-            "close": float(parts[1]),                 # 当前价作为收盘
+            "open": float(parts[2]) if parts[2] else 0,  # 开盘
+            "high": float(parts[4]) if parts[4] else 0,  # 最高
+            "low": float(parts[5]) if parts[5] else 0,  # 最低
+            "close": float(parts[1]),  # 当前价作为收盘
             "volume": float(parts[8]) if parts[8] else 0,  # 成交量
             "timestamp": int(time.time()),
             "data_type": "daily",
@@ -1606,7 +1926,9 @@ def refresh_today_daily_all():
         data = fetch_today_daily_from_sina(symbol)
         if data and data.get("close"):
             buffer_insert_daily([data])
-            logger.info(f"[TodayDaily] {symbol}: O={data['open']} H={data['high']} L={data['low']} C={data['close']}")
+            logger.info(
+                f"[TodayDaily] {symbol}: O={data['open']} H={data['high']} L={data['low']} C={data['close']}"
+            )
 
 
 # ── 从分时数据聚合当日日K线 ─────────────────────────────────
@@ -1655,7 +1977,9 @@ def _fetch_sina_realtime(symbol: str) -> dict:
     sina_code = f"s_{'sh' if symbol.startswith('6') or symbol in ('000001','000300','000688') else 'sz'}{symbol}"
     url = f"https://hq.sinajs.cn/list={sina_code}"
     try:
-        resp = httpx.get(url, timeout=5.0, headers={"Referer": "https://finance.sina.com.cn"})
+        resp = httpx.get(
+            url, timeout=5.0, headers={"Referer": "https://finance.sina.com.cn"}
+        )
         if "=" not in resp.text:
             return None
         m = re.search(r'= "(.+)"', resp.text)
@@ -1671,6 +1995,7 @@ def _fetch_sina_realtime(symbol: str) -> dict:
     except (ValueError, IndexError, TypeError):
         return None
 
+
 def refresh_today_from_minute():
     """从分时数据刷新当日日K（分时失败时使用Sina实时价更新收盘价）"""
     from app.db import buffer_insert_daily, get_daily_history
@@ -1681,7 +2006,9 @@ def refresh_today_from_minute():
         # 方案1: 分时数据聚合成功
         if data and data.get("close"):
             buffer_insert_daily([data])
-            logger.info(f"[TodayMinute] {symbol}: O={data['open']:.2f} H={data['high']:.2f} L={data['low']:.2f} C={data['close']:.2f}")
+            logger.info(
+                f"[TodayMinute] {symbol}: O={data['open']:.2f} H={data['high']:.2f} L={data['low']:.2f} C={data['close']:.2f}"
+            )
             continue
 
         # 方案2: 分时失败，但已有当日日K数据 → 用Sina最新价更新收盘
@@ -1698,11 +2025,16 @@ def refresh_today_from_minute():
             if sina["price"] > today_row.get("high", 0):
                 today_row["high"] = sina["price"]
             # 同时更新最低价
-            if sina["price"] < today_row.get("low", 999999) or today_row.get("low", 0) == 0:
+            if (
+                sina["price"] < today_row.get("low", 999999)
+                or today_row.get("low", 0) == 0
+            ):
                 today_row["low"] = sina["price"]
             today_row["timestamp"] = int(time.time())
             buffer_insert_daily([today_row])
-            logger.info(f"[TodaySina] {symbol}: O={today_row['open']} H={today_row['high']} L={today_row['low']} C={today_row['close']}")
+            logger.info(
+                f"[TodaySina] {symbol}: O={today_row['open']} H={today_row['high']} L={today_row['low']} C={today_row['close']}"
+            )
             continue
 
         logger.debug(f"[TodayDaily] {symbol}: 无可用数据源")
@@ -1750,17 +2082,19 @@ def fetch_period_klines_from_daily(symbol: str, period: str) -> list[dict]:
             volumes = [g.get("volume", 0) for g in group if g.get("volume")]
 
             if opens and closes:
-                result.append({
-                    "symbol": symbol,
-                    "date": key,
-                    "period": period,
-                    "open": opens[-1],  # 最早日期 = 周一开盘
-                    "high": max(highs) if highs else 0,
-                    "low": min([l for l in lows if l > 0]) if lows else 0,
-                    "close": closes[0],  # 最新日期 = 周五收盘
-                    "volume": sum(volumes),
-                    "timestamp": int(t.time()),
-                })
+                result.append(
+                    {
+                        "symbol": symbol,
+                        "date": key,
+                        "period": period,
+                        "open": opens[-1],  # 最早日期 = 周一开盘
+                        "high": max(highs) if highs else 0,
+                        "low": min([l for l in lows if l > 0]) if lows else 0,
+                        "close": closes[0],  # 最新日期 = 周五收盘
+                        "volume": sum(volumes),
+                        "timestamp": int(t.time()),
+                    }
+                )
 
         return result
     except Exception:

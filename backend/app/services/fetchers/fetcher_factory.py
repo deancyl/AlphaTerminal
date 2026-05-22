@@ -7,11 +7,17 @@ Provides:
 - fetch_by_priority: 根据数据类型自动选择优先级路由
 - get_market_fetcher: get fetcher by name
 """
+
 import logging
 from typing import Optional, Dict, Any, Callable, Awaitable, List
 
 from .base import BaseMarketFetcher
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen, CircuitContext
+from app.services.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerOpen,
+    CircuitContext,
+)
 from app.config.fetcher_priority import get_fetcher_priority, FetcherPriority
 
 logger = logging.getLogger(__name__)
@@ -20,7 +26,9 @@ logger = logging.getLogger(__name__)
 _circuit_breakers: Dict[str, CircuitBreaker] = {}
 
 
-def get_circuit_breaker(name: str, config: Optional[CircuitBreakerConfig] = None) -> CircuitBreaker:
+def get_circuit_breaker(
+    name: str, config: Optional[CircuitBreakerConfig] = None
+) -> CircuitBreaker:
     """Get or create circuit breaker for a fetcher"""
     if name not in _circuit_breakers:
         _circuit_breakers[name] = CircuitBreaker(name, config or CircuitBreakerConfig())
@@ -30,14 +38,14 @@ def get_circuit_breaker(name: str, config: Optional[CircuitBreakerConfig] = None
 class FetcherFactory:
     """
     Factory for creating and managing market data fetchers.
-    
+
     Usage:
         FetcherFactory.register("sina", SinaFetcher, as_default=True)
         FetcherFactory.register("tencent", TencentFetcher)
-        
+
         factory = FetcherFactory()
         fetcher = factory.get_fetcher("sina")
-        
+
         # With fallback:
         result = await fetch_with_fallback(
             lambda: fetcher.get_quote("sh000001"),
@@ -56,7 +64,9 @@ class FetcherFactory:
         cls._fetchers[name] = fetcher_cls
         if as_default:
             cls._default_fetcher = name
-        logger.info(f"[FetcherFactory] Registered fetcher: {name} (default={as_default})")
+        logger.info(
+            f"[FetcherFactory] Registered fetcher: {name} (default={as_default})"
+        )
 
     @classmethod
     def get_fetcher(cls, name: Optional[str] = None) -> BaseMarketFetcher:
@@ -65,7 +75,9 @@ class FetcherFactory:
         if not name:
             raise ValueError("No fetcher name provided and no default set")
         if name not in cls._fetchers:
-            raise ValueError(f"Unknown fetcher: {name}. Available: {list(cls._fetchers.keys())}")
+            raise ValueError(
+                f"Unknown fetcher: {name}. Available: {list(cls._fetchers.keys())}"
+            )
         return cls._fetchers[name]()
 
     @classmethod
@@ -105,15 +117,15 @@ async def fetch_with_fallback(
 ) -> Any:
     """
     Try fetch_fn; on failure, try fallback sources in order.
-    
+
     Args:
         fetch_fn: Async function that returns data
         fallbacks: List of fallback fetcher names (strings) to try on failure
         source_name: Name for logging
-    
+
     Returns:
         Data from the first successful source
-    
+
     Raises:
         Last exception if all sources fail
     """
@@ -151,18 +163,18 @@ async def fetch_by_priority(
 ) -> Any:
     """
     根据数据类型优先级自动选择数据源并尝试获取数据。
-    
+
     Args:
         data_type: 数据类型 (history, realtime, fund_nav, futures, hk_stocks, us_stocks)
         fetch_fn_factory: 工厂函数，接收数据源名称，返回对应的异步获取函数
         priority: 可选的优先级配置，默认使用全局配置
-    
+
     Returns:
         从第一个成功的数据源获取的数据
-    
+
     Raises:
         最后一个异常，如果所有数据源都失败
-    
+
     Example:
         result = await fetch_by_priority(
             "history",
@@ -193,28 +205,36 @@ async def fetch_by_priority(
             continue
         except Exception as e:
             last_error = e
-            logger.warning(f"[fetch_by_priority] {src} 失败: {e}，尝试下一个数据源", exc_info=True)
+            logger.warning(
+                f"[fetch_by_priority] {src} 失败: {e}，尝试下一个数据源", exc_info=True
+            )
             continue
 
     if last_error:
         logger.error(f"[fetch_by_priority] {data_type} 所有数据源均失败")
         raise last_error
-    raise RuntimeError(f"[fetch_by_priority] {data_type} 所有数据源均不可用（熔断器开启）")
+    raise RuntimeError(
+        f"[fetch_by_priority] {data_type} 所有数据源均不可用（熔断器开启）"
+    )
 
 
-async def get_quote_by_priority(symbol: str, priority: Optional[FetcherPriority] = None) -> Optional[Dict]:
+async def get_quote_by_priority(
+    symbol: str, priority: Optional[FetcherPriority] = None
+) -> Optional[Dict]:
     """根据优先级获取实时行情"""
     return await fetch_by_priority(
         "realtime",
         lambda src: FetcherFactory.get_fetcher(src).get_quote(symbol),
-        priority
+        priority,
     )
 
 
-async def get_kline_by_priority(symbol: str, period: str = "day", priority: Optional[FetcherPriority] = None) -> Optional[List[Dict]]:
+async def get_kline_by_priority(
+    symbol: str, period: str = "day", priority: Optional[FetcherPriority] = None
+) -> Optional[List[Dict]]:
     """根据优先级获取K线数据"""
     return await fetch_by_priority(
         "history",
         lambda src: FetcherFactory.get_fetcher(src).get_kline(symbol, period),
-        priority
+        priority,
     )

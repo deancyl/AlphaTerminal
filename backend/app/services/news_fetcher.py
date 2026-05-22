@@ -3,6 +3,7 @@
 YouTube 字幕抓取：必须走代理（墙外）
 国内数据：绕过代理（Phase 3 已处理）
 """
+
 import os
 import logging
 from typing import Optional
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 # ── YouTube 走代理（墙外资源）──────────────────────────────────────────
 # YouTube 必须走代理，从环境变量读取，永不硬编码
 from app.services.proxy_config import get_proxy_url
+
 PROXY_YOUTUBE = get_proxy_url() or ""
 
 FALLBACK_TRANSCRIPT = {
@@ -53,7 +55,7 @@ def fetch_youtube_transcript(video_id: str, lang: str = "zh-CN") -> dict:
     proxy_cfg = GenericProxyConfig(PROXY_YOUTUBE)
     _saved_http_proxy = os.environ.get("http_proxy")
     _saved_https_proxy = os.environ.get("https_proxy")
-    os.environ["http_proxy"]  = PROXY_YOUTUBE
+    os.environ["http_proxy"] = PROXY_YOUTUBE
     os.environ["https_proxy"] = PROXY_YOUTUBE
 
     try:
@@ -108,10 +110,10 @@ def fetch_youtube_transcript(video_id: str, lang: str = "zh-CN") -> dict:
 
         logger.info(f"[YouTube] 抓取成功: {len(paragraphs)} 段, 时长 {duration}")
         return {
-            "title":      title or f"Video {video_id}",
+            "title": title or f"Video {video_id}",
             "paragraphs": paragraphs,
-            "duration":   duration,
-            "source":     f"https://youtube.com/watch?v={video_id}",
+            "duration": duration,
+            "source": f"https://youtube.com/watch?v={video_id}",
         }
 
     except (TranscriptsDisabled, NoTranscriptFound) as e:
@@ -143,10 +145,14 @@ def fetch_youtube_transcript(video_id: str, lang: str = "zh-CN") -> dict:
 def _fetch_youtube_title(video_id: str) -> Optional[str]:
     """通过 YouTube oEmbed API 获取视频标题（无需代理）"""
     import httpx
+
     try:
         r = httpx.get(
             "https://www.youtube.com/oembed",
-            params={"url": f"https://www.youtube.com/watch?v={video_id}", "format": "json"},
+            params={
+                "url": f"https://www.youtube.com/watch?v={video_id}",
+                "format": "json",
+            },
             timeout=5,
         )
         if r.status_code == 200:
@@ -163,43 +169,43 @@ def get_mock_news() -> list[dict]:
     """
     return [
         {
-            "id":       "news001",
-            "tag":      "🔴 突发",
-            "title":    "央行宣布定向降准 0.25 个百分点，释放长期资金约 5000 亿元",
-            "time":     "02:34",
-            "source":   "央行官网",
-            "url":      "#",
+            "id": "news001",
+            "tag": "🔴 突发",
+            "title": "央行宣布定向降准 0.25 个百分点，释放长期资金约 5000 亿元",
+            "time": "02:34",
+            "source": "央行官网",
+            "url": "#",
         },
         {
-            "id":       "news002",
-            "tag":      "📈 A股",
-            "title":    "上证指数重返 3400 点，券商板块掀起涨停潮",
-            "time":     "01:15",
-            "source":   "东方财富",
-            "url":      "#",
+            "id": "news002",
+            "tag": "📈 A股",
+            "title": "上证指数重返 3400 点，券商板块掀起涨停潮",
+            "time": "01:15",
+            "source": "东方财富",
+            "url": "#",
         },
         {
-            "id":       "news003",
-            "tag":      "🌏 港股",
-            "title":    "恒生科技指数大涨 3.8%，南向资金净买入超 100 亿",
-            "time":     "00:58",
-            "source":   "经济通",
-            "url":      "#",
+            "id": "news003",
+            "tag": "🌏 港股",
+            "title": "恒生科技指数大涨 3.8%，南向资金净买入超 100 亿",
+            "time": "00:58",
+            "source": "经济通",
+            "url": "#",
         },
         {
-            "id":       "news004",
-            "tag":      "💎 宏观",
-            "title":    "美国 2 月 CPI 超预期回落，市场押注美联储 6 月降息概率突破 70%",
-            "time":     "00:41",
-            "source":   "Bloomberg",
-            "url":      "#",
+            "id": "news004",
+            "tag": "💎 宏观",
+            "title": "美国 2 月 CPI 超预期回落，市场押注美联储 6 月降息概率突破 70%",
+            "time": "00:41",
+            "source": "Bloomberg",
+            "url": "#",
         },
         {
-            "id":       "news005",
-            "tag":      "🖥️ AI",
-            "title":    "OpenAI 发布 GPT-5 Turbo，上下文窗口扩展至 100 万 token",
-            "time":     "00:22",
-            "source":   "The Verge",
-            "url":      "#",
+            "id": "news005",
+            "tag": "🖥️ AI",
+            "title": "OpenAI 发布 GPT-5 Turbo，上下文窗口扩展至 100 万 token",
+            "time": "00:22",
+            "source": "The Verge",
+            "url": "#",
         },
     ]

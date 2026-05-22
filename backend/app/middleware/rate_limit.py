@@ -6,6 +6,7 @@ Supports burst traffic and smooth rate limiting.
 
 v0.6.61: Migrated from Fixed Window Counter to Token Bucket algorithm.
 """
+
 import time
 import logging
 from typing import Optional
@@ -13,7 +14,10 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from app.middleware.rate_limit_token_bucket import TokenBucketRateLimiter, get_token_bucket_limiter
+from app.middleware.rate_limit_token_bucket import (
+    TokenBucketRateLimiter,
+    get_token_bucket_limiter,
+)
 
 # Use Token Bucket as primary, SQLite Fixed Window as fallback
 PrimaryRateLimiter = TokenBucketRateLimiter
@@ -36,19 +40,19 @@ DEFAULT_BURST_CAPACITY = 150  # max burst tokens
 # Per-endpoint refill rates (tokens/sec)
 # Formula: requests_per_minute / 60 = refill_rate
 ENDPOINT_REFILL_RATES = {
-    "copilot": 0.5,      # 30 req/min
-    "f9_deep": 0.167,    # 10 req/min
-    "backtest": 0.083,   # 5 req/min
-    "agent": 1.67,       # 100 req/min
-    "market": 1.0,       # 60 req/min
-    "news": 0.5,         # 30 req/min
-    "futures": 1.0,      # 60 req/min
-    "macro": 0.5,        # 30 req/min
-    "forex": 1.0,        # 60 req/min
-    "bond": 0.5,         # 30 req/min
-    "market_radar": 0.5, # 30 req/min
-    "global_index": 0.5, # 30 req/min
-    "default": 3.33,     # 200 req/min
+    "copilot": 0.5,  # 30 req/min
+    "f9_deep": 0.167,  # 10 req/min
+    "backtest": 0.083,  # 5 req/min
+    "agent": 1.67,  # 100 req/min
+    "market": 1.0,  # 60 req/min
+    "news": 0.5,  # 30 req/min
+    "futures": 1.0,  # 60 req/min
+    "macro": 0.5,  # 30 req/min
+    "forex": 1.0,  # 60 req/min
+    "bond": 0.5,  # 30 req/min
+    "market_radar": 0.5,  # 30 req/min
+    "global_index": 0.5,  # 30 req/min
+    "default": 3.33,  # 200 req/min
 }
 
 # Burst capacities (same as requests_per_minute for simplicity)
@@ -87,16 +91,13 @@ def get_client_ip(request: Request) -> str:
 
 
 def create_rate_limit_response(
-    retry_after: int,
-    limit: int = 0,
-    remaining: int = 0,
-    reset: int = 0
+    retry_after: int, limit: int = 0, remaining: int = 0, reset: int = 0
 ) -> JSONResponse:
     content = {
         "code": 429,
         "message": "请求过于频繁，请稍后重试",
         "retry_after": retry_after,
-        "detail": f"Rate limit exceeded. Try again in {retry_after} seconds."
+        "detail": f"Rate limit exceeded. Try again in {retry_after} seconds.",
     }
 
     response = JSONResponse(
@@ -107,17 +108,14 @@ def create_rate_limit_response(
             "X-RateLimit-Limit": str(limit),
             "X-RateLimit-Remaining": str(remaining),
             "X-RateLimit-Reset": str(reset),
-        }
+        },
     )
 
     return response
 
 
 def add_rate_limit_headers(
-    response: Response,
-    limit: int,
-    remaining: int,
-    reset: int
+    response: Response, limit: int, remaining: int, reset: int
 ) -> Response:
     response.headers["X-RateLimit-Limit"] = str(limit)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
@@ -158,6 +156,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Get category for refill rate and burst capacity
         from app.config.rate_limit import get_endpoint_category
+
         category = get_endpoint_category(path)
         refill_rate = get_refill_rate_for_category(category)
         burst_capacity = get_burst_capacity_for_category(category)
@@ -166,9 +165,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Use Token Bucket algorithm
         is_allowed, remaining, limit, reset = self.limiter.is_allowed(
-            key,
-            refill_rate=refill_rate,
-            burst_capacity=burst_capacity
+            key, refill_rate=refill_rate, burst_capacity=burst_capacity
         )
 
         if not is_allowed:
@@ -181,7 +178,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 retry_after=max(1, retry_after),
                 limit=limit,
                 remaining=remaining,
-                reset=reset
+                reset=reset,
             )
 
         response = await call_next(request)

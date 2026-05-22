@@ -26,12 +26,15 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-AUDIT_DB_PATH = Path(__file__).parent.parent.parent.parent / "cache" / "strategy_audit.db"
+AUDIT_DB_PATH = (
+    Path(__file__).parent.parent.parent.parent / "cache" / "strategy_audit.db"
+)
 
 
 @dataclass
 class AuditRecord:
     """Audit record for strategy execution."""
+
     record_id: str
     user_id: str
     code_hash: str
@@ -51,7 +54,7 @@ class AuditRecord:
 
 def compute_code_hash(code: str) -> str:
     """Compute SHA-256 hash of strategy code."""
-    return hashlib.sha256(code.encode('utf-8')).hexdigest()
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
 
 
 def init_audit_db():
@@ -107,7 +110,7 @@ def log_strategy_execution(
 ) -> str:
     """
     Log a strategy execution to the audit trail.
-    
+
     Args:
         user_id: User who executed the strategy
         code: Strategy code
@@ -118,7 +121,7 @@ def log_strategy_execution(
         execution_time_ms: Execution time in milliseconds
         error_message: Error message if execution failed
         metadata: Additional metadata
-        
+
     Returns:
         Record ID of the audit entry
     """
@@ -148,26 +151,29 @@ def log_strategy_execution(
     conn = sqlite3.connect(str(AUDIT_DB_PATH))
     cursor = conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO strategy_audit (
             record_id, user_id, code_hash, code_length, timestamp,
             action, is_validated, validation_errors, execution_status,
             execution_time_ms, error_message, metadata
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        record.record_id,
-        record.user_id,
-        record.code_hash,
-        record.code_length,
-        record.timestamp,
-        record.action,
-        1 if record.is_validated else 0,
-        json.dumps(record.validation_errors),
-        record.execution_status,
-        record.execution_time_ms,
-        record.error_message,
-        json.dumps(record.metadata),
-    ))
+    """,
+        (
+            record.record_id,
+            record.user_id,
+            record.code_hash,
+            record.code_length,
+            record.timestamp,
+            record.action,
+            1 if record.is_validated else 0,
+            json.dumps(record.validation_errors),
+            record.execution_status,
+            record.execution_time_ms,
+            record.error_message,
+            json.dumps(record.metadata),
+        ),
+    )
 
     conn.commit()
     conn.close()
@@ -185,13 +191,13 @@ def get_audit_records(
 ) -> List[Dict[str, Any]]:
     """
     Retrieve audit records.
-    
+
     Args:
         user_id: Filter by user ID
         limit: Maximum number of records to return
         offset: Offset for pagination
         action: Filter by action type
-        
+
     Returns:
         List of audit records
     """
@@ -220,20 +226,22 @@ def get_audit_records(
 
     records = []
     for row in rows:
-        records.append({
-            "record_id": row[0],
-            "user_id": row[1],
-            "code_hash": row[2],
-            "code_length": row[3],
-            "timestamp": row[4],
-            "action": row[5],
-            "is_validated": bool(row[6]),
-            "validation_errors": json.loads(row[7]) if row[7] else [],
-            "execution_status": row[8],
-            "execution_time_ms": row[9],
-            "error_message": row[10],
-            "metadata": json.loads(row[11]) if row[11] else {},
-        })
+        records.append(
+            {
+                "record_id": row[0],
+                "user_id": row[1],
+                "code_hash": row[2],
+                "code_length": row[3],
+                "timestamp": row[4],
+                "action": row[5],
+                "is_validated": bool(row[6]),
+                "validation_errors": json.loads(row[7]) if row[7] else [],
+                "execution_status": row[8],
+                "execution_time_ms": row[9],
+                "error_message": row[10],
+                "metadata": json.loads(row[11]) if row[11] else {},
+            }
+        )
 
     return records
 
@@ -241,7 +249,7 @@ def get_audit_records(
 def get_audit_stats() -> Dict[str, Any]:
     """
     Get audit statistics.
-    
+
     Returns:
         Dictionary with audit statistics
     """
@@ -256,16 +264,22 @@ def get_audit_stats() -> Dict[str, Any]:
     cursor.execute("SELECT COUNT(DISTINCT user_id) FROM strategy_audit")
     unique_users = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM strategy_audit WHERE execution_status = 'security_error'")
+    cursor.execute(
+        "SELECT COUNT(*) FROM strategy_audit WHERE execution_status = 'security_error'"
+    )
     security_errors = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM strategy_audit WHERE execution_status = 'timeout'")
+    cursor.execute(
+        "SELECT COUNT(*) FROM strategy_audit WHERE execution_status = 'timeout'"
+    )
     timeouts = cursor.fetchone()[0]
 
     cursor.execute("SELECT COUNT(*) FROM strategy_audit WHERE is_validated = 0")
     validation_failures = cursor.fetchone()[0]
 
-    cursor.execute("SELECT AVG(execution_time_ms) FROM strategy_audit WHERE execution_status = 'success'")
+    cursor.execute(
+        "SELECT AVG(execution_time_ms) FROM strategy_audit WHERE execution_status = 'success'"
+    )
     avg_execution_time = cursor.fetchone()[0] or 0
 
     conn.close()
@@ -283,11 +297,11 @@ def get_audit_stats() -> Dict[str, Any]:
 def check_suspicious_activity(user_id: str, window_hours: int = 24) -> Dict[str, Any]:
     """
     Check for suspicious activity patterns.
-    
+
     Args:
         user_id: User ID to check
         window_hours: Time window in hours
-        
+
     Returns:
         Dictionary with suspicious activity indicators
     """
@@ -299,36 +313,48 @@ def check_suspicious_activity(user_id: str, window_hours: int = 24) -> Dict[str,
     cutoff = datetime.now().timestamp() - (window_hours * 3600)
     cutoff_str = datetime.fromtimestamp(cutoff).isoformat()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*) FROM strategy_audit 
         WHERE user_id = ? AND timestamp >= ?
-    """, (user_id, cutoff_str))
+    """,
+        (user_id, cutoff_str),
+    )
     recent_count = cursor.fetchone()[0]
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*) FROM strategy_audit 
         WHERE user_id = ? AND execution_status = 'security_error' AND timestamp >= ?
-    """, (user_id, cutoff_str))
+    """,
+        (user_id, cutoff_str),
+    )
     security_error_count = cursor.fetchone()[0]
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*) FROM strategy_audit 
         WHERE user_id = ? AND execution_status = 'timeout' AND timestamp >= ?
-    """, (user_id, cutoff_str))
+    """,
+        (user_id, cutoff_str),
+    )
     timeout_count = cursor.fetchone()[0]
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(DISTINCT code_hash) FROM strategy_audit 
         WHERE user_id = ? AND timestamp >= ?
-    """, (user_id, cutoff_str))
+    """,
+        (user_id, cutoff_str),
+    )
     unique_codes = cursor.fetchone()[0]
 
     conn.close()
 
     is_suspicious = (
-        security_error_count > 3 or
-        timeout_count > 5 or
-        (recent_count > 50 and unique_codes < 5)
+        security_error_count > 3
+        or timeout_count > 5
+        or (recent_count > 50 and unique_codes < 5)
     )
 
     return {

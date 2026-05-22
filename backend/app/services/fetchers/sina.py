@@ -13,6 +13,7 @@ Sina 实时行情 API：
   ⚠️ 注意：指数的 parts[3] 是今开，不是涨跌幅！parts[32]=涨跌幅%, parts[33]=涨跌额
   涨跌幅必须通过 (current - prev_close) / prev_close * 100 计算得出
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,9 +27,12 @@ from .base import BaseMarketFetcher
 from ..http_client import ValidatedHTTPClient
 from ..circuit_breaker import CircuitBreaker
 from ..data_validator import (
-    QuoteData, KlineData,
-    validate_quote, validate_kline,
-    MarketType, DataType,
+    QuoteData,
+    KlineData,
+    validate_quote,
+    validate_kline,
+    MarketType,
+    DataType,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,18 +49,19 @@ HEADERS = {
 # 核心标的指数白名单（额外价格合理性校验）
 # ─────────────────────────────────────────────────────────────────────────────
 CRITICAL_INDICES = {
-    "sh000001": ("上证指数",   2000.0, 6000.0),
-    "sh000300": ("沪深300",   2000.0, 6000.0),
-    "sh000016": ("上证50",    1500.0, 8000.0),
-    "sh000688": ("科创50",     500.0, 3000.0),
-    "sz399001": ("深证成指",  5000.0, 20000.0),
-    "sz399006": ("创业板指",  1000.0, 6000.0),
-    "sz399005": ("中小板指",  2000.0, 10000.0),
+    "sh000001": ("上证指数", 2000.0, 6000.0),
+    "sh000300": ("沪深300", 2000.0, 6000.0),
+    "sh000016": ("上证50", 1500.0, 8000.0),
+    "sh000688": ("科创50", 500.0, 3000.0),
+    "sz399001": ("深证成指", 5000.0, 20000.0),
+    "sz399006": ("创业板指", 1000.0, 6000.0),
+    "sz399005": ("中小板指", 2000.0, 10000.0),
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Symbol 规范化
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def normalize_symbol(symbol: str) -> str:
     """
@@ -80,6 +85,7 @@ def is_index_symbol(symbol: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 # 核心解析函数（修复版）
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def parse_sina_response(raw_text: str, symbol: str) -> Optional[dict]:
     """
@@ -122,8 +128,12 @@ def parse_sina_response(raw_text: str, symbol: str) -> Optional[dict]:
             low = float(parts[5]) if len(parts) > 5 and parts[5] else current
 
             # 涨跌幅必须通过计算验证，不用 parts[32]（可能被污染）
-            computed_chg_pct = ((current - prev_close) / prev_close * 100) if prev_close else 0.0
-            reported_chg_pct = float(parts[32]) if len(parts) > 32 and parts[32] else computed_chg_pct
+            computed_chg_pct = (
+                ((current - prev_close) / prev_close * 100) if prev_close else 0.0
+            )
+            reported_chg_pct = (
+                float(parts[32]) if len(parts) > 32 and parts[32] else computed_chg_pct
+            )
 
             # 如果 parts[32] 与计算值偏差 > 5%，说明 API 数据异常，使用计算值
             if abs(reported_chg_pct - computed_chg_pct) > 5.0:
@@ -154,7 +164,9 @@ def parse_sina_response(raw_text: str, symbol: str) -> Optional[dict]:
                 "source": "sina",
             }
         except (ValueError, IndexError) as e:
-            logger.error(f"[Sina] 指数解析失败 {symbol}: {e}, parts={parts[:10]}", exc_info=True)
+            logger.error(
+                f"[Sina] 指数解析失败 {symbol}: {e}, parts={parts[:10]}", exc_info=True
+            )
             return None
 
     else:
@@ -169,10 +181,12 @@ def parse_sina_response(raw_text: str, symbol: str) -> Optional[dict]:
             low = float(parts[5]) if parts[5] else current
 
             if current <= 0 or prev_close <= 0:
-                logger.error(f"[Sina] 个股 {symbol} 价格异常: current={current}, prev_close={prev_close}")
+                logger.error(
+                    f"[Sina] 个股 {symbol} 价格异常: current={current}, prev_close={prev_close}"
+                )
                 return None
 
-            computed_chg_pct = ((current - prev_close) / prev_close * 100)
+            computed_chg_pct = (current - prev_close) / prev_close * 100
             change = round(current - prev_close, 3)
 
             # 成交量：parts[8]=成交量(股)
@@ -183,10 +197,14 @@ def parse_sina_response(raw_text: str, symbol: str) -> Optional[dict]:
             turnover = float(parts[10]) if len(parts) > 10 and parts[10] else None
 
             # 涨跌额 parts[33]
-            reported_change = float(parts[33]) if len(parts) > 33 and parts[33] else change
+            reported_change = (
+                float(parts[33]) if len(parts) > 33 and parts[33] else change
+            )
 
             return {
-                "symbol": normalize_symbol(parts[2].strip() if len(parts) > 2 else symbol),  # parts[2]=代码
+                "symbol": normalize_symbol(
+                    parts[2].strip() if len(parts) > 2 else symbol
+                ),  # parts[2]=代码
                 "name": parts[0].strip(),
                 "market": MarketType.AShare.value,
                 "price": current,
@@ -211,6 +229,7 @@ def parse_sina_response(raw_text: str, symbol: str) -> Optional[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 # Sina Fetcher
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class SinaFetcher(BaseMarketFetcher):
     """
@@ -239,7 +258,10 @@ class SinaFetcher(BaseMarketFetcher):
 
     # 国内金融域名不走代理（直接连接）
     NO_PROXY_DOMAINS = {
-        "hq.sinajs.cn", "finance.sina.com.cn", "sinajs.cn", "sina.com.cn",
+        "hq.sinajs.cn",
+        "finance.sina.com.cn",
+        "sinajs.cn",
+        "sina.com.cn",
     }
 
     def __init__(
@@ -262,7 +284,7 @@ class SinaFetcher(BaseMarketFetcher):
     async def _get_http(self) -> ValidatedHTTPClient:
         if self._http is None:
             self._http = ValidatedHTTPClient(
-                proxy=self._get_proxy(),   # Sina 国内直连
+                proxy=self._get_proxy(),  # Sina 国内直连
                 timeout=10.0,
                 max_retries=3,
                 base_delay=1.0,
@@ -315,7 +337,10 @@ class SinaFetcher(BaseMarketFetcher):
 
             # 核心标的价格合理性二次检查
             if result.symbol.lower() in CRITICAL_INDICES:
-                lo, hi = CRITICAL_INDICES[result.symbol.lower()][1], CRITICAL_INDICES[result.symbol.lower()][2]
+                lo, hi = (
+                    CRITICAL_INDICES[result.symbol.lower()][1],
+                    CRITICAL_INDICES[result.symbol.lower()][2],
+                )
                 if not (lo <= result.price <= hi):
                     logger.error(
                         f"[Sina] 核心标的 {result.name}({result.symbol}) "
@@ -349,7 +374,7 @@ class SinaFetcher(BaseMarketFetcher):
         http = await self._get_http()
 
         for i in range(0, len(symbols), batch_size):
-            batch = symbols[i:i + batch_size]
+            batch = symbols[i : i + batch_size]
             codes = ",".join(normalize_symbol(s) for s in batch)
 
             try:
@@ -369,7 +394,9 @@ class SinaFetcher(BaseMarketFetcher):
                         results.append(result)
 
             except Exception as e:
-                logger.warning(f"[Sina] 批量请求第 {i//batch_size + 1} 批失败: {e}", exc_info=True)
+                logger.warning(
+                    f"[Sina] 批量请求第 {i//batch_size + 1} 批失败: {e}", exc_info=True
+                )
                 continue
 
         return results
@@ -401,10 +428,7 @@ class SinaFetcher(BaseMarketFetcher):
         scale, sina_period = period_map.get(period, (240, "day"))
 
         try:
-            url = (
-                f"{KLINE_URL}?symbol={sina_code}"
-                f"&scale={scale}&datalen={datalen}"
-            )
+            url = f"{KLINE_URL}?symbol={sina_code}" f"&scale={scale}&datalen={datalen}"
             resp = await http.get_with_retry(url, headers=HEADERS)
             data = resp.json()
 

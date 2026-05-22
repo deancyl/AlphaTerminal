@@ -6,6 +6,7 @@
 - 利用数据源的start_date参数
 - 自动合并增量数据到现有数据
 """
+
 import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -29,19 +30,16 @@ class IncrementalKlineFetcher:
         self._last_dates[symbol] = date
 
     async def fetch_incremental(
-        self,
-        symbol: str,
-        period: str = "daily",
-        last_date: Optional[str] = None
+        self, symbol: str, period: str = "daily", last_date: Optional[str] = None
     ) -> List[Dict]:
         """
         获取增量K线数据
-        
+
         Args:
             symbol: 股票代码
             period: 周期
             last_date: 最后数据日期（YYYY-MM-DD）
-        
+
         Returns:
             增量K线数据列表
         """
@@ -56,10 +54,7 @@ class IncrementalKlineFetcher:
 
         try:
             df = ak.stock_zh_a_hist(
-                symbol=symbol,
-                period=period,
-                start_date=start_date,
-                adjust="qfq"
+                symbol=symbol, period=period, start_date=start_date, adjust="qfq"
             )
 
             if df.empty:
@@ -67,15 +62,17 @@ class IncrementalKlineFetcher:
 
             result = []
             for _, row in df.iterrows():
-                result.append({
-                    "date": row["日期"],
-                    "open": row["开盘"],
-                    "high": row["最高"],
-                    "low": row["最低"],
-                    "close": row["收盘"],
-                    "volume": row["成交量"],
-                    "amount": row["成交额"],
-                })
+                result.append(
+                    {
+                        "date": row["日期"],
+                        "open": row["开盘"],
+                        "high": row["最高"],
+                        "low": row["最低"],
+                        "close": row["收盘"],
+                        "volume": row["成交量"],
+                        "amount": row["成交额"],
+                    }
+                )
 
             if result:
                 self.set_last_date(symbol, result[-1]["date"])
@@ -84,21 +81,19 @@ class IncrementalKlineFetcher:
             return result
 
         except Exception as e:
-            logger.error(f"[IncrementalFetcher] {symbol} 增量获取失败: {e}", exc_info=True)
+            logger.error(
+                f"[IncrementalFetcher] {symbol} 增量获取失败: {e}", exc_info=True
+            )
             return []
 
-    def merge_data(
-        self,
-        existing: List[Dict],
-        incremental: List[Dict]
-    ) -> List[Dict]:
+    def merge_data(self, existing: List[Dict], incremental: List[Dict]) -> List[Dict]:
         """
         合并增量数据到现有数据
-        
+
         Args:
             existing: 现有数据
             incremental: 增量数据
-        
+
         Returns:
             合并后的数据
         """
@@ -107,10 +102,7 @@ class IncrementalKlineFetcher:
 
         existing_dates = {item["date"] for item in existing}
 
-        new_data = [
-            item for item in incremental
-            if item["date"] not in existing_dates
-        ]
+        new_data = [item for item in incremental if item["date"] not in existing_dates]
 
         result = existing + new_data
         result.sort(key=lambda x: x["date"])

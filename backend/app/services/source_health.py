@@ -7,6 +7,7 @@
 - 广播健康状态到WebSocket
 - 提供健康状态API
 """
+
 import asyncio
 import time
 from datetime import datetime
@@ -48,6 +49,7 @@ class SourceHealthChecker:
             if source == "sina":
                 # 探测新浪行情接口
                 from app.services.fetchers.sina_hq_fetcher import SinaHQFetcher
+
                 fetcher = SinaHQFetcher()
                 # 简单探测，不获取实际数据
                 ok = True  # 简化实现
@@ -65,7 +67,7 @@ class SourceHealthChecker:
                 source=source,
                 status=status,
                 latency_ms=latency,
-                last_check=datetime.now()
+                last_check=datetime.now(),
             )
         except Exception as e:
             return HealthCheckResult(
@@ -73,14 +75,14 @@ class SourceHealthChecker:
                 status=SourceStatus.UNHEALTHY,
                 latency_ms=(time.time() - start) * 1000,
                 last_check=datetime.now(),
-                error=str(e)
+                error=str(e),
             )
 
     async def check_all(self) -> Dict[str, HealthCheckResult]:
         """检查所有数据源"""
-        results = await asyncio.gather(*[
-            self.check_source(source) for source in self.SOURCES
-        ])
+        results = await asyncio.gather(
+            *[self.check_source(source) for source in self.SOURCES]
+        )
         self._results = {r.source: r for r in results}
         return self._results
 
@@ -91,7 +93,7 @@ class SourceHealthChecker:
                 "status": result.status.value,
                 "latency_ms": round(result.latency_ms, 2),
                 "last_check": result.last_check.isoformat(),
-                "error": result.error
+                "error": result.error,
             }
             for source, result in self._results.items()
         }

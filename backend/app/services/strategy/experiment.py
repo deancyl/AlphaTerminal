@@ -59,11 +59,23 @@ class RegimeDetector:
         ma_long = close.rolling(50).mean()
         volatility = returns.rolling(20).std()
 
-        trend_strength = (ma_short.iloc[-1] - ma_long.iloc[-1]) / ma_long.iloc[-1] if not pd.isna(ma_long.iloc[-1]) else 0
-        vol_level = volatility.iloc[-1] / volatility.rolling(60).mean().iloc[-1] if not pd.isna(volatility.iloc[-1]) and volatility.iloc[-1] != 0 else 1
+        trend_strength = (
+            (ma_short.iloc[-1] - ma_long.iloc[-1]) / ma_long.iloc[-1]
+            if not pd.isna(ma_long.iloc[-1])
+            else 0
+        )
+        vol_level = (
+            volatility.iloc[-1] / volatility.rolling(60).mean().iloc[-1]
+            if not pd.isna(volatility.iloc[-1]) and volatility.iloc[-1] != 0
+            else 1
+        )
 
         recent_returns = returns.tail(20)
-        positive_ratio = (recent_returns > 0).sum() / len(recent_returns) if len(recent_returns) > 0 else 0.5
+        positive_ratio = (
+            (recent_returns > 0).sum() / len(recent_returns)
+            if len(recent_returns) > 0
+            else 0.5
+        )
 
         if ma_short.iloc[-1] > ma_long.iloc[-1] and trend_strength > 0.02:
             if vol_level > 1.5:
@@ -84,7 +96,12 @@ class RegimeDetector:
         else:
             regime = MarketRegime.UNKNOWN
 
-        confidence = min(abs(trend_strength) * 10 + (vol_level - 1) * 0.3 + abs(positive_ratio - 0.5) * 2, 1.0)
+        confidence = min(
+            abs(trend_strength) * 10
+            + (vol_level - 1) * 0.3
+            + abs(positive_ratio - 0.5) * 2,
+            1.0,
+        )
 
         return RegimeAnalysis(
             regime=regime,
@@ -101,8 +118,11 @@ class BatchBacktester:
     def __init__(self, max_workers: int = 4):
         self.max_workers = max_workers
 
-    def _generate_param_combinations(self, param_grid: Dict[str, List[Any]]) -> List[Dict[str, Any]]:
+    def _generate_param_combinations(
+        self, param_grid: Dict[str, List[Any]]
+    ) -> List[Dict[str, Any]]:
         import itertools
+
         keys = list(param_grid.keys())
         values = list(param_grid.values())
         combinations = []
@@ -131,7 +151,10 @@ class BatchBacktester:
 
         results = []
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = {executor.submit(self._run_single_backtest, job, data): job for job in jobs}
+            futures = {
+                executor.submit(self._run_single_backtest, job, data): job
+                for job in jobs
+            }
             for future in as_completed(futures):
                 job = futures[future]
                 try:
@@ -168,7 +191,11 @@ class BatchBacktester:
                 position = 1
             elif position > 0 and signals.iloc[i]["signal"] == -1:
                 position = 0
-            ret = (data.iloc[i]["close"] / data.iloc[i-1]["close"]) - 1 if position else 0
+            ret = (
+                (data.iloc[i]["close"] / data.iloc[i - 1]["close"]) - 1
+                if position
+                else 0
+            )
             equity.append(equity[-1] * (1 + ret))
         return pd.Series(equity, index=data.index)
 
@@ -225,7 +252,9 @@ class ExperimentPipeline:
         logger.info(f"[Experiment] Starting experiment {experiment_id}")
 
         regime_analysis = self.regime_detector.detect(data)
-        logger.info(f"[Experiment] Detected regime: {regime_analysis.regime.value} (confidence: {regime_analysis.confidence:.2f})")
+        logger.info(
+            f"[Experiment] Detected regime: {regime_analysis.regime.value} (confidence: {regime_analysis.confidence:.2f})"
+        )
 
         jobs = self.batch_backtester.run_batch(strategy_codes, data, param_grid)
 
@@ -233,12 +262,14 @@ class ExperimentPipeline:
         for job in jobs:
             if job.status == "completed" and job.result:
                 score = self.scorer.score(job.result["metrics"])
-                strategy_results.append({
-                    "job_id": job.job_id,
-                    "params": job.params,
-                    "metrics": job.result["metrics"],
-                    "score": score,
-                })
+                strategy_results.append(
+                    {
+                        "job_id": job.job_id,
+                        "params": job.params,
+                        "metrics": job.result["metrics"],
+                        "score": score,
+                    }
+                )
 
         strategy_results.sort(key=lambda x: x["score"], reverse=True)
 

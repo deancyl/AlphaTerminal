@@ -11,6 +11,7 @@ test_data_validation.py — data_validator.py & http_client.py 边界测试
 6. Circuit Breaker 联动
 7. Alphavantage Alphavantage Alphavantage parser
 """
+
 import asyncio
 import sys
 import os
@@ -22,14 +23,19 @@ from pydantic import ValidationError
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.data_validator import (
-    QuoteData, KlineData, validate_quote,
+    QuoteData,
+    KlineData,
+    validate_quote,
 )
 from app.services.http_client import (
     ValidatedHTTPClient,
 )
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState
+from app.services.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitState,
+)
 from app.services.fetchers.alphavantage import AlphavantageFetcher
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 测试结果收集
@@ -64,11 +70,18 @@ def test_price_must_be_positive():
     print("\n[1] price 字段基础校验")
     try:
         QuoteData(
-            symbol="sh000001", name="上证指数",
-            price=-0.1, prev_close=3948.55,
-            open=3900, high=3950, low=3900,
-            change_pct=-0.2, change=-7.0, volume=1e9,
-            timestamp=0, source="test",
+            symbol="sh000001",
+            name="上证指数",
+            price=-0.1,
+            prev_close=3948.55,
+            open=3900,
+            high=3950,
+            low=3900,
+            change_pct=-0.2,
+            change=-7.0,
+            volume=1e9,
+            timestamp=0,
+            source="test",
         )
         fail_("price <= 0 必须报错", "未抛出异常")
     except ValidationError as e:
@@ -85,12 +98,18 @@ def test_change_pct_out_of_range():
     print("\n[2] change_pct 合理范围校验")
     try:
         QuoteData(
-            symbol="sh000001", name="上证指数",
-            price=5000, prev_close=3948.55,
-            open=3900, high=5000, low=3900,
-            change_pct=38.5,   # ← 异常大的涨跌幅（可能数据错位）
-            change=1051.45, volume=1e9,
-            timestamp=0, source="test",
+            symbol="sh000001",
+            name="上证指数",
+            price=5000,
+            prev_close=3948.55,
+            open=3900,
+            high=5000,
+            low=3900,
+            change_pct=38.5,  # ← 异常大的涨跌幅（可能数据错位）
+            change=1051.45,
+            volume=1e9,
+            timestamp=0,
+            source="test",
         )
         fail_("change_pct > 25% 必须报错", "未抛出异常")
     except ValidationError as e:
@@ -111,13 +130,18 @@ def test_ohlc_price_outside_high_low():
     # 价格错位场景：price=3.94（应为3948.55），但 change_pct/change 提供了匹配的价格
     # 使 change_pct 校验通过，让 OHLC 校验在价格一致性阶段捕获错误
     raw = dict(
-        symbol="sh000001", name="上证指数",
-        price=3.94,        # ← 疑似小数点错位（应为 3948.55）
-        prev_close=3.93,    # ← 与 price 配套，让 change_pct 计算合理
-        open=3.90, high=4.00, low=3.90,  # ← OHLC 范围配合 price=3.94
-        change_pct=0.25,   # ← 匹配 price=3.94/prev_close=3.93 的计算值
+        symbol="sh000001",
+        name="上证指数",
+        price=3.94,  # ← 疑似小数点错位（应为 3948.55）
+        prev_close=3.93,  # ← 与 price 配套，让 change_pct 计算合理
+        open=3.90,
+        high=4.00,
+        low=3.90,  # ← OHLC 范围配合 price=3.94
+        change_pct=0.25,  # ← 匹配 price=3.94/prev_close=3.93 的计算值
         change=0.01,
-        volume=1e9, timestamp=0, source="test",
+        volume=1e9,
+        timestamp=0,
+        source="test",
     )
     try:
         q = QuoteData(**raw)
@@ -144,11 +168,16 @@ def test_ohlc_consistency_close_outside():
     print("\n[4] K线 OHLC close 校验")
     try:
         KlineData(
-            symbol="sh000001", date="2026-04-21",
+            symbol="sh000001",
+            date="2026-04-21",
             period="day",
-            open=3948, high=3955, low=3930,
-            close=3.94,   # ← 疑似错位
-            volume=1e9, timestamp=0, source="test",
+            open=3948,
+            high=3955,
+            low=3930,
+            close=3.94,  # ← 疑似错位
+            volume=1e9,
+            timestamp=0,
+            source="test",
         )
         fail_("K线 close 不在 [low, high] 必须报错", "未抛出异常")
     except ValidationError as e:
@@ -176,12 +205,18 @@ def test_change_pct_mismatch():
         # parts[3] 被当作涨跌幅，实际是今开价
         # 导致 price=3923.28（正确）但 change_pct 被设为今开对应的错误值
         QuoteData(
-            symbol="sh000001", name="上证指数",
-            price=3923.28, prev_close=3948.55,
-            open=3923.28, high=3923.28, low=3923.28,
-            change_pct=0.24,   # ← 实际是今开价 3923.28，但 change_pct 用的是 parts[3]
-            change=9.5631,       # ← 这个值实际上也不是 change
-            volume=1e9, timestamp=0, source="test",
+            symbol="sh000001",
+            name="上证指数",
+            price=3923.28,
+            prev_close=3948.55,
+            open=3923.28,
+            high=3923.28,
+            low=3923.28,
+            change_pct=0.24,  # ← 实际是今开价 3923.28，但 change_pct 用的是 parts[3]
+            change=9.5631,  # ← 这个值实际上也不是 change
+            volume=1e9,
+            timestamp=0,
+            source="test",
         )
         # change_pct = (3923.28 - 3948.55) / 3948.55 * 100 ≈ -0.64%
         # 期望 change_pct ≈ -0.64，但传入 0.24
@@ -209,12 +244,18 @@ def test_critical_index_out_of_range():
     print("\n[6] 核心标的指数价格合理性检查")
     try:
         q = QuoteData(
-            symbol="sh000001", name="上证指数",
-            price=3.94,    # ← 正常应为 3948.55
+            symbol="sh000001",
+            name="上证指数",
+            price=3.94,  # ← 正常应为 3948.55
             prev_close=3948.55,
-            open=3.90, high=3.95, low=3.90,
-            change_pct=-99.9, change=-3944.61,
-            volume=1e9, timestamp=0, source="test",
+            open=3.90,
+            high=3.95,
+            low=3.90,
+            change_pct=-99.9,
+            change=-3944.61,
+            volume=1e9,
+            timestamp=0,
+            source="test",
         )
         ok = q.validate_critical_symbol()
         if not ok:
@@ -234,11 +275,18 @@ def test_critical_index_valid():
     print("\n[7] 核心标的合理价格 → 通过")
     try:
         q = QuoteData(
-            symbol="sh000001", name="上证指数",
-            price=3948.55, prev_close=3923.28,
-            open=3920, high=3960, low=3910,
-            change_pct=0.64, change=25.27,
-            volume=1e9, timestamp=0, source="test",
+            symbol="sh000001",
+            name="上证指数",
+            price=3948.55,
+            prev_close=3923.28,
+            open=3920,
+            high=3960,
+            low=3910,
+            change_pct=0.64,
+            change=25.27,
+            volume=1e9,
+            timestamp=0,
+            source="test",
         )
         ok = q.validate_critical_symbol()
         if ok:
@@ -260,13 +308,31 @@ def test_kline_ohlc():
     print("\n[8] KlineData OHLC 校验")
     klines = [
         # 正常 K线
-        {"symbol": "sh600519", "date": "2026-04-21", "period": "day",
-         "open": 1800, "high": 1820, "low": 1790, "close": 1815,
-         "volume": 5e6, "timestamp": 0, "source": "test"},
+        {
+            "symbol": "sh600519",
+            "date": "2026-04-21",
+            "period": "day",
+            "open": 1800,
+            "high": 1820,
+            "low": 1790,
+            "close": 1815,
+            "volume": 5e6,
+            "timestamp": 0,
+            "source": "test",
+        },
         # 异常 K线：close > high
-        {"symbol": "sh600519", "date": "2026-04-20", "period": "day",
-         "open": 1800, "high": 1810, "low": 1790, "close": 1830,  # close > high
-         "volume": 5e6, "timestamp": 0, "source": "test"},
+        {
+            "symbol": "sh600519",
+            "date": "2026-04-20",
+            "period": "day",
+            "open": 1800,
+            "high": 1810,
+            "low": 1790,
+            "close": 1830,  # close > high
+            "volume": 5e6,
+            "timestamp": 0,
+            "source": "test",
+        },
     ]
     try:
         normal = KlineData(**klines[0])
@@ -302,11 +368,27 @@ def test_http_retry_on_503():
 
     # 模拟前两次 503，第三次 200
     responses = [
-        MagicMock(status_code=503, raise_for_status=MagicMock(side_effect=httpx.HTTPStatusError("503", request=MagicMock(), response=MagicMock())),
-                  content=b"Service Unavailable"),
-        MagicMock(status_code=503, raise_for_status=MagicMock(side_effect=httpx.HTTPStatusError("503", request=MagicMock(), response=MagicMock())),
-                  content=b"Service Unavailable"),
-        MagicMock(status_code=200, raise_for_status=MagicMock(), content=b'{"ok": true}'),
+        MagicMock(
+            status_code=503,
+            raise_for_status=MagicMock(
+                side_effect=httpx.HTTPStatusError(
+                    "503", request=MagicMock(), response=MagicMock()
+                )
+            ),
+            content=b"Service Unavailable",
+        ),
+        MagicMock(
+            status_code=503,
+            raise_for_status=MagicMock(
+                side_effect=httpx.HTTPStatusError(
+                    "503", request=MagicMock(), response=MagicMock()
+                )
+            ),
+            content=b"Service Unavailable",
+        ),
+        MagicMock(
+            status_code=200, raise_for_status=MagicMock(), content=b'{"ok": true}'
+        ),
     ]
     mock_get = AsyncMock(side_effect=responses)
 
@@ -352,6 +434,7 @@ def test_circuit_breaker_half_open_after_timeout():
     assert cb.state == CircuitState.OPEN, "应为 OPEN"
 
     import time
+
     time.sleep(1.1)  # 等待超时
 
     state = cb._get_state_unsafe()
@@ -364,7 +447,9 @@ def test_circuit_breaker_half_open_after_timeout():
 def test_http_client_circuit_breaker_integration():
     """ValidatedHTTPClient 失败时调用 record_failure()"""
     print("\n[12] ValidatedHTTPClient 与 CircuitBreaker 联动")
-    cb = CircuitBreaker(name="test_cb", config=CircuitBreakerConfig(failure_threshold=3))
+    cb = CircuitBreaker(
+        name="test_cb", config=CircuitBreakerConfig(failure_threshold=3)
+    )
     client = ValidatedHTTPClient(circuit_breaker=cb, max_retries=0)
 
     initial_failures = cb._stats.consecutive_failures
@@ -372,7 +457,9 @@ def test_http_client_circuit_breaker_integration():
     async def run():
         with patch.object(client, "_get_client") as mock:
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+            mock_client.get = AsyncMock(
+                side_effect=httpx.ConnectError("connection refused")
+            )
             mock.return_value = mock_client
             try:
                 await client.get_with_retry("https://test.fail")
@@ -382,7 +469,9 @@ def test_http_client_circuit_breaker_integration():
 
     failures_after = asyncio.run(run())
     if failures_after > initial_failures:
-        pass_(f"HTTP 失败后 CircuitBreaker consecutive_failures={failures_after} (> {initial_failures})")
+        pass_(
+            f"HTTP 失败后 CircuitBreaker consecutive_failures={failures_after} (> {initial_failures})"
+        )
     else:
         fail_(f"consecutive_failures 未增加: {failures_after}", "")
 
@@ -395,6 +484,7 @@ def test_alphavantage_fetcher_init():
     print("\n[13] AlphavantageFetcher 初始化")
     # 设置环境变量用于测试
     import os
+
     # 先保存原始值
     original_key = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
     os.environ["ALPHA_VANTAGE_API_KEY"] = "4M3YTMFEMBOPM1W2"
@@ -402,6 +492,7 @@ def test_alphavantage_fetcher_init():
     # 重新导入以获取新环境变量值
     from importlib import reload
     import app.services.fetchers.alphavantage as av_module
+
     reload(av_module)
 
     try:
@@ -440,11 +531,17 @@ def test_validate_quote_entry():
     """validate_quote 正常路径"""
     print("\n[15] validate_quote 入口函数")
     raw = {
-        "symbol": "sh000001", "name": "上证指数",
-        "price": 3948.55, "prev_close": 3923.28,
-        "open": 3920, "high": 3960, "low": 3910,
-        "change_pct": 0.64, "change": 25.27,
-        "volume": 1e9, "timestamp": 0,
+        "symbol": "sh000001",
+        "name": "上证指数",
+        "price": 3948.55,
+        "prev_close": 3923.28,
+        "open": 3920,
+        "high": 3960,
+        "low": 3910,
+        "change_pct": 0.64,
+        "change": 25.27,
+        "volume": 1e9,
+        "timestamp": 0,
     }
     result = validate_quote(raw, source="sina")
     if result is not None and result.price == 3948.55:
@@ -457,12 +554,17 @@ def test_validate_quote_returns_none_on_bad_data():
     """校验失败返回 None（不抛异常给上层）"""
     print("\n[16] validate_quote 校验失败返回 None")
     bad_raw = {
-        "symbol": "sh000001", "name": "上证指数",
-        "price": 3.94,    # ← 价格错位
+        "symbol": "sh000001",
+        "name": "上证指数",
+        "price": 3.94,  # ← 价格错位
         "prev_close": 3948.55,
-        "open": 3.90, "high": 3.95, "low": 3.90,
-        "change_pct": -99.9, "change": -3944.61,
-        "volume": 1e9, "timestamp": 0,
+        "open": 3.90,
+        "high": 3.95,
+        "low": 3.90,
+        "change_pct": -99.9,
+        "change": -3944.61,
+        "volume": 1e9,
+        "timestamp": 0,
     }
     result = validate_quote(bad_raw, source="test")
     if result is None:

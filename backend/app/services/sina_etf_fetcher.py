@@ -4,6 +4,7 @@ sina_etf_fetcher.py — 新浪财经 ETF 实时行情抓取器
 免费数据源，无需 API Key
 覆盖：ETF 实时价格、涨跌幅、成交量
 """
+
 import re
 from typing import Optional, Dict, List
 import logging
@@ -36,16 +37,16 @@ class SinaETFFetcher:
         # ETF 基金代码规则：
         # 上海：51xxxx, 56xxxx → sh
         # 深圳：15xxxx, 16xxxx → sz
-        if code.startswith(('51', '56', '58', '60')):
+        if code.startswith(("51", "56", "58", "60")):
             return f"sh{code}"
-        elif code.startswith(('15', '16', '00', '30')):
+        elif code.startswith(("15", "16", "00", "30")):
             return f"sz{code}"
         return code
 
     async def get_etf_info(self, code: str) -> Optional[Dict]:
         """
         获取 ETF 实时行情
-        
+
         数据源: https://hq.sinajs.cn/list=sh510300
         """
         try:
@@ -65,7 +66,7 @@ class SinaETFFetcher:
                     return None
 
                 data_str = match.group(1)
-                parts = data_str.split(',')
+                parts = data_str.split(",")
 
                 if len(parts) < 33:
                     return None
@@ -97,13 +98,17 @@ class SinaETFFetcher:
                     if len(parts) > price_idx:
                         try:
                             volume = int(parts[volume_idx]) if parts[volume_idx] else 0
-                            price = float(parts[price_idx]) if parts[price_idx] else None
+                            price = (
+                                float(parts[price_idx]) if parts[price_idx] else None
+                            )
                             if price:
-                                result["bids"].append({
-                                    "level": i + 1,
-                                    "price": price,
-                                    "volume": volume,
-                                })
+                                result["bids"].append(
+                                    {
+                                        "level": i + 1,
+                                        "price": price,
+                                        "volume": volume,
+                                    }
+                                )
                         except (ValueError, IndexError, TypeError):
                             pass
 
@@ -114,20 +119,29 @@ class SinaETFFetcher:
                     if len(parts) > price_idx:
                         try:
                             volume = int(parts[volume_idx]) if parts[volume_idx] else 0
-                            price = float(parts[price_idx]) if parts[price_idx] else None
+                            price = (
+                                float(parts[price_idx]) if parts[price_idx] else None
+                            )
                             if price:
-                                result["asks"].append({
-                                    "level": i + 1,
-                                    "price": price,
-                                    "volume": volume,
-                                })
+                                result["asks"].append(
+                                    {
+                                        "level": i + 1,
+                                        "price": price,
+                                        "volume": volume,
+                                    }
+                                )
                         except (ValueError, IndexError, TypeError):
                             pass
 
                 # 计算涨跌幅
                 if result["price"] and result["prev_close"]:
                     result["change"] = round(result["price"] - result["prev_close"], 3)
-                    result["change_pct"] = round((result["price"] - result["prev_close"]) / result["prev_close"] * 100, 2)
+                    result["change_pct"] = round(
+                        (result["price"] - result["prev_close"])
+                        / result["prev_close"]
+                        * 100,
+                        2,
+                    )
 
                 logger.info(f"[Sina] ETF {code} 行情获取成功: {result['price']}")
                 return result
@@ -140,10 +154,10 @@ class SinaETFFetcher:
     async def get_etf_batch(self, codes: List[str]) -> Dict[str, Dict]:
         """
         批量获取 ETF 行情
-        
+
         Args:
             codes: ETF 代码列表
-        
+
         Returns:
             Dict[code, info]
         """
@@ -162,7 +176,7 @@ class SinaETFFetcher:
                     match = re.search(rf'var hq_str_{formatted}="([^"]*)"', text)
                     if match:
                         data_str = match.group(1)
-                        parts = data_str.split(',')
+                        parts = data_str.split(",")
 
                         if len(parts) >= 33:
                             info = {
@@ -181,8 +195,15 @@ class SinaETFFetcher:
                             }
 
                             if info["price"] and info["prev_close"]:
-                                info["change"] = round(info["price"] - info["prev_close"], 3)
-                                info["change_pct"] = round((info["price"] - info["prev_close"]) / info["prev_close"] * 100, 2)
+                                info["change"] = round(
+                                    info["price"] - info["prev_close"], 3
+                                )
+                                info["change_pct"] = round(
+                                    (info["price"] - info["prev_close"])
+                                    / info["prev_close"]
+                                    * 100,
+                                    2,
+                                )
 
                             result[code] = info
 
@@ -197,6 +218,7 @@ class SinaETFFetcher:
 
 # 单例模式
 _sina_fetcher_instance = None
+
 
 def get_sina_fetcher() -> SinaETFFetcher:
     global _sina_fetcher_instance

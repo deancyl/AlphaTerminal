@@ -7,25 +7,25 @@ Provides reusable validation functions for:
 - Numeric bounds
 - Pagination parameters
 """
+
 import re
 from datetime import datetime
 from typing import Optional, Tuple
 
-
-SYMBOL_PATTERN_A_STOCK = re.compile(r'^((sh|sz)?[0-9]{6}|[0-9]{6})$')
-SYMBOL_PATTERN_HK_STOCK = re.compile(r'^((hk)?[0-9]{5}|[0-9]{4,5})$')
-SYMBOL_PATTERN_US_STOCK = re.compile(r'^((us)?[A-Z]{1,5}|[A-Z]{1,5})$')
-SYMBOL_PATTERN_ALL = re.compile(r'^((sh|sz|hk|us)?[0-9A-Z]{4,6}|[0-9A-Z]{4,6})$')
+SYMBOL_PATTERN_A_STOCK = re.compile(r"^((sh|sz)?[0-9]{6}|[0-9]{6})$")
+SYMBOL_PATTERN_HK_STOCK = re.compile(r"^((hk)?[0-9]{5}|[0-9]{4,5})$")
+SYMBOL_PATTERN_US_STOCK = re.compile(r"^((us)?[A-Z]{1,5}|[A-Z]{1,5})$")
+SYMBOL_PATTERN_ALL = re.compile(r"^((sh|sz|hk|us)?[0-9A-Z]{4,6}|[0-9A-Z]{4,6})$")
 
 
 def validate_stock_symbol(symbol: str, market: str = "all") -> Tuple[bool, str, str]:
     """
     Validate stock symbol format.
-    
+
     Args:
         symbol: Stock symbol to validate
         market: Market type ("astock", "hk", "us", "all")
-    
+
     Returns:
         (is_valid, normalized_symbol, error_message)
     """
@@ -57,7 +57,7 @@ def validate_stock_symbol(symbol: str, market: str = "all") -> Tuple[bool, str, 
 def normalize_symbol(symbol: str) -> str:
     """
     Normalize symbol to standard format.
-    
+
     A股: sh600519, sz000001
     港股: hk00700
     股: usAAPL
@@ -76,29 +76,31 @@ def normalize_symbol(symbol: str) -> str:
     if symbol.startswith("US"):
         return symbol.lower()
 
-    if re.match(r'^[0-9]{6}$', symbol):
-        if symbol.startswith('6'):
+    if re.match(r"^[0-9]{6}$", symbol):
+        if symbol.startswith("6"):
             return f"sh{symbol}"
         else:
             return f"sz{symbol}"
 
-    if re.match(r'^[0-9]{4,5}$', symbol):
+    if re.match(r"^[0-9]{4,5}$", symbol):
         return f"hk{symbol}"
 
-    if re.match(r'^[A-Z]{1,5}$', symbol):
+    if re.match(r"^[A-Z]{1,5}$", symbol):
         return f"us{symbol}"
 
     return symbol
 
 
-def validate_date_string(date_str: str, format: str = "%Y-%m-%d") -> Tuple[bool, Optional[datetime], str]:
+def validate_date_string(
+    date_str: str, format: str = "%Y-%m-%d"
+) -> Tuple[bool, Optional[datetime], str]:
     """
     Validate date string format.
-    
+
     Args:
         date_str: Date string to validate
         format: Expected date format
-    
+
     Returns:
         (is_valid, parsed_date, error_message)
     """
@@ -109,24 +111,25 @@ def validate_date_string(date_str: str, format: str = "%Y-%m-%d") -> Tuple[bool,
         parsed = datetime.strptime(date_str.strip(), format)
         return True, parsed, ""
     except ValueError:
-        return False, None, f"日期格式错误，应为 {format.replace('%Y', 'YYYY').replace('%m', 'MM').replace('%d', 'DD')}"
+        return (
+            False,
+            None,
+            f"日期格式错误，应为 {format.replace('%Y', 'YYYY').replace('%m', 'MM').replace('%d', 'DD')}",
+        )
 
 
 def validate_date_range(
-    start_date: str,
-    end_date: str,
-    max_days: int = 3650,
-    min_days: int = 1
+    start_date: str, end_date: str, max_days: int = 3650, min_days: int = 1
 ) -> Tuple[bool, int, str]:
     """
     Validate date range.
-    
+
     Args:
         start_date: Start date string
         end_date: End date string
         max_days: Maximum allowed days between dates
         min_days: Minimum required days between dates
-    
+
     Returns:
         (is_valid, days_span, error_message)
     """
@@ -153,17 +156,17 @@ def validate_numeric_bounds(
     value: float,
     min_val: Optional[float] = None,
     max_val: Optional[float] = None,
-    field_name: str = "数值"
+    field_name: str = "数值",
 ) -> Tuple[bool, float, str]:
     """
     Validate numeric value within bounds.
-    
+
     Args:
         value: Numeric value to validate
         min_val: Minimum allowed value
         max_val: Maximum allowed value
         field_name: Field name for error message
-    
+
     Returns:
         (is_valid, value, error_message)
     """
@@ -185,20 +188,17 @@ def validate_numeric_bounds(
 
 
 def validate_pagination(
-    page: int,
-    page_size: int,
-    max_page_size: int = 100,
-    max_page: int = 10000
+    page: int, page_size: int, max_page_size: int = 100, max_page: int = 10000
 ) -> Tuple[bool, int, int, str]:
     """
     Validate pagination parameters.
-    
+
     Args:
         page: Page number
         page_size: Page size
         max_page_size: Maximum allowed page size
         max_page: Maximum allowed page number
-    
+
     Returns:
         (is_valid, normalized_page, normalized_page_size, error_message)
     """
@@ -220,7 +220,7 @@ def validate_pagination(
 def sanitize_string(value: str, max_length: int = 500) -> str:
     """
     Sanitize string input.
-    
+
     - Strip whitespace
     - Limit length
     - Remove dangerous characters
@@ -233,9 +233,9 @@ def sanitize_string(value: str, max_length: int = 500) -> str:
     if len(value) > max_length:
         value = value[:max_length]
 
-    dangerous_chars = ['<', '>', '"', "'", '\n', '\r', '\t']
+    dangerous_chars = ["<", ">", '"', "'", "\n", "\r", "\t"]
     for char in dangerous_chars:
-        value = value.replace(char, '')
+        value = value.replace(char, "")
 
     return value
 

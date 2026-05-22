@@ -2,6 +2,7 @@
 AlphaTerminal 实时新闻引擎 - Phase 5
 全局缓存 + 后台异步刷新（API 只读缓存，<50ms 响应）
 """
+
 import asyncio
 import hashlib
 import logging
@@ -16,13 +17,16 @@ logger = logging.getLogger(__name__)
 # ── 延迟导入akshare（减少启动内存）────────────────────────────────────
 _akshare_module = None
 
+
 def _get_ak():
     """延迟加载akshare"""
     global _akshare_module
     if _akshare_module is None:
         import akshare as ak
+
         _akshare_module = ak
     return _akshare_module
+
 
 # ── 线程池执行器（用于异步并行获取新闻）────────────────────────────────────
 _news_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="news_fetch_")
@@ -49,14 +53,31 @@ _CACHE_LOCK = threading.Lock()
 
 # ── 轮询标的（20 只 A 股核心，覆盖主要行业）─────────────────────────
 NEWS_SYMBOLS = [
-    "000001", "399001", "399006", "000300",              # 核心指数
-    "600036", "601318", "600030", "600016",              # 银行/券商
-    "600519", "002594", "300750", "688981",              # 消费/新能源/半导体
-    "601628", "000776",                                  # 保险
-    "002230", "300059", "688111",                        # 科技
-    "600028", "601899", "600050",                        # 周期
-    "600887", "603288", "000858",                        # 消费
-    "600009", "601888",                                  # 旅游/免税
+    "000001",
+    "399001",
+    "399006",
+    "000300",  # 核心指数
+    "600036",
+    "601318",
+    "600030",
+    "600016",  # 银行/券商
+    "600519",
+    "002594",
+    "300750",
+    "688981",  # 消费/新能源/半导体
+    "601628",
+    "000776",  # 保险
+    "002230",
+    "300059",
+    "688111",  # 科技
+    "600028",
+    "601899",
+    "600050",  # 周期
+    "600887",
+    "603288",
+    "000858",  # 消费
+    "600009",
+    "601888",  # 旅游/免税
 ]
 
 # ── 缓存去重在 refresh_news_cache() 内部通过局部 seen 集合实现 ─────
@@ -67,7 +88,9 @@ def _tag_news(title: str, source: str) -> str:
     t = title + source
     if any(k in t for k in ["突发", "紧急", "暴跌", "大涨", "重磅", "制裁", "黑天鹅"]):
         return "🔴 突发"
-    if any(k in t for k in ["央行", "美联储", "降息", "降准", "CPI", "PPI", "GDP", "LPR"]):
+    if any(
+        k in t for k in ["央行", "美联储", "降息", "降准", "CPI", "PPI", "GDP", "LPR"]
+    ):
         return "💎 宏观"
     if any(k in t for k in ["A股", "沪指", "深指", "创业板", "科创", "涨跌"]):
         return "📈 A股"
@@ -98,20 +121,25 @@ def _fetch_news_for_symbol(symbol: str) -> list[dict]:
         for _, row in df.iterrows():
             try:
                 raw_url = str(row.get("新闻链接", "")) or ""
-                title   = str(row.get("新闻标题", "")) or ""
+                title = str(row.get("新闻标题", "")) or ""
                 if not title or not raw_url or raw_url == "nan":
                     continue
-                rows.append({
-                    "title":  title.strip(),
-                    "time":   str(row.get("发布时间", ""))[:16],
-                    "source": str(row.get("文章来源", "")) or "未知",
-                    "url":    raw_url,   # ← 绝对路径，例: http://finance.eastmoney.com/a/202603313690418549.html
-                })
+                rows.append(
+                    {
+                        "title": title.strip(),
+                        "time": str(row.get("发布时间", ""))[:16],
+                        "source": str(row.get("文章来源", "")) or "未知",
+                        "url": raw_url,  # ← 绝对路径，例: http://finance.eastmoney.com/a/202603313690418549.html
+                    }
+                )
             except (ValueError, TypeError, KeyError, AttributeError):
                 continue
         return rows
     except Exception as e:
-        logger.warning(f"[NewsEngine] stock_news_em({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[NewsEngine] stock_news_em({symbol}) 失败: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         return []
 
 
@@ -128,23 +156,27 @@ def _fetch_7x24_news() -> list[dict]:
         for _, row in df.iterrows():
             try:
                 raw_url = str(row.get("新闻链接", "")) or ""
-                title   = str(row.get("新闻标题", "")) or ""
-                time_   = str(row.get("发布时间", ""))[:16]
-                source  = str(row.get("来源", "")) or "百度财经"
+                title = str(row.get("新闻标题", "")) or ""
+                time_ = str(row.get("发布时间", ""))[:16]
+                source = str(row.get("来源", "")) or "百度财经"
                 if not title or not raw_url or raw_url == "nan":
                     continue
-                rows.append({
-                    "title":  title.strip(),
-                    "time":   time_,
-                    "source": source,
-                    "url":    raw_url,
-                })
+                rows.append(
+                    {
+                        "title": title.strip(),
+                        "time": time_,
+                        "source": source,
+                        "url": raw_url,
+                    }
+                )
             except (ValueError, TypeError, KeyError, AttributeError):
                 continue
         logger.info(f"[NewsEngine] 7x24 快讯: {len(rows)} 条")
         return rows
     except Exception as e:
-        logger.warning(f"[NewsEngine] 7x24 拉取失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[NewsEngine] 7x24 拉取失败: {type(e).__name__}: {e}", exc_info=True
+        )
         return []
 
 
@@ -155,8 +187,7 @@ async def fetch_news_parallel(symbols: list[str]) -> list[dict]:
     async def fetch_one(sym):
         try:
             df = await loop.run_in_executor(
-                _news_executor,
-                lambda s=sym: _get_ak().stock_news_em(symbol=s)
+                _news_executor, lambda s=sym: _get_ak().stock_news_em(symbol=s)
             )
             if df is None or df.empty:
                 return []
@@ -164,20 +195,24 @@ async def fetch_news_parallel(symbols: list[str]) -> list[dict]:
             for _, row in df.iterrows():
                 try:
                     raw_url = str(row.get("新闻链接", "")) or ""
-                    title   = str(row.get("新闻标题", "")) or ""
+                    title = str(row.get("新闻标题", "")) or ""
                     if not title or not raw_url or raw_url == "nan":
                         continue
-                    rows.append({
-                        "title":  title.strip(),
-                        "time":   str(row.get("发布时间", ""))[:16],
-                        "source": str(row.get("文章来源", "")) or "未知",
-                        "url":    raw_url,
-                    })
+                    rows.append(
+                        {
+                            "title": title.strip(),
+                            "time": str(row.get("发布时间", ""))[:16],
+                            "source": str(row.get("文章来源", "")) or "未知",
+                            "url": raw_url,
+                        }
+                    )
                 except (ValueError, TypeError, KeyError, AttributeError):
                     continue
             return rows
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] failed for {sym}: {type(e).__name__}: {e}", exc_info=True)
+            logger.warning(
+                f"[HTTP] failed for {sym}: {type(e).__name__}: {e}", exc_info=True
+            )
             return []
 
     results = await asyncio.gather(*[fetch_one(s) for s in symbols])
@@ -206,10 +241,19 @@ def refresh_news_cache(background: bool = True):
 
     # ── 宏观快讯专用标的（从 stock_news_em 拉，真实时间戳）──────────────
     _MACRO_SYMBOLS = [
-        "000001", "399001", "399006", "000300",   # 主要指数
-        "600036", "601318", "600000",              # 金融
-        "600519", "000858", "600028",              # 消费/能源
-        "002230", "300750", "688981",              # 科技
+        "000001",
+        "399001",
+        "399006",
+        "000300",  # 主要指数
+        "600036",
+        "601318",
+        "600000",  # 金融
+        "600519",
+        "000858",
+        "600028",  # 消费/能源
+        "002230",
+        "300750",
+        "688981",  # 科技
     ]
 
     def _do_fetch():
@@ -223,10 +267,14 @@ def refresh_news_cache(background: bool = True):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                macro_news, stock_news = loop.run_until_complete(asyncio.gather(
-                    asyncio.wait_for(fetch_news_parallel(_MACRO_SYMBOLS), timeout=30),
-                    asyncio.wait_for(fetch_news_parallel(NEWS_SYMBOLS), timeout=30)
-                ))
+                macro_news, stock_news = loop.run_until_complete(
+                    asyncio.gather(
+                        asyncio.wait_for(
+                            fetch_news_parallel(_MACRO_SYMBOLS), timeout=30
+                        ),
+                        asyncio.wait_for(fetch_news_parallel(NEWS_SYMBOLS), timeout=30),
+                    )
+                )
             finally:
                 loop.close()
 
@@ -240,15 +288,21 @@ def refresh_news_cache(background: bool = True):
 
         except asyncio.TimeoutError as e:
             logger.error(f"[SCHEDULER] News fetch timeout: {e}", exc_info=True)
-            logger.info(f"[HEARTBEAT] News fetch timeout at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(
+                f"[HEARTBEAT] News fetch timeout at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
             return
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP] failed: {e}", exc_info=True)
-            logger.info(f"[HEARTBEAT] News fetch failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {e}")
+            logger.info(
+                f"[HEARTBEAT] News fetch failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {e}"
+            )
             return
 
         if not all_news:
-            logger.warning("[SCHEDULER] All sources returned empty, skipping cache update.")
+            logger.warning(
+                "[SCHEDULER] All sources returned empty, skipping cache update."
+            )
             return
 
         # 合并去重（MD5 URL）- 使用局部 seen 集合，仅在当前刷新周期内去重
@@ -260,7 +314,7 @@ def refresh_news_cache(background: bool = True):
             if h not in seen:
                 seen.add(h)
                 item["tag"] = _tag_news(item["title"], item["source"])
-                item["id"]  = h[:12]
+                item["id"] = h[:12]
                 unique_news.append(item)
 
         # 全量覆盖缓存（去重后最新 200 条）
@@ -312,14 +366,44 @@ def is_cache_ready() -> bool:
 
 def get_mock_news() -> list[dict]:
     return [
-        {"id": "mock001", "tag": "🔴 突发", "title": "央行宣布定向降准 0.25 个百分点，释放长期资金约 5000 亿元",
-         "time": datetime.now().strftime("%H:%M"), "source": "央行官网", "url": "#"},
-        {"id": "mock002", "tag": "📈 A股",  "title": "上证指数重返 3900 点，券商板块掀起涨停潮",
-         "time": datetime.now().strftime("%H:%M"), "source": "东方财富", "url": "#"},
-        {"id": "mock003", "tag": "🌏 港股", "title": "恒生科技指数大涨 3.8%，南向资金净买入超 100 亿",
-         "time": datetime.now().strftime("%H:%M"), "source": "经济通", "url": "#"},
-        {"id": "mock004", "tag": "💎 宏观", "title": "美国 2 月 CPI 超预期回落，市场押注美联储 6 月降息概率突破 70%",
-         "time": datetime.now().strftime("%H:%M"), "source": "Bloomberg", "url": "#"},
-        {"id": "mock005", "tag": "🖥️ AI",  "title": "OpenAI 发布 GPT-5 Turbo，上下文窗口扩展至 100 万 token",
-         "time": datetime.now().strftime("%H:%M"), "source": "The Verge", "url": "#"},
+        {
+            "id": "mock001",
+            "tag": "🔴 突发",
+            "title": "央行宣布定向降准 0.25 个百分点，释放长期资金约 5000 亿元",
+            "time": datetime.now().strftime("%H:%M"),
+            "source": "央行官网",
+            "url": "#",
+        },
+        {
+            "id": "mock002",
+            "tag": "📈 A股",
+            "title": "上证指数重返 3900 点，券商板块掀起涨停潮",
+            "time": datetime.now().strftime("%H:%M"),
+            "source": "东方财富",
+            "url": "#",
+        },
+        {
+            "id": "mock003",
+            "tag": "🌏 港股",
+            "title": "恒生科技指数大涨 3.8%，南向资金净买入超 100 亿",
+            "time": datetime.now().strftime("%H:%M"),
+            "source": "经济通",
+            "url": "#",
+        },
+        {
+            "id": "mock004",
+            "tag": "💎 宏观",
+            "title": "美国 2 月 CPI 超预期回落，市场押注美联储 6 月降息概率突破 70%",
+            "time": datetime.now().strftime("%H:%M"),
+            "source": "Bloomberg",
+            "url": "#",
+        },
+        {
+            "id": "mock005",
+            "tag": "🖥️ AI",
+            "title": "OpenAI 发布 GPT-5 Turbo，上下文窗口扩展至 100 万 token",
+            "time": datetime.now().strftime("%H:%M"),
+            "source": "The Verge",
+            "url": "#",
+        },
     ]

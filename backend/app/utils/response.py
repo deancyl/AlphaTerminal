@@ -22,7 +22,7 @@
 Migration Guide:
     # Before (deprecated)
     from app.utils.response import success_response, error_response
-    
+
     # After (recommended)
     from app.utils.errors import success_response, error_response
 """
@@ -35,6 +35,7 @@ import warnings
 
 class ErrorCode:
     """统一错误码定义"""
+
     SUCCESS = 0
     BAD_REQUEST = 100
     UNAUTHORIZED = 101
@@ -53,19 +54,16 @@ def generate_trace_id() -> str:
     return str(uuid.uuid4())[:8]
 
 
-def success_response(
-    data: Any,
-    message: str = "success"
-) -> dict:
+def success_response(data: Any, message: str = "success") -> dict:
     """
     Standardized success response format.
-    
+
     [DEPRECATED] Use app.utils.errors.success_response instead.
-    
+
     Args:
         data: Response data
         message: Response message, defaults to "success"
-    
+
     Returns:
         JSON response with consistent structure
     """
@@ -73,7 +71,7 @@ def success_response(
         "app.utils.response.success_response is deprecated. "
         "Use app.utils.errors.success_response instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
 
     return {
@@ -89,23 +87,23 @@ def error_response(
     code_or_message,
     message: Optional[str] = None,
     details: Optional[Dict[str, Any]] = None,
-    code: Optional[int] = None
+    code: Optional[int] = None,
 ) -> dict:
     """
     Standardized error response format.
-    
+
     [DEPRECATED] Use app.utils.errors.error_response instead.
-    
+
     Supports two calling conventions:
     1. error_response(code, message, details) - standard form
     2. error_response(message, code=X) - shorthand form
-    
+
     Args:
         code_or_message: Error code (int) or message (str)
         message: Error message (when first arg is code)
         details: Optional additional error details (e.g., validation errors)
         code: Error code (when using shorthand form)
-    
+
     Returns:
         JSON response with consistent structure including trace_id
     """
@@ -113,7 +111,7 @@ def error_response(
         "app.utils.response.error_response is deprecated. "
         "Use app.utils.errors.error_response instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
 
     # Detect calling convention

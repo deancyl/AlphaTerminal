@@ -2,16 +2,17 @@
 demo_risk_manager.py — Demonstration of RiskManager functionality
 Shows comprehensive usage of all risk management features with debug logging.
 """
+
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import logging
 from app.services.risk_manager import RiskManager
 
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 
@@ -103,10 +104,10 @@ def main():
 
         print(f"    P&L: ${result['pnl']} ({result['pnl_pct']:.2f}%)")
 
-        if result['stop_triggered']:
+        if result["stop_triggered"]:
             print("    ⚠️  STOP TRIGGERED!")
 
-        if result['profit_reached']:
+        if result["profit_reached"]:
             print("    🎯 PROFIT TARGET REACHED!")
 
     print("\n" + "-" * 80)

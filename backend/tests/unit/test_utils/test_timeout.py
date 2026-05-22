@@ -7,6 +7,7 @@ Tests for:
 - Request-level timeout middleware
 - Endpoint-specific timeout behavior
 """
+
 import asyncio
 import pytest
 import time
@@ -81,6 +82,7 @@ class TestTimeoutConfiguration:
             # Re-import to pick up new value
             import importlib
             import app.config.timeout
+
             importlib.reload(app.config.timeout)
 
             assert app.config.timeout.READ_TIMEOUT == 45.0
@@ -106,8 +108,7 @@ class TestThreadPoolExecutorTimeout:
 
         loop = asyncio.get_event_loop()
         result = await asyncio.wait_for(
-            loop.run_in_executor(executor, fast_task),
-            timeout=5.0
+            loop.run_in_executor(executor, fast_task), timeout=5.0
         )
 
         assert result == "success"
@@ -126,8 +127,7 @@ class TestThreadPoolExecutorTimeout:
 
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(
-                loop.run_in_executor(executor, slow_task),
-                timeout=1.0
+                loop.run_in_executor(executor, slow_task), timeout=1.0
             )
 
         executor.shutdown(wait=True)
@@ -145,18 +145,13 @@ class TestThreadPoolExecutorTimeout:
 
         try:
             result = await asyncio.wait_for(
-                loop.run_in_executor(executor, slow_task),
-                timeout=1.0
+                loop.run_in_executor(executor, slow_task), timeout=1.0
             )
             # Should not reach here
             assert False, "Expected TimeoutError"
         except asyncio.TimeoutError:
             # Simulate API response
-            response = {
-                "code": 504,
-                "message": "请求超时，请稍后重试",
-                "data": None
-            }
+            response = {"code": 504, "message": "请求超时，请稍后重试", "data": None}
             assert response["code"] == 504
             assert "超时" in response["message"]
 
@@ -200,6 +195,7 @@ class TestHTTPXTimeoutConfiguration:
 
         # Cleanup
         import asyncio
+
         asyncio.run(client.aclose())
 
 
@@ -225,6 +221,7 @@ class TestRequestTimeoutMiddleware:
 
         # Add timeout middleware with short timeout
         from app.middleware.timeout import TimeoutMiddleware
+
         app.add_middleware(TimeoutMiddleware, timeout=1.0)
 
         @app.get("/slow")

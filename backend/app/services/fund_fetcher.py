@@ -7,6 +7,7 @@ fund_fetcher.py — 基金数据抓取器（Phase 6.5 真·异步版）
 3. Mock 数据路径零阻塞（直接返回）
 4. 数据清洗与 Pandas 处理隔离到线程池
 """
+
 import asyncio
 import time
 import logging
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 # ══════════════════════════════════════════════════════════════════════
 # 异步安全缓存
 # ══════════════════════════════════════════════════════════════════════
+
 
 class AsyncCache:
     """异步安全的内存缓存（带大小限制和过期清理）"""
@@ -31,7 +33,7 @@ class AsyncCache:
     def _cleanup_expired(self):
         """清理过期缓存（同步方法，需在锁内调用）"""
         now = time.time()
-        expired = [k for k, v in self._cache.items() if v['expire_at'] <= now]
+        expired = [k for k, v in self._cache.items() if v["expire_at"] <= now]
         for k in expired:
             del self._cache[k]
         if expired:
@@ -40,7 +42,7 @@ class AsyncCache:
     def _evict_oldest(self):
         """淘汰最旧的缓存（同步方法，需在锁内调用）"""
         if len(self._cache) >= self._max_size:
-            oldest_key = min(self._cache, key=lambda k: self._cache[k]['expire_at'])
+            oldest_key = min(self._cache, key=lambda k: self._cache[k]["expire_at"])
             del self._cache[oldest_key]
             logger.info(f"[Cache EVICT] 移除缓存: {oldest_key[:50]}...")
 
@@ -49,8 +51,8 @@ class AsyncCache:
             if key not in self._cache:
                 return None
             entry = self._cache[key]
-            if entry['expire_at'] > time.time():
-                return entry['data']
+            if entry["expire_at"] > time.time():
+                return entry["data"]
             del self._cache[key]
             return None
 
@@ -59,8 +61,8 @@ class AsyncCache:
             self._cleanup_expired()
             self._evict_oldest()
             self._cache[key] = {
-                'data': data,
-                'expire_at': time.time() + ttl,
+                "data": data,
+                "expire_at": time.time() + ttl,
             }
 
     async def delete(self, key: str) -> None:
@@ -74,7 +76,7 @@ class AsyncCache:
             self._cache.clear()
             logger.info(f"[Cache CLEAR] 清空 {count} 条缓存")
 
-    def cached(self, ttl: int, key_prefix: str = ''):
+    def cached(self, ttl: int, key_prefix: str = ""):
         def decorator(func):
             async def wrapper(*args, **kwargs):
                 cache_key = f"{key_prefix}{func.__name__}:{args}:{kwargs}"
@@ -89,11 +91,15 @@ class AsyncCache:
 
                 if result is not None:
                     await self.set(cache_key, result, ttl)
-                    logger.info(f"[{func.__name__}] 成功 elapsed={elapsed:.2f}s ttl={ttl}s")
+                    logger.info(
+                        f"[{func.__name__}] 成功 elapsed={elapsed:.2f}s ttl={ttl}s"
+                    )
 
                 return result
+
             wrapper.cached = True
             return wrapper
+
         return decorator
 
 
@@ -101,11 +107,11 @@ fund_cache = AsyncCache()
 
 # 缓存 TTL（秒）
 CACHE_TTL = {
-    'etf_spot': 60,
-    'fund_info': 86400,
-    'portfolio': 43200,
-    'nav_history': 14400,
-    'fund_rank': 3600,
+    "etf_spot": 60,
+    "fund_info": 86400,
+    "portfolio": 43200,
+    "nav_history": 14400,
+    "fund_rank": 3600,
 }
 
 # 严格超时（秒）
@@ -116,6 +122,7 @@ TIMEOUT_TOTAL = 15.0  # 增加到 15 秒以适应网络波动
 # 数据清洗（同步函数，在线程池执行）
 # ══════════════════════════════════════════════════════════════════════
 
+
 def clean_value(val) -> Any:
     """清洗 Pandas 特殊值（同步函数）"""
     import numpy as np
@@ -124,7 +131,7 @@ def clean_value(val) -> Any:
     if val is None:
         return None
 
-    if hasattr(pd, 'isna') and pd.isna(val):
+    if hasattr(pd, "isna") and pd.isna(val):
         return None
 
     if isinstance(val, (np.floating, np.integer)):
@@ -145,34 +152,38 @@ def clean_value(val) -> Any:
 # Eastmoney 客户端（优先使用）
 # ══════════════════════════════════════════════════════════════════════
 
+
 class EastmoneyClient:
     """东方财富客户端（免费数据源，无需 AkShare）"""
 
     def __init__(self):
         from app.services.eastmoney_fund_fetcher import get_eastmoney_fetcher
+
         self.fetcher = get_eastmoney_fetcher()
 
-    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='fund:')
+    @fund_cache.cached(CACHE_TTL["fund_info"], key_prefix="fund:")
     async def get_fund_info(self, code: str) -> Optional[Dict]:
         """获取场外公募基金信息（优先 Eastmoney）"""
         return await self.fetcher.get_fund_info(code)
 
-    @fund_cache.cached(CACHE_TTL['portfolio'], key_prefix='portfolio:')
+    @fund_cache.cached(CACHE_TTL["portfolio"], key_prefix="portfolio:")
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
         """获取基金投资组合"""
         return await self.fetcher.get_fund_portfolio(code)
 
-    @fund_cache.cached(CACHE_TTL['nav_history'], key_prefix='nav:')
-    async def get_fund_nav_history(self, code: str, period: str = '6m') -> Optional[List[Dict]]:
+    @fund_cache.cached(CACHE_TTL["nav_history"], key_prefix="nav:")
+    async def get_fund_nav_history(
+        self, code: str, period: str = "6m"
+    ) -> Optional[List[Dict]]:
         """获取基金净值历史"""
         return await self.fetcher.get_fund_nav_history(code, period)
 
-    @fund_cache.cached(CACHE_TTL['fund_rank'], key_prefix='rank:')
-    async def get_fund_rank(self, type: str = '全部') -> Optional[List[Dict]]:
+    @fund_cache.cached(CACHE_TTL["fund_rank"], key_prefix="rank:")
+    async def get_fund_rank(self, type: str = "全部") -> Optional[List[Dict]]:
         """获取基金排行"""
         return await self.fetcher.get_fund_rank(type)
 
-    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='returns:')
+    @fund_cache.cached(CACHE_TTL["fund_info"], key_prefix="returns:")
     async def get_fund_returns(self, code: str) -> Optional[Dict]:
         """获取基金收益数据"""
         return await self.fetcher.get_fund_returns(code)
@@ -182,10 +193,11 @@ class EastmoneyClient:
 # AkShare 客户端（真·异步，作为降级）
 # ══════════════════════════════════════════════════════════════════════
 
+
 class AkShareClient:
     """AkShare 客户端（所有调用在线程池）"""
 
-    @fund_cache.cached(CACHE_TTL['etf_spot'], key_prefix='etf:')
+    @fund_cache.cached(CACHE_TTL["etf_spot"], key_prefix="etf:")
     async def get_etf_spot(self, code: str) -> Optional[Dict]:
         """获取 ETF 实时行情"""
         try:
@@ -193,41 +205,42 @@ class AkShareClient:
 
             # ✅ 真·异步：to_thread + wait_for
             df = await asyncio.wait_for(
-                asyncio.to_thread(ak.fund_etf_spot_em),
-                timeout=TIMEOUT_TOTAL
+                asyncio.to_thread(ak.fund_etf_spot_em), timeout=TIMEOUT_TOTAL
             )
 
             if df is not None and not df.empty:
-                matched = df[df['基金代码'] == code]
+                matched = df[df["基金代码"] == code]
                 if not matched.empty:
                     row = matched.iloc[0]
                     return {
-                        'source': 'akshare',
-                        'code': clean_value(row.get('基金代码')),
-                        'name': clean_value(row.get('基金简称')),
-                        'price': clean_value(row.get('最新价')),
-                        'change_pct': clean_value(row.get('涨跌幅')),
-                        'change': clean_value(row.get('涨跌额')),
-                        'volume': clean_value(row.get('成交量')),
-                        'amount': clean_value(row.get('成交额')),
-                        'high': clean_value(row.get('最高价')),
-                        'low': clean_value(row.get('最低价')),
-                        'prev_close': clean_value(row.get('昨收')),
-                        'iopv': clean_value(row.get('IOPV')),
-                        'premium_rate': clean_value(row.get('折价率')),
+                        "source": "akshare",
+                        "code": clean_value(row.get("基金代码")),
+                        "name": clean_value(row.get("基金简称")),
+                        "price": clean_value(row.get("最新价")),
+                        "change_pct": clean_value(row.get("涨跌幅")),
+                        "change": clean_value(row.get("涨跌额")),
+                        "volume": clean_value(row.get("成交量")),
+                        "amount": clean_value(row.get("成交额")),
+                        "high": clean_value(row.get("最高价")),
+                        "low": clean_value(row.get("最低价")),
+                        "prev_close": clean_value(row.get("昨收")),
+                        "iopv": clean_value(row.get("IOPV")),
+                        "premium_rate": clean_value(row.get("折价率")),
                     }
         except asyncio.TimeoutError:
-            logger.warning(f"[AkShare ETF] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
+            logger.warning(
+                f"[AkShare ETF] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True
+            )
         except Exception as e:
             logger.warning(f"[AkShare ETF] {code} 获取失败：{e}", exc_info=True)
 
         return None
 
-    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='fund:')
+    @fund_cache.cached(CACHE_TTL["fund_info"], key_prefix="fund:")
     async def get_fund_info(self, code: str) -> Optional[Dict]:
         """
         获取场外公募基金信息
-        
+
         ✅ 修复：不再调用 fund_open_fund_rank_em(symbol="全部")
         改用轻量的 fund_open_fund_daily_em 接口获取单只基金
         """
@@ -237,39 +250,45 @@ class AkShareClient:
             # ✅ 正确做法：直接获取单只基金信息
             df = await asyncio.wait_for(
                 asyncio.to_thread(ak.fund_open_fund_daily_em, symbol=code),
-                timeout=TIMEOUT_TOTAL
+                timeout=TIMEOUT_TOTAL,
             )
 
             if df is not None and not df.empty:
                 row = df.iloc[0]
                 return {
-                    'source': 'akshare',
-                    'code': clean_value(row.get('基金代码')),
-                    'name': clean_value(row.get('基金简称')),
-                    'type': clean_value(row.get('基金类型')),
-                    'nav': clean_value(row.get('单位净值')),
-                    'nav_change_pct': clean_value(row.get('日增长率')),
-                    'nav_date': clean_value(row.get('净值日期')),
-                    'scale': clean_value(row.get('基金规模')),
-                    'found_date': clean_value(row.get('成立日期')),
-                    'manager': clean_value(row.get('基金经理')),
-                    'company': clean_value(row.get('基金公司')),
-                    'rating': clean_value(row.get('评级')) or '★★★',
-                    'purchase_fee': clean_value(row.get('申购费率')) or '1.5%',
-                    'redemption_fee': clean_value(row.get('赎回费率')) or '0.5%',
-                    'dividend_freq': '每年',
-                    'accumulated_nav': clean_value(row.get('累计净值')) or clean_value(row.get('单位净值')),
+                    "source": "akshare",
+                    "code": clean_value(row.get("基金代码")),
+                    "name": clean_value(row.get("基金简称")),
+                    "type": clean_value(row.get("基金类型")),
+                    "nav": clean_value(row.get("单位净值")),
+                    "nav_change_pct": clean_value(row.get("日增长率")),
+                    "nav_date": clean_value(row.get("净值日期")),
+                    "scale": clean_value(row.get("基金规模")),
+                    "found_date": clean_value(row.get("成立日期")),
+                    "manager": clean_value(row.get("基金经理")),
+                    "company": clean_value(row.get("基金公司")),
+                    "rating": clean_value(row.get("评级")) or "★★★",
+                    "purchase_fee": clean_value(row.get("申购费率")) or "1.5%",
+                    "redemption_fee": clean_value(row.get("赎回费率")) or "0.5%",
+                    "dividend_freq": "每年",
+                    "accumulated_nav": clean_value(row.get("累计净值"))
+                    or clean_value(row.get("单位净值")),
                 }
         except asyncio.TimeoutError:
-            logger.error(f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
+            logger.error(
+                f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True
+            )
         except Exception as e:
-            logger.error(f"[AkShare Fund] {code} 获取失败：{type(e).__name__}: {e}", exc_info=True)
+            logger.error(
+                f"[AkShare Fund] {code} 获取失败：{type(e).__name__}: {e}",
+                exc_info=True,
+            )
             logger.exception("完整 traceback:")
 
         logger.warning(f"[AkShare Fund] {code} 返回 None，降级到 Mock")
         return None
 
-    @fund_cache.cached(CACHE_TTL['portfolio'], key_prefix='portfolio:')
+    @fund_cache.cached(CACHE_TTL["portfolio"], key_prefix="portfolio:")
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
         """获取基金投资组合"""
         try:
@@ -277,53 +296,81 @@ class AkShareClient:
 
             df = await asyncio.wait_for(
                 asyncio.to_thread(ak.fund_portfolio_hold_em, symbol=code),
-                timeout=TIMEOUT_TOTAL
+                timeout=TIMEOUT_TOTAL,
             )
 
             if df is not None and not df.empty:
-                stock_df = df[df['股票名称'].notna()]
+                stock_df = df[df["股票名称"].notna()]
                 stocks = []
                 for _, row in stock_df.head(10).iterrows():
-                    stocks.append({
-                        'code': clean_value(row.get('股票代码')),
-                        'name': clean_value(row.get('股票名称')),
-                        'price': clean_value(row.get('最新价')),
-                        'change_pct': clean_value(row.get('涨跌幅')),
-                        'ratio': clean_value(row.get('占净值比例')),
-                        'shares': clean_value(row.get('持股数')),
-                        'mkt_value': clean_value(row.get('持仓市值')),
-                        'change': clean_value(row.get('较上期变化')),
-                    })
+                    stocks.append(
+                        {
+                            "code": clean_value(row.get("股票代码")),
+                            "name": clean_value(row.get("股票名称")),
+                            "price": clean_value(row.get("最新价")),
+                            "change_pct": clean_value(row.get("涨跌幅")),
+                            "ratio": clean_value(row.get("占净值比例")),
+                            "shares": clean_value(row.get("持股数")),
+                            "mkt_value": clean_value(row.get("持仓市值")),
+                            "change": clean_value(row.get("较上期变化")),
+                        }
+                    )
 
                 asset_alloc = []
                 try:
                     # 使用行业配置数据来构建资产配置
                     industry_df = await asyncio.wait_for(
-                        asyncio.to_thread(ak.fund_portfolio_industry_allocation_em, symbol=code),
-                        timeout=TIMEOUT_TOTAL
+                        asyncio.to_thread(
+                            ak.fund_portfolio_industry_allocation_em, symbol=code
+                        ),
+                        timeout=TIMEOUT_TOTAL,
                     )
                     if industry_df is not None and not industry_df.empty:
                         # 将行业配置转换为资产配置展示
                         # 行业配置的占净值比例总和即为股票仓位
-                        stock_ratio = industry_df['占净值比例'].sum() if '占净值比例' in industry_df.columns else 0
+                        stock_ratio = (
+                            industry_df["占净值比例"].sum()
+                            if "占净值比例" in industry_df.columns
+                            else 0
+                        )
                         # 限制在合理范围内 (0-100)
                         stock_ratio = min(max(float(stock_ratio), 0), 100)
                         # 剩余仓位按典型混合型基金比例分配
                         remaining = 100 - stock_ratio
                         if remaining > 0:
                             asset_alloc = [
-                                {'name': '股票', 'ratio': round(stock_ratio, 2), 'amount': None},
-                                {'name': '债券', 'ratio': round(remaining * 0.7, 2), 'amount': None},
-                                {'name': '现金', 'ratio': round(remaining * 0.2, 2), 'amount': None},
-                                {'name': '其他', 'ratio': round(remaining * 0.1, 2), 'amount': None},
+                                {
+                                    "name": "股票",
+                                    "ratio": round(stock_ratio, 2),
+                                    "amount": None,
+                                },
+                                {
+                                    "name": "债券",
+                                    "ratio": round(remaining * 0.7, 2),
+                                    "amount": None,
+                                },
+                                {
+                                    "name": "现金",
+                                    "ratio": round(remaining * 0.2, 2),
+                                    "amount": None,
+                                },
+                                {
+                                    "name": "其他",
+                                    "ratio": round(remaining * 0.1, 2),
+                                    "amount": None,
+                                },
                             ]
                         else:
                             # 满仓股票
                             asset_alloc = [
-                                {'name': '股票', 'ratio': round(stock_ratio, 2), 'amount': None},
-                                {'name': '债券', 'ratio': 0, 'amount': None},
-                                {'name': '现金', 'ratio': 0, 'amount': None},
-                                {'name': '其他', 'ratio': 0, 'amount': None},
+                                {
+                                    "name": "股票",
+                                    "ratio": round(stock_ratio, 2),
+                                    "amount": None,
+                                },
+                                {"name": "债券", "ratio": 0, "amount": None},
+                                {"name": "现金", "ratio": 0, "amount": None},
+                                {"name": "其他", "ratio": 0, "amount": None},
                             ]
                 except Exception as e:
                     logger.debug(f"[Portfolio] 行业配置获取失败: {e}")
@@ -331,89 +378,123 @@ class AkShareClient:
 
                 # 如果行业配置失败，基于持仓数据估算
                 if not asset_alloc and stocks:
-                    total_stock_ratio = sum([s.get('ratio', 0) or 0 for s in stocks])
+                    total_stock_ratio = sum([s.get("ratio", 0) or 0 for s in stocks])
                     total_stock_ratio = min(max(float(total_stock_ratio), 0), 100)
                     remaining = 100 - total_stock_ratio
                     if remaining > 0:
                         asset_alloc = [
-                            {'name': '股票', 'ratio': round(total_stock_ratio, 2), 'amount': None},
-                            {'name': '债券', 'ratio': round(remaining * 0.7, 2), 'amount': None},
-                            {'name': '现金', 'ratio': round(remaining * 0.2, 2), 'amount': None},
-                            {'name': '其他', 'ratio': round(remaining * 0.1, 2), 'amount': None},
+                            {
+                                "name": "股票",
+                                "ratio": round(total_stock_ratio, 2),
+                                "amount": None,
+                            },
+                            {
+                                "name": "债券",
+                                "ratio": round(remaining * 0.7, 2),
+                                "amount": None,
+                            },
+                            {
+                                "name": "现金",
+                                "ratio": round(remaining * 0.2, 2),
+                                "amount": None,
+                            },
+                            {
+                                "name": "其他",
+                                "ratio": round(remaining * 0.1, 2),
+                                "amount": None,
+                            },
                         ]
                     else:
                         asset_alloc = [
-                            {'name': '股票', 'ratio': round(total_stock_ratio, 2), 'amount': None},
-                            {'name': '债券', 'ratio': 0, 'amount': None},
-                            {'name': '现金', 'ratio': 0, 'amount': None},
-                            {'name': '其他', 'ratio': 0, 'amount': None},
+                            {
+                                "name": "股票",
+                                "ratio": round(total_stock_ratio, 2),
+                                "amount": None,
+                            },
+                            {"name": "债券", "ratio": 0, "amount": None},
+                            {"name": "现金", "ratio": 0, "amount": None},
+                            {"name": "其他", "ratio": 0, "amount": None},
                         ]
 
                 return {
-                    'source': 'akshare',
-                    'code': code,
-                    'quarter': clean_value(df.iloc[0].get('季度')) if not df.empty else '',
-                    'stocks': stocks,
-                    'assets': asset_alloc,
+                    "source": "akshare",
+                    "code": code,
+                    "quarter": (
+                        clean_value(df.iloc[0].get("季度")) if not df.empty else ""
+                    ),
+                    "stocks": stocks,
+                    "assets": asset_alloc,
                 }
         except asyncio.TimeoutError:
-            logger.warning(f"[AkShare Portfolio] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
+            logger.warning(
+                f"[AkShare Portfolio] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True
+            )
         except Exception as e:
             logger.warning(f"[AkShare Portfolio] {code} 获取失败：{e}", exc_info=True)
 
         return None
 
-    @fund_cache.cached(CACHE_TTL['nav_history'], key_prefix='nav:')
-    async def get_fund_nav_history(self, code: str, period: str = '6m') -> Optional[List[Dict]]:
+    @fund_cache.cached(CACHE_TTL["nav_history"], key_prefix="nav:")
+    async def get_fund_nav_history(
+        self, code: str, period: str = "6m"
+    ) -> Optional[List[Dict]]:
         """获取基金净值历史"""
         try:
             import akshare as ak
 
             df = await asyncio.wait_for(
-                asyncio.to_thread(ak.fund_open_fund_info_em, symbol=code, indicator="单位净值走势"),
-                timeout=TIMEOUT_TOTAL
+                asyncio.to_thread(
+                    ak.fund_open_fund_info_em, symbol=code, indicator="单位净值走势"
+                ),
+                timeout=TIMEOUT_TOTAL,
             )
 
             if df is not None and not df.empty:
                 result = []
                 for _, row in df.iterrows():
-                    result.append({
-                        'date': clean_value(row.get('净值日期')),
-                        'nav': clean_value(row.get('单位净值')),
-                        'accumulated_nav': clean_value(row.get('累计净值')),
-                    })
+                    result.append(
+                        {
+                            "date": clean_value(row.get("净值日期")),
+                            "nav": clean_value(row.get("单位净值")),
+                            "accumulated_nav": clean_value(row.get("累计净值")),
+                        }
+                    )
                 return result[-180:]
         except asyncio.TimeoutError:
-            logger.warning(f"[AkShare NAV] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
+            logger.warning(
+                f"[AkShare NAV] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True
+            )
         except Exception as e:
             logger.warning(f"[AkShare NAV] {code} 获取失败：{e}", exc_info=True)
 
         return None
 
-    @fund_cache.cached(CACHE_TTL['fund_rank'], key_prefix='rank:')
-    async def get_fund_rank(self, type: str = '全部') -> Optional[List[Dict]]:
+    @fund_cache.cached(CACHE_TTL["fund_rank"], key_prefix="rank:")
+    async def get_fund_rank(self, type: str = "全部") -> Optional[List[Dict]]:
         """获取基金排行"""
         try:
             import akshare as ak
 
             df = await asyncio.wait_for(
                 asyncio.to_thread(ak.fund_open_fund_rank_em, symbol=type),
-                timeout=TIMEOUT_TOTAL
+                timeout=TIMEOUT_TOTAL,
             )
 
             if df is not None and not df.empty:
                 result = []
                 for _, row in df.iterrows():
-                    result.append({
-                        'code': clean_value(row.get('基金代码')),
-                        'name': clean_value(row.get('基金简称')),
-                        'nav': clean_value(row.get('单位净值')),
-                        'nav_growthrate': clean_value(row.get('日增长率')),
-                        'type': clean_value(row.get('基金类型')),
-                        'scale': clean_value(row.get('基金规模')),
-                        'find_date': clean_value(row.get('成立日期')),
-                        'manager': clean_value(row.get('基金经理')),
-                    })
+                    result.append(
+                        {
+                            "code": clean_value(row.get("基金代码")),
+                            "name": clean_value(row.get("基金简称")),
+                            "nav": clean_value(row.get("单位净值")),
+                            "nav_growthrate": clean_value(row.get("日增长率")),
+                            "type": clean_value(row.get("基金类型")),
+                            "scale": clean_value(row.get("基金规模")),
+                            "find_date": clean_value(row.get("成立日期")),
+                            "manager": clean_value(row.get("基金经理")),
+                        }
+                    )
                 return result
         except asyncio.TimeoutError:
             logger.warning(f"[AkShare Rank] 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
@@ -427,12 +508,13 @@ class AkShareClient:
 # 统一抓取器（快速 Mock 路径）
 # ══════════════════════════════════════════════════════════════════════
 
+
 class FundFetcher:
     """基金数据统一抓取器（Eastmoney 优先，AkShare 降级）"""
 
     def __init__(self):
         self.em = EastmoneyClient()  # 优先
-        self.ak = AkShareClient()    # 降级
+        self.ak = AkShareClient()  # 降级
 
     async def get_etf_info(self, code: str) -> Optional[Dict]:
         logger.info(f"[FundFetcher] 获取 ETF {code} 信息...")
@@ -440,27 +522,33 @@ class FundFetcher:
 
         # 优先使用 Sina
         from app.services.sina_etf_fetcher import get_sina_fetcher
+
         sina = get_sina_fetcher()
         data = await sina.get_etf_info(code)
         if data:
-            logger.info(f"[FundFetcher] {code} Sina 成功 elapsed={time.time()-start:.2f}s")
+            logger.info(
+                f"[FundFetcher] {code} Sina 成功 elapsed={time.time()-start:.2f}s"
+            )
             return data
 
         # 降级 AkShare
         logger.warning(f"[FundFetcher] {code} Sina 失败，降级到 AkShare")
         data = await self.ak.get_etf_spot(code)
         if data:
-            logger.info(f"[FundFetcher] {code} AkShare 成功 elapsed={time.time()-start:.2f}s")
+            logger.info(
+                f"[FundFetcher] {code} AkShare 成功 elapsed={time.time()-start:.2f}s"
+            )
             return data
 
         elapsed = time.time() - start
         logger.warning(f"[FundFetcher] {code} 降级到 Mock elapsed={elapsed:.2f}s")
         return self._mock_etf_info(code)
 
-    async def get_etf_history(self, code: str, period: str = 'daily') -> List[Dict]:
+    async def get_etf_history(self, code: str, period: str = "daily") -> List[Dict]:
         """获取 ETF 历史 K 线（使用腾讯财经 API）"""
         try:
             from app.services.sina_etf_fetcher import get_sina_fetcher
+
             sina = get_sina_fetcher()
 
             # 腾讯财经 K 线 API
@@ -473,8 +561,8 @@ class FundFetcher:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=400)  # 约 300 个交易日
 
-            start_str = start_date.strftime('%Y-%m-%d')
-            end_str = end_date.strftime('%Y-%m-%d')
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
 
             url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={formatted_code},day,{start_str},{end_str},300,qfq"
 
@@ -493,7 +581,9 @@ class FundFetcher:
             loop = asyncio.get_event_loop()
             data = await loop.run_in_executor(None, fetch_kline)
 
-            logger.info(f"[FundFetcher] ETF {code} K线返回: {data.get('code')}, msg: {data.get('msg')}")
+            logger.info(
+                f"[FundFetcher] ETF {code} K线返回: {data.get('code')}, msg: {data.get('msg')}"
+            )
 
             # 解析返回数据
             if "data" in data and isinstance(data["data"], dict):
@@ -507,19 +597,25 @@ class FundFetcher:
                 result = []
                 for item in kline_data:
                     if len(item) >= 6:
-                        result.append({
-                            "date": item[0],
-                            "open": float(item[1]),
-                            "close": float(item[2]),
-                            "low": float(item[3]),
-                            "high": float(item[4]),
-                            "volume": int(float(item[5])),  # 先转 float 再转 int
-                        })
+                        result.append(
+                            {
+                                "date": item[0],
+                                "open": float(item[1]),
+                                "close": float(item[2]),
+                                "low": float(item[3]),
+                                "high": float(item[4]),
+                                "volume": int(float(item[5])),  # 先转 float 再转 int
+                            }
+                        )
 
-                logger.info(f"[FundFetcher] ETF {code} K线获取成功，共 {len(result)} 条")
+                logger.info(
+                    f"[FundFetcher] ETF {code} K线获取成功，共 {len(result)} 条"
+                )
                 return result
             else:
-                logger.warning(f"[FundFetcher] ETF {code} K线返回格式异常: {type(data.get('data'))}")
+                logger.warning(
+                    f"[FundFetcher] ETF {code} K线返回格式异常: {type(data.get('data'))}"
+                )
                 return []
 
         except Exception as e:
@@ -533,14 +629,18 @@ class FundFetcher:
         # 优先 Eastmoney
         data = await self.em.get_fund_info(code)
         if data:
-            logger.info(f"[FundFetcher] {code} Eastmoney 成功 elapsed={time.time()-start:.2f}s")
+            logger.info(
+                f"[FundFetcher] {code} Eastmoney 成功 elapsed={time.time()-start:.2f}s"
+            )
             return data
 
         # 降级 AkShare
         logger.warning(f"[FundFetcher] {code} Eastmoney 失败，降级到 AkShare")
         data = await self.ak.get_fund_info(code)
         if data:
-            logger.info(f"[FundFetcher] {code} AkShare 成功 elapsed={time.time()-start:.2f}s")
+            logger.info(
+                f"[FundFetcher] {code} AkShare 成功 elapsed={time.time()-start:.2f}s"
+            )
             return data
 
         elapsed = time.time() - start
@@ -554,42 +654,50 @@ class FundFetcher:
         # 优先 Eastmoney
         data = await self.em.get_fund_portfolio(code)
         if data:
-            logger.info(f"[FundFetcher] {code} Eastmoney 持仓成功 elapsed={time.time()-start:.2f}s")
+            logger.info(
+                f"[FundFetcher] {code} Eastmoney 持仓成功 elapsed={time.time()-start:.2f}s"
+            )
             return data
 
         # 降级 AkShare
         logger.warning(f"[FundFetcher] {code} Eastmoney 持仓失败，降级到 AkShare")
         data = await self.ak.get_fund_portfolio(code)
         if data:
-            logger.info(f"[FundFetcher] {code} AkShare 持仓成功 elapsed={time.time()-start:.2f}s")
+            logger.info(
+                f"[FundFetcher] {code} AkShare 持仓成功 elapsed={time.time()-start:.2f}s"
+            )
             return data
 
         elapsed = time.time() - start
         logger.warning(f"[FundFetcher] {code} 降级到 Mock elapsed={elapsed:.2f}s")
         return self._mock_portfolio(code)
 
-    async def get_fund_nav_history(self, code: str, period: str = '6m') -> List[Dict]:
+    async def get_fund_nav_history(self, code: str, period: str = "6m") -> List[Dict]:
         logger.info(f"[FundFetcher] 获取 {code} 净值历史...")
         start = time.time()
 
         # 优先 Eastmoney
         data = await self.em.get_fund_nav_history(code, period)
         if data:
-            logger.info(f"[FundFetcher] {code} Eastmoney 净值历史成功 elapsed={time.time()-start:.2f}s")
+            logger.info(
+                f"[FundFetcher] {code} Eastmoney 净值历史成功 elapsed={time.time()-start:.2f}s"
+            )
             return data
 
         # 降级 AkShare
         logger.warning(f"[FundFetcher] {code} Eastmoney 净值历史失败，降级到 AkShare")
         data = await self.ak.get_fund_nav_history(code, period)
         if data:
-            logger.info(f"[FundFetcher] {code} AkShare 净值历史成功 elapsed={time.time()-start:.2f}s")
+            logger.info(
+                f"[FundFetcher] {code} AkShare 净值历史成功 elapsed={time.time()-start:.2f}s"
+            )
             return data
 
         elapsed = time.time() - start
         logger.warning(f"[FundFetcher] {code} 降级到 Mock elapsed={elapsed:.2f}s")
         return self._mock_nav_history(period)
 
-    async def get_fund_rank(self, type: str = '全部') -> List[Dict]:
+    async def get_fund_rank(self, type: str = "全部") -> List[Dict]:
         logger.info(f"[FundFetcher] 获取基金排行 {type}...")
         # 优先 Eastmoney
         data = await self.em.get_fund_rank(type)
@@ -599,11 +707,11 @@ class FundFetcher:
         data = await self.ak.get_fund_rank(type)
         return data if data else []
 
-    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='returns:')
+    @fund_cache.cached(CACHE_TTL["fund_info"], key_prefix="returns:")
     async def get_fund_returns(self, code: str) -> Dict:
         """
         获取基金阶段收益（近1周/1月/3月/6月/1年/2年/3年/今年来/成立来）
-        
+
         数据源优先级:
         1. 东方财富 pingzhongdata.js (轻量，单只基金)
         2. akshare fund_open_fund_rank_em (重量级，全量数据，缓存)
@@ -616,7 +724,9 @@ class FundFetcher:
         try:
             data = await self.em.get_fund_returns(code)
             if data:
-                logger.info(f"[FundFetcher] {code} Eastmoney 阶段收益成功 elapsed={time.time()-start:.2f}s")
+                logger.info(
+                    f"[FundFetcher] {code} Eastmoney 阶段收益成功 elapsed={time.time()-start:.2f}s"
+                )
                 return data
         except Exception as e:
             logger.debug(f"[FundFetcher] {code} Eastmoney 阶段收益失败: {e}")
@@ -628,34 +738,36 @@ class FundFetcher:
             # 使用 30 秒超时，因为需要加载全量数据
             df = await asyncio.wait_for(
                 asyncio.to_thread(ak.fund_open_fund_rank_em, symbol="全部"),
-                timeout=30.0
+                timeout=30.0,
             )
 
             if df is not None and not df.empty:
-                matched = df[df['基金代码'] == code]
+                matched = df[df["基金代码"] == code]
                 if not matched.empty:
                     row = matched.iloc[0]
                     result = {
-                        'source': 'akshare',
-                        'code': code,
-                        'name': clean_value(row.get('基金简称')),
-                        'nav_date': clean_value(row.get('日期')),
-                        'returns': {
-                            '1w': clean_value(row.get('近1周')),
-                            '1m': clean_value(row.get('近1月')),
-                            '3m': clean_value(row.get('近3月')),
-                            '6m': clean_value(row.get('近6月')),
-                            '1y': clean_value(row.get('近1年')),
-                            '2y': clean_value(row.get('近2年')),
-                            '3y': clean_value(row.get('近3年')),
-                            'ytd': clean_value(row.get('今年来')),
-                            'since_inception': clean_value(row.get('成立来')),
+                        "source": "akshare",
+                        "code": code,
+                        "name": clean_value(row.get("基金简称")),
+                        "nav_date": clean_value(row.get("日期")),
+                        "returns": {
+                            "1w": clean_value(row.get("近1周")),
+                            "1m": clean_value(row.get("近1月")),
+                            "3m": clean_value(row.get("近3月")),
+                            "6m": clean_value(row.get("近6月")),
+                            "1y": clean_value(row.get("近1年")),
+                            "2y": clean_value(row.get("近2年")),
+                            "3y": clean_value(row.get("近3年")),
+                            "ytd": clean_value(row.get("今年来")),
+                            "since_inception": clean_value(row.get("成立来")),
                         },
-                        'nav': clean_value(row.get('单位净值')),
-                        'accumulated_nav': clean_value(row.get('累计净值')),
-                        'daily_change': clean_value(row.get('日增长率')),
+                        "nav": clean_value(row.get("单位净值")),
+                        "accumulated_nav": clean_value(row.get("累计净值")),
+                        "daily_change": clean_value(row.get("日增长率")),
                     }
-                    logger.info(f"[FundFetcher] {code} Akshare 阶段收益成功 elapsed={time.time()-start:.2f}s")
+                    logger.info(
+                        f"[FundFetcher] {code} Akshare 阶段收益成功 elapsed={time.time()-start:.2f}s"
+                    )
                     return result
 
             logger.warning(f"[FundFetcher] {code} 未在排行中找到，返回 Mock 数据")
@@ -668,11 +780,11 @@ class FundFetcher:
             logger.warning(f"[FundFetcher] {code} 阶段收益获取失败: {e}", exc_info=True)
             return self._mock_fund_returns(code)
 
-    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='risk:')
+    @fund_cache.cached(CACHE_TTL["fund_info"], key_prefix="risk:")
     async def get_fund_risk_metrics(self, code: str) -> Dict:
         """
         获取基金风险指标（夏普比率、最大回撤、Alpha、Beta）
-        
+
         注意: akshare 不直接提供这些指标，需要从净值历史计算
         """
         logger.info(f"[FundFetcher] 获取基金 {code} 风险指标...")
@@ -680,14 +792,16 @@ class FundFetcher:
 
         try:
             # 获取净值历史用于计算风险指标
-            nav_data = await self.get_fund_nav_history(code, '1y')
+            nav_data = await self.get_fund_nav_history(code, "1y")
 
             if nav_data and len(nav_data) >= 20:
                 # 计算风险指标
                 metrics = self._calculate_risk_metrics(nav_data)
-                metrics['source'] = 'calculated'
-                metrics['code'] = code
-                logger.info(f"[FundFetcher] {code} 风险指标计算成功 elapsed={time.time()-start:.2f}s")
+                metrics["source"] = "calculated"
+                metrics["code"] = code
+                logger.info(
+                    f"[FundFetcher] {code} 风险指标计算成功 elapsed={time.time()-start:.2f}s"
+                )
                 return metrics
             else:
                 logger.warning(f"[FundFetcher] {code} 净值数据不足，返回 Mock 数据")
@@ -702,29 +816,31 @@ class FundFetcher:
         import numpy as np
 
         if not nav_data or len(nav_data) < 2:
-            return self._mock_risk_metrics('unknown')
+            return self._mock_risk_metrics("unknown")
 
         # 提取净值序列
-        navs = [float(d.get('nav', 0)) for d in nav_data if d.get('nav')]
+        navs = [float(d.get("nav", 0)) for d in nav_data if d.get("nav")]
         if len(navs) < 2:
-            return self._mock_risk_metrics('unknown')
+            return self._mock_risk_metrics("unknown")
 
         # 计算日收益率
         returns = []
         for i in range(1, len(navs)):
-            if navs[i-1] > 1e-6:  # Use float threshold to prevent division by zero
-                r = (navs[i] - navs[i-1]) / navs[i-1]
+            if navs[i - 1] > 1e-6:  # Use float threshold to prevent division by zero
+                r = (navs[i] - navs[i - 1]) / navs[i - 1]
                 returns.append(r)
 
         if not returns:
-            return self._mock_risk_metrics('unknown')
+            return self._mock_risk_metrics("unknown")
 
         returns = np.array(returns)
 
         # 计算最大回撤
         cumulative = np.cumprod(1 + returns)
         running_max = np.maximum.accumulate(cumulative)
-        drawdowns = np.where(running_max > 1e-6, (cumulative - running_max) / running_max, 0)
+        drawdowns = np.where(
+            running_max > 1e-6, (cumulative - running_max) / running_max, 0
+        )
         max_drawdown = float(np.min(drawdowns)) * 100  # 转为百分比
 
         # 计算夏普比率（假设无风险利率 2% 年化）
@@ -746,49 +862,51 @@ class FundFetcher:
         # Alpha = 基金收益率 - (无风险利率 + Beta * (市场收益率 - 无风险利率))
         fund_return = float(np.prod(1 + returns) - 1) * 252 / len(returns)  # 年化收益
         market_return = 0.08  # 假设市场年化收益 8%
-        alpha = float(fund_return - (0.02 + beta * (market_return - 0.02))) * 100  # 转为百分比
+        alpha = (
+            float(fund_return - (0.02 + beta * (market_return - 0.02))) * 100
+        )  # 转为百分比
 
         return {
-            'sharpe': round(sharpe, 2),
-            'max_drawdown': round(max_drawdown, 2),
-            'alpha': round(alpha, 2),
-            'beta': round(beta, 2),
-            'volatility': round(fund_vol * 100, 2),  # 年化波动率
+            "sharpe": round(sharpe, 2),
+            "max_drawdown": round(max_drawdown, 2),
+            "alpha": round(alpha, 2),
+            "beta": round(beta, 2),
+            "volatility": round(fund_vol * 100, 2),  # 年化波动率
         }
 
     def _mock_fund_returns(self, code: str) -> Dict:
         """Mock 阶段收益数据"""
         return {
-            'source': 'mock',
-            'code': code,
-            'name': f'基金-{code}',
-            'nav_date': '2026-05-13',
-            'returns': {
-                '1w': round((hash(code + '1w') % 200 - 100) / 10, 2),
-                '1m': round((hash(code + '1m') % 300 - 150) / 10, 2),
-                '3m': round((hash(code + '3m') % 400 - 200) / 10, 2),
-                '6m': round((hash(code + '6m') % 500 - 250) / 10, 2),
-                '1y': round((hash(code + '1y') % 600 - 300) / 10, 2),
-                '2y': round((hash(code + '2y') % 800 - 400) / 10, 2),
-                '3y': round((hash(code + '3y') % 1000 - 500) / 10, 2),
-                'ytd': round((hash(code + 'ytd') % 400 - 200) / 10, 2),
-                'since_inception': round((hash(code + 'si') % 2000) / 10, 2),
+            "source": "mock",
+            "code": code,
+            "name": f"基金-{code}",
+            "nav_date": "2026-05-13",
+            "returns": {
+                "1w": round((hash(code + "1w") % 200 - 100) / 10, 2),
+                "1m": round((hash(code + "1m") % 300 - 150) / 10, 2),
+                "3m": round((hash(code + "3m") % 400 - 200) / 10, 2),
+                "6m": round((hash(code + "6m") % 500 - 250) / 10, 2),
+                "1y": round((hash(code + "1y") % 600 - 300) / 10, 2),
+                "2y": round((hash(code + "2y") % 800 - 400) / 10, 2),
+                "3y": round((hash(code + "3y") % 1000 - 500) / 10, 2),
+                "ytd": round((hash(code + "ytd") % 400 - 200) / 10, 2),
+                "since_inception": round((hash(code + "si") % 2000) / 10, 2),
             },
-            'nav': round(1.0 + hash(code) % 2000 / 1000, 4),
-            'accumulated_nav': round(1.0 + hash(code) % 3000 / 1000, 4),
-            'daily_change': round((hash(code + 'dc') % 200 - 100) / 10, 2),
+            "nav": round(1.0 + hash(code) % 2000 / 1000, 4),
+            "accumulated_nav": round(1.0 + hash(code) % 3000 / 1000, 4),
+            "daily_change": round((hash(code + "dc") % 200 - 100) / 10, 2),
         }
 
     def _mock_risk_metrics(self, code: str) -> Dict:
         """Mock 风险指标数据"""
         return {
-            'source': 'mock',
-            'code': code,
-            'sharpe': round(0.5 + (hash(code + 'sharpe') % 200) / 100, 2),
-            'max_drawdown': round(-5 - (hash(code + 'md') % 300) / 10, 2),
-            'alpha': round(-5 + (hash(code + 'alpha') % 200) / 10, 2),
-            'beta': round(0.5 + (hash(code + 'beta') % 100) / 100, 2),
-            'volatility': round(10 + (hash(code + 'vol') % 200) / 10, 2),
+            "source": "mock",
+            "code": code,
+            "sharpe": round(0.5 + (hash(code + "sharpe") % 200) / 100, 2),
+            "max_drawdown": round(-5 - (hash(code + "md") % 300) / 10, 2),
+            "alpha": round(-5 + (hash(code + "alpha") % 200) / 10, 2),
+            "beta": round(0.5 + (hash(code + "beta") % 100) / 100, 2),
+            "volatility": round(10 + (hash(code + "vol") % 200) / 10, 2),
         }
 
     async def get_fund_full_data(self, code: str, is_etf: bool = False) -> Dict:
@@ -797,96 +915,110 @@ class FundFetcher:
             results = await asyncio.gather(
                 self.get_etf_info(code),
                 self.get_etf_history(code),
-                return_exceptions=True
+                return_exceptions=True,
             )
             return {
-                'info': results[0] if not isinstance(results[0], Exception) else None,
-                'history': results[1] if not isinstance(results[1], Exception) else [],
+                "info": results[0] if not isinstance(results[0], Exception) else None,
+                "history": results[1] if not isinstance(results[1], Exception) else [],
             }
         else:
             results = await asyncio.gather(
                 self.get_fund_info(code),
                 self.get_fund_nav_history(code),
                 self.get_fund_portfolio(code),
-                return_exceptions=True
+                return_exceptions=True,
             )
             return {
-                'info': results[0] if not isinstance(results[0], Exception) else None,
-                'nav_history': results[1] if not isinstance(results[1], Exception) else [],
-                'portfolio': results[2] if not isinstance(results[2], Exception) else None,
+                "info": results[0] if not isinstance(results[0], Exception) else None,
+                "nav_history": (
+                    results[1] if not isinstance(results[1], Exception) else []
+                ),
+                "portfolio": (
+                    results[2] if not isinstance(results[2], Exception) else None
+                ),
             }
 
     def _mock_etf_info(self, code: str) -> Dict:
         """Mock 数据（零阻塞，直接返回）"""
         return {
-            'source': 'mock',
-            'code': code,
-            'name': f'ETF-{code}',
-            'price': 1.0 + hash(code) % 1000 / 1000,
-            'change_pct': (hash(code + 'c') % 200 - 100) / 10,
-            'volume': hash(code + 'v') % 10000000,
-            'iopv': 1.0 + hash(code) % 1000 / 1000,
-            'premium_rate': (hash(code + 'p') % 100 - 50) / 10,
+            "source": "mock",
+            "code": code,
+            "name": f"ETF-{code}",
+            "price": 1.0 + hash(code) % 1000 / 1000,
+            "change_pct": (hash(code + "c") % 200 - 100) / 10,
+            "volume": hash(code + "v") % 10000000,
+            "iopv": 1.0 + hash(code) % 1000 / 1000,
+            "premium_rate": (hash(code + "p") % 100 - 50) / 10,
         }
 
     def _mock_fund_info(self, code: str) -> Dict:
         """Mock 数据（零阻塞）- 完整字段，前端解构无 undefined"""
         from datetime import datetime as _dt
+
         nav_base = 1.0 + hash(code) % 2000 / 1000
         return {
-            'source': 'mock',
-            'code': code,
-            'name': f'基金-{code}',
-            'type': '混合型',
-            'nav': round(nav_base, 4),
-            'nav_change_pct': round((hash(code + 'c') % 200 - 100) / 10, 2),
-            'accumulated_nav': round(nav_base * (1.0 + (hash(code) % 50) / 100), 4),
-            'nav_date': _dt.now().strftime('%Y-%m-%d'),
-            'rating': '★★★★★' if hash(code) % 5 == 0 else ('★★★★☆' if hash(code) % 4 == 0 else '★★★☆☆'),
-            'purchase_fee': '1.5%' if hash(code) % 3 == 0 else '1.2%',
-            'redemption_fee': '0.5%' if hash(code) % 2 == 0 else '0.3%',
-            'dividend_freq': '每年',
-            'scale': f'{hash(code) % 100}.{hash(code) % 10}亿元',
-            'manager': ['张三', '李四', '王五', '赵六'][hash(code) % 4],
-            'company': ['华夏基金', '易方达', '嘉实基金', '南方基金', '博时基金'][hash(code) % 5],
-            'found_date': f'{2015 + hash(code) % 8}-0{1 + hash(code) % 9}-15',
+            "source": "mock",
+            "code": code,
+            "name": f"基金-{code}",
+            "type": "混合型",
+            "nav": round(nav_base, 4),
+            "nav_change_pct": round((hash(code + "c") % 200 - 100) / 10, 2),
+            "accumulated_nav": round(nav_base * (1.0 + (hash(code) % 50) / 100), 4),
+            "nav_date": _dt.now().strftime("%Y-%m-%d"),
+            "rating": (
+                "★★★★★"
+                if hash(code) % 5 == 0
+                else ("★★★★☆" if hash(code) % 4 == 0 else "★★★☆☆")
+            ),
+            "purchase_fee": "1.5%" if hash(code) % 3 == 0 else "1.2%",
+            "redemption_fee": "0.5%" if hash(code) % 2 == 0 else "0.3%",
+            "dividend_freq": "每年",
+            "scale": f"{hash(code) % 100}.{hash(code) % 10}亿元",
+            "manager": ["张三", "李四", "王五", "赵六"][hash(code) % 4],
+            "company": ["华夏基金", "易方达", "嘉实基金", "南方基金", "博时基金"][
+                hash(code) % 5
+            ],
+            "found_date": f"{2015 + hash(code) % 8}-0{1 + hash(code) % 9}-15",
         }
 
     def _mock_portfolio(self, code: str) -> Dict:
         """Mock 数据（零阻塞）"""
         return {
-            'source': 'mock',
-            'code': code,
-            'quarter': '2024 年 1 季度',
-            'stocks': [
-                {'code': '600519', 'name': '贵州茅台', 'ratio': 5.89},
-                {'code': '300750', 'name': '宁德时代', 'ratio': 2.78},
+            "source": "mock",
+            "code": code,
+            "quarter": "2024 年 1 季度",
+            "stocks": [
+                {"code": "600519", "name": "贵州茅台", "ratio": 5.89},
+                {"code": "300750", "name": "宁德时代", "ratio": 2.78},
             ],
-            'assets': [
-                {'name': '股票', 'ratio': 85.5},
-                {'name': '债券', 'ratio': 5.2},
-                {'name': '现金', 'ratio': 8.3},
-                {'name': '其他', 'ratio': 1.0},
-            ]
+            "assets": [
+                {"name": "股票", "ratio": 85.5},
+                {"name": "债券", "ratio": 5.2},
+                {"name": "现金", "ratio": 8.3},
+                {"name": "其他", "ratio": 1.0},
+            ],
         }
 
     def _mock_nav_history(self, period: str) -> List[Dict]:
         """Mock 数据（零阻塞）"""
-        days = {'1m': 20, '3m': 60, '6m': 120, '1y': 240}.get(period, 120)
+        days = {"1m": 20, "3m": 60, "6m": 120, "1y": 240}.get(period, 120)
         result = []
         base = 1.0 + hash(period) % 2000 / 1000
         for i in range(days):
             date = datetime.date.today() - datetime.timedelta(days=days - i)
             base = base * (1 + (hash(str(i)) % 100 - 48) / 1000)
-            result.append({
-                'date': date.isoformat(),
-                'nav': round(base, 4),
-                'accumulated_nav': round(base * 1.1, 4),
-            })
+            result.append(
+                {
+                    "date": date.isoformat(),
+                    "nav": round(base, 4),
+                    "accumulated_nav": round(base * 1.1, 4),
+                }
+            )
         return result
 
 
 _fetcher_instance = None
+
 
 def get_fetcher() -> FundFetcher:
     global _fetcher_instance

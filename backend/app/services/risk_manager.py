@@ -9,6 +9,7 @@ Features:
   - Risk validation and controls
   - Comprehensive debug logging (10 cycles)
 """
+
 import logging
 from app.utils.safe_math import safe_divide
 from dataclasses import dataclass
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 class RiskConfig:
     """
     Risk management configuration with conservative defaults.
-    
+
     Attributes:
         max_risk_per_trade: Maximum risk per trade as percentage (default: 2%)
         max_portfolio_risk: Maximum portfolio risk as percentage (default: 6%)
@@ -35,13 +36,14 @@ class RiskConfig:
         max_position_size_pct: Maximum position size as % of portfolio (default: 20%)
         min_trade_value: Minimum trade value in currency (default: 1000)
     """
+
     max_risk_per_trade: float = 2.0  # 2% per trade
-    max_portfolio_risk: float = 6.0   # 6% total portfolio risk
-    default_stop_pct: float = 8.0     # 8% stop loss
+    max_portfolio_risk: float = 6.0  # 6% total portfolio risk
+    default_stop_pct: float = 8.0  # 8% stop loss
     default_profit_pct: float = 15.0  # 15% take profit
     trailing_stop_enabled: bool = True
     trailing_activation_pct: float = 5.0  # Activate after 5% profit
-    max_position_size_pct: float = 20.0   # Max 20% in single position
+    max_position_size_pct: float = 20.0  # Max 20% in single position
     min_trade_value: float = 1000.0
 
     def __post_init__(self):
@@ -65,22 +67,34 @@ class RiskConfig:
         errors = []
 
         if self.max_risk_per_trade <= 0 or self.max_risk_per_trade > 10:
-            errors.append(f"max_risk_per_trade must be in (0, 10], got {self.max_risk_per_trade}")
+            errors.append(
+                f"max_risk_per_trade must be in (0, 10], got {self.max_risk_per_trade}"
+            )
 
         if self.max_portfolio_risk <= 0 or self.max_portfolio_risk > 20:
-            errors.append(f"max_portfolio_risk must be in (0, 20], got {self.max_portfolio_risk}")
+            errors.append(
+                f"max_portfolio_risk must be in (0, 20], got {self.max_portfolio_risk}"
+            )
 
         if self.default_stop_pct <= 0 or self.default_stop_pct > 20:
-            errors.append(f"default_stop_pct must be in (0, 20], got {self.default_stop_pct}")
+            errors.append(
+                f"default_stop_pct must be in (0, 20], got {self.default_stop_pct}"
+            )
 
         if self.default_profit_pct <= 0:
-            errors.append(f"default_profit_pct must be > 0, got {self.default_profit_pct}")
+            errors.append(
+                f"default_profit_pct must be > 0, got {self.default_profit_pct}"
+            )
 
         if self.trailing_activation_pct <= 0:
-            errors.append(f"trailing_activation_pct must be > 0, got {self.trailing_activation_pct}")
+            errors.append(
+                f"trailing_activation_pct must be > 0, got {self.trailing_activation_pct}"
+            )
 
         if self.max_position_size_pct <= 0 or self.max_position_size_pct > 100:
-            errors.append(f"max_position_size_pct must be in (0, 100], got {self.max_position_size_pct}")
+            errors.append(
+                f"max_position_size_pct must be in (0, 100], got {self.max_position_size_pct}"
+            )
 
         if self.min_trade_value <= 0:
             errors.append(f"min_trade_value must be > 0, got {self.min_trade_value}")
@@ -100,7 +114,7 @@ class RiskConfig:
 class Position:
     """
     Position data structure for risk management.
-    
+
     Attributes:
         symbol: Trading symbol
         entry_price: Entry price
@@ -112,6 +126,7 @@ class Position:
         trailing_activated: Whether trailing stop is activated
         highest_price: Highest price since entry (for trailing stop)
     """
+
     symbol: str
     entry_price: float
     current_price: float
@@ -132,7 +147,7 @@ class Position:
 class RiskManager:
     """
     Comprehensive risk management system for position sizing and risk control.
-    
+
     Features:
         - Position sizing using fixed fractional or Kelly criterion
         - Stop loss and take profit management
@@ -161,18 +176,18 @@ class RiskManager:
     ) -> float:
         """
         Calculate position size using fixed fractional method.
-        
+
         Formula: Position Size = (Capital × Risk%) / (Entry Price - Stop Price)
-        
+
         Args:
             capital: Total capital available
             risk_pct: Risk percentage (uses config default if None)
             entry_price: Planned entry price
             stop_price: Planned stop loss price
-            
+
         Returns:
             Number of shares to trade
-            
+
         Raises:
             ValueError: If parameters are invalid
         """
@@ -180,7 +195,9 @@ class RiskManager:
         logger.debug("=" * 60)
         logger.debug("[Cycle 2: Position Size Calculation]")
         logger.debug(f"  capital: {capital}")
-        logger.debug(f"  risk_pct: {risk_pct} (default: {self.config.max_risk_per_trade}%)")
+        logger.debug(
+            f"  risk_pct: {risk_pct} (default: {self.config.max_risk_per_trade}%)"
+        )
         logger.debug(f"  entry_price: {entry_price}")
         logger.debug(f"  stop_price: {stop_price}")
 
@@ -198,15 +215,23 @@ class RiskManager:
             raise ValueError(f"stop_price must be > 0, got {stop_price}")
 
         if stop_price >= entry_price:
-            logger.error(f"  [ERROR] stop_price ({stop_price}) must be < entry_price ({entry_price})")
-            raise ValueError(f"stop_price ({stop_price}) must be < entry_price ({entry_price})")
+            logger.error(
+                f"  [ERROR] stop_price ({stop_price}) must be < entry_price ({entry_price})"
+            )
+            raise ValueError(
+                f"stop_price ({stop_price}) must be < entry_price ({entry_price})"
+            )
 
         # Use default risk if not specified
         risk_pct = risk_pct or self.config.max_risk_per_trade
 
         if risk_pct <= 0 or risk_pct > self.config.max_risk_per_trade:
-            logger.error(f"  [ERROR] risk_pct must be in (0, {self.config.max_risk_per_trade}], got {risk_pct}")
-            raise ValueError(f"risk_pct must be in (0, {self.config.max_risk_per_trade}], got {risk_pct}")
+            logger.error(
+                f"  [ERROR] risk_pct must be in (0, {self.config.max_risk_per_trade}], got {risk_pct}"
+            )
+            raise ValueError(
+                f"risk_pct must be in (0, {self.config.max_risk_per_trade}], got {risk_pct}"
+            )
 
         # Calculate position size
         risk_amount = capital * (risk_pct / 100)
@@ -219,7 +244,9 @@ class RiskManager:
 
         # Validate risk_per_share is positive
         if risk_per_share <= 0:
-            logger.warning(f"  [WARNING] Invalid risk_per_share: {risk_per_share:.2f} (entry={entry_price}, stop={stop_price})")
+            logger.warning(
+                f"  [WARNING] Invalid risk_per_share: {risk_per_share:.2f} (entry={entry_price}, stop={stop_price})"
+            )
             return 0
 
         # Apply maximum position size constraint
@@ -227,7 +254,9 @@ class RiskManager:
         max_shares = max_position_value / entry_price
 
         if shares > max_shares:
-            logger.debug(f"  [ADJUSTED] Position size capped from {shares:.0f} to {max_shares:.0f} shares")
+            logger.debug(
+                f"  [ADJUSTED] Position size capped from {shares:.0f} to {max_shares:.0f} shares"
+            )
             shares = max_shares
 
         # Round down to whole shares
@@ -236,7 +265,9 @@ class RiskManager:
         # Validate minimum trade value
         trade_value = shares * entry_price
         if trade_value < self.config.min_trade_value:
-            logger.warning(f"  [WARNING] Trade value {trade_value:.2f} below minimum {self.config.min_trade_value}")
+            logger.warning(
+                f"  [WARNING] Trade value {trade_value:.2f} below minimum {self.config.min_trade_value}"
+            )
 
         logger.debug(f"  [RESULT] Position size: {shares} shares")
         logger.debug(f"  [RESULT] Trade value: {shares * entry_price:.2f}")
@@ -253,21 +284,21 @@ class RiskManager:
     ) -> float:
         """
         Calculate position size using Kelly Criterion.
-        
+
         Formula: Kelly% = W - (1-W)/R
         Where:
             W = Win rate (probability of winning)
             R = Win/Loss ratio (average win / average loss)
-        
+
         Args:
             capital: Total capital available
             win_rate: Historical win rate (0.0 to 1.0)
             win_loss_ratio: Average win divided by average loss
             max_kelly_pct: Maximum Kelly percentage (default: 25% for safety)
-            
+
         Returns:
             Position size as percentage of capital
-            
+
         Raises:
             ValueError: If parameters are invalid
         """
@@ -300,7 +331,9 @@ class RiskManager:
 
         # Kelly can be negative (don't trade)
         if kelly_pct < 0:
-            logger.warning(f"  [WARNING] Negative Kelly ({kelly_pct:.2f}%) - strategy has negative expectancy")
+            logger.warning(
+                f"  [WARNING] Negative Kelly ({kelly_pct:.2f}%) - strategy has negative expectancy"
+            )
             logger.debug("  [RESULT] Position size: 0% (don't trade)")
             logger.debug("=" * 60)
             return 0.0
@@ -315,7 +348,9 @@ class RiskManager:
         # Ensure it doesn't exceed max position size
         if safe_kelly > self.config.max_position_size_pct:
             safe_kelly = self.config.max_position_size_pct
-            logger.debug(f"  [ADJUSTED] Capped to max_position_size_pct: {safe_kelly:.2f}%")
+            logger.debug(
+                f"  [ADJUSTED] Capped to max_position_size_pct: {safe_kelly:.2f}%"
+            )
 
         logger.debug(f"  [RESULT] Position size: {safe_kelly:.2f}% of capital")
         logger.debug(f"  [RESULT] Position value: {capital * safe_kelly / 100:.2f}")
@@ -332,14 +367,14 @@ class RiskManager:
     ) -> float:
         """
         Set stop loss price for a position.
-        
+
         Args:
             position: Position to set stop loss for
             stop_pct: Stop loss percentage (uses config default if None)
-            
+
         Returns:
             Stop loss price
-            
+
         Raises:
             ValueError: If parameters are invalid
         """
@@ -348,7 +383,9 @@ class RiskManager:
         logger.debug("[Cycle 4: Stop Loss Setting]")
         logger.debug(f"  symbol: {position.symbol}")
         logger.debug(f"  entry_price: {position.entry_price}")
-        logger.debug(f"  stop_pct: {stop_pct} (default: {self.config.default_stop_pct}%)")
+        logger.debug(
+            f"  stop_pct: {stop_pct} (default: {self.config.default_stop_pct}%)"
+        )
 
         # Use default if not specified
         stop_pct = stop_pct or self.config.default_stop_pct
@@ -358,7 +395,9 @@ class RiskManager:
             raise ValueError(f"stop_pct must be in (0, 20], got {stop_pct}")
 
         if position.entry_price <= 0:
-            logger.error(f"  [ERROR] entry_price must be > 0, got {position.entry_price}")
+            logger.error(
+                f"  [ERROR] entry_price must be > 0, got {position.entry_price}"
+            )
             raise ValueError(f"entry_price must be > 0, got {position.entry_price}")
 
         # Calculate stop price
@@ -369,7 +408,9 @@ class RiskManager:
 
         logger.debug(f"  [CALCULATION] {position.entry_price} × (1 - {stop_pct}/100)")
         logger.debug(f"  [RESULT] Stop loss price: {stop_price}")
-        logger.debug(f"  [RESULT] Stop loss amount: {position.entry_price - stop_price:.2f}")
+        logger.debug(
+            f"  [RESULT] Stop loss amount: {position.entry_price - stop_price:.2f}"
+        )
         logger.debug("=" * 60)
 
         return stop_price
@@ -381,14 +422,14 @@ class RiskManager:
     ) -> float:
         """
         Set take profit target price for a position.
-        
+
         Args:
             position: Position to set take profit for
             profit_pct: Take profit percentage (uses config default if None)
-            
+
         Returns:
             Take profit target price
-            
+
         Raises:
             ValueError: If parameters are invalid
         """
@@ -397,7 +438,9 @@ class RiskManager:
         logger.debug("[Cycle 5: Take Profit Setting]")
         logger.debug(f"  symbol: {position.symbol}")
         logger.debug(f"  entry_price: {position.entry_price}")
-        logger.debug(f"  profit_pct: {profit_pct} (default: {self.config.default_profit_pct}%)")
+        logger.debug(
+            f"  profit_pct: {profit_pct} (default: {self.config.default_profit_pct}%)"
+        )
 
         # Use default if not specified
         profit_pct = profit_pct or self.config.default_profit_pct
@@ -407,7 +450,9 @@ class RiskManager:
             raise ValueError(f"profit_pct must be > 0, got {profit_pct}")
 
         if position.entry_price <= 0:
-            logger.error(f"  [ERROR] entry_price must be > 0, got {position.entry_price}")
+            logger.error(
+                f"  [ERROR] entry_price must be > 0, got {position.entry_price}"
+            )
             raise ValueError(f"entry_price must be > 0, got {position.entry_price}")
 
         # Calculate target price
@@ -418,7 +463,9 @@ class RiskManager:
 
         logger.debug(f"  [CALCULATION] {position.entry_price} × (1 + {profit_pct}/100)")
         logger.debug(f"  [RESULT] Take profit price: {target_price}")
-        logger.debug(f"  [RESULT] Profit amount: {target_price - position.entry_price:.2f}")
+        logger.debug(
+            f"  [RESULT] Profit amount: {target_price - position.entry_price:.2f}"
+        )
         logger.debug("=" * 60)
 
         return target_price
@@ -433,21 +480,21 @@ class RiskManager:
     ) -> float:
         """
         Update trailing stop price based on current price.
-        
+
         Logic:
             1. Check if trailing stop is activated (profit >= activation threshold)
             2. Update highest price if current price is higher
             3. Calculate new trailing stop from highest price
             4. Only move trailing stop UP, never down
-        
+
         Args:
             position: Position to update trailing stop for
             current_price: Current market price
             trail_pct: Trailing stop percentage (default: 8%)
-            
+
         Returns:
             Updated trailing stop price
-            
+
         Raises:
             ValueError: If parameters are invalid
         """
@@ -482,9 +529,13 @@ class RiskManager:
         if not position.trailing_activated:
             if profit_pct >= self.config.trailing_activation_pct:
                 position.trailing_activated = True
-                logger.debug(f"  [ACTIVATED] Profit {profit_pct:.2f}% >= activation threshold {self.config.trailing_activation_pct}%")
+                logger.debug(
+                    f"  [ACTIVATED] Profit {profit_pct:.2f}% >= activation threshold {self.config.trailing_activation_pct}%"
+                )
             else:
-                logger.debug(f"  [NOT ACTIVATED] Profit {profit_pct:.2f}% < activation threshold {self.config.trailing_activation_pct}%")
+                logger.debug(
+                    f"  [NOT ACTIVATED] Profit {profit_pct:.2f}% < activation threshold {self.config.trailing_activation_pct}%"
+                )
                 logger.debug("=" * 60)
                 return position.trailing_stop_price or 0.0
 
@@ -501,11 +552,18 @@ class RiskManager:
         new_trailing_stop = round(new_trailing_stop, 2)
 
         # Only move trailing stop UP, never down
-        if position.trailing_stop_price is None or new_trailing_stop > position.trailing_stop_price:
-            logger.debug(f"  [UPDATED] Trailing stop: {position.trailing_stop_price} → {new_trailing_stop}")
+        if (
+            position.trailing_stop_price is None
+            or new_trailing_stop > position.trailing_stop_price
+        ):
+            logger.debug(
+                f"  [UPDATED] Trailing stop: {position.trailing_stop_price} → {new_trailing_stop}"
+            )
             position.trailing_stop_price = new_trailing_stop
         else:
-            logger.debug(f"  [HELD] Trailing stop remains at {position.trailing_stop_price} (new: {new_trailing_stop})")
+            logger.debug(
+                f"  [HELD] Trailing stop remains at {position.trailing_stop_price} (new: {new_trailing_stop})"
+            )
 
         logger.debug(f"  [RESULT] Trailing stop price: {position.trailing_stop_price}")
         logger.debug("=" * 60)
@@ -521,11 +579,11 @@ class RiskManager:
     ) -> bool:
         """
         Check if stop loss or trailing stop is triggered.
-        
+
         Args:
             position: Position to check
             current_price: Current market price
-            
+
         Returns:
             True if stop is triggered, False otherwise
         """
@@ -551,7 +609,9 @@ class RiskManager:
                 triggered = True
                 trigger_type = "trailing_stop"
                 trigger_price = position.trailing_stop_price
-                logger.debug(f"  [TRIGGERED] Trailing stop hit: {current_price} <= {position.trailing_stop_price}")
+                logger.debug(
+                    f"  [TRIGGERED] Trailing stop hit: {current_price} <= {position.trailing_stop_price}"
+                )
 
         # Check regular stop loss
         if not triggered and position.stop_price and position.stop_price > 0:
@@ -559,10 +619,14 @@ class RiskManager:
                 triggered = True
                 trigger_type = "stop_loss"
                 trigger_price = position.stop_price
-                logger.debug(f"  [TRIGGERED] Stop loss hit: {current_price} <= {position.stop_price}")
+                logger.debug(
+                    f"  [TRIGGERED] Stop loss hit: {current_price} <= {position.stop_price}"
+                )
 
         if triggered:
-            loss_pct = (position.entry_price - current_price) / position.entry_price * 100
+            loss_pct = (
+                (position.entry_price - current_price) / position.entry_price * 100
+            )
             logger.debug("  [RESULT] STOP TRIGGERED")
             logger.debug(f"  [RESULT] Type: {trigger_type}")
             logger.debug(f"  [RESULT] Trigger price: {trigger_price}")
@@ -581,11 +645,11 @@ class RiskManager:
     ) -> bool:
         """
         Check if take profit target is reached.
-        
+
         Args:
             position: Position to check
             current_price: Current market price
-            
+
         Returns:
             True if profit target is reached, False otherwise
         """
@@ -608,8 +672,12 @@ class RiskManager:
         triggered = current_price >= position.target_price
 
         if triggered:
-            profit_pct = (current_price - position.entry_price) / position.entry_price * 100
-            logger.debug(f"  [TRIGGERED] Profit target reached: {current_price} >= {position.target_price}")
+            profit_pct = (
+                (current_price - position.entry_price) / position.entry_price * 100
+            )
+            logger.debug(
+                f"  [TRIGGERED] Profit target reached: {current_price} >= {position.target_price}"
+            )
             logger.debug(f"  [RESULT] Profit: {profit_pct:.2f}%")
         else:
             distance_pct = (position.target_price - current_price) / current_price * 100
@@ -629,14 +697,14 @@ class RiskManager:
     ) -> float:
         """
         Adjust risk percentage after consecutive losses.
-        
+
         Strategy: Reduce risk by 10% for each consecutive loss, up to max_reduction.
-        
+
         Args:
             current_risk_pct: Current risk percentage
             consecutive_losses: Number of consecutive losses
             max_reduction: Maximum reduction percentage (default: 50%)
-            
+
         Returns:
             Adjusted risk percentage
         """
@@ -677,11 +745,11 @@ class RiskManager:
     ) -> Dict[str, Any]:
         """
         Generate comprehensive risk summary for portfolio.
-        
+
         Args:
             positions: List of positions
             capital: Total portfolio capital
-            
+
         Returns:
             Risk summary dictionary
         """
@@ -772,7 +840,7 @@ class RiskManager:
     ) -> Position:
         """
         Register a new position with risk management.
-        
+
         Args:
             symbol: Trading symbol
             entry_price: Entry price
@@ -780,7 +848,7 @@ class RiskManager:
             current_price: Current market price (defaults to entry_price)
             stop_pct: Stop loss percentage (uses config default if None)
             profit_pct: Take profit percentage (uses config default if None)
-            
+
         Returns:
             Registered Position object
         """
@@ -802,7 +870,9 @@ class RiskManager:
         # Store position
         self.positions[symbol] = position
 
-        logger.info(f"[RiskManager] Registered position: {symbol} {shares} shares @ {entry_price}")
+        logger.info(
+            f"[RiskManager] Registered position: {symbol} {shares} shares @ {entry_price}"
+        )
         logger.info(f"  Stop loss: {position.stop_price}")
         logger.info(f"  Take profit: {position.target_price}")
 
@@ -815,11 +885,11 @@ class RiskManager:
     ) -> Dict[str, Any]:
         """
         Update position with current price and check risk triggers.
-        
+
         Args:
             symbol: Trading symbol
             current_price: Current market price
-            
+
         Returns:
             Update result dictionary
         """

@@ -7,11 +7,13 @@
 - 预热主要指数
 - 异步执行，不阻塞启动
 """
+
 import asyncio
 import logging
 from typing import List, Dict
 
 logger = logging.getLogger(__name__)
+
 
 class WarmupStrategy:
     """智能预热策略"""
@@ -72,16 +74,16 @@ class WarmupStrategy:
 
     # 主要货币对
     HOT_FOREX: List[str] = [
-        "USDCNY",    # 美元/人民币
-        "EURCNY",    # 欧元/人民币
-        "GBPCNY",    # 英镑/人民币
-        "JPYCNY",    # 日元/人民币
-        "EURUSD",    # 欧元/美元
-        "USDJPY",    # 美元/日元
-        "GBPUSD",    # 英镑/美元
-        "AUDUSD",    # 澳元/美元
-        "USDCAD",    # 美元/加元
-        "USDCHF",    # 美元/瑞郎
+        "USDCNY",  # 美元/人民币
+        "EURCNY",  # 欧元/人民币
+        "GBPCNY",  # 英镑/人民币
+        "JPYCNY",  # 日元/人民币
+        "EURUSD",  # 欧元/美元
+        "USDJPY",  # 美元/日元
+        "GBPUSD",  # 英镑/美元
+        "AUDUSD",  # 澳元/美元
+        "USDCAD",  # 美元/加元
+        "USDCHF",  # 美元/瑞郎
     ]
 
     # 主要指数
@@ -103,7 +105,7 @@ class WarmupStrategy:
     async def warmup_all(self) -> Dict[str, int]:
         """
         预热所有热门数据
-        
+
         Returns:
             各类型预热数量统计
         """
@@ -119,7 +121,7 @@ class WarmupStrategy:
                 self._warmup_stocks(),
                 self._warmup_forex(),
                 self._warmup_indexes(),
-                return_exceptions=True
+                return_exceptions=True,
             )
 
             # 统计
@@ -144,6 +146,7 @@ class WarmupStrategy:
             try:
                 # 调用缓存预热
                 from app.services.data_cache import get_cache
+
                 cache = get_cache()
                 # 这里只是标记需要预热，实际获取由后续请求触发
                 warmed += 1
@@ -165,8 +168,10 @@ class WarmupStrategy:
         """获取预热统计"""
         return self._warmup_stats
 
+
 # 全局实例
 _strategy: WarmupStrategy = None
+
 
 def get_warmup_strategy() -> WarmupStrategy:
     global _strategy

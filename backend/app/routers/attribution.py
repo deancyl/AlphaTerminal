@@ -35,32 +35,43 @@ _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="attribution_"
 
 class SandboxRequest(BaseModel):
     """Request model for attribution sandbox"""
-    symbols: List[str] = Field(..., min_length=1, max_length=50, description="股票代码列表")
-    factors: List[str] = Field(..., min_length=1, max_length=20, description="因子ID列表")
+
+    symbols: List[str] = Field(
+        ..., min_length=1, max_length=50, description="股票代码列表"
+    )
+    factors: List[str] = Field(
+        ..., min_length=1, max_length=20, description="因子ID列表"
+    )
     start_date: str = Field(..., description="开始日期 YYYY-MM-DD")
     end_date: str = Field(..., description="结束日期 YYYY-MM-DD")
-    initial_capital: float = Field(default=100000, ge=10000, le=1e9, description="初始资金")
+    initial_capital: float = Field(
+        default=100000, ge=10000, le=1e9, description="初始资金"
+    )
 
-    @field_validator('symbols')
+    @field_validator("symbols")
     @classmethod
     def validate_symbols(cls, v: List[str]) -> List[str]:
         return [s.strip().lower() for s in v if s.strip()]
 
-    @field_validator('start_date', 'end_date')
+    @field_validator("start_date", "end_date")
     @classmethod
     def validate_date_format(cls, v: str) -> str:
         from datetime import datetime as dt
+
         try:
             dt.strptime(v, "%Y-%m-%d")
         except ValueError:
-            raise ValueError(f'日期格式错误：{v}，应为 YYYY-MM-DD')
+            raise ValueError(f"日期格式错误：{v}，应为 YYYY-MM-DD")
         return v
 
 
 class RealtimeRequest(BaseModel):
     """Request model for real-time attribution"""
+
     symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
-    factors: List[str] = Field(..., min_length=1, max_length=20, description="因子ID列表")
+    factors: List[str] = Field(
+        ..., min_length=1, max_length=20, description="因子ID列表"
+    )
     lookback_days: int = Field(default=60, ge=20, le=252, description="回溯天数")
 
 
@@ -81,10 +92,12 @@ async def list_factors(
 
     factors = registry.list_factors(cat_filter)
 
-    return success_response({
-        "factors": [f.to_dict() for f in factors],
-        "total": len(factors),
-    })
+    return success_response(
+        {
+            "factors": [f.to_dict() for f in factors],
+            "total": len(factors),
+        }
+    )
 
 
 @router.get("/factors/categories")
@@ -94,10 +107,12 @@ async def list_categories():
     registry = get_factor_registry()
     categories = registry.list_categories()
 
-    return success_response({
-        "categories": categories,
-        "total": len(categories),
-    })
+    return success_response(
+        {
+            "categories": categories,
+            "total": len(categories),
+        }
+    )
 
 
 @router.post("/sandbox")
@@ -105,7 +120,7 @@ async def list_categories():
 async def run_sandbox(req: SandboxRequest):
     """
     运行归因沙盒
-    
+
     计算指定股票组合在选定因子上的归因分析
     """
     loop = asyncio.get_event_loop()
@@ -121,21 +136,26 @@ async def run_sandbox(req: SandboxRequest):
 
             conn = _get_conn()
             try:
-                rows = conn.execute("""
+                rows = conn.execute(
+                    """
                     SELECT date, open, high, low, close, volume
                     FROM market_data_daily
                     WHERE symbol = ? AND date >= ? AND date <= ?
                     ORDER BY date ASC
-                """, (db_symbol, req.start_date, req.end_date)).fetchall()
+                """,
+                    (db_symbol, req.start_date, req.end_date),
+                ).fetchall()
 
                 if len(rows) < 20:
                     continue
 
-                df = pd.DataFrame(rows, columns=['date', 'open', 'high', 'low', 'close', 'volume'])
-                df['date'] = pd.to_datetime(df['date'])
+                df = pd.DataFrame(
+                    rows, columns=["date", "open", "high", "low", "close", "volume"]
+                )
+                df["date"] = pd.to_datetime(df["date"])
 
                 returns = np.zeros(len(df))
-                returns[1:] = np.diff(np.log(df['close'].values + 1e-10))
+                returns[1:] = np.diff(np.log(df["close"].values + 1e-10))
 
                 factor_data = pd.DataFrame(index=df.index)
                 for factor_id in req.factors:
@@ -151,10 +171,12 @@ async def run_sandbox(req: SandboxRequest):
                     period_end=req.end_date,
                 )
 
-                all_results.append({
-                    "symbol": symbol,
-                    "attribution": result.to_dict(),
-                })
+                all_results.append(
+                    {
+                        "symbol": symbol,
+                        "attribution": result.to_dict(),
+                    }
+                )
 
             finally:
                 conn.close()
@@ -166,16 +188,18 @@ async def run_sandbox(req: SandboxRequest):
     if not results:
         return error_response(ErrorCode.NOT_FOUND, "未找到有效数据")
 
-    return success_response({
-        "results": results,
-        "total": len(results),
-        "request": {
-            "symbols": req.symbols,
-            "factors": req.factors,
-            "start_date": req.start_date,
-            "end_date": req.end_date,
-        },
-    })
+    return success_response(
+        {
+            "results": results,
+            "total": len(results),
+            "request": {
+                "symbols": req.symbols,
+                "factors": req.factors,
+                "start_date": req.start_date,
+                "end_date": req.end_date,
+            },
+        }
+    )
 
 
 @router.post("/sandbox/realtime")
@@ -183,7 +207,7 @@ async def run_sandbox(req: SandboxRequest):
 async def run_realtime(req: RealtimeRequest):
     """
     实时归因计算
-    
+
     基于最近N天的数据进行快速归因分析
     """
     loop = asyncio.get_event_loop()
@@ -197,23 +221,28 @@ async def run_realtime(req: RealtimeRequest):
 
         conn = _get_conn()
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT date, open, high, low, close, volume
                 FROM market_data_daily
                 WHERE symbol = ?
                 ORDER BY date DESC
                 LIMIT ?
-            """, (db_symbol, req.lookback_days + 10)).fetchall()
+            """,
+                (db_symbol, req.lookback_days + 10),
+            ).fetchall()
 
             if len(rows) < 20:
                 return None
 
             rows.reverse()
-            df = pd.DataFrame(rows, columns=['date', 'open', 'high', 'low', 'close', 'volume'])
-            df['date'] = pd.to_datetime(df['date'])
+            df = pd.DataFrame(
+                rows, columns=["date", "open", "high", "low", "close", "volume"]
+            )
+            df["date"] = pd.to_datetime(df["date"])
 
             returns = np.zeros(len(df))
-            returns[1:] = np.diff(np.log(df['close'].values + 1e-10))
+            returns[1:] = np.diff(np.log(df["close"].values + 1e-10))
 
             factor_data = pd.DataFrame(index=df.index)
             for factor_id in req.factors:
@@ -225,15 +254,15 @@ async def run_realtime(req: RealtimeRequest):
                 returns=returns,
                 factor_data=factor_data,
                 factor_ids=req.factors,
-                period_start=str(df['date'].iloc[0].date()),
-                period_end=str(df['date'].iloc[-1].date()),
+                period_start=str(df["date"].iloc[0].date()),
+                period_end=str(df["date"].iloc[-1].date()),
             )
 
             return {
                 "symbol": symbol,
                 "attribution": result.to_dict(),
-                "latest_price": float(df['close'].iloc[-1]),
-                "latest_date": str(df['date'].iloc[-1].date()),
+                "latest_price": float(df["close"].iloc[-1]),
+                "latest_date": str(df["date"].iloc[-1].date()),
             }
 
         finally:
@@ -254,8 +283,10 @@ async def health_check():
     registry = get_factor_registry()
     engine = get_attribution_engine()
 
-    return success_response({
-        "status": "healthy",
-        "factors_registered": len(registry.list_factors()),
-        "categories": len(registry.list_categories()),
-    })
+    return success_response(
+        {
+            "status": "healthy",
+            "factors_registered": len(registry.list_factors()),
+            "categories": len(registry.list_categories()),
+        }
+    )

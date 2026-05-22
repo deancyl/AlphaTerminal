@@ -19,12 +19,14 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
-BASE_URL = os.environ.get('ALPHATERMINAL_BASE_URL', 'http://localhost:8002')
-AGENT_TOKEN = os.environ.get('ALPHATERMINAL_AGENT_TOKEN', '')
-TRANSPORT = os.environ.get('ALPHATERMINAL_TRANSPORT', 'stdio')
+BASE_URL = os.environ.get("ALPHATERMINAL_BASE_URL", "http://localhost:8002")
+AGENT_TOKEN = os.environ.get("ALPHATERMINAL_AGENT_TOKEN", "")
+TRANSPORT = os.environ.get("ALPHATERMINAL_TRANSPORT", "stdio")
 
 
 def get_tools() -> list:
@@ -36,13 +38,19 @@ def get_tools() -> list:
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "market": {"type": "string", "enum": ["AStock", "HKStock", "USStock"]},
+                    "market": {
+                        "type": "string",
+                        "enum": ["AStock", "HKStock", "USStock"],
+                    },
                     "symbol": {"type": "string"},
-                    "timeframe": {"type": "string", "enum": ["1m", "5m", "15m", "1H", "4H", "1D", "1W"]},
-                    "limit": {"type": "integer", "default": 100}
+                    "timeframe": {
+                        "type": "string",
+                        "enum": ["1m", "5m", "15m", "1H", "4H", "1D", "1W"],
+                    },
+                    "limit": {"type": "integer", "default": 100},
                 },
-                "required": ["market", "symbol", "timeframe"]
-            }
+                "required": ["market", "symbol", "timeframe"],
+            },
         },
         {
             "name": "get_realtime_quote",
@@ -50,11 +58,14 @@ def get_tools() -> list:
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "market": {"type": "string", "enum": ["AStock", "HKStock", "USStock"]},
-                    "symbol": {"type": "string"}
+                    "market": {
+                        "type": "string",
+                        "enum": ["AStock", "HKStock", "USStock"],
+                    },
+                    "symbol": {"type": "string"},
                 },
-                "required": ["market", "symbol"]
-            }
+                "required": ["market", "symbol"],
+            },
         },
         {
             "name": "search_symbols",
@@ -62,22 +73,23 @@ def get_tools() -> list:
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "market": {"type": "string", "enum": ["AStock", "HKStock", "USStock"]},
+                    "market": {
+                        "type": "string",
+                        "enum": ["AStock", "HKStock", "USStock"],
+                    },
                     "keyword": {"type": "string"},
-                    "limit": {"type": "integer", "default": 20}
+                    "limit": {"type": "integer", "default": 20},
                 },
-                "required": ["market", "keyword"]
-            }
+                "required": ["market", "keyword"],
+            },
         },
         {
             "name": "get_portfolio",
             "description": "获取组合持仓信息",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "portfolio_id": {"type": "string"}
-                }
-            }
+                "properties": {"portfolio_id": {"type": "string"}},
+            },
         },
         {
             "name": "submit_order",
@@ -88,10 +100,10 @@ def get_tools() -> list:
                     "symbol": {"type": "string"},
                     "side": {"type": "string", "enum": ["BUY", "SELL"]},
                     "quantity": {"type": "number"},
-                    "price": {"type": "number"}
+                    "price": {"type": "number"},
                 },
-                "required": ["symbol", "side", "quantity", "price"]
-            }
+                "required": ["symbol", "side", "quantity", "price"],
+            },
         },
         {
             "name": "list_orders",
@@ -100,14 +112,19 @@ def get_tools() -> list:
                 "type": "object",
                 "properties": {
                     "symbol": {"type": "string"},
-                    "status": {"type": "string", "enum": ["pending", "filled", "cancelled", "rejected"]}
-                }
-            }
-        }
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "filled", "cancelled", "rejected"],
+                    },
+                },
+            },
+        },
     ]
 
 
-async def call_api(endpoint: str, method: str = "GET", data: Optional[Dict] = None) -> Dict[str, Any]:
+async def call_api(
+    endpoint: str, method: str = "GET", data: Optional[Dict] = None
+) -> Dict[str, Any]:
     """Call AlphaTerminal API"""
     import urllib.request
     import urllib.error
@@ -115,14 +132,16 @@ async def call_api(endpoint: str, method: str = "GET", data: Optional[Dict] = No
     url = f"{BASE_URL}{endpoint}"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {AGENT_TOKEN}"
+        "Authorization": f"Bearer {AGENT_TOKEN}",
     }
 
     try:
         if method == "GET":
             req = urllib.request.Request(url, headers=headers)
         else:
-            req = urllib.request.Request(url, data=json.dumps(data or {}).encode(), headers=headers)
+            req = urllib.request.Request(
+                url, data=json.dumps(data or {}).encode(), headers=headers
+            )
             req.get_method = lambda: method
 
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -144,14 +163,11 @@ def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "AlphaTerminal MCP", "version": "1.0.0"},
-            "id": request_id
+            "id": request_id,
         }
 
     if method == "tools/list":
-        return {
-            "tools": get_tools(),
-            "id": request_id
-        }
+        return {"tools": get_tools(), "id": request_id}
 
     if method == "tools/call":
         tool_name = params.get("name", "")
@@ -159,43 +175,69 @@ def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
 
         if tool_name == "get_market_data":
             endpoint = "/api/v1/agent/v1/klines"
-            response = call_api(endpoint, "POST", {
-                "market": arguments.get("market"),
-                "symbol": arguments.get("symbol"),
-                "timeframe": arguments.get("timeframe", "1D"),
-                "limit": arguments.get("limit", 100)
-            })
-            return {"content": [{"type": "text", "text": json.dumps(response)}], "id": request_id}
+            response = call_api(
+                endpoint,
+                "POST",
+                {
+                    "market": arguments.get("market"),
+                    "symbol": arguments.get("symbol"),
+                    "timeframe": arguments.get("timeframe", "1D"),
+                    "limit": arguments.get("limit", 100),
+                },
+            )
+            return {
+                "content": [{"type": "text", "text": json.dumps(response)}],
+                "id": request_id,
+            }
 
         elif tool_name == "get_realtime_quote":
             endpoint = f"/api/v1/agent/v1/price?market={arguments.get('market')}&symbol={arguments.get('symbol')}"
             response = call_api(endpoint)
-            return {"content": [{"type": "text", "text": json.dumps(response)}], "id": request_id}
+            return {
+                "content": [{"type": "text", "text": json.dumps(response)}],
+                "id": request_id,
+            }
 
         elif tool_name == "search_symbols":
             endpoint = f"/api/v1/agent/v1/markets/{arguments.get('market')}/symbols?keyword={arguments.get('keyword', '')}&limit={arguments.get('limit', 20)}"
             response = call_api(endpoint)
-            return {"content": [{"type": "text", "text": json.dumps(response)}], "id": request_id}
+            return {
+                "content": [{"type": "text", "text": json.dumps(response)}],
+                "id": request_id,
+            }
 
         elif tool_name == "get_portfolio":
             endpoint = "/api/v1/agent/v1/portfolio"
             response = call_api(endpoint)
-            return {"content": [{"type": "text", "text": json.dumps(response)}], "id": request_id}
+            return {
+                "content": [{"type": "text", "text": json.dumps(response)}],
+                "id": request_id,
+            }
 
         elif tool_name == "submit_order":
             endpoint = "/api/v1/agent/v1/orders"
-            response = call_api(endpoint, "POST", {
-                "symbol": arguments.get("symbol"),
-                "side": arguments.get("side"),
-                "quantity": arguments.get("quantity"),
-                "price": arguments.get("price")
-            })
-            return {"content": [{"type": "text", "text": json.dumps(response)}], "id": request_id}
+            response = call_api(
+                endpoint,
+                "POST",
+                {
+                    "symbol": arguments.get("symbol"),
+                    "side": arguments.get("side"),
+                    "quantity": arguments.get("quantity"),
+                    "price": arguments.get("price"),
+                },
+            )
+            return {
+                "content": [{"type": "text", "text": json.dumps(response)}],
+                "id": request_id,
+            }
 
         elif tool_name == "list_orders":
             endpoint = "/api/v1/agent/v1/orders"
             response = call_api(endpoint)
-            return {"content": [{"type": "text", "text": json.dumps(response)}], "id": request_id}
+            return {
+                "content": [{"type": "text", "text": json.dumps(response)}],
+                "id": request_id,
+            }
 
         else:
             return {"error": f"Unknown tool: {tool_name}", "id": request_id}
@@ -225,19 +267,19 @@ def run_http():
     """Run MCP server in HTTP mode"""
     from http.server import HTTPServer, BaseHTTPRequestHandler
 
-    host = os.environ.get('ALPHATERMINAL_HOST', '0.0.0.0')
-    port = int(os.environ.get('ALPHATERMINAL_PORT', '7800'))
+    host = os.environ.get("ALPHATERMINAL_HOST", "0.0.0.0")
+    port = int(os.environ.get("ALPHATERMINAL_PORT", "7800"))
 
     class MCPHandler(BaseHTTPRequestHandler):
         def do_POST(self):
-            content_length = int(self.headers.get('Content-Length', 0))
+            content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length).decode()
 
             try:
                 request = json.loads(body)
                 response = handle_request(request)
                 self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
+                self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps(response).encode())
             except Exception as e:
@@ -247,10 +289,10 @@ def run_http():
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
 
         def do_GET(self):
-            if self.path == '/tools':
+            if self.path == "/tools":
                 response = {"tools": get_tools()}
                 self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
+                self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps(response).encode())
             else:

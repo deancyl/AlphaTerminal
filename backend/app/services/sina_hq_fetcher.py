@@ -2,14 +2,15 @@
 Sina HQ 行情抓取器 v3 - Phase 3
 数据源：腾讯 qt.gtimg.cn（个股）+ 新浪行业板块 Sina Industry Board
 """
+
 import logging
 import time as time_module
 from datetime import datetime
 
 import httpx
+
 logger = logging.getLogger(__name__)
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
-
 
 # Circuit breaker for Sina HQ API protection (P0 fix)
 _SINA_HQ_CB = CircuitBreaker(
@@ -18,8 +19,9 @@ _SINA_HQ_CB = CircuitBreaker(
         failure_threshold=5,
         timeout=60.0,
         success_threshold=2,
-    )
+    ),
 )
+
 
 def _get_hs300_pool() -> list[str]:
     """
@@ -29,6 +31,7 @@ def _get_hs300_pool() -> list[str]:
     """
     try:
         import akshare as ak
+
         # 尝试 index_stock_cons樣本（含中文）
         func_names = ["index_stock_cons樣本", "index_stock_cons"]
         df = None
@@ -41,7 +44,9 @@ def _get_hs300_pool() -> list[str]:
                         logger.info(f"[SinaHQ] HS300 via {fname}: {len(df)} rows")
                         break
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-                logger.warning(f"[HTTP] via {fname} failed: {type(e).__name__}: {e}", exc_info=True)
+                logger.warning(
+                    f"[HTTP] via {fname} failed: {type(e).__name__}: {e}", exc_info=True
+                )
                 continue
 
         if df is None or df.empty:
@@ -57,12 +62,16 @@ def _get_hs300_pool() -> list[str]:
                 prefix = "sh" if code.startswith(("6", "5")) else "sz"
                 codes.append(f"{prefix}{code}")
             except Exception as e:
-                logger.warning(f"[SinaHQ] Failed to parse HS300 row: {e}", exc_info=True)
+                logger.warning(
+                    f"[SinaHQ] Failed to parse HS300 row: {e}", exc_info=True
+                )
                 continue
         logger.info(f"[SinaHQ] HS300 成分股: {len(codes)} 只")
         return codes[:100]  # 熔断上限 100 只
     except Exception as e:
-        logger.warning(f"[SinaHQ] HS300 获取失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[SinaHQ] HS300 获取失败: {type(e).__name__}: {e}", exc_info=True
+        )
     return []
 
 
@@ -73,15 +82,25 @@ _HS300_POOL = _get_hs300_pool()
 # 核心股票池（第一批 15 只，最重要的蓝筹，足够展示分布）
 FOCUS_STOCKS = [
     # 白酒/消费
-    "sh600519", "sz000858", "sh600887",
+    "sh600519",
+    "sz000858",
+    "sh600887",
     # 银行
-    "sh601318", "sh600036", "sh601166",
+    "sh601318",
+    "sh600036",
+    "sh601166",
     # 保险/券商
-    "sh601628", "sh600030", "sh601688",
+    "sh601628",
+    "sh600030",
+    "sh601688",
     # 科技/新能源
-    "sh600585", "sz002594", "sz300750",
+    "sh600585",
+    "sz002594",
+    "sz300750",
     # 医药
-    "sh600276", "sz000538", "sh600196",
+    "sh600276",
+    "sz000538",
+    "sh600196",
 ]
 
 
@@ -113,7 +132,7 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
     all_rows = []
 
     for i in range(0, len(codes), batch_size):
-        batch = codes[i:i + batch_size]
+        batch = codes[i : i + batch_size]
         joined = ",".join(batch)
         try:
             r = httpx.get(
@@ -135,17 +154,21 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
                         continue
 
                     raw_code = parts[0].strip()
-                    name     = parts[1].strip()
-                    code     = parts[2].strip()        # ← 真正的 6 位代码
-                    price    = float(parts[3]) if parts[3] else 0.0
-                    y_close  = float(parts[4]) if parts[4] else price
-                    open_p   = float(parts[5]) if parts[5] else price
-                    volume   = float(parts[6]) if parts[6] else 0.0
-                    chg_pct  = float(parts[32]) if parts[32] else 0.0
-                    chg_val  = round(price - y_close, 2) if y_close else 0.0
+                    name = parts[1].strip()
+                    code = parts[2].strip()  # ← 真正的 6 位代码
+                    price = float(parts[3]) if parts[3] else 0.0
+                    y_close = float(parts[4]) if parts[4] else price
+                    open_p = float(parts[5]) if parts[5] else price
+                    volume = float(parts[6]) if parts[6] else 0.0
+                    chg_pct = float(parts[32]) if parts[32] else 0.0
+                    chg_val = round(price - y_close, 2) if y_close else 0.0
                     # 腾讯字段：[37]=成交额(元) [38]=换手率(%)
-                    amount   = float(parts[37]) if (len(parts) > 37 and parts[37]) else 0.0  # 已是元，无需 *10000
-                    turnover = float(parts[38]) if (len(parts) > 38 and parts[38]) else 0.0   # 换手率(%)
+                    amount = (
+                        float(parts[37]) if (len(parts) > 37 and parts[37]) else 0.0
+                    )  # 已是元，无需 *10000
+                    turnover = (
+                        float(parts[38]) if (len(parts) > 38 and parts[38]) else 0.0
+                    )  # 换手率(%)
 
                     if not name or price <= 0 or not code:
                         continue
@@ -158,22 +181,26 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
                     else:
                         market = "OTHER"
 
-                    all_rows.append({
-                        "code":     code,
-                        "name":     name,
-                        "price":    round(price, 2),
-                        "yesterday": round(y_close, 2),
-                        "open":     round(open_p, 2),
-                        "volume":   round(volume, 0),
-                        "chg":      chg_val,
-                        "chg_pct":  round(chg_pct, 2),
-                        "turnover": round(turnover, 2),
-                        "amount":   round(amount, 0),   # 成交额(元)
-                        "market":   market,
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    })
+                    all_rows.append(
+                        {
+                            "code": code,
+                            "name": name,
+                            "price": round(price, 2),
+                            "yesterday": round(y_close, 2),
+                            "open": round(open_p, 2),
+                            "volume": round(volume, 0),
+                            "chg": chg_val,
+                            "chg_pct": round(chg_pct, 2),
+                            "turnover": round(turnover, 2),
+                            "amount": round(amount, 0),  # 成交额(元)
+                            "market": market,
+                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        }
+                    )
                 except ValueError as e:
-                    logger.warning(f"[SinaHQ] Invalid value in stock data: {e}", exc_info=True)
+                    logger.warning(
+                        f"[SinaHQ] Invalid value in stock data: {e}", exc_info=True
+                    )
                     continue
                 except IndexError as e:
                     logger.warning(f"[SinaHQ] Malformed stock data: {e}", exc_info=True)
@@ -186,11 +213,15 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
             _SINA_HQ_CB.record_failure()
             continue
         except httpx.HTTPStatusError as e:
-            logger.warning(f"[SinaHQ] HTTP {e.response.status_code}: {e}", exc_info=True)
+            logger.warning(
+                f"[SinaHQ] HTTP {e.response.status_code}: {e}", exc_info=True
+            )
             _SINA_HQ_CB.record_failure()
             continue
         except Exception as e:
-            logger.error(f"[SinaHQ] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
+            logger.error(
+                f"[SinaHQ] Unexpected error: {type(e).__name__}: {e}", exc_info=True
+            )
             _SINA_HQ_CB.record_failure()
             continue
 
@@ -231,17 +262,21 @@ def fetch_sina_industry_board() -> list[dict]:
                 parts = val.strip().split(",")
                 if len(parts) < 5:
                     continue
-                name    = parts[1].strip()
+                name = parts[1].strip()
                 chg_pct = float(parts[4]) if parts[4] else 0.0
                 top_code = parts[8].strip() if len(parts) > 8 and parts[8] else ""
                 top_name = parts[12].strip() if len(parts) > 12 and parts[12] else ""
                 if not name:
                     continue
-                sectors.append({
-                    "name":       name,
-                    "change_pct": round(chg_pct, 2),
-                    "top_stock":  {"name": top_name, "code": top_code} if top_name else None,
-                })
+                sectors.append(
+                    {
+                        "name": name,
+                        "change_pct": round(chg_pct, 2),
+                        "top_stock": (
+                            {"name": top_name, "code": top_code} if top_name else None
+                        ),
+                    }
+                )
             except ValueError as e:
                 logger.warning(f"[SinaIndustry] Invalid value: {e}", exc_info=True)
                 continue
@@ -256,7 +291,9 @@ def fetch_sina_industry_board() -> list[dict]:
             _SINA_HQ_CB.record_success()
         return sectors[:15]
     except Exception as e:
-        logger.warning(f"[SinaIndustry] 拉取失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.warning(
+            f"[SinaIndustry] 拉取失败: {type(e).__name__}: {e}", exc_info=True
+        )
         _SINA_HQ_CB.record_failure()
         return []
 
@@ -266,23 +303,31 @@ def build_histogram_from_rows(rows: list[dict]) -> dict:
     基于股票实时数据构建涨跌分布直方图（11桶）
     """
     BUCKETS = [
-        ("跌停",    -1e9,  -9.9),
-        ("<-7%",  -9.9,   -7.0),
+        ("跌停", -1e9, -9.9),
+        ("<-7%", -9.9, -7.0),
         ("-7%~-5%", -7.0, -5.0),
         ("-5%~-2%", -5.0, -2.0),
-        ("-2%~0%",  -2.0,  0.0),
-        ("平盘(0%)",  0.0,  0.0),
-        ("0%~2%",    0.0,  2.0),
-        ("2%~5%",    2.0,  5.0),
-        ("5%~7%",    5.0,  7.0),
-        (">7%",      7.0,  9.9),
-        ("涨停",      9.9, 1e9),
+        ("-2%~0%", -2.0, 0.0),
+        ("平盘(0%)", 0.0, 0.0),
+        ("0%~2%", 0.0, 2.0),
+        ("2%~5%", 2.0, 5.0),
+        ("5%~7%", 5.0, 7.0),
+        (">7%", 7.0, 9.9),
+        ("涨停", 9.9, 1e9),
     ]
 
     if not rows:
-        return {"buckets": [], "total": 0, "advance": 0, "decline": 0,
-                "unchanged": 0, "limit_up": 0, "limit_down": 0,
-                "up_ratio": 0.0, "timestamp": ""}
+        return {
+            "buckets": [],
+            "total": 0,
+            "advance": 0,
+            "decline": 0,
+            "unchanged": 0,
+            "limit_up": 0,
+            "limit_down": 0,
+            "up_ratio": 0.0,
+            "timestamp": "",
+        }
 
     pcts = [float(r["chg_pct"]) for r in rows]
     total = len(rows)
@@ -299,21 +344,23 @@ def build_histogram_from_rows(rows: list[dict]) -> dict:
         else:
             count = sum(1 for p in pcts if lo < p <= hi)
         color = "#14b143" if lo < 0 else "#ef232a" if lo >= 0 else "#6b7280"
-        buckets.append({
-            "label": label,
-            "count": count,
-            "pct":   round(count / total * 100, 2) if total > 0 else 0,
-            "color": color,
-        })
+        buckets.append(
+            {
+                "label": label,
+                "count": count,
+                "pct": round(count / total * 100, 2) if total > 0 else 0,
+                "color": color,
+            }
+        )
 
     return {
-        "buckets":    buckets,
-        "total":      total,
-        "advance":    advance,
-        "decline":    decline,
-        "unchanged":  unchanged,
-        "limit_up":   limit_up,
+        "buckets": buckets,
+        "total": total,
+        "advance": advance,
+        "decline": decline,
+        "unchanged": unchanged,
+        "limit_up": limit_up,
         "limit_down": limit_down,
-        "up_ratio":   round(advance / total, 4) if total > 0 else 0,
-        "timestamp":  rows[0]["timestamp"] if rows else "",
+        "up_ratio": round(advance / total, 4) if total > 0 else 0,
+        "timestamp": rows[0]["timestamp"] if rows else "",
     }

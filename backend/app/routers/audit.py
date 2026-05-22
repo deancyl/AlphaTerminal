@@ -28,12 +28,12 @@ async def verify_audit_chain(
 ):
     """
     Verify audit chain integrity.
-    
+
     Checks:
     1. Each record's prev_hash matches the previous record's record_hash
     2. Each record's record_hash can be recomputed from its fields
     3. Chain index is sequential
-    
+
     Returns:
         - valid: bool - Whether the chain is valid
         - checked_records: int - Number of records checked
@@ -49,7 +49,7 @@ async def verify_audit_chain(
 async def get_audit_stats():
     """
     Get audit chain statistics.
-    
+
     Returns:
         - total_records: int - Total number of audit records
         - chain_index_min: int - Minimum chain index
@@ -66,19 +66,29 @@ async def get_audit_stats():
 @router.get("/logs")
 @handle_errors(module="audit")
 async def query_audit_logs(
-    after_timestamp: Optional[str] = Query(None, description="Cursor: get logs before this timestamp (ISO format)"),
-    after_id: Optional[int] = Query(None, ge=1, description="Cursor: get logs with id less than this (for same timestamp)"),
+    after_timestamp: Optional[str] = Query(
+        None, description="Cursor: get logs before this timestamp (ISO format)"
+    ),
+    after_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Cursor: get logs with id less than this (for same timestamp)",
+    ),
     agent_id: Optional[str] = Query(None, description="Filter by agent ID"),
     action: Optional[str] = Query(None, description="Filter by action type"),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
-    offset: int = Query(0, ge=0, description="Offset for pagination (deprecated, use after_timestamp/after_id)"),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Offset for pagination (deprecated, use after_timestamp/after_id)",
+    ),
 ):
     """
     Query audit logs with keyset pagination for O(1) performance.
-    
+
     Keyset pagination uses cursor (after_timestamp, after_id) instead of OFFSET.
     This provides constant-time performance even for deep pages.
-    
+
     Args:
         after_timestamp: Cursor timestamp - get logs before this time
         after_id: Cursor ID - for disambiguating same-timestamp records
@@ -86,7 +96,7 @@ async def query_audit_logs(
         action: Filter by action type
         limit: Max results (1-1000)
         offset: DEPRECATED - use cursor instead
-        
+
     Returns:
         - logs: List of audit log entries
         - has_more: Boolean indicating if more results exist
@@ -131,7 +141,7 @@ async def query_audit_logs(
 async def audit_health():
     """
     Health check for audit system.
-    
+
     Returns:
         - status: str - "ok" if audit system is healthy
         - chain_valid: bool - Whether chain verification passes

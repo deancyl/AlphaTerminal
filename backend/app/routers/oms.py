@@ -25,7 +25,10 @@ from app.services.oms import (
     is_valid_transition,
 )
 from app.services.oms.order_status import get_allowed_transitions
-from app.services.oms.order_engine import InvalidStateTransitionError, OrderNotFoundError
+from app.services.oms.order_engine import (
+    InvalidStateTransitionError,
+    OrderNotFoundError,
+)
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
@@ -47,11 +50,11 @@ class OrderCreate(BaseModel):
     price: Optional[float] = Field(default=None, ge=0)
     order_type: str = Field(default="limit", pattern="^(market|limit|stop)$")
 
-    @field_validator('order_type')
+    @field_validator("order_type")
     @classmethod
     def validate_order_type(cls, v: str, info) -> str:
-        if v == 'limit' and info.data.get('price') is None:
-            raise ValueError('Limit order requires price')
+        if v == "limit" and info.data.get("price") is None:
+            raise ValueError("Limit order requires price")
         return v
 
 
@@ -111,14 +114,20 @@ async def get_order_status(
             raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
 
         order = oms.get_order(order_id)
-        return success_response({
-            "order_id": order_id,
-            "status": status.value,
-            "filled_quantity": order.filled_quantity if order else 0,
-            "avg_fill_price": order.avg_fill_price if order else 0.0,
-            "remaining_quantity": (order.quantity - order.filled_quantity) if order else 0,
-            "allowed_transitions": [s.value for s in get_allowed_transitions(status)],
-        })
+        return success_response(
+            {
+                "order_id": order_id,
+                "status": status.value,
+                "filled_quantity": order.filled_quantity if order else 0,
+                "avg_fill_price": order.avg_fill_price if order else 0.0,
+                "remaining_quantity": (
+                    (order.quantity - order.filled_quantity) if order else 0
+                ),
+                "allowed_transitions": [
+                    s.value for s in get_allowed_transitions(status)
+                ],
+            }
+        )
 
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
@@ -138,7 +147,7 @@ async def submit_order(
             allowed = [s.value for s in get_allowed_transitions(order.status)]
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot submit order in {order.status.value} state. Allowed: {allowed}"
+                detail=f"Cannot submit order in {order.status.value} state. Allowed: {allowed}",
             )
 
         try:
@@ -198,7 +207,10 @@ async def process_fill(
 @handle_errors(module="oms")
 async def list_portfolio_orders(
     portfolio_id: int,
-    status: Optional[str] = Query(None, pattern="^(staged|submitted|validated|pending|partial|filled|cancelled|rejected|expired)$"),
+    status: Optional[str] = Query(
+        None,
+        pattern="^(staged|submitted|validated|pending|partial|filled|cancelled|rejected|expired)$",
+    ),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     oms: OrderExecutionEngine = Depends(get_oms_engine),
@@ -212,16 +224,18 @@ async def list_portfolio_orders(
             offset=offset,
         )
 
-        return success_response({
-            "orders": [o.to_dict() for o in orders],
-            "pagination": {
-                "portfolio_id": portfolio_id,
-                "status_filter": status,
-                "limit": limit,
-                "offset": offset,
-                "count": len(orders),
+        return success_response(
+            {
+                "orders": [o.to_dict() for o in orders],
+                "pagination": {
+                    "portfolio_id": portfolio_id,
+                    "status_filter": status,
+                    "limit": limit,
+                    "offset": offset,
+                    "count": len(orders),
+                },
             }
-        })
+        )
 
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
@@ -234,10 +248,12 @@ async def list_open_orders(
 ):
     async def _inner():
         orders = oms.get_open_orders(portfolio_id)
-        return success_response({
-            "orders": [o.to_dict() for o in orders],
-            "count": len(orders),
-        })
+        return success_response(
+            {
+                "orders": [o.to_dict() for o in orders],
+                "count": len(orders),
+            }
+        )
 
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
@@ -245,13 +261,15 @@ async def list_open_orders(
 @router.get("/orders/statuses")
 @handle_errors(module="oms")
 async def list_order_statuses():
-    return success_response({
-        "statuses": [
-            {"value": s.value, "terminal": len(get_allowed_transitions(s)) == 0}
-            for s in OrderStatus
-        ],
-        "transitions": {
-            s.value: [t.value for t in get_allowed_transitions(s)]
-            for s in OrderStatus
+    return success_response(
+        {
+            "statuses": [
+                {"value": s.value, "terminal": len(get_allowed_transitions(s)) == 0}
+                for s in OrderStatus
+            ],
+            "transitions": {
+                s.value: [t.value for t in get_allowed_transitions(s)]
+                for s in OrderStatus
+            },
         }
-    })
+    )

@@ -8,6 +8,7 @@ Fetcher Priority Configuration — 数据源优先级配置
 - realtime: Sina → Tencent → EastMoney（实时数据优先 Sina）
 - fund_nav: AkShare → EastMoney（基金净值优先 AkShare）
 """
+
 from pydantic import BaseModel
 from typing import List, Optional
 

@@ -6,7 +6,12 @@ Includes circuit breaker pattern for fault tolerance.
 """
 
 from .base import BaseMarketFetcher
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen, CircuitContext
+from app.services.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerOpen,
+    CircuitContext,
+)
 from .fetcher_factory import (
     FetcherFactory,
     get_market_fetcher,

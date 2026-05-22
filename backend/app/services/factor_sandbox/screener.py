@@ -26,6 +26,7 @@ _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="screener_")
 
 class Universe(str, Enum):
     """Stock universe for screening"""
+
     ALL = "all"
     HS300 = "hs300"
     ZZ500 = "zz500"
@@ -35,6 +36,7 @@ class Universe(str, Enum):
 @dataclass
 class ScreeningFactor:
     """Factor filter configuration"""
+
     id: str
     params: Dict[str, Any] = field(default_factory=dict)
 
@@ -42,6 +44,7 @@ class ScreeningFactor:
 @dataclass
 class ScreeningResult:
     """Screening result for a single stock"""
+
     symbol: str
     name: str
     score: float
@@ -78,8 +81,9 @@ class ThreadSafeCache:
             if len(self._cache) >= self._max_entries:
                 self._cleanup_expired()
                 if len(self._cache) >= self._max_entries:
-                    oldest_keys = sorted(self._cache.keys(),
-                                         key=lambda k: self._cache[k][0])[:100]
+                    oldest_keys = sorted(
+                        self._cache.keys(), key=lambda k: self._cache[k][0]
+                    )[:100]
                     for k in oldest_keys:
                         del self._cache[k]
             self._cache[key] = (time.time(), value)
@@ -92,8 +96,7 @@ class ThreadSafeCache:
     def _cleanup_expired(self) -> None:
         now = time.time()
         expired_keys = [
-            k for k, (ts, _) in self._cache.items()
-            if now - ts >= self._ttl
+            k for k, (ts, _) in self._cache.items() if now - ts >= self._ttl
         ]
         for k in expired_keys:
             del self._cache[k]
@@ -106,8 +109,7 @@ class ThreadSafeCache:
         with self._lock:
             now = time.time()
             valid_entries = sum(
-                1 for ts, _ in self._cache.values()
-                if now - ts < self._ttl
+                1 for ts, _ in self._cache.values() if now - ts < self._ttl
             )
             return {
                 "total_entries": len(self._cache),
@@ -119,7 +121,7 @@ class ThreadSafeCache:
 class StockScreener:
     """
     Stock screening engine with factor-based filtering
-    
+
     Features:
     - Multi-factor filtering with configurable parameters
     - Real-time data from akshare
@@ -138,6 +140,7 @@ class StockScreener:
         if self._akshare is None:
             try:
                 import akshare as ak
+
                 self._akshare = ak
             except ImportError:
                 logger.error("[Screener] akshare not installed", exc_info=True)
@@ -161,7 +164,7 @@ class StockScreener:
                     "stocks": [],
                     "total": 0,
                     "error": "Failed to get universe stocks",
-                    "progress": {"total_stocks": 0, "screened_stocks": 0}
+                    "progress": {"total_stocks": 0, "screened_stocks": 0},
                 }
 
             total_stocks = len(stocks)
@@ -204,23 +207,29 @@ class StockScreener:
                             passed_all = False
 
                     if passed_all and factor_values:
-                        results.append(ScreeningResult(
-                            symbol=symbol,
-                            name=name,
-                            score=total_score / len(factors) if factors else 0,
-                            factor_values=factor_values,
-                            passed=True,
-                        ))
+                        results.append(
+                            ScreeningResult(
+                                symbol=symbol,
+                                name=name,
+                                score=total_score / len(factors) if factors else 0,
+                                factor_values=factor_values,
+                                passed=True,
+                            )
+                        )
 
                 except Exception as e:
-                    logger.debug(f"[Screener] Error screening {stock.get('symbol')}: {e}")
+                    logger.debug(
+                        f"[Screener] Error screening {stock.get('symbol')}: {e}"
+                    )
                     continue
 
             results.sort(key=lambda x: x.score, reverse=True)
             results = results[:limit]
 
             elapsed = time.time() - start_time
-            logger.info(f"[Screener] Screened {len(stocks_to_screen)}/{total_stocks} stocks in {elapsed:.2f}s, found {len(results)} matches")
+            logger.info(
+                f"[Screener] Screened {len(stocks_to_screen)}/{total_stocks} stocks in {elapsed:.2f}s, found {len(results)} matches"
+            )
 
             return {
                 "stocks": [
@@ -251,13 +260,13 @@ class StockScreener:
     ) -> Dict[str, Any]:
         """
         Screen stocks with real-time progress updates.
-        
+
         Args:
             factors: List of factor filters to apply
             universe: Stock universe to screen
             limit: Maximum number of results to return
             progress_callback: Called with (screened_count, total_count, matches_so_far)
-        
+
         Returns:
             Dict with stocks, total, and progress info
         """
@@ -272,7 +281,7 @@ class StockScreener:
                     "stocks": [],
                     "total": 0,
                     "error": "Failed to get universe stocks",
-                    "progress": {"total_stocks": 0, "screened_stocks": 0}
+                    "progress": {"total_stocks": 0, "screened_stocks": 0},
                 }
 
             total_stocks = len(stocks)
@@ -316,26 +325,34 @@ class StockScreener:
                             passed_all = False
 
                     if passed_all and factor_values:
-                        results.append({
-                            "symbol": symbol,
-                            "name": name,
-                            "score": total_score / len(factors) if factors else 0,
-                            "factor_values": factor_values,
-                        })
+                        results.append(
+                            {
+                                "symbol": symbol,
+                                "name": name,
+                                "score": total_score / len(factors) if factors else 0,
+                                "factor_values": factor_values,
+                            }
+                        )
 
                 except Exception as e:
-                    logger.debug(f"[Screener] Error screening {stock.get('symbol')}: {e}")
+                    logger.debug(
+                        f"[Screener] Error screening {stock.get('symbol')}: {e}"
+                    )
                     continue
 
                 if progress_callback and (idx + 1) % progress_interval == 0:
-                    sorted_results = sorted(results, key=lambda x: x["score"], reverse=True)
+                    sorted_results = sorted(
+                        results, key=lambda x: x["score"], reverse=True
+                    )
                     progress_callback(idx + 1, max_screen, sorted_results[:limit])
 
             results.sort(key=lambda x: x["score"], reverse=True)
             results = results[:limit]
 
             elapsed = time.time() - start_time
-            logger.info(f"[Screener] Screened {len(stocks_to_screen)}/{total_stocks} stocks in {elapsed:.2f}s, found {len(results)} matches")
+            logger.info(
+                f"[Screener] Screened {len(stocks_to_screen)}/{total_stocks} stocks in {elapsed:.2f}s, found {len(results)} matches"
+            )
 
             return {
                 "stocks": [
@@ -396,7 +413,9 @@ class StockScreener:
             return stocks
 
         except Exception as e:
-            logger.error(f"[Screener] Failed to get universe {universe}: {e}", exc_info=True)
+            logger.error(
+                f"[Screener] Failed to get universe {universe}: {e}", exc_info=True
+            )
             return []
 
     def _calculate_factor_value(
@@ -435,12 +454,20 @@ class StockScreener:
             return value
 
         except Exception as e:
-            logger.debug(f"[Screener] Factor calculation error for {symbol}/{factor_id}: {e}")
+            logger.debug(
+                f"[Screener] Factor calculation error for {symbol}/{factor_id}: {e}"
+            )
             return None
 
-    def _get_kline_data(self, symbol: str, days: int = 60) -> Tuple[Optional[pd.DataFrame], str]:
+    def _get_kline_data(
+        self, symbol: str, days: int = 60
+    ) -> Tuple[Optional[pd.DataFrame], str]:
         db_symbol = symbol.replace("sh", "").replace("sz", "")
-        prefixed_symbol = symbol if symbol.startswith(('sh', 'sz')) else f"sh{symbol}" if symbol.startswith('6') else f"sz{symbol}"
+        prefixed_symbol = (
+            symbol
+            if symbol.startswith(("sh", "sz"))
+            else f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
+        )
 
         try:
             df = self.ak.stock_zh_a_hist(
@@ -451,11 +478,27 @@ class StockScreener:
 
             if df is not None and len(df) > 0:
                 df = df.tail(days)
-                df.columns = ['date', 'open', 'close', 'high', 'low', 'volume', 'turnover', 'amplitude', 'pct_change', 'change', 'turnover_rate']
-                logger.debug(f"[Screener] Got kline for {symbol} from Eastmoney: {len(df)} rows")
+                df.columns = [
+                    "date",
+                    "open",
+                    "close",
+                    "high",
+                    "low",
+                    "volume",
+                    "turnover",
+                    "amplitude",
+                    "pct_change",
+                    "change",
+                    "turnover_rate",
+                ]
+                logger.debug(
+                    f"[Screener] Got kline for {symbol} from Eastmoney: {len(df)} rows"
+                )
                 return df, "eastmoney"
         except Exception as e:
-            logger.debug(f"[Screener] Eastmoney kline failed for {symbol}: {type(e).__name__}")
+            logger.debug(
+                f"[Screener] Eastmoney kline failed for {symbol}: {type(e).__name__}"
+            )
 
         try:
             df = self.ak.stock_zh_a_daily(
@@ -465,16 +508,29 @@ class StockScreener:
 
             if df is not None and len(df) > 0:
                 df = df.tail(days)
-                df = df[['date', 'open', 'high', 'low', 'close', 'volume', 'amount']]
-                df.columns = ['date', 'open', 'high', 'low', 'close', 'volume', 'turnover']
-                df['amplitude'] = 0.0
-                df['pct_change'] = 0.0
-                df['change'] = 0.0
-                df['turnover_rate'] = 0.0
-                logger.debug(f"[Screener] Got kline for {symbol} from Sina fallback: {len(df)} rows")
+                df = df[["date", "open", "high", "low", "close", "volume", "amount"]]
+                df.columns = [
+                    "date",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume",
+                    "turnover",
+                ]
+                df["amplitude"] = 0.0
+                df["pct_change"] = 0.0
+                df["change"] = 0.0
+                df["turnover_rate"] = 0.0
+                logger.debug(
+                    f"[Screener] Got kline for {symbol} from Sina fallback: {len(df)} rows"
+                )
                 return df, "sina"
         except Exception as e:
-            logger.warning(f"[Screener] Sina kline fallback failed for {symbol}: {type(e).__name__}", exc_info=True)
+            logger.warning(
+                f"[Screener] Sina kline fallback failed for {symbol}: {type(e).__name__}",
+                exc_info=True,
+            )
 
         logger.error(f"[Screener] All kline sources failed for {symbol}")
         return None, "failed"
@@ -484,7 +540,7 @@ class StockScreener:
         if df is None or len(df) < 30:
             return None
 
-        closes = df['close'].values
+        closes = df["close"].values
 
         fast = params.get("fast", 12)
         slow = params.get("slow", 26)
@@ -517,7 +573,7 @@ class StockScreener:
         if df is None or len(df) < 20:
             return None
 
-        closes = df['close'].values
+        closes = df["close"].values
         period = params.get("period", 14)
         threshold = params.get("threshold", 30)
 
@@ -549,7 +605,7 @@ class StockScreener:
         if df is None or len(df) < 30:
             return None
 
-        closes = df['close'].values
+        closes = df["close"].values
         period = params.get("period", 20)
 
         if len(closes) < period:
@@ -591,7 +647,7 @@ class StockScreener:
         if df is None or len(df) < 30:
             return None
 
-        volumes = df['volume'].values
+        volumes = df["volume"].values
         multiplier = params.get("multiplier", 2.0)
         period = params.get("period", 20)
 
@@ -599,7 +655,7 @@ class StockScreener:
             return None
 
         volumes_arr = np.asarray(volumes, dtype=np.float64)
-        avg_volume = float(np.mean(volumes_arr[-period-1:-1]))
+        avg_volume = float(np.mean(volumes_arr[-period - 1 : -1]))
         current_volume = float(volumes_arr[-1])
 
         if avg_volume == 0:
@@ -622,14 +678,19 @@ class StockScreener:
             if df is None or len(df) == 0:
                 return 0.0
 
-            recent = df[df['调研日期'] >= (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')]
-            stock_research = recent[recent['股票代码'] == db_symbol]
+            recent = df[
+                df["调研日期"]
+                >= (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            ]
+            stock_research = recent[recent["股票代码"] == db_symbol]
             count = len(stock_research)
 
             return min(count / 10, 1.0)
 
         except Exception as e:
-            logger.debug(f"[Screener] Institution research check failed for {symbol}: {e}")
+            logger.debug(
+                f"[Screener] Institution research check failed for {symbol}: {e}"
+            )
             return None
 
     def _check_new_high(self, symbol: str, params: Dict) -> Optional[float]:
@@ -638,7 +699,7 @@ class StockScreener:
         if df is None or len(df) < 30:
             return None
 
-        closes = df['close'].values
+        closes = df["close"].values
         period = params.get("period", 60)
 
         if len(closes) < period:

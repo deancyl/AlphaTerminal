@@ -9,6 +9,7 @@ Tests cover:
 - Result generation and storage (Debug Cycle 5)
 - Integration with BacktestEngine and StrategyCompiler
 """
+
 import pytest
 import pandas as pd
 import numpy as np
@@ -56,7 +57,7 @@ class TestExecutionConfig:
             stop_loss_pct=5.0,
             take_profit_pct=10.0,
             enable_debug_logging=False,
-            debug_level=3
+            debug_level=3,
         )
 
         assert config.initial_capital == 50000.0
@@ -76,9 +77,9 @@ class TestExecutionConfig:
         result = config.to_dict()
 
         assert isinstance(result, dict)
-        assert result['initial_capital'] == 75000.0
-        assert 'commission' in result
-        assert 'slippage' in result
+        assert result["initial_capital"] == 75000.0
+        assert "commission" in result
+        assert "slippage" in result
 
 
 class TestExecutionMetrics:
@@ -99,15 +100,15 @@ class TestExecutionMetrics:
             execution_time_ms=1234.56,
             bars_processed=100,
             trades_executed=5,
-            avg_bar_time_ms=12.3456
+            avg_bar_time_ms=12.3456,
         )
 
         result = metrics.to_dict()
 
-        assert result['execution_time_ms'] == 1234.56
-        assert result['bars_processed'] == 100
-        assert result['trades_executed'] == 5
-        assert result['avg_bar_time_ms'] == 12.3456
+        assert result["execution_time_ms"] == 1234.56
+        assert result["bars_processed"] == 100
+        assert result["trades_executed"] == 5
+        assert result["avg_bar_time_ms"] == 12.3456
 
 
 class TestExecutionResult:
@@ -146,11 +147,11 @@ class TestExecutionResult:
 
         data = result.to_dict()
 
-        assert data['execution_id'] == "test-123"
-        assert data['strategy_id'] == "strategy-456"
-        assert data['strategy_name'] == "Test Strategy"
-        assert data['execution_type'] == "backtest"
-        assert data['status'] == "completed"
+        assert data["execution_id"] == "test-123"
+        assert data["strategy_id"] == "strategy-456"
+        assert data["strategy_name"] == "Test Strategy"
+        assert data["execution_type"] == "backtest"
+        assert data["status"] == "completed"
 
 
 class TestStrategyExecutionEngine:
@@ -159,7 +160,7 @@ class TestStrategyExecutionEngine:
     @pytest.fixture
     def sample_data(self):
         """Create sample OHLCV data"""
-        dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
         np.random.seed(42)
 
         closes = 100 + np.cumsum(np.random.randn(100) * 2)
@@ -168,29 +169,28 @@ class TestStrategyExecutionEngine:
         lows = np.minimum(opens, closes) - np.abs(np.random.randn(100) * 1)
         volumes = np.random.randint(1000000, 10000000, 100)
 
-        return pd.DataFrame({
-            'timestamp': dates,
-            'open': opens,
-            'high': highs,
-            'low': lows,
-            'close': closes,
-            'volume': volumes
-        })
+        return pd.DataFrame(
+            {
+                "timestamp": dates,
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": volumes,
+            }
+        )
 
     @pytest.fixture
     def config(self):
         """Create test configuration"""
         return ExecutionConfig(
-            initial_capital=100000,
-            commission=0.0003,
-            slippage=0.0001,
-            debug_level=5
+            initial_capital=100000, commission=0.0003, slippage=0.0001, debug_level=5
         )
 
     @pytest.fixture
     def sample_strategy_code(self):
         """Sample strategy code"""
-        return '''
+        return """
 # @name 测试均线策略
 # @description 简单均线交叉策略
 # @param fast_period int 5 快线周期
@@ -206,7 +206,7 @@ output = {
     'indicators': {'ma_fast': ma_fast, 'ma_slow': ma_slow},
     'signals': {'buy': buy, 'sell': sell}
 }
-'''
+"""
 
     def test_engine_initialization(self, config):
         """Test engine initialization (Debug Cycle 1)"""
@@ -214,11 +214,16 @@ output = {
 
         assert engine._config == config
         assert len(engine._debug_log) > 0
-        assert any("DEBUG CYCLE 1: EXECUTION INITIALIZATION" in log for log in engine._debug_log)
+        assert any(
+            "DEBUG CYCLE 1: EXECUTION INITIALIZATION" in log
+            for log in engine._debug_log
+        )
         assert any("Initial Capital" in log for log in engine._debug_log)
         assert any("Commission Rate" in log for log in engine._debug_log)
 
-    def test_strategy_compilation_check(self, config, sample_data, sample_strategy_code):
+    def test_strategy_compilation_check(
+        self, config, sample_data, sample_strategy_code
+    ):
         """Test strategy compilation check (Debug Cycle 2)"""
         engine = StrategyExecutionEngine(config)
 
@@ -233,14 +238,16 @@ output = {
         """Test data loading validation (Debug Cycle 3)"""
         engine = StrategyExecutionEngine(config)
 
-        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        required_cols = ["open", "high", "low", "close", "volume"]
         missing_cols = [col for col in required_cols if col not in sample_data.columns]
 
         assert len(missing_cols) == 0
-        assert 'timestamp' in sample_data.columns
+        assert "timestamp" in sample_data.columns
         assert len(sample_data) > 0
 
-    def test_execute_strategy_with_compiled_result(self, config, sample_data, sample_strategy_code):
+    def test_execute_strategy_with_compiled_result(
+        self, config, sample_data, sample_strategy_code
+    ):
         """Test executing strategy with CompilationResult"""
         engine = StrategyExecutionEngine(config)
 
@@ -250,16 +257,27 @@ output = {
         result = engine.execute_strategy(
             compiled_strategy=compiled,
             data=sample_data,
-            strategy_name=compiled.spec.name if compiled.spec else "Test"
+            strategy_name=compiled.spec.name if compiled.spec else "Test",
         )
 
         assert result.status == ExecutionStatus.COMPLETED
         assert result.execution_id is not None
         assert result.strategy_id is not None
-        assert any("DEBUG CYCLE 2: STRATEGY COMPILATION CHECK" in log for log in result.debug_log)
-        assert any("DEBUG CYCLE 3: DATA LOADING VALIDATION" in log for log in result.debug_log)
-        assert any("DEBUG CYCLE 4: EXECUTION PROGRESS TRACKING" in log for log in result.debug_log)
-        assert any("DEBUG CYCLE 5: RESULT GENERATION AND STORAGE" in log for log in result.debug_log)
+        assert any(
+            "DEBUG CYCLE 2: STRATEGY COMPILATION CHECK" in log
+            for log in result.debug_log
+        )
+        assert any(
+            "DEBUG CYCLE 3: DATA LOADING VALIDATION" in log for log in result.debug_log
+        )
+        assert any(
+            "DEBUG CYCLE 4: EXECUTION PROGRESS TRACKING" in log
+            for log in result.debug_log
+        )
+        assert any(
+            "DEBUG CYCLE 5: RESULT GENERATION AND STORAGE" in log
+            for log in result.debug_log
+        )
 
     def test_execute_strategy_with_callable(self, config, sample_data):
         """Test executing strategy with callable function"""
@@ -267,17 +285,17 @@ output = {
 
         def simple_strategy(df, params):
             return {
-                'indicators': {},
-                'signals': {
-                    'buy': pd.Series(False, index=df.index),
-                    'sell': pd.Series(False, index=df.index)
-                }
+                "indicators": {},
+                "signals": {
+                    "buy": pd.Series(False, index=df.index),
+                    "sell": pd.Series(False, index=df.index),
+                },
             }
 
         result = engine.execute_strategy(
             compiled_strategy=simple_strategy,
             data=sample_data,
-            strategy_name="Simple Strategy"
+            strategy_name="Simple Strategy",
         )
 
         assert result.status == ExecutionStatus.COMPLETED
@@ -288,8 +306,7 @@ output = {
         engine = StrategyExecutionEngine(config)
 
         result = engine.run_backtest(
-            strategy_code=sample_strategy_code,
-            data=sample_data
+            strategy_code=sample_strategy_code, data=sample_data
         )
 
         assert result.status == ExecutionStatus.COMPLETED
@@ -302,8 +319,7 @@ output = {
         engine = StrategyExecutionEngine(config)
 
         result = engine.run_backtest(
-            strategy_code=sample_strategy_code,
-            data=sample_data
+            strategy_code=sample_strategy_code, data=sample_data
         )
 
         assert result.metrics.execution_time_ms > 0
@@ -316,13 +332,20 @@ output = {
 
         def slow_strategy(df, params):
             import time
+
             time.sleep(0.1)
-            return {'indicators': {}, 'signals': {'buy': pd.Series(False, index=df.index), 'sell': pd.Series(False, index=df.index)}}
+            return {
+                "indicators": {},
+                "signals": {
+                    "buy": pd.Series(False, index=df.index),
+                    "sell": pd.Series(False, index=df.index),
+                },
+            }
 
         result = engine.execute_strategy(
             compiled_strategy=slow_strategy,
             data=sample_data,
-            strategy_name="Slow Strategy"
+            strategy_name="Slow Strategy",
         )
 
         status = engine.get_execution_status(result.execution_id)
@@ -352,7 +375,7 @@ output = {
         result = engine.execute_strategy(
             compiled_strategy="not a valid strategy",
             data=sample_data,
-            strategy_name="Invalid Strategy"
+            strategy_name="Invalid Strategy",
         )
 
         assert result.status == ExecutionStatus.FAILED
@@ -363,12 +386,15 @@ output = {
         engine = StrategyExecutionEngine(config)
 
         def simple_strategy(df, params):
-            return {'indicators': {}, 'signals': {'buy': pd.Series(), 'sell': pd.Series()}}
+            return {
+                "indicators": {},
+                "signals": {"buy": pd.Series(), "sell": pd.Series()},
+            }
 
         result = engine.execute_strategy(
             compiled_strategy=simple_strategy,
             data=pd.DataFrame(),
-            strategy_name="Test Strategy"
+            strategy_name="Test Strategy",
         )
 
         assert result.status == ExecutionStatus.FAILED
@@ -378,18 +404,23 @@ output = {
         """Test error handling with missing columns"""
         engine = StrategyExecutionEngine(config)
 
-        invalid_data = pd.DataFrame({
-            'timestamp': pd.date_range(start='2023-01-01', periods=10, freq='D'),
-            'close': [100] * 10
-        })
+        invalid_data = pd.DataFrame(
+            {
+                "timestamp": pd.date_range(start="2023-01-01", periods=10, freq="D"),
+                "close": [100] * 10,
+            }
+        )
 
         def simple_strategy(df, params):
-            return {'indicators': {}, 'signals': {'buy': pd.Series(), 'sell': pd.Series()}}
+            return {
+                "indicators": {},
+                "signals": {"buy": pd.Series(), "sell": pd.Series()},
+            }
 
         result = engine.execute_strategy(
             compiled_strategy=simple_strategy,
             data=invalid_data,
-            strategy_name="Test Strategy"
+            strategy_name="Test Strategy",
         )
 
         assert result.status == ExecutionStatus.FAILED
@@ -400,11 +431,10 @@ output = {
         engine = StrategyExecutionEngine(config)
 
         result = engine.run_backtest(
-            strategy_code=sample_strategy_code,
-            data=sample_data
+            strategy_code=sample_strategy_code, data=sample_data
         )
 
-        debug_log_str = '\n'.join(result.debug_log)
+        debug_log_str = "\n".join(result.debug_log)
 
         assert "DEBUG CYCLE 1: EXECUTION INITIALIZATION" in debug_log_str
         assert "DEBUG CYCLE 2: STRATEGY COMPILATION CHECK" in debug_log_str
@@ -412,41 +442,43 @@ output = {
         assert "DEBUG CYCLE 4: EXECUTION PROGRESS TRACKING" in debug_log_str
         assert "DEBUG CYCLE 5: RESULT GENERATION AND STORAGE" in debug_log_str
 
-    def test_performance_summary_in_debug_log(self, config, sample_data, sample_strategy_code):
+    def test_performance_summary_in_debug_log(
+        self, config, sample_data, sample_strategy_code
+    ):
         """Test that performance summary is included in debug log"""
         engine = StrategyExecutionEngine(config)
 
         result = engine.run_backtest(
-            strategy_code=sample_strategy_code,
-            data=sample_data
+            strategy_code=sample_strategy_code, data=sample_data
         )
 
-        debug_log_str = '\n'.join(result.debug_log)
+        debug_log_str = "\n".join(result.debug_log)
 
-        assert "Performance Summary" in debug_log_str or result.metrics.trades_executed == 0
+        assert (
+            "Performance Summary" in debug_log_str
+            or result.metrics.trades_executed == 0
+        )
 
     def test_backtest_result_structure(self, config, sample_data, sample_strategy_code):
         """Test that backtest result has correct structure"""
         engine = StrategyExecutionEngine(config)
 
         result = engine.run_backtest(
-            strategy_code=sample_strategy_code,
-            data=sample_data
+            strategy_code=sample_strategy_code, data=sample_data
         )
 
         assert result.backtest_result is not None
-        assert 'config' in result.backtest_result
-        assert 'trades' in result.backtest_result
-        assert 'equity_curve' in result.backtest_result
-        assert 'metrics' in result.backtest_result
+        assert "config" in result.backtest_result
+        assert "trades" in result.backtest_result
+        assert "equity_curve" in result.backtest_result
+        assert "metrics" in result.backtest_result
 
     def test_trades_and_equity_curve(self, config, sample_data, sample_strategy_code):
         """Test that trades and equity curve are populated"""
         engine = StrategyExecutionEngine(config)
 
         result = engine.run_backtest(
-            strategy_code=sample_strategy_code,
-            data=sample_data
+            strategy_code=sample_strategy_code, data=sample_data
         )
 
         assert isinstance(result.trades, list)
@@ -460,19 +492,21 @@ class TestConvenienceFunctions:
     @pytest.fixture
     def sample_data(self):
         """Create sample OHLCV data"""
-        dates = pd.date_range(start='2023-01-01', periods=50, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=50, freq="D")
         np.random.seed(42)
 
         closes = 100 + np.cumsum(np.random.randn(50) * 2)
 
-        return pd.DataFrame({
-            'timestamp': dates,
-            'open': closes + np.random.randn(50) * 0.5,
-            'high': closes + np.abs(np.random.randn(50)),
-            'low': closes - np.abs(np.random.randn(50)),
-            'close': closes,
-            'volume': np.random.randint(1000000, 10000000, 50)
-        })
+        return pd.DataFrame(
+            {
+                "timestamp": dates,
+                "open": closes + np.random.randn(50) * 0.5,
+                "high": closes + np.abs(np.random.randn(50)),
+                "low": closes - np.abs(np.random.randn(50)),
+                "close": closes,
+                "volume": np.random.randint(1000000, 10000000, 50),
+            }
+        )
 
     def test_create_execution_engine(self):
         """Test create_execution_engine function"""
@@ -481,7 +515,7 @@ class TestConvenienceFunctions:
             commission=0.001,
             slippage=0.0005,
             enable_debug_logging=True,
-            debug_level=3
+            debug_level=3,
         )
 
         assert isinstance(engine, StrategyExecutionEngine)
@@ -492,7 +526,7 @@ class TestConvenienceFunctions:
 
     def test_execute_strategy_simple(self, sample_data):
         """Test execute_strategy_simple function"""
-        strategy_code = '''
+        strategy_code = """
 # @name Simple Test
 # @param period int 10 Period
 
@@ -500,12 +534,10 @@ ma = df['close'].rolling(period).mean()
 buy = df['close'] > ma
 sell = df['close'] < ma
 output = {'indicators': {'ma': ma}, 'signals': {'buy': buy, 'sell': sell}}
-'''
+"""
 
         result = execute_strategy_simple(
-            strategy_code=strategy_code,
-            data=sample_data,
-            initial_capital=50000
+            strategy_code=strategy_code, data=sample_data, initial_capital=50000
         )
 
         assert isinstance(result, ExecutionResult)
@@ -518,29 +550,29 @@ class TestIntegrationWithBacktestEngine:
     @pytest.fixture
     def sample_data(self):
         """Create sample OHLCV data"""
-        dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
         np.random.seed(42)
 
         closes = 100 + np.cumsum(np.random.randn(100) * 2)
 
-        return pd.DataFrame({
-            'timestamp': dates,
-            'open': closes + np.random.randn(100) * 0.5,
-            'high': closes + np.abs(np.random.randn(100)),
-            'low': closes - np.abs(np.random.randn(100)),
-            'close': closes,
-            'volume': np.random.randint(1000000, 10000000, 100)
-        })
+        return pd.DataFrame(
+            {
+                "timestamp": dates,
+                "open": closes + np.random.randn(100) * 0.5,
+                "high": closes + np.abs(np.random.randn(100)),
+                "low": closes - np.abs(np.random.randn(100)),
+                "close": closes,
+                "volume": np.random.randint(1000000, 10000000, 100),
+            }
+        )
 
     def test_integration_with_backtest_engine(self, sample_data):
         """Test full integration with BacktestEngine"""
         engine = create_execution_engine(
-            initial_capital=100000,
-            commission=0.0003,
-            debug_level=5
+            initial_capital=100000, commission=0.0003, debug_level=5
         )
 
-        strategy_code = '''
+        strategy_code = """
 # @name Integration Test Strategy
 # @param fast int 5 Fast period
 # @param slow int 20 Slow period
@@ -553,25 +585,25 @@ output = {
     'indicators': {'ma_fast': ma_fast, 'ma_slow': ma_slow},
     'signals': {'buy': buy, 'sell': sell}
 }
-'''
+"""
 
         result = engine.run_backtest(strategy_code, sample_data)
 
         assert result.status == ExecutionStatus.COMPLETED
         assert result.backtest_result is not None
-        assert 'metrics' in result.backtest_result
+        assert "metrics" in result.backtest_result
 
-        metrics = result.backtest_result['metrics']
-        assert 'total_return_pct' in metrics
-        assert 'sharpe_ratio' in metrics
-        assert 'max_drawdown_pct' in metrics
-        assert 'win_rate' in metrics
+        metrics = result.backtest_result["metrics"]
+        assert "total_return_pct" in metrics
+        assert "sharpe_ratio" in metrics
+        assert "max_drawdown_pct" in metrics
+        assert "win_rate" in metrics
 
     def test_integration_with_strategy_compiler(self, sample_data):
         """Test integration with StrategyCompiler"""
         from app.services.strategy.compiler import StrategyCompiler
 
-        strategy_code = '''
+        strategy_code = """
 # @name Compiler Integration Test
 # @description Test integration with compiler
 # @param period int 14 Period
@@ -590,7 +622,7 @@ output = {
     'indicators': {'rsi': rsi},
     'signals': {'buy': buy, 'sell': sell}
 }
-'''
+"""
 
         compiler = StrategyCompiler(debug_level=5)
         compiled = compiler.compile(strategy_code)
@@ -601,7 +633,7 @@ output = {
         result = engine.execute_strategy(
             compiled_strategy=compiled,
             data=sample_data,
-            strategy_name=compiled.spec.name
+            strategy_name=compiled.spec.name,
         )
 
         assert result.status == ExecutionStatus.COMPLETED
@@ -614,15 +646,17 @@ class TestEdgeCases:
         """Test with empty strategy code"""
         engine = create_execution_engine()
 
-        dates = pd.date_range(start='2023-01-01', periods=10, freq='D')
-        data = pd.DataFrame({
-            'timestamp': dates,
-            'open': [100] * 10,
-            'high': [105] * 10,
-            'low': [95] * 10,
-            'close': [100] * 10,
-            'volume': [1000000] * 10
-        })
+        dates = pd.date_range(start="2023-01-01", periods=10, freq="D")
+        data = pd.DataFrame(
+            {
+                "timestamp": dates,
+                "open": [100] * 10,
+                "high": [105] * 10,
+                "low": [95] * 10,
+                "close": [100] * 10,
+                "volume": [1000000] * 10,
+            }
+        )
 
         result = engine.run_backtest("", data)
 
@@ -632,20 +666,22 @@ class TestEdgeCases:
         """Test strategy with syntax error"""
         engine = create_execution_engine()
 
-        dates = pd.date_range(start='2023-01-01', periods=10, freq='D')
-        data = pd.DataFrame({
-            'timestamp': dates,
-            'open': [100] * 10,
-            'high': [105] * 10,
-            'low': [95] * 10,
-            'close': [100] * 10,
-            'volume': [1000000] * 10
-        })
+        dates = pd.date_range(start="2023-01-01", periods=10, freq="D")
+        data = pd.DataFrame(
+            {
+                "timestamp": dates,
+                "open": [100] * 10,
+                "high": [105] * 10,
+                "low": [95] * 10,
+                "close": [100] * 10,
+                "volume": [1000000] * 10,
+            }
+        )
 
-        invalid_code = '''
+        invalid_code = """
 # @name Invalid Strategy
 this is not valid python syntax
-'''
+"""
 
         result = engine.run_backtest(invalid_code, data)
 
@@ -656,26 +692,31 @@ this is not valid python syntax
         """Test strategy with security violation"""
         engine = create_execution_engine()
 
-        dates = pd.date_range(start='2023-01-01', periods=10, freq='D')
-        data = pd.DataFrame({
-            'timestamp': dates,
-            'open': [100] * 10,
-            'high': [105] * 10,
-            'low': [95] * 10,
-            'close': [100] * 10,
-            'volume': [1000000] * 10
-        })
+        dates = pd.date_range(start="2023-01-01", periods=10, freq="D")
+        data = pd.DataFrame(
+            {
+                "timestamp": dates,
+                "open": [100] * 10,
+                "high": [105] * 10,
+                "low": [95] * 10,
+                "close": [100] * 10,
+                "volume": [1000000] * 10,
+            }
+        )
 
-        dangerous_code = '''
+        dangerous_code = """
 # @name Dangerous Strategy
 import os
 output = {'signals': {'buy': True, 'sell': False}}
-'''
+"""
 
         result = engine.run_backtest(dangerous_code, data)
 
         assert result.status == ExecutionStatus.FAILED
-        assert any("forbidden" in err.lower() or "security" in err.lower() for err in result.errors)
+        assert any(
+            "forbidden" in err.lower() or "security" in err.lower()
+            for err in result.errors
+        )
 
 
 if __name__ == "__main__":

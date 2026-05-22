@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Order:
     """Order data structure with all fields."""
+
     id: Optional[int] = None
     portfolio_id: int = 0
     symbol: str = ""
@@ -72,14 +73,14 @@ class Order:
 class OrderExecutionEngine:
     """
     Order Execution Engine - Core OMS Component.
-    
+
     Manages complete order lifecycle:
     1. create_order() - Create order in STAGED state
     2. validate_order() - Pre-trade validation
     3. submit_order() - Submit to broker
     4. cancel_order() - Cancel pending order
     5. process_fill() - Process execution report
-    
+
     All state transitions are validated against VALID_TRANSITIONS.
     """
 
@@ -128,15 +129,23 @@ class OrderExecutionEngine:
             details={"initial_status": "staged"},
         )
 
-        logger.info(f"[OMS] Created order {order.id}: {symbol} {side} {quantity}@{price}")
+        logger.info(
+            f"[OMS] Created order {order.id}: {symbol} {side} {quantity}@{price}"
+        )
         return order
 
     def validate_order(self, order: Order) -> ValidationResult:
         if order.status != OrderStatus.STAGED:
             from .pre_trade_validation import ValidationError
+
             return ValidationResult(
                 is_valid=False,
-                errors=[ValidationError(code="INVALID_STATUS", message=f"Cannot validate order in {order.status.value} state")],
+                errors=[
+                    ValidationError(
+                        code="INVALID_STATUS",
+                        message=f"Cannot validate order in {order.status.value} state",
+                    )
+                ],
             )
 
         result = self.validator.validate(
@@ -151,7 +160,10 @@ class OrderExecutionEngine:
         self._log_audit(
             action="order_validated",
             order=order,
-            details={"is_valid": result.is_valid, "errors": [e.message for e in result.errors]},
+            details={
+                "is_valid": result.is_valid,
+                "errors": [e.message for e in result.errors],
+            },
         )
 
         return result
@@ -215,7 +227,10 @@ class OrderExecutionEngine:
         self._log_audit(
             action="order_submitted",
             order=order,
-            details={"broker_order_id": order.broker_order_id, "status": order.status.value},
+            details={
+                "broker_order_id": order.broker_order_id,
+                "status": order.status.value,
+            },
         )
 
         logger.info(f"[OMS] Order {order.id} submitted, status={order.status.value}")
@@ -266,9 +281,13 @@ class OrderExecutionEngine:
         new_filled = order.filled_quantity + filled_quantity
 
         if new_filled > order.quantity:
-            raise ValueError(f"Fill quantity exceeds order: {new_filled} > {order.quantity}")
+            raise ValueError(
+                f"Fill quantity exceeds order: {new_filled} > {order.quantity}"
+            )
 
-        total_value = order.avg_fill_price * order.filled_quantity + fill_price * filled_quantity
+        total_value = (
+            order.avg_fill_price * order.filled_quantity + fill_price * filled_quantity
+        )
         order.avg_fill_price = total_value / new_filled if new_filled > 0 else 0.0
         order.filled_quantity = new_filled
 
@@ -478,7 +497,9 @@ class OrderExecutionEngine:
                     order_id=str(order.id),
                 )
 
-            logger.info(f"[OMS] Trade executed: {order.side} {order.filled_quantity} {order.symbol}@{order.avg_fill_price}")
+            logger.info(
+                f"[OMS] Trade executed: {order.side} {order.filled_quantity} {order.symbol}@{order.avg_fill_price}"
+            )
         except Exception as e:
             logger.error(f"[OMS] Trade execution failed: {e}", exc_info=True)
             raise
@@ -504,9 +525,11 @@ class OrderExecutionEngine:
 
 class InvalidStateTransitionError(Exception):
     """Raised when an invalid state transition is attempted."""
+
     pass
 
 
 class OrderNotFoundError(Exception):
     """Raised when an order is not found."""
+
     pass

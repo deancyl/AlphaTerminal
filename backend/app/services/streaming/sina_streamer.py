@@ -9,6 +9,7 @@ Protocol:
     - Subscribe: {"action":"subscribe","symbols":["sh600519","sz000001"]}
     - Message: JSON tick with OHLCV data
 """
+
 import asyncio
 import json
 import logging
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 class SinaStreamer(BaseStreamer):
     """
     Sina WebSocket real-time quote streamer.
-    
+
     Connects to Sina's WebSocket API and parses tick messages
     for broadcasting to connected clients.
     """
@@ -50,7 +51,9 @@ class SinaStreamer(BaseStreamer):
 
     async def connect(self):
         if websockets is None:
-            raise ImportError("websockets library not installed. Run: pip install websockets")
+            raise ImportError(
+                "websockets library not installed. Run: pip install websockets"
+            )
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -71,10 +74,9 @@ class SinaStreamer(BaseStreamer):
         if not self._ws or not symbols:
             return
 
-        msg = json.dumps({
-            "action": "subscribe",
-            "symbols": symbols
-        }, ensure_ascii=False)
+        msg = json.dumps(
+            {"action": "subscribe", "symbols": symbols}, ensure_ascii=False
+        )
 
         await self._ws.send(msg)
         logger.debug(f"[{self.name}] Subscribed to {len(symbols)} symbols")
@@ -83,10 +85,9 @@ class SinaStreamer(BaseStreamer):
         if not self._ws or not symbols:
             return
 
-        msg = json.dumps({
-            "action": "unsubscribe",
-            "symbols": symbols
-        }, ensure_ascii=False)
+        msg = json.dumps(
+            {"action": "unsubscribe", "symbols": symbols}, ensure_ascii=False
+        )
 
         await self._ws.send(msg)
         logger.debug(f"[{self.name}] Unsubscribed from {len(symbols)} symbols")
@@ -117,26 +118,29 @@ class SinaStreamer(BaseStreamer):
         while self._running and self._ws:
             try:
                 raw = await asyncio.wait_for(
-                    self._ws.recv(),
-                    timeout=self.MESSAGE_TIMEOUT
+                    self._ws.recv(), timeout=self.MESSAGE_TIMEOUT
                 )
 
                 await self._handle_message(raw)
 
             except asyncio.TimeoutError:
-                logger.warning(f"[{self.name}] Message timeout, sending ping", exc_info=True)
+                logger.warning(
+                    f"[{self.name}] Message timeout, sending ping", exc_info=True
+                )
                 await self._send_ping()
 
             except Exception as e:
                 if websockets and isinstance(e, websockets.exceptions.ConnectionClosed):
-                    logger.warning(f"[{self.name}] Connection closed: {e}", exc_info=True)
+                    logger.warning(
+                        f"[{self.name}] Connection closed: {e}", exc_info=True
+                    )
                     raise
                 logger.error(f"[{self.name}] Message loop error: {e}", exc_info=True)
                 raise
 
     async def _handle_message(self, raw: Union[str, bytes]):
         if isinstance(raw, bytes):
-            raw = raw.decode('utf-8')
+            raw = raw.decode("utf-8")
         try:
             data = json.loads(raw)
 
@@ -167,7 +171,9 @@ class SinaStreamer(BaseStreamer):
         if price <= 0:
             return None
 
-        change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
+        change_pct = (
+            ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
+        )
         change = round(price - prev_close, 3) if prev_close > 0 else 0.0
 
         return {
@@ -200,7 +206,7 @@ class SinaStreamer(BaseStreamer):
 class MockSinaStreamer(BaseStreamer):
     """
     Mock Sina streamer for testing/fallback.
-    
+
     Generates simulated tick data at regular intervals.
     """
 
@@ -235,7 +241,9 @@ class MockSinaStreamer(BaseStreamer):
 
         while self._running:
             for symbol in self._subscribed_symbols:
-                mock_data = self.MOCK_PRICES.get(symbol, {"name": symbol, "base": 100.0})
+                mock_data = self.MOCK_PRICES.get(
+                    symbol, {"name": symbol, "base": 100.0}
+                )
                 base_price = mock_data["base"]
 
                 variation = random.uniform(-0.02, 0.02)

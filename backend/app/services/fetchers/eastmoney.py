@@ -7,7 +7,7 @@ from ..http_client import get_shared_client
 class EastmoneyFetcher(BaseMarketFetcher):
     """
     Eastmoney (东方财富) data fetcher.
-    
+
     Supports: A-shares, indices, futures, HK stocks, US stocks.
     Uses shared HTTP client for connection pooling.
     """
@@ -80,11 +80,19 @@ class EastmoneyFetcher(BaseMarketFetcher):
                 "prev_close": float(d.get("f60", 0)) / 100 if d.get("f60") else 0,
                 "volume": int(d.get("f47", 0)) if d.get("f47") else 0,
                 "change_pct": float(d.get("f170", 0)) / 100 if d.get("f170") else 0,
-                "source": "eastmoney"
+                "source": "eastmoney",
             }
 
-        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError) as e:
-            logger.debug(f"[Eastmoney] get_quote error for {symbol}: {type(e).__name__}: {e}")
+        except (
+            httpx.HTTPError,
+            asyncio.TimeoutError,
+            ConnectionError,
+            ValueError,
+            KeyError,
+        ) as e:
+            logger.debug(
+                f"[Eastmoney] get_quote error for {symbol}: {type(e).__name__}: {e}"
+            )
             return None
 
     async def get_kline(self, symbol: str, period: str = "day") -> Optional[List[Dict]]:
@@ -94,12 +102,7 @@ class EastmoneyFetcher(BaseMarketFetcher):
             em_code = self._normalize_symbol(symbol)
 
             # Map period to Eastmoney format
-            period_map = {
-                "minute": "101",
-                "day": "101",
-                "week": "102",
-                "month": "103"
-            }
+            period_map = {"minute": "101", "day": "101", "week": "102", "month": "103"}
             em_period = period_map.get(period, "101")
 
             url = f"{self.KLINE_URL}/api/qt/stock/kline/get"
@@ -127,19 +130,30 @@ class EastmoneyFetcher(BaseMarketFetcher):
             for item in data["data"]["klines"]:
                 fields = item.split(",")
                 if len(fields) >= 6:
-                    klines.append({
-                        "date": fields[0],
-                        "open": float(fields[1]),
-                        "high": float(fields[2]),
-                        "low": float(fields[3]),
-                        "close": float(fields[4]),
-                        "volume": int(fields[5]) if len(fields) > 5 else 0
-                    })
+                    klines.append(
+                        {
+                            "date": fields[0],
+                            "open": float(fields[1]),
+                            "high": float(fields[2]),
+                            "low": float(fields[3]),
+                            "close": float(fields[4]),
+                            "volume": int(fields[5]) if len(fields) > 5 else 0,
+                        }
+                    )
 
             return klines
 
-        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError, IndexError) as e:
-            logger.debug(f"[Eastmoney] get_kline error for {symbol}: {type(e).__name__}: {e}")
+        except (
+            httpx.HTTPError,
+            asyncio.TimeoutError,
+            ConnectionError,
+            ValueError,
+            KeyError,
+            IndexError,
+        ) as e:
+            logger.debug(
+                f"[Eastmoney] get_kline error for {symbol}: {type(e).__name__}: {e}"
+            )
             return None
 
     def _to_em_secid(self, symbol: str) -> str:

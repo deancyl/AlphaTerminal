@@ -13,6 +13,7 @@ Tests:
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
@@ -114,7 +115,7 @@ class TestStrategyCompiler:
     @pytest.fixture
     def sample_indicator_code(self):
         """Sample indicator strategy code."""
-        return '''
+        return """
 # @name Test MA Strategy
 # @description Simple moving average crossover
 # @param fast_period int 5 Fast period
@@ -130,12 +131,12 @@ output = {
     'indicators': {'ma_fast': ma_fast, 'ma_slow': ma_slow},
     'signals': {'buy': buy, 'sell': sell}
 }
-'''
+"""
 
     @pytest.fixture
     def sample_script_code(self):
         """Sample script strategy code."""
-        return '''
+        return """
 # @name Test Script Strategy
 # @type script
 # @strategy stopLossPct 2
@@ -147,18 +148,20 @@ def on_bar(ctx, bar):
     if not ctx.position:
         if bar['close'] > bar['open']:
             ctx.buy(bar['close'], 100)
-'''
+"""
 
     @pytest.fixture
     def sample_df(self):
         """Create sample DataFrame for testing."""
-        return pd.DataFrame({
-            'open': [100.0, 101.0, 102.0, 101.5, 103.0],
-            'high': [101.0, 102.0, 103.0, 103.5, 104.0],
-            'low': [99.0, 100.0, 101.0, 101.0, 102.0],
-            'close': [100.5, 101.5, 102.5, 103.0, 103.5],
-            'volume': [1000000, 1100000, 1050000, 1200000, 1150000],
-        })
+        return pd.DataFrame(
+            {
+                "open": [100.0, 101.0, 102.0, 101.5, 103.0],
+                "high": [101.0, 102.0, 103.0, 103.5, 104.0],
+                "low": [99.0, 100.0, 101.0, 101.0, 102.0],
+                "close": [100.5, 101.5, 102.5, 103.0, 103.5],
+                "volume": [1000000, 1100000, 1050000, 1200000, 1150000],
+            }
+        )
 
     def test_compiler_initialization(self, compiler):
         """Test compiler initializes correctly."""
@@ -218,7 +221,9 @@ def on_bar(ctx, bar):
         assert spec.parameters["slow_period"]["type"] == "int"
         assert spec.parameters["slow_period"]["default"] == "20"
 
-    def test_execute_indicator_strategy(self, compiler, sample_indicator_code, sample_df):
+    def test_execute_indicator_strategy(
+        self, compiler, sample_indicator_code, sample_df
+    ):
         """Test executing compiled indicator strategy."""
         result = compiler.compile(sample_indicator_code)
 
@@ -251,7 +256,9 @@ def on_bar(ctx, bar):
     def test_debug_cycle_1_input_validation(self, compiler):
         """Test debug cycle 1: input validation."""
         # Valid code with annotations
-        cycle_data = compiler._debug_cycle_1_input_validation("# @name Test\noutput = {}")
+        cycle_data = compiler._debug_cycle_1_input_validation(
+            "# @name Test\noutput = {}"
+        )
         assert cycle_data["passed"] is True
 
         # Empty code
@@ -345,10 +352,10 @@ def on_bar(ctx, bar):
 
     def test_syntax_error_compilation(self, compiler):
         """Test compilation with syntax error."""
-        code = '''
+        code = """
 # @name Bad Syntax
 x = 
-'''
+"""
         result = compiler.compile(code)
 
         assert result.success is False
@@ -356,11 +363,11 @@ x =
 
     def test_security_violation_compilation(self, compiler):
         """Test compilation with security violation."""
-        code = '''
+        code = """
 # @name Dangerous Strategy
 import os
 output = {'signals': {'buy': True}}
-'''
+"""
         result = compiler.compile(code)
 
         assert result.success is False
@@ -370,14 +377,14 @@ output = {'signals': {'buy': True}}
         """Test debug level controls cycle execution."""
         # Low debug level
         compiler_low = StrategyCompiler(debug_level=3)
-        result = compiler_low.compile(EXAMPLE_STRATEGIES['ma_cross_indicator'])
+        result = compiler_low.compile(EXAMPLE_STRATEGIES["ma_cross_indicator"])
 
         assert result.success is True
         assert len(result.debug_cycles) <= 3
 
         # High debug level - indicator strategies skip cycle 8
         compiler_high = StrategyCompiler(debug_level=10)
-        result = compiler_high.compile(EXAMPLE_STRATEGIES['ma_cross_indicator'])
+        result = compiler_high.compile(EXAMPLE_STRATEGIES["ma_cross_indicator"])
 
         assert result.success is True
         # Indicator strategies: cycles 1-7, 9-10 = 9 cycles
@@ -387,24 +394,24 @@ output = {'signals': {'buy': True}}
         """Test compilation result has correct structure."""
         result = compiler.compile(sample_indicator_code)
 
-        assert hasattr(result, 'success')
-        assert hasattr(result, 'spec')
-        assert hasattr(result, 'execute_func')
-        assert hasattr(result, 'errors')
-        assert hasattr(result, 'warnings')
-        assert hasattr(result, 'debug_cycles')
-        assert hasattr(result, 'compilation_time_ms')
+        assert hasattr(result, "success")
+        assert hasattr(result, "spec")
+        assert hasattr(result, "execute_func")
+        assert hasattr(result, "errors")
+        assert hasattr(result, "warnings")
+        assert hasattr(result, "debug_cycles")
+        assert hasattr(result, "compilation_time_ms")
 
     def test_debug_cycle_structure(self, compiler, sample_indicator_code):
         """Test debug cycle data structure."""
         result = compiler.compile(sample_indicator_code)
 
         for cycle in result.debug_cycles:
-            assert 'cycle' in cycle
-            assert 'name' in cycle
+            assert "cycle" in cycle
+            assert "name" in cycle
             # Cycle 10 (summary) doesn't have 'passed' key
-            if cycle.get('cycle') != 10:
-                assert 'passed' in cycle
+            if cycle.get("cycle") != 10:
+                assert "passed" in cycle
 
 
 class TestConvenienceFunctions:
@@ -413,8 +420,7 @@ class TestConvenienceFunctions:
     def test_compile_strategy_function(self):
         """Test compile_strategy convenience function."""
         result = compile_strategy(
-            EXAMPLE_STRATEGIES['ma_cross_indicator'],
-            debug_level=5
+            EXAMPLE_STRATEGIES["ma_cross_indicator"], debug_level=5
         )
 
         assert result.success is True
@@ -424,7 +430,7 @@ class TestConvenienceFunctions:
         """Test validate_strategy_code convenience function."""
         # Valid code
         is_valid, errors = validate_strategy_code(
-            EXAMPLE_STRATEGIES['ma_cross_indicator']
+            EXAMPLE_STRATEGIES["ma_cross_indicator"]
         )
         assert is_valid is True
         assert len(errors) == 0
@@ -441,22 +447,25 @@ class TestExampleStrategies:
     @pytest.fixture
     def sample_df(self):
         """Create sample DataFrame."""
-        dates = pd.date_range('2024-01-01', periods=100, freq='D')
+        dates = pd.date_range("2024-01-01", periods=100, freq="D")
         np.random.seed(42)
 
         close = 100 + np.cumsum(np.random.randn(100) * 2)
 
-        return pd.DataFrame({
-            'open': close + np.random.randn(100) * 0.5,
-            'high': close + np.abs(np.random.randn(100) * 1),
-            'low': close - np.abs(np.random.randn(100) * 1),
-            'close': close,
-            'volume': np.random.randint(1000000, 2000000, 100),
-        }, index=dates)
+        return pd.DataFrame(
+            {
+                "open": close + np.random.randn(100) * 0.5,
+                "high": close + np.abs(np.random.randn(100) * 1),
+                "low": close - np.abs(np.random.randn(100) * 1),
+                "close": close,
+                "volume": np.random.randint(1000000, 2000000, 100),
+            },
+            index=dates,
+        )
 
     def test_ma_cross_strategy(self, sample_df):
         """Test MA cross example strategy."""
-        result = compile_strategy(EXAMPLE_STRATEGIES['ma_cross_indicator'])
+        result = compile_strategy(EXAMPLE_STRATEGIES["ma_cross_indicator"])
 
         assert result.success is True
         assert result.spec.name == "均线金叉策略"
@@ -470,23 +479,21 @@ class TestExampleStrategies:
 
     def test_rsi_strategy(self, sample_df):
         """Test RSI example strategy."""
-        result = compile_strategy(EXAMPLE_STRATEGIES['rsi_oscillator'])
+        result = compile_strategy(EXAMPLE_STRATEGIES["rsi_oscillator"])
 
         assert result.success is True
         assert result.spec.name == "RSI 超买超卖策略"
 
-        output = result.execute_func(sample_df, {
-            "rsi_period": 14,
-            "rsi_buy": 30,
-            "rsi_sell": 70
-        })
+        output = result.execute_func(
+            sample_df, {"rsi_period": 14, "rsi_buy": 30, "rsi_sell": 70}
+        )
 
         assert "indicators" in output
         assert "rsi" in output["indicators"]
 
     def test_script_example_strategy(self, sample_df):
         """Test script example strategy."""
-        result = compile_strategy(EXAMPLE_STRATEGIES['script_example'])
+        result = compile_strategy(EXAMPLE_STRATEGIES["script_example"])
 
         assert result.success is True
         assert result.spec.strategy_type == "script"
@@ -502,11 +509,11 @@ class TestEdgeCases:
 
     def test_missing_output_variable(self):
         """Test code without output variable."""
-        code = '''
+        code = """
 # @name No Output
 x = 1
 y = 2
-'''
+"""
         result = compile_strategy(code)
 
         assert result.success is False
@@ -514,13 +521,13 @@ y = 2
 
     def test_unicode_in_annotations(self):
         """Test unicode characters in annotations."""
-        code = '''
+        code = """
 # @name 测试策略 🚀
 # @description 这是一个测试策略
 # @param 周期 int 10 均线周期
 
 output = {'signals': {'buy': True}}
-'''
+"""
         result = compile_strategy(code)
 
         assert result.success is True
@@ -528,26 +535,26 @@ output = {'signals': {'buy': True}}
 
     def test_multiline_description(self):
         """Test multiline description."""
-        code = '''
+        code = """
 # @name Test
 # @description Line 1
 # Line 2 of description
 output = {'signals': {'buy': True}}
-'''
+"""
         result = compile_strategy(code)
 
         assert result.success is True
 
     def test_parameter_type_conversion(self):
         """Test parameter type conversion."""
-        code = '''
+        code = """
 # @name Test
 # @param period int 10 Period
 # @param threshold float 0.5 Threshold
 # @param enabled bool true Enable flag
 
 output = {'signals': {'buy': True}}
-'''
+"""
         result = compile_strategy(code)
 
         assert result.success is True
@@ -557,14 +564,14 @@ output = {'signals': {'buy': True}}
 
     def test_strategy_config_validation(self):
         """Test strategy config validation."""
-        code = '''
+        code = """
 # @name Test
 # @strategy stopLossPct 5
 # @strategy takeProfitPct 10
 # @strategy tradeDirection long
 
 output = {'signals': {'buy': True}}
-'''
+"""
         result = compile_strategy(code)
 
         assert result.success is True
@@ -574,14 +581,14 @@ output = {'signals': {'buy': True}}
 
     def test_trailing_stop_config(self):
         """Test trailing stop configuration."""
-        code = '''
+        code = """
 # @name Test
 # @strategy trailingEnabled true
 # @strategy trailingStopPct 2
 # @strategy trailingActivationPct 3
 
 output = {'signals': {'buy': True}}
-'''
+"""
         result = compile_strategy(code)
 
         assert result.success is True
@@ -591,13 +598,13 @@ output = {'signals': {'buy': True}}
 
     def test_version_and_author(self):
         """Test version and author annotations."""
-        code = '''
+        code = """
 # @name Test
 # @version 2.0
 # @author Test Author
 
 output = {'signals': {'buy': True}}
-'''
+"""
         result = compile_strategy(code)
 
         assert result.success is True
@@ -613,7 +620,7 @@ class TestPerformance:
         import time
 
         start = time.time()
-        result = compile_strategy(EXAMPLE_STRATEGIES['ma_cross_indicator'])
+        result = compile_strategy(EXAMPLE_STRATEGIES["ma_cross_indicator"])
         elapsed = time.time() - start
 
         assert result.success is True
@@ -625,7 +632,7 @@ class TestPerformance:
         compiler = StrategyCompiler(debug_level=5)
 
         for _ in range(10):
-            result = compiler.compile(EXAMPLE_STRATEGIES['ma_cross_indicator'])
+            result = compiler.compile(EXAMPLE_STRATEGIES["ma_cross_indicator"])
             assert result.success is True
 
 

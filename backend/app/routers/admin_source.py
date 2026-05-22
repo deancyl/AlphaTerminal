@@ -2,6 +2,7 @@
 数据源管理接口 - Phase 2
 提供数据源状态查询、切换、健康检查等管理功能
 """
+
 import logging
 import time
 from fastapi import APIRouter
@@ -35,6 +36,7 @@ class HealthStatus(BaseModel):
 
 # ── 路由 ────────────────────────────────────────────────────────────────
 
+
 @router.get("/admin/data-sources")
 @handle_errors(module="admin_source")
 async def list_data_sources():
@@ -57,7 +59,7 @@ async def list_data_sources():
                 "sources": fetcher_list,
                 "current": current,
                 "proxy": proxy,
-            }
+            },
         }
     except Exception as e:
         logger.error(f"list_data_sources error: {e}", exc_info=True)
@@ -71,11 +73,7 @@ async def switch_data_source(name: str):
     try:
         success = FetcherFactory.set_current(name)
         if success:
-            return {
-                "code": 0,
-                "message": f"已切换到 {name}",
-                "data": {"current": name}
-            }
+            return {"code": 0, "message": f"已切换到 {name}", "data": {"current": name}}
         else:
             return {
                 "code": 404,
@@ -109,7 +107,7 @@ async def health_check_source(name: Optional[str] = None):
                 "name": target,
                 "healthy": healthy,
                 "latency_ms": round(latency, 2) if latency else None,
-            }
+            },
         }
     except Exception as e:
         logger.error(f"health_check_source error: {e}", exc_info=True)
@@ -136,7 +134,7 @@ async def get_source_status():
                 "available": available,
                 "proxy": proxy,
                 "circuit_breakers": all_stats,
-            }
+            },
         }
     except Exception as e:
         logger.error(f"get_source_status error: {e}", exc_info=True)

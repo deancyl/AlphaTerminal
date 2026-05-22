@@ -7,6 +7,7 @@ FactorSandbox 异步任务队列
 3. 前端通过 SSE 或轮询获取进度
 4. 任务状态持久化到 SQLite
 """
+
 import asyncio
 import sqlite3
 import json
@@ -101,7 +102,7 @@ class FactorSandboxTaskQueue:
             result=None,
             error=None,
             created_at=now,
-            updated_at=now
+            updated_at=now,
         )
 
         # 保存到内存和数据库
@@ -126,10 +127,7 @@ class FactorSandboxTaskQueue:
         # 从数据库加载
         conn = self._get_conn()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM screening_jobs WHERE job_id = ?",
-            (job_id,)
-        )
+        cursor.execute("SELECT * FROM screening_jobs WHERE job_id = ?", (job_id,))
         row = cursor.fetchone()
         conn.close()
 
@@ -144,7 +142,7 @@ class FactorSandboxTaskQueue:
                 result=json.loads(row[6]) if row[6] else None,
                 error=row[7],
                 created_at=row[8],
-                updated_at=row[9]
+                updated_at=row[9],
             )
             with self._lock:
                 self._jobs[job_id] = job
@@ -170,22 +168,25 @@ class FactorSandboxTaskQueue:
         """保存任务到数据库"""
         conn = self._get_conn()
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT OR REPLACE INTO screening_jobs 
             (job_id, status, factors, universe, progress, total, result, error, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            job.job_id,
-            job.status.value,
-            json.dumps(job.factors),
-            job.universe,
-            job.progress,
-            job.total,
-            json.dumps(job.result) if job.result else None,
-            job.error,
-            job.created_at,
-            job.updated_at
-        ))
+        """,
+            (
+                job.job_id,
+                job.status.value,
+                json.dumps(job.factors),
+                job.universe,
+                job.progress,
+                job.total,
+                json.dumps(job.result) if job.result else None,
+                job.error,
+                job.created_at,
+                job.updated_at,
+            ),
+        )
         conn.commit()
         conn.close()
 
@@ -244,13 +245,18 @@ class FactorSandboxTaskQueue:
                     self.update_job(job_id, status=JobStatus.CANCELLED)
                     break
                 except Exception as e:
-                    logger.error(f"[TaskQueue] Worker {worker_id} error: {e}", exc_info=True)
+                    logger.error(
+                        f"[TaskQueue] Worker {worker_id} error: {e}", exc_info=True
+                    )
                     self.update_job(job_id, status=JobStatus.FAILED, error=str(e))
 
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
-                logger.error(f"[TaskQueue] Worker {worker_id} unexpected error: {e}", exc_info=True)
+                logger.error(
+                    f"[TaskQueue] Worker {worker_id} unexpected error: {e}",
+                    exc_info=True,
+                )
 
         logger.info(f"[TaskQueue] Worker {worker_id} stopped")
 

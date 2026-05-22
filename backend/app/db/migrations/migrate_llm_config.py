@@ -26,6 +26,7 @@ CRITICAL: This migration is safe and preserves all existing data.
 - Idempotent (safe to run multiple times)
 - Preserves original configs
 """
+
 import json
 import logging
 import sqlite3
@@ -60,8 +61,10 @@ DEFAULT_MODEL_CONFIGS = {
 
 def _get_db_path() -> str:
     return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
-        'database.db'
+        os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        ),
+        "database.db",
     )
 
 
@@ -92,7 +95,7 @@ def get_old_config(conn, key: str) -> Optional[Dict[str, Any]]:
     if not row:
         return None
     try:
-        return json.loads(row['value'])
+        return json.loads(row["value"])
     except json.JSONDecodeError:
         return None
 
@@ -100,50 +103,49 @@ def get_old_config(conn, key: str) -> Optional[Dict[str, Any]]:
 def set_new_config(conn, key: str, value: Dict[str, Any]) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
-        (key, json.dumps(value), datetime.now().isoformat())
+        (key, json.dumps(value), datetime.now().isoformat()),
     )
     conn.commit()
 
 
-def migrate_single_to_multi(old_config: Dict[str, Any], provider_key: str) -> Dict[str, Any]:
-    model_id = old_config.get('model', 'gpt-3.5-turbo')
+def migrate_single_to_multi(
+    old_config: Dict[str, Any], provider_key: str
+) -> Dict[str, Any]:
+    model_id = old_config.get("model", "gpt-3.5-turbo")
 
-    default_config = DEFAULT_MODEL_CONFIGS.get(model_id, {
-        "context_length": 16385,
-        "concurrency_limit": 10
-    })
+    default_config = DEFAULT_MODEL_CONFIGS.get(
+        model_id, {"context_length": 16385, "concurrency_limit": 10}
+    )
 
     model_config = {
-        "api_key": old_config.get('api_key', ''),
-        "base_url": old_config.get('base_url', ''),
+        "api_key": old_config.get("api_key", ""),
+        "base_url": old_config.get("base_url", ""),
         "context_length": default_config["context_length"],
         "concurrency_limit": default_config["concurrency_limit"],
-        "enabled": True
+        "enabled": True,
     }
 
-    if 'temperature' in old_config:
-        model_config['temperature'] = old_config['temperature']
-    if 'max_tokens' in old_config:
-        model_config['max_tokens'] = old_config['max_tokens']
+    if "temperature" in old_config:
+        model_config["temperature"] = old_config["temperature"]
+    if "max_tokens" in old_config:
+        model_config["max_tokens"] = old_config["max_tokens"]
 
     new_config = {
-        "models": {
-            model_id: model_config
-        },
+        "models": {model_id: model_config},
         "default_model": model_id,
         "migration_version": MIGRATION_VERSION,
         "migrated_from": provider_key,
-        "migrated_at": datetime.now().isoformat()
+        "migrated_at": datetime.now().isoformat(),
     }
 
     return new_config
 
 
 def needs_migration(config: Dict[str, Any]) -> bool:
-    if 'models' in config and isinstance(config.get('models'), dict):
+    if "models" in config and isinstance(config.get("models"), dict):
         return False
 
-    if 'migration_version' in config:
+    if "migration_version" in config:
         return False
 
     return True
@@ -155,7 +157,7 @@ def migrate_llm_configs(dry_run: bool = False) -> Dict[str, Any]:
         "migrated": [],
         "skipped": [],
         "errors": [],
-        "backup_path": None
+        "backup_path": None,
     }
 
     provider_keys = [
@@ -166,7 +168,7 @@ def migrate_llm_configs(dry_run: bool = False) -> Dict[str, Any]:
         "llm_kimi",
         "llm_minimax",
         "llm_siliconflow",
-        "llm_opencode"
+        "llm_opencode",
     ]
 
     conn = _get_conn()
@@ -189,19 +191,23 @@ def migrate_llm_configs(dry_run: bool = False) -> Dict[str, Any]:
                 new_config = migrate_single_to_multi(old_config, key)
 
                 if dry_run:
-                    result["migrated"].append({
-                        "key": key,
-                        "old": old_config,
-                        "new": new_config,
-                        "dry_run": True
-                    })
+                    result["migrated"].append(
+                        {
+                            "key": key,
+                            "old": old_config,
+                            "new": new_config,
+                            "dry_run": True,
+                        }
+                    )
                 else:
                     set_new_config(conn, key, new_config)
-                    result["migrated"].append({
-                        "key": key,
-                        "model": new_config.get('default_model'),
-                        "dry_run": False
-                    })
+                    result["migrated"].append(
+                        {
+                            "key": key,
+                            "model": new_config.get("default_model"),
+                            "dry_run": False,
+                        }
+                    )
 
             except Exception as e:
                 result["errors"].append({"key": key, "error": str(e)})
@@ -217,15 +223,17 @@ def verify_migration() -> Dict[str, Any]:
     conn = _get_conn()
     try:
         provider_keys = [
-            "llm_openai", "llm_anthropic", "llm_deepseek",
-            "llm_qianwen", "llm_kimi", "llm_minimax",
-            "llm_siliconflow", "llm_opencode"
+            "llm_openai",
+            "llm_anthropic",
+            "llm_deepseek",
+            "llm_qianwen",
+            "llm_kimi",
+            "llm_minimax",
+            "llm_siliconflow",
+            "llm_opencode",
         ]
 
-        verification = {
-            "all_migrated": True,
-            "configs": {}
-        }
+        verification = {"all_migrated": True, "configs": {}}
 
         for key in provider_keys:
             config = get_old_config(conn, key)
@@ -236,9 +244,9 @@ def verify_migration() -> Dict[str, Any]:
             is_migrated = not needs_migration(config)
             verification["configs"][key] = {
                 "status": "migrated" if is_migrated else "needs_migration",
-                "model_count": len(config.get('models', {})),
-                "default_model": config.get('default_model'),
-                "migration_version": config.get('migration_version')
+                "model_count": len(config.get("models", {})),
+                "default_model": config.get("default_model"),
+                "migration_version": config.get("migration_version"),
             }
 
             if not is_migrated:
@@ -272,8 +280,12 @@ def run_migration_with_backup() -> Tuple[bool, str]:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Migrate LLM configs to multi-model schema")
-    parser.add_argument("--dry-run", action="store_true", help="Preview migration without changes")
+    parser = argparse.ArgumentParser(
+        description="Migrate LLM configs to multi-model schema"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview migration without changes"
+    )
     parser.add_argument("--verify", action="store_true", help="Verify migration status")
     args = parser.parse_args()
 
@@ -286,7 +298,9 @@ if __name__ == "__main__":
             status = "✅" if info["status"] == "migrated" else "❌"
             print(f"{status} {key}: {info['status']}")
             if info["status"] == "migrated":
-                print(f"   Models: {info['model_count']}, Default: {info['default_model']}")
+                print(
+                    f"   Models: {info['model_count']}, Default: {info['default_model']}"
+                )
         print(f"\nAll migrated: {'✅' if verification['all_migrated'] else '❌'}")
 
     elif args.dry_run:

@@ -1,6 +1,7 @@
 """
 Unit tests for Options Pricing Engine (Black-Scholes-Merton)
 """
+
 import pytest
 from datetime import date, timedelta
 
@@ -11,6 +12,7 @@ class TestOptionsPricingEngine:
     @pytest.fixture
     def engine(self):
         from app.services.pricing.black_scholes import OptionsPricingEngine
+
         return OptionsPricingEngine(risk_free_rate=0.025, dividend_yield=0.02)
 
     def test_engine_initialization(self, engine):
@@ -50,7 +52,8 @@ class TestOptionsPricingEngine:
         sigma = 0.20
 
         from py_vollib.black_scholes_merton import black_scholes_merton
-        price = black_scholes_merton('c', S, K, T, engine.r, sigma, engine.q)
+
+        price = black_scholes_merton("c", S, K, T, engine.r, sigma, engine.q)
 
         iv = engine.calculate_iv(price, S, K, T, is_call=True)
 
@@ -64,7 +67,8 @@ class TestOptionsPricingEngine:
         sigma = 0.25
 
         from py_vollib.black_scholes_merton import black_scholes_merton
-        price = black_scholes_merton('c', S, K, T, engine.r, sigma, engine.q)
+
+        price = black_scholes_merton("c", S, K, T, engine.r, sigma, engine.q)
 
         iv = engine.calculate_iv(price, S, K, T, is_call=True)
 
@@ -78,7 +82,8 @@ class TestOptionsPricingEngine:
         sigma = 0.22
 
         from py_vollib.black_scholes_merton import black_scholes_merton
-        price = black_scholes_merton('p', S, K, T, engine.r, sigma, engine.q)
+
+        price = black_scholes_merton("p", S, K, T, engine.r, sigma, engine.q)
 
         iv = engine.calculate_iv(price, S, K, T, is_call=False)
 
@@ -160,12 +165,12 @@ class TestOptionsPricingEngine:
 
         assert len(results) == 3
         for opt in results:
-            assert opt.get('delta') is not None
-            assert opt.get('gamma') is not None
-            assert opt.get('theta') is not None
-            assert opt.get('vega') is not None
-            assert opt.get('iv') is not None
-            assert -1 <= opt['delta'] <= 1
+            assert opt.get("delta") is not None
+            assert opt.get("gamma") is not None
+            assert opt.get("theta") is not None
+            assert opt.get("vega") is not None
+            assert opt.get("iv") is not None
+            assert -1 <= opt["delta"] <= 1
 
     def test_price_option_chain_with_puts(self, engine):
         options = [
@@ -179,8 +184,8 @@ class TestOptionsPricingEngine:
 
         assert len(results) == 2
         for opt in results:
-            assert opt.get('delta') is not None
-            assert -1 <= opt['delta'] <= 0
+            assert opt.get("delta") is not None
+            assert -1 <= opt["delta"] <= 0
 
     def test_price_option_chain_default_volatility(self, engine):
         options = [
@@ -189,10 +194,12 @@ class TestOptionsPricingEngine:
         spot = 4000.0
         expiry = date.today() + timedelta(days=90)
 
-        results = engine.price_option_chain(options, spot, expiry, default_volatility=0.25)
+        results = engine.price_option_chain(
+            options, spot, expiry, default_volatility=0.25
+        )
 
         assert len(results) == 1
-        assert results[0].get('iv') == 0.25
+        assert results[0].get("iv") == 0.25
 
     def test_price_option_chain_empty(self, engine):
         results = engine.price_option_chain([], 4000.0)
@@ -201,7 +208,7 @@ class TestOptionsPricingEngine:
     def test_price_option_chain_zero_spot(self, engine):
         options = [{"code": "test", "strike": 4000.0, "latest": 100.0, "is_call": True}]
         results = engine.price_option_chain(options, 0.0)
-        assert results[0].get('delta') is None
+        assert results[0].get("delta") is None
 
 
 class TestGreeksResult:
@@ -211,12 +218,7 @@ class TestGreeksResult:
         from app.services.pricing.black_scholes import GreeksResult
 
         result = GreeksResult(
-            delta=0.5,
-            gamma=0.001,
-            theta=-0.02,
-            vega=0.15,
-            rho=0.01,
-            iv=0.20
+            delta=0.5, gamma=0.001, theta=-0.02, vega=0.15, rho=0.01, iv=0.20
         )
 
         assert result.delta == 0.5
@@ -229,13 +231,7 @@ class TestGreeksResult:
     def test_greeks_result_optional_iv(self):
         from app.services.pricing.black_scholes import GreeksResult
 
-        result = GreeksResult(
-            delta=0.5,
-            gamma=0.001,
-            theta=-0.02,
-            vega=0.15,
-            rho=0.01
-        )
+        result = GreeksResult(delta=0.5, gamma=0.001, theta=-0.02, vega=0.15, rho=0.01)
 
         assert result.iv is None
 
@@ -246,6 +242,7 @@ class TestPricingEngineIntegration:
     def test_py_vollib_available(self):
         try:
             from py_vollib import black_scholes_merton
+
             assert True
         except ImportError:
             pytest.skip("py_vollib not installed")
@@ -261,7 +258,8 @@ class TestPricingEngineIntegration:
         sigma = 0.20
 
         from py_vollib.black_scholes_merton import black_scholes_merton
-        price = black_scholes_merton('c', S, K, T, engine.r, sigma, engine.q)
+
+        price = black_scholes_merton("c", S, K, T, engine.r, sigma, engine.q)
 
         iv = engine.calculate_iv(price, S, K, T, is_call=True)
         assert iv is not None

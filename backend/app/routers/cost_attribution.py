@@ -24,7 +24,7 @@ _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="cost_attribut
 router = APIRouter(
     prefix="/cost_attribution",
     tags=["cost_attribution"],
-    dependencies=[Depends(verify_admin_key)]
+    dependencies=[Depends(verify_admin_key)],
 )
 
 
@@ -32,10 +32,11 @@ router = APIRouter(
 # Helper Functions
 # ═══════════════════════════════════════════════════════════════
 
+
 def _infer_workflow_type(metadata: str, session_id: str) -> str:
     """
     Infer workflow type from metadata JSON or session_id pattern.
-    
+
     Workflow types:
     - agentic: Multi-step agentic workflows
     - report: Report generation
@@ -84,13 +85,16 @@ def _get_sankey_data_sync(start_date: str, end_date: str) -> Dict[str, Any]:
     conn = _get_conn()
     try:
         # Fetch all records in date range
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT session_id, model_id, provider, prompt_tokens, completion_tokens,
                    total_tokens, cost_usd, metadata, created_at
             FROM token_usage_logs
             WHERE created_at >= ? AND created_at <= ?
             ORDER BY created_at DESC
-        """, (start_date, end_date)).fetchall()
+        """,
+            (start_date, end_date),
+        ).fetchall()
 
         # Aggregate by workflow -> model
         workflow_totals: Dict[str, Dict[str, float]] = {}
@@ -135,27 +139,33 @@ def _get_sankey_data_sync(start_date: str, end_date: str) -> Dict[str, Any]:
             "chat": "#F5A623",
             "backtest": "#9B59B6",
             "research": "#3498DB",
-            "other": "#95A5A6"
+            "other": "#95A5A6",
         }
 
-        for workflow, models in sorted(workflow_totals.items(), key=lambda x: sum(x[1].values()), reverse=True):
+        for workflow, models in sorted(
+            workflow_totals.items(), key=lambda x: sum(x[1].values()), reverse=True
+        ):
             workflow_cost = sum(models.values())
             if workflow_cost > 0:
                 idx = len(nodes)
                 node_index[workflow] = idx
-                nodes.append({
-                    "name": workflow.capitalize(),
-                    "itemStyle": {"color": workflow_colors.get(workflow, "#95A5A6")}
-                })
+                nodes.append(
+                    {
+                        "name": workflow.capitalize(),
+                        "itemStyle": {
+                            "color": workflow_colors.get(workflow, "#95A5A6")
+                        },
+                    }
+                )
                 # Link from Total to workflow
-                links.append({
-                    "source": 0,
-                    "target": idx,
-                    "value": round(workflow_cost, 6)
-                })
+                links.append(
+                    {"source": 0, "target": idx, "value": round(workflow_cost, 6)}
+                )
 
         # Add model nodes and links
-        for model_id, cost in sorted(model_totals.items(), key=lambda x: x[1], reverse=True):
+        for model_id, cost in sorted(
+            model_totals.items(), key=lambda x: x[1], reverse=True
+        ):
             if cost > 0:
                 idx = len(nodes)
                 node_index[model_id] = idx
@@ -168,11 +178,13 @@ def _get_sankey_data_sync(start_date: str, end_date: str) -> Dict[str, Any]:
             workflow_idx = node_index[workflow]
             for model_id, cost in models.items():
                 if model_id in node_index and cost > 0:
-                    links.append({
-                        "source": workflow_idx,
-                        "target": node_index[model_id],
-                        "value": round(cost, 6)
-                    })
+                    links.append(
+                        {
+                            "source": workflow_idx,
+                            "target": node_index[model_id],
+                            "value": round(cost, 6),
+                        }
+                    )
 
         return {
             "nodes": nodes,
@@ -180,7 +192,7 @@ def _get_sankey_data_sync(start_date: str, end_date: str) -> Dict[str, Any]:
             "total_cost": round(total_cost, 6),
             "workflow_count": len(workflow_totals),
             "model_count": len(model_totals),
-            "record_count": len(rows)
+            "record_count": len(rows),
         }
     finally:
         conn.close()
@@ -190,13 +202,16 @@ def _get_prompt_tree_sync(session_id: str) -> Dict[str, Any]:
     """Synchronous function to build prompt tree for a session."""
     conn = _get_conn()
     try:
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT request_id, model_id, prompt_tokens, completion_tokens,
                    total_tokens, cost_usd, duration_ms, metadata, created_at
             FROM token_usage_logs
             WHERE session_id = ?
             ORDER BY created_at ASC
-        """, (session_id,)).fetchall()
+        """,
+            (session_id,),
+        ).fetchall()
 
         if not rows:
             return {"session_id": session_id, "nodes": [], "total_cost": 0.0}
@@ -229,20 +244,22 @@ def _get_prompt_tree_sync(session_id: str) -> Dict[str, Any]:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-            nodes.append({
-                "id": request_id,
-                "seq": i + 1,
-                "model_id": model_id,
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": total_tokens,
-                "cost_usd": round(cost, 6),
-                "duration_ms": duration_ms,
-                "prompt_preview": prompt_preview,
-                "tool_calls": tool_calls,
-                "created_at": created_at,
-                "children": []
-            })
+            nodes.append(
+                {
+                    "id": request_id,
+                    "seq": i + 1,
+                    "model_id": model_id,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                    "cost_usd": round(cost, 6),
+                    "duration_ms": duration_ms,
+                    "prompt_preview": prompt_preview,
+                    "tool_calls": tool_calls,
+                    "created_at": created_at,
+                    "children": [],
+                }
+            )
 
             total_cost += cost
 
@@ -251,23 +268,28 @@ def _get_prompt_tree_sync(session_id: str) -> Dict[str, Any]:
             "nodes": nodes,
             "total_cost": round(total_cost, 6),
             "total_tokens": sum(n["total_tokens"] for n in nodes),
-            "request_count": len(nodes)
+            "request_count": len(nodes),
         }
     finally:
         conn.close()
 
 
-def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> List[Dict[str, Any]]:
+def _get_cost_breakdown_sync(
+    start_date: str, end_date: str, group_by: str
+) -> List[Dict[str, Any]]:
     """Synchronous function to get cost breakdown by dimension."""
     conn = _get_conn()
     try:
         if group_by == "workflow":
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT session_id, model_id, provider, prompt_tokens, completion_tokens,
                        total_tokens, cost_usd, metadata
                 FROM token_usage_logs
                 WHERE created_at >= ? AND created_at <= ?
-            """, (start_date, end_date)).fetchall()
+            """,
+                (start_date, end_date),
+            ).fetchall()
 
             workflow_data: Dict[str, Dict[str, Any]] = {}
             for row in rows:
@@ -288,7 +310,7 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
                         "prompt_tokens": 0,
                         "completion_tokens": 0,
                         "total_tokens": 0,
-                        "cost_usd": 0.0
+                        "cost_usd": 0.0,
                     }
 
                 workflow_data[workflow]["requests"] += 1
@@ -302,7 +324,8 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
             return result
 
         elif group_by == "model":
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT model_id, provider,
                        COUNT(*) as requests,
                        SUM(prompt_tokens) as prompt_tokens,
@@ -314,12 +337,15 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
                 WHERE created_at >= ? AND created_at <= ?
                 GROUP BY model_id, provider
                 ORDER BY cost_usd DESC
-            """, (start_date, end_date)).fetchall()
+            """,
+                (start_date, end_date),
+            ).fetchall()
 
             return [dict(row) for row in rows]
 
         elif group_by == "session":
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT session_id,
                        COUNT(*) as requests,
                        SUM(prompt_tokens) as prompt_tokens,
@@ -334,7 +360,9 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
                 GROUP BY session_id
                 ORDER BY cost_usd DESC
                 LIMIT 100
-            """, (start_date, end_date)).fetchall()
+            """,
+                (start_date, end_date),
+            ).fetchall()
 
             return [dict(row) for row in rows]
 
@@ -344,11 +372,14 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
         conn.close()
 
 
-def _get_sessions_list_sync(start_date: str, end_date: str, limit: int) -> List[Dict[str, Any]]:
+def _get_sessions_list_sync(
+    start_date: str, end_date: str, limit: int
+) -> List[Dict[str, Any]]:
     """Get list of sessions with token usage for the prompt tree selector."""
     conn = _get_conn()
     try:
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT session_id,
                    COUNT(*) as requests,
                    SUM(total_tokens) as total_tokens,
@@ -361,7 +392,9 @@ def _get_sessions_list_sync(start_date: str, end_date: str, limit: int) -> List[
             GROUP BY session_id
             ORDER BY cost_usd DESC
             LIMIT ?
-        """, (start_date, end_date, limit)).fetchall()
+        """,
+            (start_date, end_date, limit),
+        ).fetchall()
 
         return [dict(row) for row in rows]
     finally:
@@ -372,25 +405,23 @@ def _get_sessions_list_sync(start_date: str, end_date: str, limit: int) -> List[
 # API Endpoints
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.get("/sankey")
 @handle_errors(module="cost_attribution")
 async def get_sankey_data(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="End date (YYYY-MM-DD)")
+    end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
 ):
     """
     Get Sankey diagram data for cost attribution.
-    
+
     Returns nodes and links for visualizing cost flow from Total -> Workflow -> Model.
     """
     loop = asyncio.get_event_loop()
 
     try:
         result = await loop.run_in_executor(
-            _executor,
-            _get_sankey_data_sync,
-            start_date,
-            end_date
+            _executor, _get_sankey_data_sync, start_date, end_date
         )
         return {"code": 0, "data": result}
     except Exception as e:
@@ -405,16 +436,14 @@ async def get_prompt_tree(
 ):
     """
     Get prompt tree for a specific session.
-    
+
     Returns hierarchical tree of prompts with token counts and costs.
     """
     loop = asyncio.get_event_loop()
 
     try:
         result = await loop.run_in_executor(
-            _executor,
-            _get_prompt_tree_sync,
-            session_id
+            _executor, _get_prompt_tree_sync, session_id
         )
         return {"code": 0, "data": result}
     except Exception as e:
@@ -427,11 +456,11 @@ async def get_prompt_tree(
 async def get_cost_breakdown(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
-    group_by: str = Query(default="workflow", pattern="^(workflow|model|session)$")
+    group_by: str = Query(default="workflow", pattern="^(workflow|model|session)$"),
 ):
     """
     Get cost breakdown by different dimensions.
-    
+
     - workflow: Group by workflow type (agentic, report, chat, etc.)
     - model: Group by model_id
     - session: Group by session_id
@@ -440,11 +469,7 @@ async def get_cost_breakdown(
 
     try:
         result = await loop.run_in_executor(
-            _executor,
-            _get_cost_breakdown_sync,
-            start_date,
-            end_date,
-            group_by
+            _executor, _get_cost_breakdown_sync, start_date, end_date, group_by
         )
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:
@@ -457,7 +482,7 @@ async def get_cost_breakdown(
 async def get_sessions_list(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
-    limit: int = Query(default=50, ge=1, le=500)
+    limit: int = Query(default=50, ge=1, le=500),
 ):
     """
     Get list of sessions with token usage for the prompt tree selector.
@@ -466,11 +491,7 @@ async def get_sessions_list(
 
     try:
         result = await loop.run_in_executor(
-            _executor,
-            _get_sessions_list_sync,
-            start_date,
-            end_date,
-            limit
+            _executor, _get_sessions_list_sync, start_date, end_date, limit
         )
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:

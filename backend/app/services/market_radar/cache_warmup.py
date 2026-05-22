@@ -12,19 +12,18 @@ logger = logging.getLogger(__name__)
 
 
 async def warmup_market_radar_cache(
-    timeout: float = 30.0,
-    background: bool = True
+    timeout: float = 30.0, background: bool = True
 ) -> dict:
     """
     Pre-warm market radar cache on server startup.
-    
+
     This reduces initial request latency by pre-fetching data
     before the first user request.
-    
+
     Args:
         timeout: Maximum time for warmup in seconds
         background: If True, run in background without blocking
-        
+
     Returns:
         Dictionary with warmup status and timing
     """
@@ -43,12 +42,14 @@ async def warmup_market_radar_cache(
         tasks = [
             ("treemap_sector", build_treemap_data(level="sector", timeout=timeout / 2)),
             ("treemap_stock", build_treemap_data(level="stock", timeout=timeout / 2)),
-            ("anomalies", detect_anomalies(anomaly_type=None, top_n=10, timeout=timeout / 2)),
+            (
+                "anomalies",
+                detect_anomalies(anomaly_type=None, top_n=10, timeout=timeout / 2),
+            ),
         ]
 
         task_results = await asyncio.gather(
-            *[t[1] for t in tasks],
-            return_exceptions=True
+            *[t[1] for t in tasks], return_exceptions=True
         )
 
         # Process results and cache them
@@ -94,7 +95,7 @@ async def warmup_market_radar_cache(
 async def schedule_cache_warmup():
     """
     Schedule periodic cache warmup.
-    
+
     Should be called from the scheduler to refresh cache
     before it expires.
     """
@@ -105,9 +106,10 @@ async def schedule_cache_warmup():
 def start_background_warmup():
     """
     Start cache warmup in background on server startup.
-    
+
     This is non-blocking and runs in the background.
     """
+
     async def _warmup():
         try:
             await warmup_market_radar_cache(timeout=30.0, background=True)

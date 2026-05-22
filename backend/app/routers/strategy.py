@@ -1,6 +1,7 @@
 """
 Strategy API - Strategy CRUD, backtest and optimization
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -26,14 +27,14 @@ class BacktestRequest(BaseModel):
     commission: float = Field(default=0.001, ge=0, le=0.1)
     slippage: float = Field(default=0.001, ge=0, le=0.1)
 
-    @field_validator('start_date', 'end_date')
+    @field_validator("start_date", "end_date")
     @classmethod
     def validate_date_format(cls, v: str) -> str:
         try:
             datetime.strptime(v, "%Y-%m-%d")
             return v
         except ValueError:
-            raise ValueError(f'Invalid date format: {v}, expected YYYY-MM-DD')
+            raise ValueError(f"Invalid date format: {v}, expected YYYY-MM-DD")
 
 
 class OptimizeRequest(BaseModel):
@@ -45,21 +46,23 @@ class OptimizeRequest(BaseModel):
     param_grid: Dict[str, List[Any]]
     metric: str = "sharpe_ratio"
 
-    @field_validator('start_date', 'end_date')
+    @field_validator("start_date", "end_date")
     @classmethod
     def validate_date_format(cls, v: str) -> str:
         try:
             datetime.strptime(v, "%Y-%m-%d")
             return v
         except ValueError:
-            raise ValueError(f'Invalid date format: {v}, expected YYYY-MM-DD')
+            raise ValueError(f"Invalid date format: {v}, expected YYYY-MM-DD")
 
 
 class StrategyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: str = Field(default="", max_length=500)
     code: str = Field(..., max_length=50000)
-    market: str = Field(default="AStock", pattern="^(AStock|HKStock|USStock|Crypto|Forex|Futures)$")
+    market: str = Field(
+        default="AStock", pattern="^(AStock|HKStock|USStock|Crypto|Forex|Futures)$"
+    )
     parameters: Dict[str, Any] = {}
     stop_loss_pct: float = Field(default=2.0, ge=0, le=100)
     take_profit_pct: float = Field(default=6.0, ge=0, le=100)
@@ -159,14 +162,14 @@ class CompileResponse(BaseModel):
 async def validate_strategy_code(request: CodeValidateRequest):
     """
     Validate strategy code without executing it.
-    
+
     Performs comprehensive security validation including:
     - AST-based security analysis
     - Forbidden import detection
     - Dangerous function call detection
     - Infinite loop detection
     - Memory bomb detection
-    
+
     Returns validation result without executing the code.
     """
     try:
@@ -199,7 +202,7 @@ async def validate_strategy_code(request: CodeValidateRequest):
 def _generate_python_code(ast: StrategyAST) -> str:
     """
     Generate Python DSL code from Strategy AST.
-    
+
     Supports Top 5 strategies:
     - MA Cross (MA金叉)
     - MACD Cross (MACD金叉)
@@ -216,8 +219,8 @@ def _generate_python_code(ast: StrategyAST) -> str:
 
     # Risk management
     if ast.riskManagement:
-        stop_loss = ast.riskManagement.get('stopLossPct', 2.0)
-        take_profit = ast.riskManagement.get('takeProfitPct', 6.0)
+        stop_loss = ast.riskManagement.get("stopLossPct", 2.0)
+        take_profit = ast.riskManagement.get("takeProfitPct", 6.0)
         lines.append(f"# @strategy stopLossPct {stop_loss}")
         lines.append(f"# @strategy takeProfitPct {take_profit}")
 
@@ -233,44 +236,58 @@ def _generate_python_code(ast: StrategyAST) -> str:
 
         if condition.indicator == "MA":
             # MA Cross strategy
-            fast = condition.params.get('fast_period', 5)
-            slow = condition.params.get('slow_period', 20)
+            fast = condition.params.get("fast_period", 5)
+            slow = condition.params.get("slow_period", 20)
             lines.append(f"ma_fast_{idx} = df['close'].rolling({fast}).mean()")
             lines.append(f"ma_slow_{idx} = df['close'].rolling({slow}).mean()")
-            indicators[f'ma_fast_{idx}'] = f'ma_fast_{idx}'
-            indicators[f'ma_slow_{idx}'] = f'ma_slow_{idx}'
+            indicators[f"ma_fast_{idx}"] = f"ma_fast_{idx}"
+            indicators[f"ma_slow_{idx}"] = f"ma_slow_{idx}"
 
-            if condition.direction == 'cross_above':
-                lines.append(f"{cond_var} = (ma_fast_{idx} > ma_slow_{idx}) & (ma_fast_{idx}.shift(1) <= ma_slow_{idx}.shift(1))")
+            if condition.direction == "cross_above":
+                lines.append(
+                    f"{cond_var} = (ma_fast_{idx} > ma_slow_{idx}) & (ma_fast_{idx}.shift(1) <= ma_slow_{idx}.shift(1))"
+                )
                 buy_signals.append(cond_var)
-            elif condition.direction == 'cross_below':
-                lines.append(f"{cond_var} = (ma_fast_{idx} < ma_slow_{idx}) & (ma_fast_{idx}.shift(1) >= ma_slow_{idx}.shift(1))")
+            elif condition.direction == "cross_below":
+                lines.append(
+                    f"{cond_var} = (ma_fast_{idx} < ma_slow_{idx}) & (ma_fast_{idx}.shift(1) >= ma_slow_{idx}.shift(1))"
+                )
                 sell_signals.append(cond_var)
 
         elif condition.indicator == "MACD":
             # MACD Cross strategy
-            fast = condition.params.get('fast_period', 12)
-            slow = condition.params.get('slow_period', 26)
-            signal = condition.params.get('signal_period', 9)
-            lines.append(f"ema_fast_{idx} = df['close'].ewm(span={fast}, adjust=False).mean()")
-            lines.append(f"ema_slow_{idx} = df['close'].ewm(span={slow}, adjust=False).mean()")
+            fast = condition.params.get("fast_period", 12)
+            slow = condition.params.get("slow_period", 26)
+            signal = condition.params.get("signal_period", 9)
+            lines.append(
+                f"ema_fast_{idx} = df['close'].ewm(span={fast}, adjust=False).mean()"
+            )
+            lines.append(
+                f"ema_slow_{idx} = df['close'].ewm(span={slow}, adjust=False).mean()"
+            )
             lines.append(f"dif_{idx} = ema_fast_{idx} - ema_slow_{idx}")
-            lines.append(f"dea_{idx} = dif_{idx}.ewm(span={signal}, adjust=False).mean()")
+            lines.append(
+                f"dea_{idx} = dif_{idx}.ewm(span={signal}, adjust=False).mean()"
+            )
             lines.append(f"histogram_{idx} = (dif_{idx} - dea_{idx}) * 2")
-            indicators[f'dif_{idx}'] = f'dif_{idx}'
-            indicators[f'dea_{idx}'] = f'dea_{idx}'
-            indicators[f'histogram_{idx}'] = f'histogram_{idx}'
+            indicators[f"dif_{idx}"] = f"dif_{idx}"
+            indicators[f"dea_{idx}"] = f"dea_{idx}"
+            indicators[f"histogram_{idx}"] = f"histogram_{idx}"
 
-            if condition.direction == 'cross_above':
-                lines.append(f"{cond_var} = (dif_{idx} > dea_{idx}) & (dif_{idx}.shift(1) <= dea_{idx}.shift(1))")
+            if condition.direction == "cross_above":
+                lines.append(
+                    f"{cond_var} = (dif_{idx} > dea_{idx}) & (dif_{idx}.shift(1) <= dea_{idx}.shift(1))"
+                )
                 buy_signals.append(cond_var)
-            elif condition.direction == 'cross_below':
-                lines.append(f"{cond_var} = (dif_{idx} < dea_{idx}) & (dif_{idx}.shift(1) >= dea_{idx}.shift(1))")
+            elif condition.direction == "cross_below":
+                lines.append(
+                    f"{cond_var} = (dif_{idx} < dea_{idx}) & (dif_{idx}.shift(1) >= dea_{idx}.shift(1))"
+                )
                 sell_signals.append(cond_var)
 
         elif condition.indicator == "RSI":
             # RSI strategy
-            period = condition.params.get('period', 14)
+            period = condition.params.get("period", 14)
             threshold = condition.threshold or 30
             lines.append(f"delta_{idx} = df['close'].diff()")
             lines.append(f"gain_{idx} = delta_{idx}.where(delta_{idx} > 0, 0)")
@@ -279,46 +296,50 @@ def _generate_python_code(ast: StrategyAST) -> str:
             lines.append(f"avg_loss_{idx} = loss_{idx}.rolling(window={period}).mean()")
             lines.append(f"rs_{idx} = avg_gain_{idx} / avg_loss_{idx}")
             lines.append(f"rsi_{idx} = 100 - (100 / (1 + rs_{idx}))")
-            indicators[f'rsi_{idx}'] = f'rsi_{idx}'
+            indicators[f"rsi_{idx}"] = f"rsi_{idx}"
 
-            if condition.direction == 'below':
+            if condition.direction == "below":
                 # RSI < threshold (oversold)
                 lines.append(f"{cond_var} = rsi_{idx} < {threshold}")
                 buy_signals.append(cond_var)
-            elif condition.direction == 'above':
+            elif condition.direction == "above":
                 # RSI > threshold (overbought)
                 lines.append(f"{cond_var} = rsi_{idx} > {threshold}")
                 sell_signals.append(cond_var)
 
         elif condition.indicator == "BOLL":
             # Bollinger Bands strategy
-            period = condition.params.get('period', 20)
-            std_dev = condition.params.get('std_dev', 2)
-            band = condition.band or 'lower'
+            period = condition.params.get("period", 20)
+            std_dev = condition.params.get("std_dev", 2)
+            band = condition.band or "lower"
             lines.append(f"middle_{idx} = df['close'].rolling({period}).mean()")
             lines.append(f"std_{idx} = df['close'].rolling({period}).std()")
             lines.append(f"upper_{idx} = middle_{idx} + {std_dev} * std_{idx}")
             lines.append(f"lower_{idx} = middle_{idx} - {std_dev} * std_{idx}")
-            indicators[f'upper_{idx}'] = f'upper_{idx}'
-            indicators[f'middle_{idx}'] = f'middle_{idx}'
-            indicators[f'lower_{idx}'] = f'lower_{idx}'
+            indicators[f"upper_{idx}"] = f"upper_{idx}"
+            indicators[f"middle_{idx}"] = f"middle_{idx}"
+            indicators[f"lower_{idx}"] = f"lower_{idx}"
 
-            if band == 'lower':
+            if band == "lower":
                 # Price breaks lower band
-                lines.append(f"{cond_var} = (df['close'] < lower_{idx}) & (df['close'].shift(1) >= lower_{idx}.shift(1))")
+                lines.append(
+                    f"{cond_var} = (df['close'] < lower_{idx}) & (df['close'].shift(1) >= lower_{idx}.shift(1))"
+                )
                 buy_signals.append(cond_var)
-            elif band == 'upper':
+            elif band == "upper":
                 # Price breaks upper band
-                lines.append(f"{cond_var} = (df['close'] > upper_{idx}) & (df['close'].shift(1) <= upper_{idx}.shift(1))")
+                lines.append(
+                    f"{cond_var} = (df['close'] > upper_{idx}) & (df['close'].shift(1) <= upper_{idx}.shift(1))"
+                )
                 sell_signals.append(cond_var)
 
         elif condition.indicator == "VOLUME":
             # Volume surge strategy
-            period = condition.params.get('period', 20)
+            period = condition.params.get("period", 20)
             multiplier = condition.multiplier or 2.0
             lines.append(f"avg_vol_{idx} = df['volume'].rolling({period}).mean()")
             lines.append(f"{cond_var} = df['volume'] > avg_vol_{idx} * {multiplier}")
-            indicators[f'avg_vol_{idx}'] = f'avg_vol_{idx}'
+            indicators[f"avg_vol_{idx}"] = f"avg_vol_{idx}"
             buy_signals.append(cond_var)
 
     lines.append("")
@@ -350,10 +371,10 @@ def _generate_python_code(ast: StrategyAST) -> str:
 async def compile_strategy(request: CompileRequest):
     """
     Compile Strategy AST to Python DSL code.
-    
+
     Converts visual strategy builder JSON AST to executable Python code
     that can be used with the backtest engine.
-    
+
     Supported indicators:
     - MA: Moving Average crossover
     - MACD: MACD crossover
@@ -372,7 +393,7 @@ async def compile_strategy(request: CompileRequest):
                     "code": "",
                     "valid": False,
                     "errors": ["至少需要一个策略条件"],
-                }
+                },
             }
 
         # Generate Python code
@@ -380,6 +401,7 @@ async def compile_strategy(request: CompileRequest):
 
         # Validate generated code
         from app.services.strategy import StrategyValidator
+
         is_valid, error = StrategyValidator.validate(python_code)
 
         if not is_valid:
@@ -389,7 +411,7 @@ async def compile_strategy(request: CompileRequest):
                     "code": python_code,
                     "valid": False,
                     "errors": [f"生成的代码验证失败: {error}"],
-                }
+                },
             }
 
         return {
@@ -398,7 +420,7 @@ async def compile_strategy(request: CompileRequest):
                 "code": python_code,
                 "valid": True,
                 "errors": [],
-            }
+            },
         }
     except Exception as e:
         logger.error(f"[Strategy] Compile error: {e}", exc_info=True)
@@ -408,7 +430,7 @@ async def compile_strategy(request: CompileRequest):
                 "code": "",
                 "valid": False,
                 "errors": [f"编译失败: {str(e)}"],
-            }
+            },
         }
 
 
@@ -419,25 +441,33 @@ def _get_history_data(symbol: str, start_date: str, end_date: str) -> Optional[D
         conn = None
         try:
             from app.db.database import _get_conn
+
             conn = _get_conn()
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT date, open, high, low, close, volume
                 FROM market_data_daily
                 WHERE symbol = ? AND date >= ? AND date <= ?
                 ORDER BY date ASC
-            """, (db_symbol, start_date, end_date)).fetchall()
+            """,
+                (db_symbol, start_date, end_date),
+            ).fetchall()
 
             if len(rows) == 0:
                 return None
 
             import pandas as pd
-            df = pd.DataFrame({
-                "open": [float(r[1]) for r in rows],
-                "high": [float(r[2]) for r in rows],
-                "low": [float(r[3]) for r in rows],
-                "close": [float(r[4]) for r in rows],
-                "volume": [float(r[5]) for r in rows],
-            }, index=pd.to_datetime([r[0] for r in rows]))
+
+            df = pd.DataFrame(
+                {
+                    "open": [float(r[1]) for r in rows],
+                    "high": [float(r[2]) for r in rows],
+                    "low": [float(r[3]) for r in rows],
+                    "close": [float(r[4]) for r in rows],
+                    "volume": [float(r[5]) for r in rows],
+                },
+                index=pd.to_datetime([r[0] for r in rows]),
+            )
 
             return df
         finally:
@@ -456,7 +486,7 @@ def _simulate_trades(df, signals, initial_capital=100000.0, commission=0.001):
     trades = []
 
     for i in range(1, len(df)):
-        signal = signals.iloc[i] if hasattr(signals, 'iloc') else signals[i]
+        signal = signals.iloc[i] if hasattr(signals, "iloc") else signals[i]
         close = df.iloc[i]["close"]
 
         if signal == 1 and position == 0 and capital > 0:
@@ -465,24 +495,28 @@ def _simulate_trades(df, signals, initial_capital=100000.0, commission=0.001):
                 position = shares
                 entry_price = close
                 capital -= shares * entry_price * (1 + commission)
-                trades.append({
-                    "type": "BUY",
-                    "price": entry_price,
-                    "shares": shares,
-                    "index": i,
-                })
+                trades.append(
+                    {
+                        "type": "BUY",
+                        "price": entry_price,
+                        "shares": shares,
+                        "index": i,
+                    }
+                )
 
         elif signal == -1 and position > 0:
             proceeds = position * close * (1 - commission)
             pnl = proceeds - position * entry_price
             capital += proceeds
-            trades.append({
-                "type": "SELL",
-                "price": close,
-                "shares": position,
-                "pnl": pnl,
-                "index": i,
-            })
+            trades.append(
+                {
+                    "type": "SELL",
+                    "price": close,
+                    "shares": position,
+                    "pnl": pnl,
+                    "index": i,
+                }
+            )
             position = 0
 
     final_value = capital + position * df.iloc[-1]["close"] if position > 0 else capital
@@ -518,18 +552,25 @@ async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_k
         signals = strategy.to_signal_df(df)
         signal_values = signals["signal"]
 
-        result = _simulate_trades(df, signal_values, request.initial_capital, request.commission)
+        result = _simulate_trades(
+            df, signal_values, request.initial_capital, request.commission
+        )
 
         import pandas as pd
+
         equity = [1.0]
         position = 0
         for i in range(1, len(df)):
-            sig = signal_values.iloc[i] if hasattr(signal_values, 'iloc') else signal_values[i]
+            sig = (
+                signal_values.iloc[i]
+                if hasattr(signal_values, "iloc")
+                else signal_values[i]
+            )
             if position == 0 and sig == 1:
                 position = 1
             elif position > 0 and sig == -1:
                 position = 0
-            ret = (df.iloc[i]["close"] / df.iloc[i-1]["close"] - 1) if position else 0
+            ret = (df.iloc[i]["close"] / df.iloc[i - 1]["close"] - 1) if position else 0
             equity.append(equity[-1] * (1 + ret))
 
         equity_series = pd.Series(equity, index=df.index)
@@ -547,7 +588,7 @@ async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_k
                     "indicators": regime.indicators,
                 },
                 "trades_count": len(result["trades"]),
-            }
+            },
         }
     except HTTPException:
         raise
@@ -558,7 +599,9 @@ async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_k
 
 @router.post("/optimize")
 @handle_errors(module="strategy")
-async def optimize_strategy(request: OptimizeRequest, _: None = Depends(require_api_key)):
+async def optimize_strategy(
+    request: OptimizeRequest, _: None = Depends(require_api_key)
+):
     """参数优化"""
     try:
         from app.services.strategy import (
@@ -605,7 +648,7 @@ async def optimize_strategy(request: OptimizeRequest, _: None = Depends(require_
                     }
                     for r in report.all_results[:10]
                 ],
-            }
+            },
         }
     except HTTPException:
         raise
@@ -619,15 +662,12 @@ async def optimize_strategy(request: OptimizeRequest, _: None = Depends(require_
 async def list_templates():
     """获取内置策略模板"""
     from app.services.strategy import EXAMPLE_STRATEGIES
-    return {
-        "code": 0,
-        "data": {
-            "templates": list(EXAMPLE_STRATEGIES.keys())
-        }
-    }
+
+    return {"code": 0, "data": {"templates": list(EXAMPLE_STRATEGIES.keys())}}
 
 
 # ── Strategy CRUD Endpoints ───────────────────────────────────────────────────
+
 
 @router.get("/strategies")
 @handle_errors(module="strategy")
@@ -635,30 +675,35 @@ async def list_strategies():
     """获取所有策略列表"""
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import list_strategies as db_list, count_strategies
+
         strategies = db_list()
         total = count_strategies()
         result = []
         for s in strategies:
-            result.append({
-                "id": s.get("id", ""),
-                "name": s.get("name", ""),
-                "description": s.get("description", ""),
-                "market": s.get("market", "AStock"),
-                "created_at": s.get("created_at", ""),
-                "updated_at": s.get("updated_at", ""),
-            })
+            result.append(
+                {
+                    "id": s.get("id", ""),
+                    "name": s.get("name", ""),
+                    "description": s.get("description", ""),
+                    "market": s.get("market", "AStock"),
+                    "created_at": s.get("created_at", ""),
+                    "updated_at": s.get("updated_at", ""),
+                }
+            )
         return {"code": 0, "data": {"strategies": result, "total": total}}
     else:
         strategies = []
         for sid, data in _strategies_db.items():
-            strategies.append({
-                "id": sid,
-                "name": data.get("name", ""),
-                "description": data.get("description", ""),
-                "market": data.get("market", "AStock"),
-                "created_at": data.get("created_at", ""),
-                "updated_at": data.get("updated_at", ""),
-            })
+            strategies.append(
+                {
+                    "id": sid,
+                    "name": data.get("name", ""),
+                    "description": data.get("description", ""),
+                    "market": data.get("market", "AStock"),
+                    "created_at": data.get("created_at", ""),
+                    "updated_at": data.get("updated_at", ""),
+                }
+            )
         return {"code": 0, "data": {"strategies": strategies, "total": len(strategies)}}
 
 
@@ -676,6 +721,7 @@ async def create_strategy(request: StrategyCreate, _: None = Depends(require_api
 
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import create_strategy as db_create
+
         try:
             db_create(
                 strategy_id=strategy_id,
@@ -704,11 +750,7 @@ async def create_strategy(request: StrategyCreate, _: None = Depends(require_api
             "updated_at": now,
         }
 
-    return {
-        "code": 0,
-        "message": "策略创建成功",
-        "data": {"id": strategy_id}
-    }
+    return {"code": 0, "message": "策略创建成功", "data": {"id": strategy_id}}
 
 
 @router.get("/strategies/{strategy_id}")
@@ -717,6 +759,7 @@ async def get_strategy(strategy_id: str):
     """获取策略详情"""
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import get_strategy as db_get
+
         strategy = db_get(strategy_id)
         if strategy is None:
             raise HTTPException(status_code=404, detail="策略不存在")
@@ -729,16 +772,21 @@ async def get_strategy(strategy_id: str):
 
 @router.put("/strategies/{strategy_id}")
 @handle_errors(module="strategy")
-async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = Depends(require_api_key)):
+async def update_strategy(
+    strategy_id: str, request: StrategyUpdate, _: None = Depends(require_api_key)
+):
     """更新策略"""
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import update_strategy as db_update
 
         if request.code is not None:
             from app.services.strategy import StrategyValidator
+
             is_valid, error = StrategyValidator.validate(request.code)
             if not is_valid:
-                raise HTTPException(status_code=400, detail=f"策略代码验证失败: {error}")
+                raise HTTPException(
+                    status_code=400, detail=f"策略代码验证失败: {error}"
+                )
 
         updated = db_update(
             strategy_id=strategy_id,
@@ -754,11 +802,7 @@ async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = D
         if updated is None:
             raise HTTPException(status_code=404, detail="策略不存在")
 
-        return {
-            "code": 0,
-            "message": "策略更新成功",
-            "data": {"id": strategy_id}
-        }
+        return {"code": 0, "message": "策略更新成功", "data": {"id": strategy_id}}
     else:
         if strategy_id not in _strategies_db:
             raise HTTPException(status_code=404, detail="策略不存在")
@@ -771,9 +815,12 @@ async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = D
             data["description"] = request.description
         if request.code is not None:
             from app.services.strategy import StrategyValidator
+
             is_valid, error = StrategyValidator.validate(request.code)
             if not is_valid:
-                raise HTTPException(status_code=400, detail=f"策略代码验证失败: {error}")
+                raise HTTPException(
+                    status_code=400, detail=f"策略代码验证失败: {error}"
+                )
             data["code"] = request.code
         if request.market is not None:
             data["market"] = request.market
@@ -786,11 +833,7 @@ async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = D
 
         data["updated_at"] = datetime.now().isoformat()
 
-        return {
-            "code": 0,
-            "message": "策略更新成功",
-            "data": {"id": strategy_id}
-        }
+        return {"code": 0, "message": "策略更新成功", "data": {"id": strategy_id}}
 
 
 @router.delete("/strategies/{strategy_id}")
@@ -799,6 +842,7 @@ async def delete_strategy(strategy_id: str, _: None = Depends(require_api_key)):
     """删除策略"""
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import delete_strategy as db_delete
+
         success = db_delete(strategy_id, soft_delete=True)
         if not success:
             raise HTTPException(status_code=404, detail="策略不存在")
@@ -807,18 +851,18 @@ async def delete_strategy(strategy_id: str, _: None = Depends(require_api_key)):
             raise HTTPException(status_code=404, detail="策略不存在")
         del _strategies_db[strategy_id]
 
-    return {
-        "code": 0,
-        "message": "策略删除成功"
-    }
+    return {"code": 0, "message": "策略删除成功"}
 
 
 @router.post("/strategies/{strategy_id}/backtest")
 @handle_errors(module="strategy")
-async def backtest_saved_strategy(strategy_id: str, request: BacktestRequest, _: None = Depends(require_api_key)):
+async def backtest_saved_strategy(
+    strategy_id: str, request: BacktestRequest, _: None = Depends(require_api_key)
+):
     """运行已保存策略的回测"""
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import get_strategy as db_get
+
         strategy_data = db_get(strategy_id)
         if strategy_data is None:
             raise HTTPException(status_code=404, detail="策略不存在")

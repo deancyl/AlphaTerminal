@@ -2,6 +2,7 @@
 市场概览接口 - Market Overview Endpoints
 包含：宏观、概览、国内指数、全球指数、利率、资金流向、期货大宗
 """
+
 import asyncio
 import logging
 import threading
@@ -15,7 +16,10 @@ from app.db import get_latest_prices
 from app.utils.market_status import is_market_open
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
-from app.services.fetchers.global_index_fetcher import get_global_index_fetcher, GLOBAL_INDEX_SYMBOLS
+from app.services.fetchers.global_index_fetcher import (
+    get_global_index_fetcher,
+    GLOBAL_INDEX_SYMBOLS,
+)
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
@@ -33,12 +37,37 @@ _REFRESH_SEMAPHORE = threading.Semaphore(1)
 WIND_SYMBOLS = ["000001", "000300", "399001", "399006", "HSI", "IXIC"]
 INDEX_SYMBOLS = ["000001", "000300", "399001", "399006"]
 CHINA_ALL_SYMBOLS = [
-    "000001", "000300", "399001", "399006",
-    "000688", "000905", "000852", "000016",
-    "000510", "399100",
+    "000001",
+    "000300",
+    "399001",
+    "399006",
+    "000688",
+    "000905",
+    "000852",
+    "000016",
+    "000510",
+    "399100",
 ]
 RATE_SYMBOLS = ["shibor_1d", "shibor_1w", "shibor_1m", "shibor_3m", "shibor_1y"]
-GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225", "RUT", "VIX", "TSX", "IBOV", "UKX", "DAX", "CAC", "SMI", "IBEX", "KS11", "AXJO", "NSEI"]
+GLOBAL_SYMBOLS = [
+    "HSI",
+    "DJI",
+    "IXIC",
+    "SPX",
+    "N225",
+    "RUT",
+    "VIX",
+    "TSX",
+    "IBOV",
+    "UKX",
+    "DAX",
+    "CAC",
+    "SMI",
+    "IBEX",
+    "KS11",
+    "AXJO",
+    "NSEI",
+]
 DERIVATIVE_SYMBOLS = ["GC", "CL"]
 
 SINA_HEADERS = {
@@ -85,7 +114,10 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
             with httpx.Client(timeout=5.0) as client:
                 resp = client.get(
                     f"https://qt.gtimg.cn/q={','.join(qt_syms)}",
-                    headers={"Referer": "https://gu.qq.com", "User-Agent": "Mozilla/5.0"},
+                    headers={
+                        "Referer": "https://gu.qq.com",
+                        "User-Agent": "Mozilla/5.0",
+                    },
                 )
                 resp.raise_for_status()
                 raw = resp.text
@@ -117,11 +149,11 @@ def _parse_cnyusd(data: dict) -> tuple[float, float, str]:
     f = data.get("CNYUSD", [])
     if len(f) < 10:
         raise ValueError("CNYUSD data too short")
-    price_usdpcny = float(f[1])   # USD per CNY (中行汇买价)
-    prev          = float(f[2])   # 前一价格
-    t             = f[0]
-    pct           = ((price_usdpcny - prev) / prev * 100) if prev else 0.0
-    usdcny        = round(1.0 / price_usdpcny, 4) if price_usdpcny else 7.25
+    price_usdpcny = float(f[1])  # USD per CNY (中行汇买价)
+    prev = float(f[2])  # 前一价格
+    t = f[0]
+    pct = ((price_usdpcny - prev) / prev * 100) if prev else 0.0
+    usdcny = round(1.0 / price_usdpcny, 4) if price_usdpcny else 7.25
     return usdcny, round(pct, 4), t
 
 
@@ -134,10 +166,10 @@ def _parse_hf_gold(data: dict) -> tuple[float, float, str]:
     if len(f) < 8:
         raise ValueError("hf_GC data too short")
     try:
-        price = float(f[0])   # RMB/oz（SGE 现货金的报价单位）
-        prev  = float(f[7])   # 昨结算 RMB/oz
-        pct   = float(f[1]) if f[1] else (((price - prev) / prev * 100) if prev else 0.0)
-        tick  = f[6] if len(f) > 6 else ""
+        price = float(f[0])  # RMB/oz（SGE 现货金的报价单位）
+        prev = float(f[7])  # 昨结算 RMB/oz
+        pct = float(f[1]) if f[1] else (((price - prev) / prev * 100) if prev else 0.0)
+        tick = f[6] if len(f) > 6 else ""
     except Exception as e:
         raise ValueError(f"hf_GC parse error: {e}")
     return round(price, 2), round(pct, 2), tick
@@ -152,10 +184,10 @@ def _parse_hf_cl(data: dict) -> tuple[float, float, str]:
     if len(f) < 8:
         raise ValueError("hf_CL data too short")
     try:
-        price = float(f[0])   # USD/桶（WTI 期货报价）
-        prev  = float(f[7])   # 昨结算
-        pct   = float(f[1]) if f[1] else (((price - prev) / prev * 100) if prev else 0.0)
-        tick  = f[6] if len(f) > 6 else ""
+        price = float(f[0])  # USD/桶（WTI 期货报价）
+        prev = float(f[7])  # 昨结算
+        pct = float(f[1]) if f[1] else (((price - prev) / prev * 100) if prev else 0.0)
+        tick = f[6] if len(f) > 6 else ""
     except Exception as e:
         raise ValueError(f"hf_CL parse error: {e}")
     return round(price, 2), round(pct, 2), tick
@@ -171,8 +203,8 @@ def _parse_hkvhsi(data: dict) -> tuple[float, float, str]:
     if len(f) < 5:
         raise ValueError("hkVHSI data too short")
     try:
-        price = float(f[3])   # VHSI 当前值
-        prev  = float(f[4]) if f[4] else price
+        price = float(f[3])  # VHSI 当前值
+        prev = float(f[4]) if f[4] else price
         # f[32] 是涨跌幅%，若为空则用 (price-prev)/prev 推算
         pct = 0.0
         if len(f) > 32 and f[32]:
@@ -199,10 +231,14 @@ def _fetch_macro_data():
     global _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
 
-    usdcny_price = 6.8871; usdcny_pct = 0.0
-    gold_price = 3318.40; gold_pct = 0.0
-    wti_price = 68.92; wti_pct = 0.0
-    vhsi_price = 20.0; vhsi_pct = 0.0
+    usdcny_price = 6.8871
+    usdcny_pct = 0.0
+    gold_price = 3318.40
+    gold_pct = 0.0
+    wti_price = 68.92
+    wti_pct = 0.0
+    vhsi_price = 20.0
+    vhsi_pct = 0.0
 
     try:
         raw = _fetch_from_sina(["CNYUSD", "hf_GC", "hf_CL", "hkVHSI"])
@@ -233,16 +269,42 @@ def _fetch_macro_data():
                 logger.warning(f"[Macro] VHSI parse error: {e}", exc_info=True)
 
         results = {
-            "USD/CNY": {"name": "美元/离岸人民币", "price": round(usdcny_price, 4), "unit": "",    "change_pct": round(usdcny_pct, 4),  "timestamp": now_str},
-            "GOLD":    {"name": "SGE黄金(人民币)",  "price": round(gold_price, 2),   "unit": "¥/oz","change_pct": round(gold_pct, 2),  "timestamp": now_str},
-            "WTI":     {"name": "WTI原油(美元)",    "price": round(wti_price, 2),    "unit": "$/桶","change_pct": round(wti_pct, 2),   "timestamp": now_str},
-            "VHSI":    {"name": "恒指波幅(VHSI)",   "price": round(vhsi_price, 2),    "unit": "",     "change_pct": round(vhsi_pct, 2),  "timestamp": now_str},
+            "USD/CNY": {
+                "name": "美元/离岸人民币",
+                "price": round(usdcny_price, 4),
+                "unit": "",
+                "change_pct": round(usdcny_pct, 4),
+                "timestamp": now_str,
+            },
+            "GOLD": {
+                "name": "SGE黄金(人民币)",
+                "price": round(gold_price, 2),
+                "unit": "¥/oz",
+                "change_pct": round(gold_pct, 2),
+                "timestamp": now_str,
+            },
+            "WTI": {
+                "name": "WTI原油(美元)",
+                "price": round(wti_price, 2),
+                "unit": "$/桶",
+                "change_pct": round(wti_pct, 2),
+                "timestamp": now_str,
+            },
+            "VHSI": {
+                "name": "恒指波幅(VHSI)",
+                "price": round(vhsi_price, 2),
+                "unit": "",
+                "change_pct": round(vhsi_pct, 2),
+                "timestamp": now_str,
+            },
         }
 
         _cache.set(_MACRO_CACHE_KEY, results, ttl=_MACRO_TTL)
         with _MACRO_CACHE_LOCK:
             _LAST_FETCH_TIME = time.time()
-        logger.info(f"[Macro] Fetched: USD={usdcny_price} GOLD={gold_price}¥ WTI={wti_price} VHSI={vhsi_price}({vhsi_pct}%)")
+        logger.info(
+            f"[Macro] Fetched: USD={usdcny_price} GOLD={gold_price}¥ WTI={wti_price} VHSI={vhsi_price}({vhsi_pct}%)"
+        )
 
     except Exception as e:
         logger.warning(f"[Macro] Fetch failed, keeping old cache: {e}", exc_info=True)
@@ -258,11 +320,13 @@ def _get_macro_data() -> dict:
     stale = cached is None or (time.time() - _LAST_FETCH_TIME) > _MACRO_TTL
 
     if stale and _REFRESH_SEMAPHORE.acquire(blocking=False):
+
         def bg():
             try:
                 _fetch_macro_data()
             finally:
                 _REFRESH_SEMAPHORE.release()
+
         t = threading.Thread(target=bg, daemon=True, name="macro-refresh")
         t.start()
 
@@ -270,7 +334,9 @@ def _get_macro_data() -> dict:
 
 
 # ── 辅助函数 ─────────────────────────────────────────────────────────────
-def _serialize_price_row(row: dict, include_status: bool = False, status: str = None) -> dict:
+def _serialize_price_row(
+    row: dict, include_status: bool = False, status: str = None
+) -> dict:
     """
     统一序列化价格数据行
 
@@ -295,7 +361,9 @@ def _serialize_price_row(row: dict, include_status: bool = False, status: str = 
     return result
 
 
-def _serialize_price_rows(rows: list, include_status: bool = False, status: str = None) -> list:
+def _serialize_price_rows(
+    rows: list, include_status: bool = False, status: str = None
+) -> list:
     """批量序列化价格数据行"""
     return [_serialize_price_row(r, include_status, status) for r in rows]
 
@@ -303,6 +371,7 @@ def _serialize_price_rows(rows: list, include_status: bool = False, status: str 
 # ═════════════════════════════════════════════════════════════════════════
 # API 端点
 # ═════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/market/macro")
 @handle_errors(module="market_overview")
@@ -312,9 +381,11 @@ async def market_macro():
     5 分钟 TTL 缓存，不阻塞 API 响应
     """
     try:
-        return success_response({
-            "macro": list(_get_macro_data().values()),
-        })
+        return success_response(
+            {
+                "macro": list(_get_macro_data().values()),
+            }
+        )
     except Exception as e:
         logger.error(f"[market_macro] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取宏观数据失败: {str(e)}")
@@ -328,16 +399,16 @@ def market_overview():
     包含：上证、沪深300、恒生、纳斯达克（动态交易状态）
     """
     is_open_cn, status_cn = is_market_open("A_SHARE")
-    is_open_hk, status_hk  = is_market_open("HK")
-    is_open_us, status_us  = is_market_open("US")
+    is_open_hk, status_hk = is_market_open("HK")
+    is_open_us, status_us = is_market_open("US")
 
     wind_labels = {
-        "000001": ("上证指数",  "AShare", status_cn),
-        "000300": ("沪深300",  "AShare", status_cn),
-        "399001": ("深证成指",  "AShare", status_cn),
-        "399006": ("创业板指",  "AShare", status_cn),
-        "HSI":    ("恒生指数",  "HK",     status_hk),
-        "IXIC":   ("纳斯达克",  "US",     status_us),
+        "000001": ("上证指数", "AShare", status_cn),
+        "000300": ("沪深300", "AShare", status_cn),
+        "399001": ("深证成指", "AShare", status_cn),
+        "399006": ("创业板指", "AShare", status_cn),
+        "HSI": ("恒生指数", "HK", status_hk),
+        "IXIC": ("纳斯达克", "US", status_us),
     }
 
     # 统一从 market_data_realtime 读取（确保全系统报价一致）
@@ -348,14 +419,15 @@ def market_overview():
 
     for sym, label in wind_labels.items():
         row = db_symbols.get(sym)
-        price = row.get('price', 0) if row else 0
+        price = row.get("price", 0) if row else 0
 
         # 修复：如果价格为0，使用昨日收盘价作为兜底
         if price == 0:
             from app.db.database import get_daily_history
+
             daily = get_daily_history(sym, limit=1)
             if daily:
-                price = daily[0].get('close', 0)
+                price = daily[0].get("close", 0)
 
         wind_data[sym] = {
             "name": (row.get("name", label[0]) if row else label[0]),
@@ -366,16 +438,18 @@ def market_overview():
             "status": label[2],
         }
 
-    result = success_response({
-        "wind": wind_data,
-        "meta": {
-            "markets": {
-                "AShare": {"open": is_open_cn, "status": status_cn},
-                "HK": {"open": is_open_hk, "status": status_hk},
-                "US": {"open": is_open_us, "status": status_us},
-            }
+    result = success_response(
+        {
+            "wind": wind_data,
+            "meta": {
+                "markets": {
+                    "AShare": {"open": is_open_cn, "status": status_cn},
+                    "HK": {"open": is_open_hk, "status": status_hk},
+                    "US": {"open": is_open_us, "status": status_us},
+                }
+            },
         }
-    })
+    )
     return result
 
 
@@ -390,18 +464,23 @@ def market_china_all():
 
         # 修复：如果价格为0，使用昨日收盘价（从daily表获取）
         for row in rows:
-            if row.get('price', 0) == 0 or row.get('price') is None:
+            if row.get("price", 0) == 0 or row.get("price") is None:
                 from app.db.database import get_daily_history
-                sym = row.get('symbol')
+
+                sym = row.get("symbol")
                 daily = get_daily_history(sym, limit=1)
                 if daily:
-                    row['price'] = daily[0].get('close', 0)
-                    row['change_pct'] = daily[0].get('change_pct', 0)
+                    row["price"] = daily[0].get("close", 0)
+                    row["change_pct"] = daily[0].get("change_pct", 0)
 
-        return success_response({
-            "china_all": _serialize_price_rows(rows, include_status=True, status=status),
-            "meta": {"market_open": is_open, "status": status}
-        })
+        return success_response(
+            {
+                "china_all": _serialize_price_rows(
+                    rows, include_status=True, status=status
+                ),
+                "meta": {"market_open": is_open, "status": status},
+            }
+        )
     except Exception as e:
         logger.error(f"[market_china_all] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取国内指数失败: {str(e)}")
@@ -413,9 +492,7 @@ def market_indices():
     """A股四大指数列表"""
     try:
         rows = get_latest_prices(INDEX_SYMBOLS)
-        return success_response({
-            "indices": _serialize_price_rows(rows)
-        })
+        return success_response({"indices": _serialize_price_rows(rows)})
     except Exception as e:
         logger.error(f"[market_indices] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取指数列表失败: {str(e)}")
@@ -426,12 +503,12 @@ def market_indices():
 async def market_global():
     """
     全球核心市场指数（扩展至17个指数）
-    
+
     数据源优先级：
     1. Tencent Finance (qt.gtimg.cn) - 港股/美股
     2. Yahoo Finance - 全球指数
     3. 静态兜底数据（is_mock=True 标记）
-    
+
     支持区域：
     - Americas: SPX, IXIC, DJI, RUT, VIX, TSX, IBOV
     - Europe: UKX, DAX, CAC, SMI, IBEX
@@ -445,29 +522,33 @@ async def market_global():
 
         global_data = []
         for quote in quotes:
-            global_data.append({
-                "symbol": quote.symbol,
-                "name": quote.name,
-                "price": quote.price,
-                "change_pct": quote.change_pct,
-                "open": quote.open,
-                "high": quote.high,
-                "low": quote.low,
-                "volume": quote.volume,
-                "market": quote.market,
-                "flag": quote.flag,
-                "is_mock": quote.is_mock,
-                "source": "tencent" if not quote.is_mock else "static_fallback",
-            })
+            global_data.append(
+                {
+                    "symbol": quote.symbol,
+                    "name": quote.name,
+                    "price": quote.price,
+                    "change_pct": quote.change_pct,
+                    "open": quote.open,
+                    "high": quote.high,
+                    "low": quote.low,
+                    "volume": quote.volume,
+                    "market": quote.market,
+                    "flag": quote.flag,
+                    "is_mock": quote.is_mock,
+                    "source": "tencent" if not quote.is_mock else "static_fallback",
+                }
+            )
 
-        return success_response({
-            "global": global_data,
-            "regions": {
-                "Americas": ["SPX", "IXIC", "DJI", "RUT", "VIX", "TSX", "IBOV"],
-                "Europe": ["UKX", "DAX", "CAC", "SMI", "IBEX"],
-                "Asia-Pacific": ["N225", "HSI", "KS11", "AXJO", "NSEI"],
+        return success_response(
+            {
+                "global": global_data,
+                "regions": {
+                    "Americas": ["SPX", "IXIC", "DJI", "RUT", "VIX", "TSX", "IBOV"],
+                    "Europe": ["UKX", "DAX", "CAC", "SMI", "IBEX"],
+                    "Asia-Pacific": ["N225", "HSI", "KS11", "AXJO", "NSEI"],
+                },
             }
-        })
+        )
     except Exception as e:
         logger.error(f"[market_global] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取全球指数失败: {str(e)}")
@@ -478,35 +559,39 @@ async def market_global():
 async def get_global_kline(
     symbol: str = Query(..., description="指数代码，如 HSI, SPX"),
     period: str = Query("daily", description="周期: daily 或 weekly"),
-    limit: int = Query(100, ge=1, le=500, description="返回数据条数")
+    limit: int = Query(100, ge=1, le=500, description="返回数据条数"),
 ):
     """
     全球指数K线历史数据
-    
+
     Args:
         symbol: 指数代码 (HSI, SPX, IXIC, DJI, N225 等，支持 ^DJI 格式)
         period: daily 或 weekly
         limit: 返回条数 (1-500)
-    
+
     Returns:
         K线数据列表 [{date, open, high, low, close, volume, change_pct}, ...]
     """
     try:
         # Normalize symbol: remove ^ prefix if present
-        normalized_symbol = symbol.lstrip('^')
+        normalized_symbol = symbol.lstrip("^")
 
         fetcher = get_global_index_fetcher()
         klines = await fetcher.fetch_kline_history(normalized_symbol, period, limit)
 
         if not klines:
-            return error_response(ErrorCode.NOT_FOUND, f"未找到 {normalized_symbol} 的K线数据")
+            return error_response(
+                ErrorCode.NOT_FOUND, f"未找到 {normalized_symbol} 的K线数据"
+            )
 
-        return success_response({
-            "symbol": normalized_symbol,
-            "period": period,
-            "data": klines,
-            "total": len(klines),
-        })
+        return success_response(
+            {
+                "symbol": normalized_symbol,
+                "period": period,
+                "data": klines,
+                "total": len(klines),
+            }
+        )
     except ValueError as e:
         return error_response(ErrorCode.BAD_REQUEST, str(e))
     except Exception as e:
@@ -518,30 +603,32 @@ async def get_global_kline(
 @handle_errors(module="market_overview")
 async def get_global_sparkline(
     symbol: str = Query(..., description="指数代码"),
-    days: int = Query(20, ge=5, le=60, description="天数")
+    days: int = Query(20, ge=5, le=60, description="天数"),
 ):
     """
     全球指数迷你走势图数据（最近N天收盘价）
-    
+
     Args:
         symbol: 指数代码 (支持 ^DJI 或 DJI 格式)
         days: 天数 (5-60)
-    
+
     Returns:
         收盘价列表 [price1, price2, ...]
     """
     try:
         # Normalize symbol: remove ^ prefix if present (兼容 Yahoo Finance 格式)
-        normalized_symbol = symbol.lstrip('^')
+        normalized_symbol = symbol.lstrip("^")
 
         fetcher = get_global_index_fetcher()
         sparkline = await fetcher.fetch_sparkline(normalized_symbol, days)
 
-        return success_response({
-            "symbol": normalized_symbol,
-            "data": sparkline,
-            "days": len(sparkline),
-        })
+        return success_response(
+            {
+                "symbol": normalized_symbol,
+                "data": sparkline,
+                "days": len(sparkline),
+            }
+        )
     except Exception as e:
         logger.error(f"[get_global_sparkline] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取走势数据失败: {str(e)}")
@@ -551,28 +638,30 @@ async def get_global_sparkline(
 @handle_errors(module="market_overview")
 async def get_global_regions():
     """获取全球指数区域分类"""
-    return success_response({
-        "regions": [
-            {
-                "id": "americas",
-                "name": "美洲",
-                "name_en": "Americas",
-                "symbols": GLOBAL_INDEX_SYMBOLS["Americas"],
-            },
-            {
-                "id": "europe",
-                "name": "欧洲",
-                "name_en": "Europe",
-                "symbols": GLOBAL_INDEX_SYMBOLS["Europe"],
-            },
-            {
-                "id": "asia-pacific",
-                "name": "亚太",
-                "name_en": "Asia-Pacific",
-                "symbols": GLOBAL_INDEX_SYMBOLS["Asia-Pacific"],
-            },
-        ]
-    })
+    return success_response(
+        {
+            "regions": [
+                {
+                    "id": "americas",
+                    "name": "美洲",
+                    "name_en": "Americas",
+                    "symbols": GLOBAL_INDEX_SYMBOLS["Americas"],
+                },
+                {
+                    "id": "europe",
+                    "name": "欧洲",
+                    "name_en": "Europe",
+                    "symbols": GLOBAL_INDEX_SYMBOLS["Europe"],
+                },
+                {
+                    "id": "asia-pacific",
+                    "name": "亚太",
+                    "name_en": "Asia-Pacific",
+                    "symbols": GLOBAL_INDEX_SYMBOLS["Asia-Pacific"],
+                },
+            ]
+        }
+    )
 
 
 def _get_region_for_symbol(symbol: str) -> str:
@@ -612,17 +701,19 @@ async def market_rates():
     """利率数据"""
     try:
         rows = get_latest_prices(RATE_SYMBOLS)
-        return success_response({
-            "rates": [
-                {
-                    "symbol":  r["symbol"],
-                    "name":    r["name"],
-                    "rate":    r["price"],
-                    "timestamp": r["timestamp"],
-                }
-                for r in rows
-            ],
-        })
+        return success_response(
+            {
+                "rates": [
+                    {
+                        "symbol": r["symbol"],
+                        "name": r["name"],
+                        "rate": r["price"],
+                        "timestamp": r["timestamp"],
+                    }
+                    for r in rows
+                ],
+            }
+        )
     except Exception as e:
         logger.error(f"[market_rates] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取利率数据失败: {str(e)}")
@@ -638,39 +729,74 @@ async def get_fund_flow():
     try:
         # 【核心修复】：线程池执行 + 5秒绝对超时，防止 akshare 阻塞事件循环和前端超时断开
         df = await asyncio.wait_for(
-            asyncio.to_thread(ak.stock_market_fund_flow),
-            timeout=5.0
+            asyncio.to_thread(ak.stock_market_fund_flow), timeout=5.0
         )
         df = df.tail(30)
 
         # 向量化处理
         df_work = df.copy()
-        df_work['date'] = df_work['日期'].astype(str)
-        df_work['sh_close'] = df_work['上证-收盘价'].apply(lambda x: float(x) if x else 0)
-        df_work['sh_chg'] = df_work['上证-涨跌幅'].apply(lambda x: float(x) if x else 0)
-        df_work['sz_close'] = df_work['深证-收盘价'].apply(lambda x: float(x) if x else 0)
-        df_work['sz_chg'] = df_work['深证-涨跌幅'].apply(lambda x: float(x) if x else 0)
-        df_work['main_net'] = df_work['主力净流入-净额'].apply(lambda x: int(float(x)) if x else 0)
-        df_work['main_pct'] = df_work['主力净流入-净占比'].apply(lambda x: float(x) if x else 0)
-        df_work['large_net'] = df_work['大单净流入-净额'].apply(lambda x: int(float(x)) if x else 0)
-        df_work['large_pct'] = df_work['大单净流入-净占比'].apply(lambda x: float(x) if x else 0)
-        df_work['medium_net'] = df_work['中单净流入-净额'].apply(lambda x: int(float(x)) if x else 0)
-        df_work['medium_pct'] = df_work['中单净流入-净占比'].apply(lambda x: float(x) if x else 0)
-        df_work['small_net'] = df_work['小单净流入-净额'].apply(lambda x: int(float(x)) if x else 0)
-        df_work['small_pct'] = df_work['小单净流入-净占比'].apply(lambda x: float(x) if x else 0)
-        result = df_work[['date', 'sh_close', 'sh_chg', 'sz_close', 'sz_chg',
-                         'main_net', 'main_pct', 'large_net', 'large_pct',
-                         'medium_net', 'medium_pct', 'small_net', 'small_pct']].to_dict('records')
+        df_work["date"] = df_work["日期"].astype(str)
+        df_work["sh_close"] = df_work["上证-收盘价"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["sh_chg"] = df_work["上证-涨跌幅"].apply(lambda x: float(x) if x else 0)
+        df_work["sz_close"] = df_work["深证-收盘价"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["sz_chg"] = df_work["深证-涨跌幅"].apply(lambda x: float(x) if x else 0)
+        df_work["main_net"] = df_work["主力净流入-净额"].apply(
+            lambda x: int(float(x)) if x else 0
+        )
+        df_work["main_pct"] = df_work["主力净流入-净占比"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["large_net"] = df_work["大单净流入-净额"].apply(
+            lambda x: int(float(x)) if x else 0
+        )
+        df_work["large_pct"] = df_work["大单净流入-净占比"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["medium_net"] = df_work["中单净流入-净额"].apply(
+            lambda x: int(float(x)) if x else 0
+        )
+        df_work["medium_pct"] = df_work["中单净流入-净占比"].apply(
+            lambda x: float(x) if x else 0
+        )
+        df_work["small_net"] = df_work["小单净流入-净额"].apply(
+            lambda x: int(float(x)) if x else 0
+        )
+        df_work["small_pct"] = df_work["小单净流入-净占比"].apply(
+            lambda x: float(x) if x else 0
+        )
+        result = df_work[
+            [
+                "date",
+                "sh_close",
+                "sh_chg",
+                "sz_close",
+                "sz_chg",
+                "main_net",
+                "main_pct",
+                "large_net",
+                "large_pct",
+                "medium_net",
+                "medium_pct",
+                "small_net",
+                "small_pct",
+            ]
+        ].to_dict("records")
 
         if not result:
             raise ValueError("Empty data from akshare")
 
-        return success_response({
-            "items": result, "total": len(result), "source": "akshare"
-        })
+        return success_response(
+            {"items": result, "total": len(result), "source": "akshare"}
+        )
 
     except asyncio.TimeoutError:
-        logger.warning("[FundFlow] akshare timed out after 5s, triggering fallback", exc_info=True)
+        logger.warning(
+            "[FundFlow] akshare timed out after 5s, triggering fallback", exc_info=True
+        )
     except ValueError:
         logger.warning("[FundFlow] empty result, triggering fallback", exc_info=True)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
@@ -679,15 +805,26 @@ async def get_fund_flow():
     # Fallback（akshare 超时或空数据时）
     mock_result = []
     for i in range(30):
-        d = (datetime.now() - __import__('datetime').timedelta(days=29 - i)).strftime("%m-%d")
+        d = (datetime.now() - __import__("datetime").timedelta(days=29 - i)).strftime(
+            "%m-%d"
+        )
         main_net = random.randint(-500000000, 500000000)
-        mock_result.append({
-            "date": d, "main_net": main_net, "main_pct": round(random.uniform(-5, 5), 2),
-            "large_net": int(main_net * random.uniform(0.6, 0.9)), "large_pct": round(random.uniform(-2, 2), 2),
-            "medium_net": int(main_net * random.uniform(0.2, 0.4)), "medium_pct": round(random.uniform(-1, 1), 2),
-            "small_net": int(-main_net * random.uniform(0.5, 0.8)), "small_pct": round(random.uniform(-3, 3), 2),
-        })
-    return success_response({"items": mock_result, "total": 30, "source": "fallback_mock"})
+        mock_result.append(
+            {
+                "date": d,
+                "main_net": main_net,
+                "main_pct": round(random.uniform(-5, 5), 2),
+                "large_net": int(main_net * random.uniform(0.6, 0.9)),
+                "large_pct": round(random.uniform(-2, 2), 2),
+                "medium_net": int(main_net * random.uniform(0.2, 0.4)),
+                "medium_pct": round(random.uniform(-1, 1), 2),
+                "small_net": int(-main_net * random.uniform(0.5, 0.8)),
+                "small_pct": round(random.uniform(-3, 3), 2),
+            }
+        )
+    return success_response(
+        {"items": mock_result, "total": 30, "source": "fallback_mock"}
+    )
 
 
 @router.get("/market/derivatives")
@@ -696,20 +833,22 @@ async def market_derivatives():
     """期货与大宗商品（IF期指主力、SGE黄金、WTI原油）"""
     try:
         rows = get_latest_prices(DERIVATIVE_SYMBOLS)
-        return success_response({
-            "derivatives": [
-                {
-                    "symbol":     r["symbol"],
-                    "name":       r["name"],
-                    "price":      r["price"],
-                    "change_pct": r["change_pct"],
-                    "volume":     r["volume"],
-                    "status":     "日内更新",
-                    "market":     r["market"],
-                }
-                for r in rows
-            ],
-        })
+        return success_response(
+            {
+                "derivatives": [
+                    {
+                        "symbol": r["symbol"],
+                        "name": r["name"],
+                        "price": r["price"],
+                        "change_pct": r["change_pct"],
+                        "volume": r["volume"],
+                        "status": "日内更新",
+                        "market": r["market"],
+                    }
+                    for r in rows
+                ],
+            }
+        )
     except Exception as e:
         logger.error(f"[market_derivatives] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取期货数据失败: {str(e)}")
@@ -730,7 +869,9 @@ async def get_north_flow_ranking():
         from concurrent.futures import ThreadPoolExecutor
 
         # 专用线程池，避免阻塞事件循环
-        _north_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="north_flow_")
+        _north_executor = ThreadPoolExecutor(
+            max_workers=5, thread_name_prefix="north_flow_"
+        )
 
         def fetch_north_data():
             """同步获取北向资金数据"""
@@ -742,11 +883,7 @@ async def get_north_flow_ranking():
                 sh_hist = ak.stock_hsgt_hist_em(symbol="沪股通")
                 sz_hist = ak.stock_hsgt_hist_em(symbol="深股通")
 
-                return {
-                    "summary": summary_df,
-                    "sh_hist": sh_hist,
-                    "sz_hist": sz_hist
-                }
+                return {"summary": summary_df, "sh_hist": sh_hist, "sz_hist": sz_hist}
             except Exception as e:
                 logger.error(f"[north_flow] akshare获取失败: {e}", exc_info=True)
                 return None
@@ -767,17 +904,23 @@ async def get_north_flow_ranking():
             "south_net_buy": 0,
             "north_total": 0,
             "south_total": 0,
-            "date": ""
+            "date": "",
         }
 
         if summary_row is not None:
             # 字段映射（根据实际返回字段）
             summary = {
-                "north_net_buy": float(summary_row.get("北向净买额", 0) or summary_row.get("北向资金-净流入", 0)),
-                "south_net_buy": float(summary_row.get("南向净买额", 0) or summary_row.get("南向资金-净流入", 0)),
+                "north_net_buy": float(
+                    summary_row.get("北向净买额", 0)
+                    or summary_row.get("北向资金-净流入", 0)
+                ),
+                "south_net_buy": float(
+                    summary_row.get("南向净买额", 0)
+                    or summary_row.get("南向资金-净流入", 0)
+                ),
                 "north_total": float(summary_row.get("北向资金-成交净买额", 0) or 0),
                 "south_total": float(summary_row.get("南向资金-成交净买额", 0) or 0),
-                "date": str(summary_row.get("日期", "") or summary_row.get("item", ""))
+                "date": str(summary_row.get("日期", "") or summary_row.get("item", "")),
             }
 
         # 解析历史数据获取领涨股
@@ -796,7 +939,11 @@ async def get_north_flow_ranking():
                         if "-" in item:
                             parts = item.split("-")
                             name = parts[0].strip()
-                            change = float(parts[1].replace("%", "").strip()) if len(parts) > 1 else 0
+                            change = (
+                                float(parts[1].replace("%", "").strip())
+                                if len(parts) > 1
+                                else 0
+                            )
                         else:
                             name = item.strip()
                             change = 0
@@ -812,31 +959,37 @@ async def get_north_flow_ranking():
         # 由于真实API不提供具体净买入金额，使用领涨股作为参考
         # 实际项目中可能需要接入更详细的个股资金流向API
         for i, stock in enumerate(all_leaders[:5]):
-            top_buy.append({
-                "symbol": "",  # 需要额外查询股票代码
-                "name": stock["name"],
-                "amount": round(summary["north_net_buy"] * (0.3 - i * 0.05), 2),  # 估算金额
-                "change": stock["change"]
-            })
+            top_buy.append(
+                {
+                    "symbol": "",  # 需要额外查询股票代码
+                    "name": stock["name"],
+                    "amount": round(
+                        summary["north_net_buy"] * (0.3 - i * 0.05), 2
+                    ),  # 估算金额
+                    "change": stock["change"],
+                }
+            )
 
         # 净卖出TOP5（使用领跌股或反向数据）
         # 由于API限制，这里使用估算数据
-        top_sell = [
-            {"symbol": "", "name": "数据暂缺", "amount": -1.0, "change": 0}
-        ]
+        top_sell = [{"symbol": "", "name": "数据暂缺", "amount": -1.0, "change": 0}]
 
-        return success_response({
-            "topBuy": top_buy,
-            "topSell": top_sell,
-            "summary": summary,
-            "dataSource": {
-                "name": "东方财富-沪深港通",
-                "type": "real",
-                "timestamp": datetime.now().isoformat()
-            },
-            "note": "北向资金数据来源于akshare，领涨股为沪股通+深股通合并数据"
-        })
+        return success_response(
+            {
+                "topBuy": top_buy,
+                "topSell": top_sell,
+                "summary": summary,
+                "dataSource": {
+                    "name": "东方财富-沪深港通",
+                    "type": "real",
+                    "timestamp": datetime.now().isoformat(),
+                },
+                "note": "北向资金数据来源于akshare，领涨股为沪股通+深股通合并数据",
+            }
+        )
 
     except Exception as e:
         logger.error(f"[north_flow_ranking] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取北向资金数据失败: {str(e)}")
+        return error_response(
+            ErrorCode.INTERNAL_ERROR, f"获取北向资金数据失败: {str(e)}"
+        )

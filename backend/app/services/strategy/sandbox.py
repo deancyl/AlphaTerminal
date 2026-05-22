@@ -28,23 +28,34 @@ logger = logging.getLogger(__name__)
 
 class StrategyTimeoutError(Exception):
     """Raised when strategy execution exceeds timeout limit."""
+
     pass
 
 
 class StrategySecurityError(Exception):
     """Raised when strategy code violates security rules."""
+
     pass
 
 
 class StrategyMemoryError(Exception):
     """Raised when strategy exceeds memory limits."""
+
     pass
 
 
 # Modules that can be imported in the sandbox
 ALLOWED_IMPORTS = {
-    'pandas', 'pd', 'numpy', 'np', 'math', 'statistics',
-    'datetime', 'date', 'time', 'timedelta',
+    "pandas",
+    "pd",
+    "numpy",
+    "np",
+    "math",
+    "statistics",
+    "datetime",
+    "date",
+    "time",
+    "timedelta",
 }
 
 
@@ -55,92 +66,87 @@ def _safe_import(name: str, *args, **kwargs):
     This is used internally to allow legal imports while blocking
     dangerous ones like os, sys, subprocess, etc.
     """
-    module_name = name.split('.')[0]
+    module_name = name.split(".")[0]
     if module_name not in ALLOWED_IMPORTS:
-        raise ImportError(f"Import of '{name}' is not allowed. Allowed modules: {', '.join(sorted(ALLOWED_IMPORTS))}")
+        raise ImportError(
+            f"Import of '{name}' is not allowed. Allowed modules: {', '.join(sorted(ALLOWED_IMPORTS))}"
+        )
     return __import__(name, *args, **kwargs)
 
 
 def create_safe_builtins() -> Dict[str, Any]:
     """
     Create a restricted builtins dictionary with only safe functions.
-    
+
     This replaces the default __builtins__ with a whitelist of safe
     operations that cannot be used to escape the sandbox.
-    
+
     Returns:
         Dictionary of safe builtin functions
     """
     return {
         # Basic arithmetic
-        'abs': abs,
-        'min': min,
-        'max': max,
-        'sum': sum,
-        'round': round,
-        'pow': pow,
-        'divmod': divmod,
-
+        "abs": abs,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "round": round,
+        "pow": pow,
+        "divmod": divmod,
         # Type conversions (safe)
-        'int': int,
-        'float': float,
-        'str': str,
-        'bool': bool,
-        'list': list,
-        'dict': dict,
-        'tuple': tuple,
-        'set': set,
-        'frozenset': frozenset,
-
+        "int": int,
+        "float": float,
+        "str": str,
+        "bool": bool,
+        "list": list,
+        "dict": dict,
+        "tuple": tuple,
+        "set": set,
+        "frozenset": frozenset,
         # Comparison and logic
-        'all': all,
-        'any': any,
-        'len': len,
-        'isinstance': isinstance,
-
+        "all": all,
+        "any": any,
+        "len": len,
+        "isinstance": isinstance,
         # Iteration (safe)
-        'range': range,
-        'enumerate': enumerate,
-        'zip': zip,
-        'map': map,
-        'filter': filter,
-        'sorted': sorted,
-        'reversed': reversed,
-        'iter': iter,
-        'next': next,
-
+        "range": range,
+        "enumerate": enumerate,
+        "zip": zip,
+        "map": map,
+        "filter": filter,
+        "sorted": sorted,
+        "reversed": reversed,
+        "iter": iter,
+        "next": next,
         # String operations (safe)
-        'chr': chr,
-        'ord': ord,
-        'hex': hex,
-        'oct': oct,
-        'bin': bin,
-        'repr': repr,
-        'format': format,
-
+        "chr": chr,
+        "ord": ord,
+        "hex": hex,
+        "oct": oct,
+        "bin": bin,
+        "repr": repr,
+        "format": format,
         # Constants
-        'True': True,
-        'False': False,
-        'None': None,
-
+        "True": True,
+        "False": False,
+        "None": None,
         # Safe import function (restricted to allowed modules)
-        '__import__': _safe_import,
-
+        "__import__": _safe_import,
         # Math functions (safe subset)
-        'ceil': math.ceil,
-        'floor': math.floor,
-        'sqrt': math.sqrt,
-        'log': math.log,
-        'log10': math.log10,
-        'exp': math.exp,
-        'sin': math.sin,
-        'cos': math.cos,
-        'tan': math.tan,
-        'asin': math.asin,
-        'acos': math.acos,
-        'atan': math.atan,
-        'pi': math.pi,
-        'e': math.e,
+        "ceil": math.ceil,
+        "floor": math.floor,
+        "sqrt": math.sqrt,
+        "log": math.log,
+        "log10": math.log10,
+        "exp": math.exp,
+        "sin": math.sin,
+        "cos": math.cos,
+        "tan": math.tan,
+        "asin": math.asin,
+        "acos": math.acos,
+        "atan": math.atan,
+        "pi": math.pi,
+        "e": math.e,
     }
 
 
@@ -151,32 +157,32 @@ def create_sandbox_namespace(
 ) -> Dict[str, Any]:
     """
     Create a sandboxed namespace for strategy execution.
-    
+
     Args:
         ctx: Strategy context object (StrategyContext)
         allow_pandas: Whether to allow pandas access
         allow_numpy: Whether to allow numpy access
-    
+
     Returns:
         Restricted namespace dictionary
     """
-    namespace = {'__builtins__': create_safe_builtins()}
+    namespace = {"__builtins__": create_safe_builtins()}
 
     if allow_pandas:
-        namespace['pd'] = pd
+        namespace["pd"] = pd
 
     if allow_numpy:
-        namespace['np'] = np
+        namespace["np"] = np
 
-    namespace['math'] = math
-    namespace['statistics'] = statistics
-    namespace['datetime'] = datetime
-    namespace['date'] = date
-    namespace['time'] = time
-    namespace['timedelta'] = timedelta
+    namespace["math"] = math
+    namespace["statistics"] = statistics
+    namespace["datetime"] = datetime
+    namespace["date"] = date
+    namespace["time"] = time
+    namespace["timedelta"] = timedelta
 
     if ctx is not None:
-        namespace['ctx'] = ctx
+        namespace["ctx"] = ctx
 
     return namespace
 
@@ -184,7 +190,7 @@ def create_sandbox_namespace(
 class SecureExecutor:
     """
     Secure executor for running validated strategy code.
-    
+
     Combines AST validation with sandboxed execution to provide
     comprehensive security against code injection attacks.
     """
@@ -207,13 +213,13 @@ class SecureExecutor:
     def compile_code(self, code: str) -> Any:
         """
         Compile validated code to executable object.
-        
+
         Args:
             code: Validated strategy code
-            
+
         Returns:
             Compiled code object
-            
+
         Raises:
             StrategySecurityError: If code fails security validation
             SyntaxError: If code has syntax errors
@@ -222,16 +228,12 @@ class SecureExecutor:
 
         is_valid, errors = validate_strategy_ast(code)
         if not is_valid:
-            raise StrategySecurityError(
-                f"Security validation failed: {errors}"
-            )
+            raise StrategySecurityError(f"Security validation failed: {errors}")
 
         try:
-            return compile(code, '<strategy>', 'exec')
+            return compile(code, "<strategy>", "exec")
         except SyntaxError as e:
-            raise StrategySecurityError(
-                f"Syntax error at line {e.lineno}: {e.msg}"
-            )
+            raise StrategySecurityError(f"Syntax error at line {e.lineno}: {e.msg}")
 
     def execute(
         self,
@@ -241,15 +243,15 @@ class SecureExecutor:
     ) -> Dict[str, Any]:
         """
         Execute strategy code in sandboxed environment.
-        
+
         Args:
             code: Validated strategy code
             ctx: Strategy context object
             additional_globals: Additional safe globals to include
-            
+
         Returns:
             Namespace after execution (contains defined functions)
-            
+
         Raises:
             StrategySecurityError: If security validation fails
             StrategyTimeoutError: If execution exceeds timeout
@@ -284,17 +286,17 @@ class SecureExecutor:
     ) -> Dict[str, Any]:
         """
         Execute strategy code with timeout protection.
-        
+
         This is an async wrapper that enforces timeout limits.
-        
+
         Args:
             code: Validated strategy code
             ctx: Strategy context object
             additional_globals: Additional safe globals
-            
+
         Returns:
             Namespace after execution
-            
+
         Raises:
             StrategyTimeoutError: If execution exceeds timeout
             StrategySecurityError: If security validation fails
@@ -321,14 +323,15 @@ class SecureExecutor:
     def validate_only(self, code: str) -> tuple[bool, List[str]]:
         """
         Validate code without executing it.
-        
+
         Args:
             code: Strategy code to validate
-            
+
         Returns:
             Tuple of (is_valid, error_messages)
         """
         from .ast_validator import validate_strategy_ast
+
         return validate_strategy_ast(code)
 
 
@@ -339,12 +342,12 @@ def secure_exec(
 ) -> Dict[str, Any]:
     """
     Convenience function for secure execution.
-    
+
     Args:
         code: Strategy code
         ctx: Strategy context
         timeout: Execution timeout in seconds
-        
+
     Returns:
         Execution namespace
     """
@@ -355,14 +358,15 @@ def secure_exec(
 def is_safe_to_execute(code: str) -> tuple[bool, List[str]]:
     """
     Check if code is safe to execute without actually running it.
-    
+
     Args:
         code: Strategy code
-        
+
     Returns:
         Tuple of (is_safe, error_messages)
     """
     from .ast_validator import validate_strategy_ast
+
     return validate_strategy_ast(code)
 
 
@@ -372,34 +376,50 @@ if __name__ == "__main__":
     print("=" * 80)
 
     test_codes = [
-        ("Valid code", """
+        (
+            "Valid code",
+            """
 def on_bar(ctx, bar):
     if bar['close'] > bar['open']:
         ctx.buy(bar['close'], 100)
-""", True),
-
-        ("Try to import os", """
+""",
+            True,
+        ),
+        (
+            "Try to import os",
+            """
 def on_bar(ctx, bar):
     import os
     os.system('ls')
-""", False),
-
-        ("Try to use eval", """
+""",
+            False,
+        ),
+        (
+            "Try to use eval",
+            """
 def on_bar(ctx, bar):
     eval("print('hello')")
-""", False),
-
-        ("Try __builtins__ access", """
+""",
+            False,
+        ),
+        (
+            "Try __builtins__ access",
+            """
 def on_bar(ctx, bar):
     __builtins__['eval']('1+1')
-""", False),
-
-        ("Pandas allowed", """
+""",
+            False,
+        ),
+        (
+            "Pandas allowed",
+            """
 import pandas as pd
 
 def on_bar(ctx, bar):
     df = pd.DataFrame({'a': [1, 2, 3]})
-""", True),
+""",
+            True,
+        ),
     ]
 
     executor = SecureExecutor()

@@ -24,7 +24,9 @@ class CacheMetrics:
     evictions: int = 0
 
     # Latency tracking (in seconds)
-    fetch_latencies: Dict[str, List[float]] = field(default_factory=lambda: defaultdict(list))
+    fetch_latencies: Dict[str, List[float]] = field(
+        default_factory=lambda: defaultdict(list)
+    )
 
     # Data source statistics
     source_requests: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
@@ -51,7 +53,7 @@ class CacheMetrics:
     def record_latency(self, source: str, latency_seconds: float) -> None:
         """
         Record fetch latency for a data source.
-        
+
         Args:
             source: Data source identifier (e.g., 'akshare', 'sina', 'eastmoney')
             latency_seconds: Time taken to fetch data
@@ -104,7 +106,7 @@ class CacheMetrics:
     def to_prometheus(self) -> str:
         """
         Export metrics in Prometheus text format.
-        
+
         Returns:
             Prometheus-formatted metrics string
         """
@@ -131,7 +133,9 @@ class CacheMetrics:
             lines.append(f"cache_hit_rate {hit_rate:.6f}")
 
             lines.append("")
-            lines.append("# HELP datasource_requests_total Total requests per data source")
+            lines.append(
+                "# HELP datasource_requests_total Total requests per data source"
+            )
             lines.append("# TYPE datasource_requests_total counter")
             for source, count in self.source_requests.items():
                 lines.append(f'datasource_requests_total{{source="{source}"}} {count}')
@@ -141,23 +145,33 @@ class CacheMetrics:
             for source, count in self.source_errors.items():
                 lines.append(f'datasource_errors_total{{source="{source}"}} {count}')
 
-            lines.append("# HELP datasource_error_rate Error rate per data source (0-1)")
+            lines.append(
+                "# HELP datasource_error_rate Error rate per data source (0-1)"
+            )
             lines.append("# TYPE datasource_error_rate gauge")
             for source in self.source_requests.keys():
                 requests = self.source_requests.get(source, 0)
                 errors = self.source_errors.get(source, 0)
                 error_rate = errors / requests if requests > 0 else 0.0
-                lines.append(f'datasource_error_rate{{source="{source}"}} {error_rate:.6f}')
+                lines.append(
+                    f'datasource_error_rate{{source="{source}"}} {error_rate:.6f}'
+                )
 
             lines.append("")
-            lines.append("# HELP datasource_latency_avg_seconds Average fetch latency per data source")
+            lines.append(
+                "# HELP datasource_latency_avg_seconds Average fetch latency per data source"
+            )
             lines.append("# TYPE datasource_latency_avg_seconds gauge")
             for source in self.fetch_latencies.keys():
                 latencies = self.fetch_latencies.get(source, [])
                 avg = sum(latencies) / len(latencies) if latencies else 0.0
-                lines.append(f'datasource_latency_avg_seconds{{source="{source}"}} {avg:.6f}')
+                lines.append(
+                    f'datasource_latency_avg_seconds{{source="{source}"}} {avg:.6f}'
+                )
 
-            lines.append("# HELP datasource_latency_p95_seconds 95th percentile fetch latency per data source")
+            lines.append(
+                "# HELP datasource_latency_p95_seconds 95th percentile fetch latency per data source"
+            )
             lines.append("# TYPE datasource_latency_p95_seconds gauge")
             for source in self.fetch_latencies.keys():
                 latencies = self.fetch_latencies.get(source, [])
@@ -167,7 +181,9 @@ class CacheMetrics:
                     sorted_latencies = sorted(latencies)
                     idx = int(len(sorted_latencies) * 0.95)
                     p95 = sorted_latencies[min(idx, len(sorted_latencies) - 1)]
-                lines.append(f'datasource_latency_p95_seconds{{source="{source}"}} {p95:.6f}')
+                lines.append(
+                    f'datasource_latency_p95_seconds{{source="{source}"}} {p95:.6f}'
+                )
 
             return "\n".join(lines) + "\n"
 

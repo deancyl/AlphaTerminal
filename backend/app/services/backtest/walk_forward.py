@@ -4,6 +4,7 @@ Walk-Forward Analysis for Out-of-Sample Validation
 Implements walk-forward optimization to detect overfitting and validate
 strategy performance on out-of-sample data.
 """
+
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Tuple, Optional
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class WindowResult:
     """Result for a single walk-forward window"""
+
     window_index: int
     train_start: str
     train_end: str
@@ -48,6 +50,7 @@ class WindowResult:
 @dataclass
 class AnomalyWarning:
     """Anomaly warning for pre-flight detection"""
+
     level: str  # "info", "warning", "error"
     category: str  # "data_quality", "strategy_compat", "volatility"
     message: str
@@ -57,6 +60,7 @@ class AnomalyWarning:
 @dataclass
 class WalkForwardResult:
     """Aggregated walk-forward analysis result"""
+
     symbol: str
     strategy_type: str
     window_mode: str  # 'rolling' or 'anchored'
@@ -96,7 +100,7 @@ class WalkForwardResult:
 class WalkForwardAnalyzer:
     """
     Walk-Forward Analysis Engine
-    
+
     Splits data into train/test windows, optimizes on train, tests on out-of-sample,
     and aggregates results to detect overfitting.
     """
@@ -104,14 +108,14 @@ class WalkForwardAnalyzer:
     def __init__(
         self,
         train_window_days: int = 252,  # 1 year
-        test_window_days: int = 63,    # 3 months
-        step_days: int = 63,           # Roll forward by 3 months
-        min_data_days: int = 126,      # Minimum 6 months of data
-        mode: str = "rolling"          # 'rolling' or 'anchored'
+        test_window_days: int = 63,  # 3 months
+        step_days: int = 63,  # Roll forward by 3 months
+        min_data_days: int = 126,  # Minimum 6 months of data
+        mode: str = "rolling",  # 'rolling' or 'anchored'
     ):
         """
         Initialize analyzer
-        
+
         Args:
             train_window_days: Training window size in days
             test_window_days: Test window size in days
@@ -126,16 +130,13 @@ class WalkForwardAnalyzer:
         self.mode = mode
 
         # Overfitting thresholds
-        self.RETURN_GAP_WARNING = 10.0    # 10% gap = warning
-        self.RETURN_GAP_SEVERE = 20.0     # 20% gap = severe
+        self.RETURN_GAP_WARNING = 10.0  # 10% gap = warning
+        self.RETURN_GAP_SEVERE = 20.0  # 20% gap = severe
         self.SHARPE_GAP_WARNING = 0.5
         self.SHARPE_GAP_SEVERE = 1.0
 
     def detect_anomalies(
-        self,
-        data: List[Dict[str, Any]],
-        symbol: str,
-        strategy_type: str
+        self, data: List[Dict[str, Any]], symbol: str, strategy_type: str
     ) -> List[AnomalyWarning]:
         """
         Pre-flight anomaly detection before WFA.
@@ -145,8 +146,8 @@ class WalkForwardAnalyzer:
         if not data or len(data) < 20:
             return warnings
 
-        closes = [d.get('close', 0) for d in data if d.get('close')]
-        dates = [d.get('date', '') for d in data if d.get('date')]
+        closes = [d.get("close", 0) for d in data if d.get("close")]
+        dates = [d.get("date", "") for d in data if d.get("date")]
 
         if len(closes) < 20:
             return warnings
@@ -154,65 +155,84 @@ class WalkForwardAnalyzer:
         # 1. Data Quality - Check for gaps
         if len(dates) >= 2:
             try:
-                date_span = (datetime.strptime(dates[-1], '%Y-%m-%d') -
-                            datetime.strptime(dates[0], '%Y-%m-%d')).days
+                date_span = (
+                    datetime.strptime(dates[-1], "%Y-%m-%d")
+                    - datetime.strptime(dates[0], "%Y-%m-%d")
+                ).days
                 expected_trading_days = date_span * 252 / 365
                 if expected_trading_days > 0:
                     gap_ratio = 1 - (len(dates) / expected_trading_days)
                     if gap_ratio > 0.1:
-                        warnings.append(AnomalyWarning(
-                            level="warning",
-                            category="data_quality",
-                            message=f"数据存在缺口，覆盖率{100-gap_ratio*100:.1f}%",
-                            suggestion="建议检查数据源或使用更长时间范围"
-                        ))
+                        warnings.append(
+                            AnomalyWarning(
+                                level="warning",
+                                category="data_quality",
+                                message=f"数据存在缺口，覆盖率{100-gap_ratio*100:.1f}%",
+                                suggestion="建议检查数据源或使用更长时间范围",
+                            )
+                        )
             except (ValueError, TypeError, ZeroDivisionError):
                 pass
 
         # 2. Volatility Regime Check
         returns = []
         for i in range(1, len(closes)):
-            if closes[i-1] > 0:
-                returns.append((closes[i] - closes[i-1]) / closes[i-1])
+            if closes[i - 1] > 0:
+                returns.append((closes[i] - closes[i - 1]) / closes[i - 1])
 
         if len(returns) >= 20:
             try:
-                recent_vol = statistics.stdev(returns[-20:]) * (252 ** 0.5) * 100
-                historical_vol = statistics.stdev(returns) * (252 ** 0.5) * 100
+                recent_vol = statistics.stdev(returns[-20:]) * (252**0.5) * 100
+                historical_vol = statistics.stdev(returns) * (252**0.5) * 100
 
                 if historical_vol > 0 and recent_vol < historical_vol * 0.5:
-                    warnings.append(AnomalyWarning(
-                        level="info",
-                        category="volatility",
-                        message=f"近期波动率({recent_vol:.1f}%)显著低于历史({historical_vol:.1f}%)",
-                        suggestion="低波动环境下趋势策略可能表现不佳"
-                    ))
+                    warnings.append(
+                        AnomalyWarning(
+                            level="info",
+                            category="volatility",
+                            message=f"近期波动率({recent_vol:.1f}%)显著低于历史({historical_vol:.1f}%)",
+                            suggestion="低波动环境下趋势策略可能表现不佳",
+                        )
+                    )
                 elif historical_vol > 0 and recent_vol > historical_vol * 1.5:
-                    warnings.append(AnomalyWarning(
-                        level="warning",
-                        category="volatility",
-                        message=f"近期波动率({recent_vol:.1f}%)显著高于历史({historical_vol:.1f}%)",
-                        suggestion="高波动环境下需注意风险控制"
-                    ))
-            except (ValueError, TypeError, ZeroDivisionError, statistics.StatisticsError):
+                    warnings.append(
+                        AnomalyWarning(
+                            level="warning",
+                            category="volatility",
+                            message=f"近期波动率({recent_vol:.1f}%)显著高于历史({historical_vol:.1f}%)",
+                            suggestion="高波动环境下需注意风险控制",
+                        )
+                    )
+            except (
+                ValueError,
+                TypeError,
+                ZeroDivisionError,
+                statistics.StatisticsError,
+            ):
                 pass
 
         # 3. Strategy-Symbol Compatibility
         if strategy_type == "ma_crossover" and len(closes) >= 14:
             try:
-                up_moves = [max(closes[i] - closes[i-1], 0) for i in range(1, len(closes))]
-                down_moves = [max(closes[i-1] - closes[i], 0) for i in range(1, len(closes))]
+                up_moves = [
+                    max(closes[i] - closes[i - 1], 0) for i in range(1, len(closes))
+                ]
+                down_moves = [
+                    max(closes[i - 1] - closes[i], 0) for i in range(1, len(closes))
+                ]
 
                 avg_up = sum(up_moves[-14:]) / 14
                 avg_down = sum(down_moves[-14:]) / 14
 
                 if avg_down > avg_up * 1.5 and avg_up > 0:
-                    warnings.append(AnomalyWarning(
-                        level="info",
-                        category="strategy_compat",
-                        message="当前处于下跌趋势，双均线策略可能频繁止损",
-                        suggestion="考虑等待趋势明朗或使用做空策略"
-                    ))
+                    warnings.append(
+                        AnomalyWarning(
+                            level="info",
+                            category="strategy_compat",
+                            message="当前处于下跌趋势，双均线策略可能频繁止损",
+                            suggestion="考虑等待趋势明朗或使用做空策略",
+                        )
+                    )
             except (ValueError, TypeError, ZeroDivisionError):
                 pass
 
@@ -224,26 +244,30 @@ class WalkForwardAnalyzer:
         strategy_type: str,
         param_grid: Dict[str, List[Any]],
         initial_capital: float = 100000.0,
-        symbol: str = ""
+        symbol: str = "",
     ) -> WalkForwardResult:
         """
         Run walk-forward analysis
-        
+
         Args:
             data: Historical data list with 'date', 'close' fields
             strategy_type: Strategy type (ma_crossover, rsi_oversold, bollinger_bands)
             param_grid: Dict of param_name -> list of values to test
             initial_capital: Starting capital
             symbol: Symbol being analyzed
-            
+
         Returns:
             WalkForwardResult with all metrics and window results
         """
-        logger.info(f"[WalkForward] Starting analysis for {symbol}, strategy={strategy_type}, mode={self.mode}")
+        logger.info(
+            f"[WalkForward] Starting analysis for {symbol}, strategy={strategy_type}, mode={self.mode}"
+        )
 
         # Validate data
         if len(data) < self.min_data_days:
-            logger.warning(f"[WalkForward] Insufficient data: {len(data)} < {self.min_data_days}")
+            logger.warning(
+                f"[WalkForward] Insufficient data: {len(data)} < {self.min_data_days}"
+            )
             return self._create_empty_result(symbol, strategy_type, "Insufficient data")
 
         # Generate windows
@@ -267,29 +291,28 @@ class WalkForwardAnalyzer:
                 test_dates=test_dates,
                 strategy_type=strategy_type,
                 param_grid=param_grid,
-                initial_capital=initial_capital
+                initial_capital=initial_capital,
             )
             window_results.append(result)
 
         # Aggregate results
         final_result = self._aggregate_results(
-            symbol=symbol,
-            strategy_type=strategy_type,
-            window_results=window_results
+            symbol=symbol, strategy_type=strategy_type, window_results=window_results
         )
 
-        logger.info(f"[WalkForward] Analysis complete: {final_result.overfitting_severity} overfitting, "
-                   f"avg test return={final_result.avg_test_return_pct:.2f}%")
+        logger.info(
+            f"[WalkForward] Analysis complete: {final_result.overfitting_severity} overfitting, "
+            f"avg test return={final_result.avg_test_return_pct:.2f}%"
+        )
 
         return final_result
 
     def _generate_windows(
-        self,
-        data: List[Dict[str, Any]]
+        self, data: List[Dict[str, Any]]
     ) -> List[Tuple[List, List, Tuple[str, str], Tuple[str, str]]]:
         """
         Generate train/test windows
-        
+
         Returns:
             List of (train_data, test_data, (train_start, train_end), (test_start, test_end))
         """
@@ -299,15 +322,17 @@ class WalkForwardAnalyzer:
         if self.mode == "rolling":
             # Rolling window: train window moves forward
             start_idx = 0
-            while start_idx + self.train_window_days + self.test_window_days <= total_days:
+            while (
+                start_idx + self.train_window_days + self.test_window_days <= total_days
+            ):
                 train_end_idx = start_idx + self.train_window_days
                 test_end_idx = train_end_idx + self.test_window_days
 
                 train_data = data[start_idx:train_end_idx]
                 test_data = data[train_end_idx:test_end_idx]
 
-                train_dates = (train_data[0]['date'], train_data[-1]['date'])
-                test_dates = (test_data[0]['date'], test_data[-1]['date'])
+                train_dates = (train_data[0]["date"], train_data[-1]["date"])
+                test_dates = (test_data[0]["date"], test_data[-1]["date"])
 
                 windows.append((train_data, test_data, train_dates, test_dates))
 
@@ -322,10 +347,12 @@ class WalkForwardAnalyzer:
             while test_start_idx + self.test_window_days <= total_days:
                 # Train window is always from beginning
                 train_data = data[train_start_idx:test_start_idx]
-                test_data = data[test_start_idx:test_start_idx + self.test_window_days]
+                test_data = data[
+                    test_start_idx : test_start_idx + self.test_window_days
+                ]
 
-                train_dates = (train_data[0]['date'], train_data[-1]['date'])
-                test_dates = (test_data[0]['date'], test_data[-1]['date'])
+                train_dates = (train_data[0]["date"], train_data[-1]["date"])
+                test_dates = (test_data[0]["date"], test_data[-1]["date"])
 
                 windows.append((train_data, test_data, train_dates, test_dates))
 
@@ -343,7 +370,7 @@ class WalkForwardAnalyzer:
         test_dates: Tuple[str, str],
         strategy_type: str,
         param_grid: Dict[str, List[Any]],
-        initial_capital: float
+        initial_capital: float,
     ) -> WindowResult:
         """Analyze a single window: optimize on train, test on out-of-sample"""
 
@@ -352,7 +379,7 @@ class WalkForwardAnalyzer:
             train_start=train_dates[0],
             train_end=train_dates[1],
             test_start=test_dates[0],
-            test_end=test_dates[1]
+            test_end=test_dates[1],
         )
 
         # Step 1: Optimize parameters on training data
@@ -360,7 +387,7 @@ class WalkForwardAnalyzer:
             data=train_data,
             strategy_type=strategy_type,
             param_grid=param_grid,
-            initial_capital=initial_capital
+            initial_capital=initial_capital,
         )
         result.best_params = best_params
 
@@ -369,39 +396,47 @@ class WalkForwardAnalyzer:
             data=train_data,
             strategy_type=strategy_type,
             params=best_params,
-            initial_capital=initial_capital
+            initial_capital=initial_capital,
         )
-        result.train_return_pct = train_metrics['return_pct']
-        result.train_sharpe = train_metrics['sharpe']
-        result.train_max_dd_pct = train_metrics['max_dd_pct']
-        result.train_win_rate = train_metrics['win_rate']
-        result.train_trades = train_metrics['trades']
+        result.train_return_pct = train_metrics["return_pct"]
+        result.train_sharpe = train_metrics["sharpe"]
+        result.train_max_dd_pct = train_metrics["max_dd_pct"]
+        result.train_win_rate = train_metrics["win_rate"]
+        result.train_trades = train_metrics["trades"]
 
         # Step 3: Test on out-of-sample data
         test_metrics = self._run_strategy(
             data=test_data,
             strategy_type=strategy_type,
             params=best_params,
-            initial_capital=initial_capital
+            initial_capital=initial_capital,
         )
-        result.test_return_pct = test_metrics['return_pct']
-        result.test_sharpe = test_metrics['sharpe']
-        result.test_max_dd_pct = test_metrics['max_dd_pct']
-        result.test_win_rate = test_metrics['win_rate']
-        result.test_trades = test_metrics['trades']
+        result.test_return_pct = test_metrics["return_pct"]
+        result.test_sharpe = test_metrics["sharpe"]
+        result.test_max_dd_pct = test_metrics["max_dd_pct"]
+        result.test_win_rate = test_metrics["win_rate"]
+        result.test_trades = test_metrics["trades"]
 
         # Step 4: Calculate overfitting indicators
         result.return_gap = result.train_return_pct - result.test_return_pct
         result.sharpe_gap = result.train_sharpe - result.test_sharpe
 
         # Detect overfitting
-        if result.return_gap > self.RETURN_GAP_SEVERE or result.sharpe_gap > self.SHARPE_GAP_SEVERE:
+        if (
+            result.return_gap > self.RETURN_GAP_SEVERE
+            or result.sharpe_gap > self.SHARPE_GAP_SEVERE
+        ):
             result.is_overfitted = True
-        elif result.return_gap > self.RETURN_GAP_WARNING or result.sharpe_gap > self.SHARPE_GAP_WARNING:
+        elif (
+            result.return_gap > self.RETURN_GAP_WARNING
+            or result.sharpe_gap > self.SHARPE_GAP_WARNING
+        ):
             result.is_overfitted = True
 
-        logger.info(f"[WalkForward] Window {window_index}: train={result.train_return_pct:.2f}%, "
-                   f"test={result.test_return_pct:.2f}%, gap={result.return_gap:.2f}%")
+        logger.info(
+            f"[WalkForward] Window {window_index}: train={result.train_return_pct:.2f}%, "
+            f"test={result.test_return_pct:.2f}%, gap={result.return_gap:.2f}%"
+        )
 
         return result
 
@@ -410,11 +445,11 @@ class WalkForwardAnalyzer:
         data: List[Dict],
         strategy_type: str,
         param_grid: Dict[str, List[Any]],
-        initial_capital: float
+        initial_capital: float,
     ) -> Tuple[Dict[str, Any], float]:
         """
         Grid search to find best parameters on training data
-        
+
         Returns:
             (best_params, best_return)
         """
@@ -439,11 +474,11 @@ class WalkForwardAnalyzer:
                 data=data,
                 strategy_type=strategy_type,
                 params=params,
-                initial_capital=initial_capital
+                initial_capital=initial_capital,
             )
 
-            if metrics['return_pct'] > best_return:
-                best_return = metrics['return_pct']
+            if metrics["return_pct"] > best_return:
+                best_return = metrics["return_pct"]
                 best_params = params.copy()
 
         return best_params, best_return
@@ -453,15 +488,15 @@ class WalkForwardAnalyzer:
         data: List[Dict],
         strategy_type: str,
         params: Dict[str, Any],
-        initial_capital: float
+        initial_capital: float,
     ) -> Dict[str, Any]:
         """
         Run strategy and return metrics
-        
+
         Returns:
             Dict with return_pct, sharpe, max_dd_pct, win_rate, trades
         """
-        closes = [d['close'] for d in data]
+        closes = [d["close"] for d in data]
 
         # Generate signals
         signals = self._generate_signals(strategy_type, closes, params)
@@ -473,7 +508,9 @@ class WalkForwardAnalyzer:
 
         # Calculate metrics
         total_return = final_capital - initial_capital
-        return_pct = (total_return / initial_capital) * 100 if initial_capital > 0 else 0
+        return_pct = (
+            (total_return / initial_capital) * 100 if initial_capital > 0 else 0
+        )
 
         # Calculate max drawdown
         equity = initial_capital
@@ -481,7 +518,7 @@ class WalkForwardAnalyzer:
         max_dd = 0.0
 
         for t in trades:
-            equity += t.get('pnl', 0)
+            equity += t.get("pnl", 0)
             if equity > peak:
                 peak = equity
             dd = peak - equity
@@ -498,25 +535,22 @@ class WalkForwardAnalyzer:
         sharpe = self._calculate_sharpe(trades, len(data))
 
         return {
-            'return_pct': round(return_pct, 2),
-            'sharpe': round(sharpe, 2),
-            'max_dd_pct': round(max_dd_pct, 2),
-            'win_rate': round(win_rate, 2),
-            'trades': total_trades
+            "return_pct": round(return_pct, 2),
+            "sharpe": round(sharpe, 2),
+            "max_dd_pct": round(max_dd_pct, 2),
+            "win_rate": round(win_rate, 2),
+            "trades": total_trades,
         }
 
     def _generate_signals(
-        self,
-        strategy_type: str,
-        closes: List[float],
-        params: Dict[str, Any]
+        self, strategy_type: str, closes: List[float], params: Dict[str, Any]
     ) -> List[int]:
         """Generate trading signals based on strategy type"""
         signals = [0] * len(closes)
 
         if strategy_type == "ma_crossover":
-            fast_ma = params.get('fast_ma', 5)
-            slow_ma = params.get('slow_ma', 20)
+            fast_ma = params.get("fast_ma", 5)
+            slow_ma = params.get("slow_ma", 20)
 
             fast_vals = self._calc_ma(closes, fast_ma)
             slow_vals = self._calc_ma(closes, slow_ma)
@@ -524,15 +558,17 @@ class WalkForwardAnalyzer:
             for i in range(slow_ma, len(closes)):
                 if fast_vals[i] is None or slow_vals[i] is None:
                     continue
-                if fast_vals[i] > slow_vals[i] and fast_vals[i-1] <= slow_vals[i-1]:
+                if fast_vals[i] > slow_vals[i] and fast_vals[i - 1] <= slow_vals[i - 1]:
                     signals[i] = 1
-                elif fast_vals[i] < slow_vals[i] and fast_vals[i-1] >= slow_vals[i-1]:
+                elif (
+                    fast_vals[i] < slow_vals[i] and fast_vals[i - 1] >= slow_vals[i - 1]
+                ):
                     signals[i] = -1
 
         elif strategy_type == "rsi_oversold":
-            rsi_period = params.get('rsi_period', 14)
-            rsi_buy = params.get('rsi_buy', 30)
-            rsi_sell = params.get('rsi_sell', 70)
+            rsi_period = params.get("rsi_period", 14)
+            rsi_buy = params.get("rsi_buy", 30)
+            rsi_sell = params.get("rsi_sell", 70)
 
             rsi_vals = self._calc_rsi(closes, rsi_period)
             in_position = False
@@ -548,17 +584,17 @@ class WalkForwardAnalyzer:
                     in_position = False
 
         elif strategy_type == "bollinger_bands":
-            bb_period = params.get('bb_period', 20)
-            bb_std = params.get('bb_std', 2)
+            bb_period = params.get("bb_period", 20)
+            bb_std = params.get("bb_std", 2)
 
             mid, upper, lower = self._calc_bollinger(closes, bb_period, bb_std)
 
             for i in range(1, len(closes)):
                 if lower[i] is None:
                     continue
-                if closes[i-1] <= lower[i-1] and closes[i] > lower[i]:
+                if closes[i - 1] <= lower[i - 1] and closes[i] > lower[i]:
                     signals[i] = 1
-                elif closes[i-1] >= upper[i-1] and closes[i] < upper[i]:
+                elif closes[i - 1] >= upper[i - 1] and closes[i] < upper[i]:
                     signals[i] = -1
 
         return signals
@@ -568,7 +604,7 @@ class WalkForwardAnalyzer:
         signals: List[int],
         closes: List[float],
         data: List[Dict],
-        initial_capital: float
+        initial_capital: float,
     ) -> Tuple[List[Dict], int, int, float]:
         """Simulate trades based on signals"""
         capital = float(initial_capital)
@@ -585,12 +621,14 @@ class WalkForwardAnalyzer:
                     position = shares
                     entry_price = closes[i]
                     capital -= shares * entry_price
-                    trades.append({
-                        "entry_date": data[i]['date'],
-                        "entry_price": round(entry_price, 2),
-                        "shares": shares,
-                        "type": "long"
-                    })
+                    trades.append(
+                        {
+                            "entry_date": data[i]["date"],
+                            "entry_price": round(entry_price, 2),
+                            "shares": shares,
+                            "type": "long",
+                        }
+                    )
             elif signals[i] == -1 and position > 0:
                 exit_price = closes[i]
                 pnl = (exit_price - entry_price) * position
@@ -599,12 +637,16 @@ class WalkForwardAnalyzer:
                 else:
                     losses += 1
                 capital += position * exit_price
-                trades[-1].update({
-                    "exit_date": data[i]['date'],
-                    "exit_price": round(exit_price, 2),
-                    "pnl": round(pnl, 2),
-                    "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)
-                })
+                trades[-1].update(
+                    {
+                        "exit_date": data[i]["date"],
+                        "exit_price": round(exit_price, 2),
+                        "pnl": round(pnl, 2),
+                        "pnl_pct": round(
+                            (exit_price - entry_price) / entry_price * 100, 2
+                        ),
+                    }
+                )
                 position = 0
 
         # Close remaining position
@@ -616,19 +658,21 @@ class WalkForwardAnalyzer:
             else:
                 losses += 1
             capital += position * exit_price
-            trades[-1].update({
-                "exit_date": data[-1]['date'],
-                "exit_price": round(exit_price, 2),
-                "pnl": round(pnl, 2),
-                "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)
-            })
+            trades[-1].update(
+                {
+                    "exit_date": data[-1]["date"],
+                    "exit_price": round(exit_price, 2),
+                    "pnl": round(pnl, 2),
+                    "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2),
+                }
+            )
 
         return trades, wins, losses, capital
 
     def _calc_ma(self, data: List[float], period: int) -> List[Optional[float]]:
         """Calculate moving average"""
         return [None] * (period - 1) + [
-            round(sum(data[i-period+1:i+1]) / period, 2)
+            round(sum(data[i - period + 1 : i + 1]) / period, 2)
             for i in range(period - 1, len(data))
         ]
 
@@ -636,7 +680,7 @@ class WalkForwardAnalyzer:
         """Calculate RSI"""
         gains, losses = [], []
         for i in range(1, len(closes)):
-            d = closes[i] - closes[i-1]
+            d = closes[i] - closes[i - 1]
             gains.append(max(d, 0))
             losses.append(max(-d, 0))
 
@@ -647,21 +691,18 @@ class WalkForwardAnalyzer:
         al = sum(losses[:period]) / period
         rs = ag / al if al != 0 else 0
 
-        rsi_vals = [None] * period + [100 - 100/(1+rs)]
+        rsi_vals = [None] * period + [100 - 100 / (1 + rs)]
 
         for i in range(period, len(gains)):
-            ag = (ag*(period-1) + gains[i]) / period
-            al = (al*(period-1) + losses[i]) / period
+            ag = (ag * (period - 1) + gains[i]) / period
+            al = (al * (period - 1) + losses[i]) / period
             rs = ag / al if al != 0 else 0
-            rsi_vals.append(100 - 100/(1+rs) if al != 0 else 50.0)
+            rsi_vals.append(100 - 100 / (1 + rs) if al != 0 else 50.0)
 
         return rsi_vals + [None] * (len(closes) - len(rsi_vals))
 
     def _calc_bollinger(
-        self,
-        closes: List[float],
-        period: int = 20,
-        multiplier: float = 2
+        self, closes: List[float], period: int = 20, multiplier: float = 2
     ) -> Tuple[List, List, List]:
         """Calculate Bollinger Bands"""
         mid = self._calc_ma(closes, period)
@@ -669,7 +710,10 @@ class WalkForwardAnalyzer:
 
         for i in range(period - 1, len(closes)):
             if mid[i] is not None:
-                std = (sum((closes[j] - mid[i])**2 for j in range(i-period+1, i+1)) / period) ** 0.5
+                std = (
+                    sum((closes[j] - mid[i]) ** 2 for j in range(i - period + 1, i + 1))
+                    / period
+                ) ** 0.5
                 upper[i] = round(mid[i] + multiplier * std, 2)
                 lower[i] = round(mid[i] - multiplier * std, 2)
 
@@ -682,8 +726,8 @@ class WalkForwardAnalyzer:
 
         returns = []
         for t in trades:
-            if 'pnl_pct' in t:
-                returns.append(t['pnl_pct'] / 100)
+            if "pnl_pct" in t:
+                returns.append(t["pnl_pct"] / 100)
 
         if len(returns) < 2:
             return 0.0
@@ -697,16 +741,13 @@ class WalkForwardAnalyzer:
         # Annualize
         years = days / 252
         annualized_return = avg_return * 252 / max(len(trades), 1)
-        annualized_vol = std_return * (252 ** 0.5)
+        annualized_vol = std_return * (252**0.5)
 
         sharpe = annualized_return / annualized_vol if annualized_vol > 0 else 0
         return sharpe
 
     def _aggregate_results(
-        self,
-        symbol: str,
-        strategy_type: str,
-        window_results: List[WindowResult]
+        self, symbol: str, strategy_type: str, window_results: List[WindowResult]
     ) -> WalkForwardResult:
         """Aggregate all window results into final metrics"""
         if not window_results:
@@ -717,7 +758,7 @@ class WalkForwardAnalyzer:
             strategy_type=strategy_type,
             window_mode=self.mode,
             total_windows=len(window_results),
-            windows=window_results
+            windows=window_results,
         )
 
         # Calculate averages
@@ -739,16 +780,26 @@ class WalkForwardAnalyzer:
         result.avg_train_sharpe = round(statistics.mean(train_sharpes), 2)
 
         # Calculate gaps
-        result.avg_return_gap = round(result.avg_train_return_pct - result.avg_test_return_pct, 2)
-        result.avg_sharpe_gap = round(result.avg_train_sharpe - result.avg_test_sharpe, 2)
+        result.avg_return_gap = round(
+            result.avg_train_return_pct - result.avg_test_return_pct, 2
+        )
+        result.avg_sharpe_gap = round(
+            result.avg_train_sharpe - result.avg_test_sharpe, 2
+        )
 
         # Count overfitted windows
         result.overfitting_windows = sum(1 for w in window_results if w.is_overfitted)
-        result.overfitting_ratio = round(result.overfitting_windows / len(window_results), 2)
+        result.overfitting_ratio = round(
+            result.overfitting_windows / len(window_results), 2
+        )
 
         # Calculate consistency
-        result.return_std = round(statistics.stdev(test_returns), 2) if len(test_returns) > 1 else 0
-        result.sharpe_std = round(statistics.stdev(test_sharpes), 2) if len(test_sharpes) > 1 else 0
+        result.return_std = (
+            round(statistics.stdev(test_returns), 2) if len(test_returns) > 1 else 0
+        )
+        result.sharpe_std = (
+            round(statistics.stdev(test_sharpes), 2) if len(test_sharpes) > 1 else 0
+        )
 
         # Consistency score: lower std = higher consistency
         if result.return_std > 0:
@@ -757,9 +808,15 @@ class WalkForwardAnalyzer:
             result.consistency_score = 100.0
 
         # Determine overfitting severity
-        if result.overfitting_ratio >= 0.7 or result.avg_return_gap > self.RETURN_GAP_SEVERE:
+        if (
+            result.overfitting_ratio >= 0.7
+            or result.avg_return_gap > self.RETURN_GAP_SEVERE
+        ):
             result.overfitting_severity = "severe"
-        elif result.overfitting_ratio >= 0.4 or result.avg_return_gap > self.RETURN_GAP_WARNING:
+        elif (
+            result.overfitting_ratio >= 0.4
+            or result.avg_return_gap > self.RETURN_GAP_WARNING
+        ):
             result.overfitting_severity = "moderate"
         elif result.overfitting_ratio >= 0.2 or result.avg_return_gap > 5:
             result.overfitting_severity = "mild"
@@ -796,17 +853,14 @@ class WalkForwardAnalyzer:
             return "low"
 
     def _create_empty_result(
-        self,
-        symbol: str,
-        strategy_type: str,
-        reason: str
+        self, symbol: str, strategy_type: str, reason: str
     ) -> WalkForwardResult:
         """Create empty result for error cases"""
         result = WalkForwardResult(
             symbol=symbol,
             strategy_type=strategy_type,
             window_mode=self.mode,
-            total_windows=0
+            total_windows=0,
         )
         result.recommendation = f"❌ 无法分析：{reason}"
         return result

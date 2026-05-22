@@ -11,6 +11,7 @@ http_client.py — 统一 HTTP 客户端（带 retry + Circuit Breaker + Pydanti
 5. 共享 AsyncClient 实例（连接池复用，减少资源消耗）
 6. 信号量并发限制（防止过多并发请求压垮数据源）
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -61,7 +62,7 @@ _client_lock = asyncio.Lock()
 async def get_shared_client() -> httpx.AsyncClient:
     """
     Get or create the shared AsyncClient instance.
-    
+
     Uses connection pooling for efficiency.
     Thread-safe via asyncio.Lock.
     """
@@ -106,6 +107,7 @@ async def close_shared_client():
 
 class HTTPClientError(Exception):
     """HTTP 客户端基础异常"""
+
     def __init__(self, message: str, url: str = ""):
         self.url = url
         super().__init__(message)
@@ -113,16 +115,19 @@ class HTTPClientError(Exception):
 
 class RetryableError(HTTPClientError):
     """可重试错误（触发 retry）"""
+
     pass
 
 
 class ValidationError(HTTPClientError):
     """Pydantic 校验失败（不重试，不触发 circuit breaker）"""
+
     pass
 
 
 class CircuitOpenError(HTTPClientError):
     """Circuit Breaker 打开（跳过请求）"""
+
     pass
 
 
@@ -191,7 +196,9 @@ class ValidatedHTTPClient:
         if self._client and not self._client.is_closed:
             await self._client.aclose()
             self._client = None
-            logger.debug(f"[HTTPClient] closed (total_requests={self._total_requests}, total_retries={self._total_retries})")
+            logger.debug(
+                f"[HTTPClient] closed (total_requests={self._total_requests}, total_retries={self._total_retries})"
+            )
 
     # ── Circuit Breaker 前置检查 ──────────────────────────────────────────
 
@@ -213,7 +220,9 @@ class ValidatedHTTPClient:
             return False
 
         if state == CircuitState.HALF_OPEN:
-            logger.info(f"[HTTPClient] CircuitBreaker '{self.cb.name}' HALF_OPEN，放行测试请求")
+            logger.info(
+                f"[HTTPClient] CircuitBreaker '{self.cb.name}' HALF_OPEN，放行测试请求"
+            )
             return True
 
         return True  # CLOSED
@@ -225,7 +234,7 @@ class ValidatedHTTPClient:
         url: str,
         *,
         headers: Optional[dict] = None,
-        encoding: Optional[str] = None,   # 响应编码（如 "gbk" for Sina）
+        encoding: Optional[str] = None,  # 响应编码（如 "gbk" for Sina）
         extra_retries: Optional[int] = None,
     ) -> httpx.Response:
         """
@@ -270,7 +279,7 @@ class ValidatedHTTPClient:
                         else:
                             raise RetryableError(
                                 f"HTTP {resp.status_code} after {retries + 1} attempts",
-                                url
+                                url,
                             )
 
                     resp.raise_for_status()
@@ -279,7 +288,9 @@ class ValidatedHTTPClient:
                     if not resp.content:
                         if attempt < retries:
                             self._total_retries += 1
-                            logger.warning(f"[HTTPClient] {url} 响应体为空，{delay:.1f}s 后重试")
+                            logger.warning(
+                                f"[HTTPClient] {url} 响应体为空，{delay:.1f}s 后重试"
+                            )
                             await asyncio.sleep(delay)
                             delay = min(delay * 2, self.max_delay)
                             continue
@@ -298,13 +309,16 @@ class ValidatedHTTPClient:
                         logger.warning(
                             f"[HTTPClient] {url} 网络错误: {type(e).__name__}，"
                             f"{delay:.1f}s 后重试 (attempt {attempt + 1}/{retries + 1})",
-                            exc_info=True
+                            exc_info=True,
                         )
                         await asyncio.sleep(delay)
                         delay = min(delay * 2, self.max_delay)
                     else:
                         self._record_failure()
-                        logger.error(f"[HTTPClient] {url} 网络错误，全部尝试失败: {e}", exc_info=True)
+                        logger.error(
+                            f"[HTTPClient] {url} 网络错误，全部尝试失败: {e}",
+                            exc_info=True,
+                        )
 
                 except httpx.TimeoutException as e:
                     last_error = e
@@ -314,19 +328,24 @@ class ValidatedHTTPClient:
                         logger.warning(
                             f"[HTTPClient] {url} 超时，{delay:.1f}s 后重试 "
                             f"(attempt {attempt + 1}/{retries + 1})",
-                            exc_info=True
+                            exc_info=True,
                         )
                         await asyncio.sleep(delay)
                         delay = min(delay * 2, self.max_delay)
                     else:
                         self._record_failure()
-                        logger.error(f"[HTTPClient] {url} 超时，全部尝试失败: {e}", exc_info=True)
+                        logger.error(
+                            f"[HTTPClient] {url} 超时，全部尝试失败: {e}", exc_info=True
+                        )
 
                 except httpx.HTTPStatusError as e:
                     # 4xx 错误（不含429）— 不重试，直接失败
                     last_error = e
                     self._record_failure()
-                    logger.error(f"[HTTPClient] {url} HTTP {e.response.status_code}: {e}", exc_info=True)
+                    logger.error(
+                        f"[HTTPClient] {url} HTTP {e.response.status_code}: {e}",
+                        exc_info=True,
+                    )
                     break
 
                 except Exception as e:
@@ -337,15 +356,19 @@ class ValidatedHTTPClient:
                         logger.warning(
                             f"[HTTPClient] {url} 未知错误: {type(e).__name__}: {e}，"
                             f"{delay:.1f}s 后重试",
-                            exc_info=True
+                            exc_info=True,
                         )
                         await asyncio.sleep(delay)
                         delay = min(delay * 2, self.max_delay)
                     else:
                         self._record_failure()
-                        logger.error(f"[HTTPClient] {url} 未知错误，最终失败: {e}", exc_info=True)
+                        logger.error(
+                            f"[HTTPClient] {url} 未知错误，最终失败: {e}", exc_info=True
+                        )
 
-        raise last_error or RetryableError(f"HTTP GET failed after {retries + 1} attempts", url)
+        raise last_error or RetryableError(
+            f"HTTP GET failed after {retries + 1} attempts", url
+        )
 
     # ── Circuit Breaker 记录 ─────────────────────────────────────────────
 

@@ -9,7 +9,6 @@ Tests the complete user flow for the wind vane widget:
 """
 
 
-
 class TestWindVaneDisplay:
     """Test wind vane display functionality."""
 
@@ -22,7 +21,14 @@ class TestWindVaneDisplay:
             data = response.json()
             if data.get("code") == 0:
                 wind = data["data"]["wind"]
-                expected_symbols = ["000001", "000300", "399001", "399006", "HSI", "IXIC"]
+                expected_symbols = [
+                    "000001",
+                    "000300",
+                    "399001",
+                    "399006",
+                    "HSI",
+                    "IXIC",
+                ]
                 for symbol in expected_symbols:
                     assert symbol in wind, f"Missing wind symbol: {symbol}"
 
@@ -107,6 +113,7 @@ class TestWindVaneDataFreshness:
     def test_macro_cache_is_60_seconds(self):
         """Test that macro cache TTL is 60 seconds."""
         from app.routers.market.overview import _MACRO_CACHE_TTL
+
         assert _MACRO_CACHE_TTL == 60
 
     def test_market_overview_has_timestamp(self, client):

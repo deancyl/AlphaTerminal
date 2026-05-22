@@ -74,20 +74,28 @@ class PerformanceAnalyzer:
             return 0.0
         return float((1 + total) ** (1 / years) - 1)
 
-    def _sharpe_ratio(self, risk_free_rate: float = 0.0, periods_per_year: int = 252) -> float:
+    def _sharpe_ratio(
+        self, risk_free_rate: float = 0.0, periods_per_year: int = 252
+    ) -> float:
         if len(self.returns) == 0 or self.returns.std() == 0:
             return 0.0
         excess_returns = self.returns - risk_free_rate / periods_per_year
-        return float(np.sqrt(periods_per_year) * excess_returns.mean() / excess_returns.std())
+        return float(
+            np.sqrt(periods_per_year) * excess_returns.mean() / excess_returns.std()
+        )
 
-    def _sortino_ratio(self, risk_free_rate: float = 0.0, periods_per_year: int = 252) -> float:
+    def _sortino_ratio(
+        self, risk_free_rate: float = 0.0, periods_per_year: int = 252
+    ) -> float:
         if len(self.returns) == 0:
             return 0.0
         excess_returns = self.returns - risk_free_rate / periods_per_year
         downside_returns = excess_returns[excess_returns < 0]
         if len(downside_returns) == 0 or downside_returns.std() == 0:
             return 0.0
-        return float(np.sqrt(periods_per_year) * excess_returns.mean() / downside_returns.std())
+        return float(
+            np.sqrt(periods_per_year) * excess_returns.mean() / downside_returns.std()
+        )
 
     def _max_drawdown(self) -> float:
         if len(self.returns) == 0:
@@ -117,9 +125,9 @@ class PerformanceAnalyzer:
     def _avg_holding_period(self) -> float:
         if self.positions is None or len(self.positions) == 0:
             return 0.0
-        if 'holding_period' not in self.positions.columns:
+        if "holding_period" not in self.positions.columns:
             return 0.0
-        return float(self.positions['holding_period'].mean())
+        return float(self.positions["holding_period"].mean())
 
     def _equity_curve(self) -> pd.Series:
         if len(self.returns) == 0:

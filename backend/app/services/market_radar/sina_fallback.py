@@ -15,12 +15,15 @@ _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="sina_fallback
 
 try:
     from curl_cffi import requests as curl_requests
+
     HAS_CURL_CFFI = True
 except ImportError:
     import requests as curl_requests
+
     HAS_CURL_CFFI = False
 
 from app.config.settings import get_settings
+
 
 def _get_proxies():
     settings = get_settings()
@@ -29,16 +32,17 @@ def _get_proxies():
         return {"http": proxy, "https": proxy}
     return None
 
+
 _PROXIES = _get_proxies()
 
 
 def fetch_all_stocks_sina_sync(page_size: int = 500) -> List[Dict]:
     """
     Fetch all A-share stocks from Sina API (works through proxy).
-    
+
     Args:
         page_size: Number of stocks per page (default 500)
-        
+
     Returns:
         List of stock dictionaries with keys:
         - symbol: Stock code (e.g., "sh600519")
@@ -61,10 +65,7 @@ def fetch_all_stocks_sina_sync(page_size: int = 500) -> List[Dict]:
 
             if HAS_CURL_CFFI:
                 response = curl_requests.get(
-                    url,
-                    timeout=15,
-                    impersonate="chrome120",
-                    proxies=_PROXIES
+                    url, timeout=15, impersonate="chrome120", proxies=_PROXIES
                 )
             else:
                 response = curl_requests.get(url, timeout=15, proxies=_PROXIES)
@@ -85,18 +86,20 @@ def fetch_all_stocks_sina_sync(page_size: int = 500) -> List[Dict]:
                     if symbol.startswith("bj"):
                         continue
 
-                    all_stocks.append({
-                        "symbol": symbol,
-                        "name": item.get("name", ""),
-                        "price": float(item.get("trade", 0) or 0),
-                        "change_pct": float(item.get("changepercent", 0) or 0),
-                        "volume": float(item.get("volume", 0) or 0),
-                        "amount": float(item.get("amount", 0) or 0),
-                        "market_cap": float(item.get("mktcap", 0) or 0) * 10000,
-                        "high": float(item.get("high", 0) or 0),
-                        "low": float(item.get("low", 0) or 0),
-                        "pre_close": float(item.get("settlement", 0) or 0),
-                    })
+                    all_stocks.append(
+                        {
+                            "symbol": symbol,
+                            "name": item.get("name", ""),
+                            "price": float(item.get("trade", 0) or 0),
+                            "change_pct": float(item.get("changepercent", 0) or 0),
+                            "volume": float(item.get("volume", 0) or 0),
+                            "amount": float(item.get("amount", 0) or 0),
+                            "market_cap": float(item.get("mktcap", 0) or 0) * 10000,
+                            "high": float(item.get("high", 0) or 0),
+                            "low": float(item.get("low", 0) or 0),
+                            "pre_close": float(item.get("settlement", 0) or 0),
+                        }
+                    )
                 except (ValueError, TypeError):
                     continue
 
@@ -115,9 +118,9 @@ def fetch_all_stocks_sina_sync(page_size: int = 500) -> List[Dict]:
 def fetch_sectors_sina_sync() -> List[Dict]:
     """
     Get static sector list as fallback.
-    
+
     Used when Eastmoney sector API is blocked.
-    
+
     Returns:
         List of sector dictionaries with keys:
         - name: Sector name
@@ -161,6 +164,7 @@ def fetch_sectors_sina_sync() -> List[Dict]:
 async def fetch_all_stocks_sina() -> List[Dict]:
     """Async wrapper for Sina stocks fetching."""
     import asyncio
+
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, fetch_all_stocks_sina_sync)
 

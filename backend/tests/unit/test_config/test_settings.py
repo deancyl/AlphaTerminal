@@ -7,11 +7,14 @@ Tests cover:
 - Validation logic
 - Helper methods
 """
+
 import os
 import sys
 from unittest.mock import patch
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+)
 from app.config.settings import Settings, get_settings, reload_settings
 
 
@@ -69,12 +72,16 @@ class TestSettingsEnvironmentLoading:
     """Test loading settings from environment variables."""
 
     def test_load_http_proxy_from_env(self):
-        with patch.dict(os.environ, {"HTTP_PROXY": "http://192.168.1.50:7897"}, clear=False):
+        with patch.dict(
+            os.environ, {"HTTP_PROXY": "http://192.168.1.50:7897"}, clear=False
+        ):
             settings = Settings()
             assert settings.HTTP_PROXY == "http://192.168.1.50:7897"
 
     def test_load_alpha_vantage_key_from_env(self):
-        with patch.dict(os.environ, {"ALPHA_VANTAGE_API_KEY": "test_key_123"}, clear=False):
+        with patch.dict(
+            os.environ, {"ALPHA_VANTAGE_API_KEY": "test_key_123"}, clear=False
+        ):
             settings = Settings()
             assert settings.ALPHA_VANTAGE_API_KEY == "test_key_123"
 
@@ -99,9 +106,15 @@ class TestSettingsEnvironmentLoading:
             assert settings.DEBUG_MODE is False
 
     def test_load_allowed_origins_from_env(self):
-        with patch.dict(os.environ, {"ALLOWED_ORIGINS": "http://localhost:3000,http://example.com"}, clear=False):
+        with patch.dict(
+            os.environ,
+            {"ALLOWED_ORIGINS": "http://localhost:3000,http://example.com"},
+            clear=False,
+        ):
             settings = Settings()
-            assert settings.ALLOWED_ORIGINS == "http://localhost:3000,http://example.com"
+            assert (
+                settings.ALLOWED_ORIGINS == "http://localhost:3000,http://example.com"
+            )
 
 
 class TestSettingsValidation:
@@ -149,12 +162,20 @@ class TestSettingsHelperMethods:
         assert result == ["*"]
 
     def test_get_allowed_origins_list_multiple(self):
-        settings = Settings(ALLOWED_ORIGINS="http://localhost:3000, http://example.com, http://test.com")
+        settings = Settings(
+            ALLOWED_ORIGINS="http://localhost:3000, http://example.com, http://test.com"
+        )
         result = settings.get_allowed_origins_list()
-        assert result == ["http://localhost:3000", "http://example.com", "http://test.com"]
+        assert result == [
+            "http://localhost:3000",
+            "http://example.com",
+            "http://test.com",
+        ]
 
     def test_get_allowed_origins_list_empty_parts(self):
-        settings = Settings(ALLOWED_ORIGINS="http://localhost:3000,,http://example.com,")
+        settings = Settings(
+            ALLOWED_ORIGINS="http://localhost:3000,,http://example.com,"
+        )
         result = settings.get_allowed_origins_list()
         assert result == ["http://localhost:3000", "http://example.com"]
 
@@ -230,23 +251,37 @@ class TestSettingsSecurityDefaults:
 
     def test_debug_mode_defaults_to_false(self):
         settings = Settings()
-        assert settings.DEBUG_MODE is False, "DEBUG_MODE must default to False for security"
+        assert (
+            settings.DEBUG_MODE is False
+        ), "DEBUG_MODE must default to False for security"
 
     def test_agent_db_debug_defaults_to_false(self):
         settings = Settings()
-        assert settings.AGENT_DB_DEBUG is False, "AGENT_DB_DEBUG must default to False for security"
+        assert (
+            settings.AGENT_DB_DEBUG is False
+        ), "AGENT_DB_DEBUG must default to False for security"
 
     def test_agent_auth_debug_defaults_to_false(self):
         settings = Settings()
-        assert settings.AGENT_AUTH_DEBUG is False, "AGENT_AUTH_DEBUG must default to False for security"
+        assert (
+            settings.AGENT_AUTH_DEBUG is False
+        ), "AGENT_AUTH_DEBUG must default to False for security"
 
     def test_api_keys_default_to_empty(self):
         settings = Settings()
-        assert settings.ALPHA_VANTAGE_API_KEY == "", "ALPHA_VANTAGE_API_KEY must default to empty string"
-        assert settings.ADMIN_API_KEY == "", "ADMIN_API_KEY must default to empty string"
+        assert (
+            settings.ALPHA_VANTAGE_API_KEY == ""
+        ), "ALPHA_VANTAGE_API_KEY must default to empty string"
+        assert (
+            settings.ADMIN_API_KEY == ""
+        ), "ADMIN_API_KEY must default to empty string"
 
     def test_no_hardcoded_api_keys(self):
         settings = Settings()
         # Ensure no hardcoded API keys in defaults
-        assert settings.ALPHA_VANTAGE_API_KEY not in ["4M3YTMFEMBOPM1W2", "demo", "test"]
+        assert settings.ALPHA_VANTAGE_API_KEY not in [
+            "4M3YTMFEMBOPM1W2",
+            "demo",
+            "test",
+        ]
         assert settings.ADMIN_API_KEY not in ["admin", "secret", "password"]

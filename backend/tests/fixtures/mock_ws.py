@@ -4,6 +4,7 @@ Mock WebSocket fixtures for testing.
 Provides reusable MockWebSocket classes for testing WebSocket-related functionality
 without requiring actual network connections.
 """
+
 import json
 from typing import List, Dict, Any, Optional
 
@@ -11,13 +12,13 @@ from typing import List, Dict, Any, Optional
 class MockWebSocket:
     """
     Mock WebSocket for testing WebSocket endpoints.
-    
+
     Simulates the FastAPI WebSocket interface for testing:
     - accept() - connection acceptance
     - send_text() - message sending
     - receive_text() - message receiving
     - close() - connection closing
-    
+
     Usage:
         mock_ws = MockWebSocket()
         await mock_ws.accept()
@@ -29,11 +30,11 @@ class MockWebSocket:
         self,
         receive_messages: Optional[List[str]] = None,
         auto_accept: bool = True,
-        raise_on_send: Optional[Exception] = None
+        raise_on_send: Optional[Exception] = None,
     ):
         """
         Initialize MockWebSocket.
-        
+
         Args:
             receive_messages: Pre-populated messages to receive (for testing receive loop)
             auto_accept: Automatically accept connection on accept() call
@@ -57,10 +58,10 @@ class MockWebSocket:
     async def send_text(self, data: str) -> None:
         """
         Send text message through WebSocket.
-        
+
         Args:
             data: JSON string or plain text to send
-        
+
         Raises:
             Exception: If raise_on_send is configured
         """
@@ -80,10 +81,10 @@ class MockWebSocket:
     async def receive_text(self) -> str:
         """
         Receive text message from WebSocket.
-        
+
         Returns:
             Next message from receive_messages queue
-            
+
         Raises:
             RuntimeError: If no more messages available
         """
@@ -97,7 +98,7 @@ class MockWebSocket:
     async def close(self, code: int = 1000, reason: str = "") -> None:
         """
         Close WebSocket connection.
-        
+
         Args:
             code: WebSocket close code
             reason: Close reason string
@@ -122,9 +123,9 @@ class MockWebSocket:
 class MockWebSocketWithHeartbeat(MockWebSocket):
     """
     Mock WebSocket with heartbeat support.
-    
+
     Automatically responds to ping messages with pong.
-    
+
     Usage:
         mock_ws = MockWebSocketWithHeartbeat()
         await mock_ws.send_text(json.dumps({"type": "ping"}))
@@ -148,7 +149,9 @@ class MockWebSocketWithHeartbeat(MockWebSocket):
                 self.ping_count += 1
                 self._last_ping_time = parsed.get("timestamp")
                 # Auto-send pong response
-                pong_msg = json.dumps({"type": "pong", "timestamp": self._last_ping_time})
+                pong_msg = json.dumps(
+                    {"type": "pong", "timestamp": self._last_ping_time}
+                )
                 await super().send_text(pong_msg)
                 self.pong_count += 1
         except (json.JSONDecodeError, TypeError):
@@ -158,9 +161,9 @@ class MockWebSocketWithHeartbeat(MockWebSocket):
 class MockWebSocketFactory:
     """
     Factory for creating multiple MockWebSocket instances.
-    
+
     Useful for testing multiple concurrent connections.
-    
+
     Usage:
         factory = MockWebSocketFactory()
         connections = factory.create_batch(5)
@@ -171,7 +174,7 @@ class MockWebSocketFactory:
     def __init__(
         self,
         default_receive_messages: Optional[List[str]] = None,
-        default_raise_on_send: Optional[Exception] = None
+        default_raise_on_send: Optional[Exception] = None,
     ):
         self._default_receive_messages = default_receive_messages
         self._default_raise_on_send = default_raise_on_send
@@ -180,12 +183,12 @@ class MockWebSocketFactory:
     def create(
         self,
         receive_messages: Optional[List[str]] = None,
-        raise_on_send: Optional[Exception] = None
+        raise_on_send: Optional[Exception] = None,
     ) -> MockWebSocket:
         """Create a single MockWebSocket instance."""
         ws = MockWebSocket(
             receive_messages=receive_messages or self._default_receive_messages,
-            raise_on_send=raise_on_send or self._default_raise_on_send
+            raise_on_send=raise_on_send or self._default_raise_on_send,
         )
         self._created.append(ws)
         return ws
@@ -212,13 +215,10 @@ class MockWebSocketFactory:
 # Convenience fixtures for pytest
 def create_mock_websocket(
     receive_messages: Optional[List[str]] = None,
-    raise_on_send: Optional[Exception] = None
+    raise_on_send: Optional[Exception] = None,
 ) -> MockWebSocket:
     """Convenience function to create a MockWebSocket."""
-    return MockWebSocket(
-        receive_messages=receive_messages,
-        raise_on_send=raise_on_send
-    )
+    return MockWebSocket(receive_messages=receive_messages, raise_on_send=raise_on_send)
 
 
 def create_mock_websocket_batch(count: int) -> List[MockWebSocket]:

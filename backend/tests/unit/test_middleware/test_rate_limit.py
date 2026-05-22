@@ -3,6 +3,7 @@ Rate Limiting Middleware Tests
 
 Tests for IP-based rate limiting, endpoint-specific limits, and 429 response format.
 """
+
 import pytest
 from unittest.mock import Mock
 from fastapi import FastAPI, Request
@@ -58,7 +59,7 @@ class TestIPBasedRateLimiting:
         request.client.host = "127.0.0.1"
         request.headers = {
             "x-forwarded-for": "203.0.113.50",
-            "x-real-ip": "198.51.100.78"
+            "x-real-ip": "198.51.100.78",
         }
 
         ip = get_client_ip(request)
@@ -120,11 +121,15 @@ class TestRateLimitStorage:
         limiter = InMemoryRateLimiter()
         key = "192.168.1.100:/api/v1/market/overview"
 
-        is_allowed, remaining, limit, reset = limiter.is_allowed(key, limit=10, period=60)
+        is_allowed, remaining, limit, reset = limiter.is_allowed(
+            key, limit=10, period=60
+        )
         assert is_allowed is True
         assert remaining == 9
 
-        is_allowed, remaining, limit, reset = limiter.is_allowed(key, limit=10, period=60)
+        is_allowed, remaining, limit, reset = limiter.is_allowed(
+            key, limit=10, period=60
+        )
         assert is_allowed is True
         assert remaining == 8
 
@@ -136,10 +141,14 @@ class TestRateLimitStorage:
         key = "192.168.1.100:/api/v1/test"
 
         for i in range(10):
-            is_allowed, remaining, limit, reset = limiter.is_allowed(key, limit=10, period=60)
+            is_allowed, remaining, limit, reset = limiter.is_allowed(
+                key, limit=10, period=60
+            )
             assert is_allowed is True
 
-        is_allowed, remaining, limit, reset = limiter.is_allowed(key, limit=10, period=60)
+        is_allowed, remaining, limit, reset = limiter.is_allowed(
+            key, limit=10, period=60
+        )
         assert is_allowed is False
         assert remaining == 0
 
@@ -155,7 +164,9 @@ class TestRateLimitStorage:
 
         time.sleep(1.1)
 
-        is_allowed, remaining, limit, reset = limiter.is_allowed(key, limit=10, period=1)
+        is_allowed, remaining, limit, reset = limiter.is_allowed(
+            key, limit=10, period=1
+        )
         assert is_allowed is True
         assert remaining == 9
 
@@ -178,11 +189,7 @@ class TestRateLimitMiddleware:
         async def health():
             return {"status": "healthy"}
 
-        config = RateLimitConfig(
-            global_limit=5,
-            global_period=60,
-            enabled=True
-        )
+        config = RateLimitConfig(global_limit=5, global_period=60, enabled=True)
         app.add_middleware(RateLimitMiddleware, config=config)
 
         return app
@@ -225,6 +232,7 @@ class TestRateLimitResponseFormat:
         assert response.status_code == 429
 
         import json
+
         body = json.loads(response.body)
 
         assert "code" in body
@@ -246,10 +254,7 @@ class TestRateLimitResponseFormat:
         from app.middleware.rate_limit import create_rate_limit_response
 
         response = create_rate_limit_response(
-            retry_after=60,
-            limit=10,
-            remaining=0,
-            reset=1700000000
+            retry_after=60, limit=10, remaining=0, reset=1700000000
         )
 
         assert "x-ratelimit-limit" in response.headers
@@ -272,10 +277,7 @@ class TestRateLimitHeaders:
         response = JSONResponse(content={"status": "ok"})
 
         response = add_rate_limit_headers(
-            response,
-            limit=10,
-            remaining=5,
-            reset=1700000000
+            response, limit=10, remaining=5, reset=1700000000
         )
 
         assert "x-ratelimit-limit" in response.headers

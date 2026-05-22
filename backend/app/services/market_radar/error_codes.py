@@ -35,7 +35,7 @@ class MarketRadarErrorCode(str, Enum):
 class MarketRadarError:
     """
     Standardized error response for Market Radar API.
-    
+
     Usage:
         error = MarketRadarError(
             code=MarketRadarErrorCode.TIMEOUT,
@@ -80,7 +80,7 @@ class MarketRadarError:
         code: MarketRadarErrorCode,
         message: Optional[str] = None,
         detail: Optional[str] = None,
-        retry_after: Optional[int] = None
+        retry_after: Optional[int] = None,
     ):
         self.code = code
         self.message = message or self.USER_MESSAGES.get(code, "未知错误")
@@ -108,7 +108,7 @@ class MarketRadarError:
     def from_exception(cls, exc: Exception) -> "MarketRadarError":
         """
         Create error from exception.
-        
+
         Maps technical exceptions to user-friendly error codes.
         """
         error_str = str(exc).lower()
@@ -128,11 +128,11 @@ class MarketRadarError:
 def success_response(data: Any, **kwargs) -> Dict[str, Any]:
     """
     Create a success response.
-    
+
     Args:
         data: Response data
         **kwargs: Additional fields to include
-        
+
     Returns:
         Standardized success response dictionary
     """
@@ -147,16 +147,16 @@ def success_response(data: Any, **kwargs) -> Dict[str, Any]:
 def error_response(
     code: MarketRadarErrorCode,
     message: Optional[str] = None,
-    detail: Optional[str] = None
+    detail: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create an error response.
-    
+
     Args:
         code: Error code
         message: Optional custom message
         detail: Optional detail for logging
-        
+
     Returns:
         Standardized error response dictionary
     """

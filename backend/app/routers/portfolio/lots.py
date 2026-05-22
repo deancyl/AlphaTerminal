@@ -19,8 +19,13 @@ from app.utils.errors import success_response
 from app.middleware import require_api_key
 from app.db.database import _get_conn, get_conn
 from app.services.trading import (
-    execute_buy, execute_sell, get_open_lots, calc_unrealized_pnl,
-    upsert_position_summary, update_market_value, get_position_summary,
+    execute_buy,
+    execute_sell,
+    get_open_lots,
+    calc_unrealized_pnl,
+    upsert_position_summary,
+    update_market_value,
+    get_position_summary,
 )
 
 from .dependencies import (
@@ -38,10 +43,13 @@ router = APIRouter(tags=["portfolio"])
 PORTFOLIO_TIMEOUT = 30  # seconds
 
 # Shared thread pool for non-blocking SQLite operations
-_portfolio_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="portfolio_")
+_portfolio_executor = ThreadPoolExecutor(
+    max_workers=20, thread_name_prefix="portfolio_"
+)
 
 
 # ── Buy (BUY) - Add new lot ────────────────────────────────────────────
+
 
 @router.post("/{portfolio_id}/lots/buy")
 @handle_errors(module="portfolio_lots")
@@ -50,6 +58,7 @@ async def buy_lot(portfolio_id: int, body: BuyIn, _: None = Depends(require_api_
     买入时新增一个批次（lot）。
     同一标的同一日期可有多批次，但 avg_cost 独立计算。
     """
+
     def _sync_work():
         lot = execute_buy(
             portfolio_id=portfolio_id,
@@ -76,7 +85,9 @@ async def buy_lot(portfolio_id: int, body: BuyIn, _: None = Depends(require_api_
         result = await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
         return success_response(result)
     except asyncio.TimeoutError:
-        logger.warning("[lots] buy_lot timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] buy_lot timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True
+        )
         raise HTTPException(504, "Buy lot timeout")
     except ValueError as e:
         logger.warning("[lots] buy_lot value error: %s", e, exc_info=True)
@@ -94,6 +105,7 @@ async def buy_lot(portfolio_id: int, body: BuyIn, _: None = Depends(require_api_
 
 # ── Sell (SELL) - FIFO close position ─────────────────────────────────────────
 
+
 @router.post("/{portfolio_id}/lots/sell")
 @handle_errors(module="portfolio_lots")
 async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_api_key)):
@@ -103,6 +115,7 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
       2. 每批次平仓时计算 realized_pnl 并累加
       3. 返回平仓明细和总已实现盈亏
     """
+
     def _sync_work():
         with get_conn() as conn:
             conn.execute("BEGIN IMMEDIATE TRANSACTION")
@@ -142,7 +155,10 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
 
                 conn.commit()
             except sqlite3.Error as e:
-                logger.error(f"[lots] Database error during sell_lot: {type(e).__name__}: {e}", exc_info=True)
+                logger.error(
+                    f"[lots] Database error during sell_lot: {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
                 conn.rollback()
                 raise
 
@@ -172,7 +188,9 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
         result = await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
         return success_response(result)
     except asyncio.TimeoutError:
-        logger.warning("[lots] sell_lot timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] sell_lot timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True
+        )
         raise HTTPException(504, "Sell lot timeout")
     except ValueError as e:
         logger.warning("[lots] sell_lot value error: %s", e, exc_info=True)
@@ -190,6 +208,7 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
 
 # ── Lot Query ─────────────────────────────────────────────────────────
 
+
 @router.get("/{portfolio_id}/lots")
 @handle_errors(module="portfolio_lots")
 async def list_lots(
@@ -201,6 +220,7 @@ async def list_lots(
     返回某账户的未平批次（可按标的过滤）。
     当 include_children=True 时，使用递归 CTE 聚合所有后代子账户的批次。
     """
+
     def _sync_work():
         lots = get_open_lots(portfolio_id, symbol, include_children=include_children)
         if include_children:
@@ -239,7 +259,9 @@ async def list_lots(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[lots] list_lots timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] list_lots timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True
+        )
         raise HTTPException(504, "List lots timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Lots] 数据库操作错误: {e}", exc_info=True)
@@ -250,6 +272,7 @@ async def list_lots(
 
 
 # ── Unrealized PnL ──────────────────────────────────────────────────────
+
 
 @router.get("/{portfolio_id}/lots/unrealized")
 @handle_errors(module="portfolio_lots")
@@ -262,6 +285,7 @@ async def unrealized_pnl(
     计算浮动盈亏。
     未实现 PnL = Σ(shares × (current_price - avg_cost))
     """
+
     def _sync_work():
         return calc_unrealized_pnl(portfolio_id, symbol, current_price)
 
@@ -273,7 +297,9 @@ async def unrealized_pnl(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[lots] unrealized_pnl timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] unrealized_pnl timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True
+        )
         raise HTTPException(504, "Unrealized PnL timeout")
     except ValueError as e:
         logger.error(f"[UnrealizedPnl] 参数错误: {e}", exc_info=True)
@@ -290,6 +316,7 @@ async def unrealized_pnl(
 #  Sub-account Roll-up aggregation endpoints (Conservation Law + Tree Structure)
 # ══════════════════════════════════════════════════════════════════════════
 
+
 @router.get("/{portfolio_id}/conservation")
 @handle_errors(module="portfolio_lots")
 async def check_conservation(portfolio_id: int):
@@ -299,6 +326,7 @@ async def check_conservation(portfolio_id: int):
 
     返回各子项明细和对齐结果，用于调试和自动化测试。
     """
+
     def _sync_work():
         from app.services.sentiment_engine import SpotCache
 
@@ -306,7 +334,7 @@ async def check_conservation(portfolio_id: int):
         try:
             parent = conn.execute(
                 "SELECT id, name, cash_balance FROM portfolios WHERE id=?",
-                (portfolio_id,)
+                (portfolio_id,),
             ).fetchone()
             if not parent:
                 raise HTTPException(404, f"账户 {portfolio_id} 不存在")
@@ -315,20 +343,20 @@ async def check_conservation(portfolio_id: int):
 
             children = conn.execute(
                 "SELECT id, name, cash_balance FROM portfolios WHERE parent_id=?",
-                (portfolio_id,)
+                (portfolio_id,),
             ).fetchall()
 
             parent_positions = conn.execute(
                 "SELECT portfolio_id, symbol, total_shares as shares, avg_cost, market_value FROM position_summary WHERE portfolio_id=? AND total_shares > 0",
-                (portfolio_id,)
+                (portfolio_id,),
             ).fetchall()
 
             all_desc_ids = _get_all_descendants(conn, portfolio_id)
             if all_desc_ids:
-                placeholders = ','.join(['?' for _ in all_desc_ids])
+                placeholders = ",".join(["?" for _ in all_desc_ids])
                 child_positions = conn.execute(
                     f"SELECT portfolio_id, symbol, total_shares as shares, avg_cost, market_value FROM position_summary WHERE portfolio_id IN ({placeholders}) AND total_shares > 0",
-                    tuple(all_desc_ids)
+                    tuple(all_desc_ids),
                 ).fetchall()
             else:
                 child_positions = []
@@ -352,7 +380,11 @@ async def check_conservation(portfolio_id: int):
                     if market_value is not None and market_value > 0:
                         total += market_value
                     else:
-                        price = price_map.get(sym) or price_map.get(sym[2:] if len(sym) > 2 else sym) or 0.0
+                        price = (
+                            price_map.get(sym)
+                            or price_map.get(sym[2:] if len(sym) > 2 else sym)
+                            or 0.0
+                        )
                         total += shares * price
                 return total
 
@@ -368,13 +400,22 @@ async def check_conservation(portfolio_id: int):
                 if abs(parent_total - (parent_cash + parent_pos_value)) > 0.001:
                     conservation_ok = False
             except TypeError as e:
-                logger.warning(f"[Portfolio Conservation] 类型错误 (portfolio_id={portfolio_id}): {e}", exc_info=True)
+                logger.warning(
+                    f"[Portfolio Conservation] 类型错误 (portfolio_id={portfolio_id}): {e}",
+                    exc_info=True,
+                )
                 conservation_ok = False
             except ValueError as e:
-                logger.warning(f"[Portfolio Conservation] 数值错误 (portfolio_id={portfolio_id}): {e}", exc_info=True)
+                logger.warning(
+                    f"[Portfolio Conservation] 数值错误 (portfolio_id={portfolio_id}): {e}",
+                    exc_info=True,
+                )
                 conservation_ok = False
             except Exception as e:
-                logger.warning(f"[Portfolio Conservation] 校验异常 (portfolio_id={portfolio_id}): {e}", exc_info=True)
+                logger.warning(
+                    f"[Portfolio Conservation] 校验异常 (portfolio_id={portfolio_id}): {e}",
+                    exc_info=True,
+                )
                 conservation_ok = False
 
             return {
@@ -411,7 +452,11 @@ async def check_conservation(portfolio_id: int):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[lots] check_conservation timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] check_conservation timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "Check conservation timeout")
 
 
@@ -421,15 +466,17 @@ async def get_portfolio_tree(portfolio_id: int):
     """
     返回指定账户的完整子树结构（递归），每节点包含聚合资产快照。
     用于前端树形账户选择器的渲染。
-    
+
     优化：使用单次递归CTE查询替代N+1递归查询。
     """
+
     def _sync_work():
         from app.services.sentiment_engine import SpotCache
 
         conn = _get_conn()
         try:
-            tree_rows = conn.execute("""
+            tree_rows = conn.execute(
+                """
                 WITH RECURSIVE portfolio_tree AS (
                     SELECT id, name, type, parent_id, cash_balance, status, 0 as depth
                     FROM portfolios WHERE id = ?
@@ -441,18 +488,23 @@ async def get_portfolio_tree(portfolio_id: int):
                 SELECT id, name, type, parent_id, cash_balance, status, depth 
                 FROM portfolio_tree 
                 ORDER BY depth, id
-            """, (portfolio_id,)).fetchall()
+            """,
+                (portfolio_id,),
+            ).fetchall()
 
             if not tree_rows:
                 return {"tree": {}}
 
             tree_ids = [r[0] for r in tree_rows]
-            placeholders = ','.join(['?' for _ in tree_ids])
-            pos_rows = conn.execute(f"""
+            placeholders = ",".join(["?" for _ in tree_ids])
+            pos_rows = conn.execute(
+                f"""
                 SELECT portfolio_id, symbol, shares 
                 FROM positions 
                 WHERE portfolio_id IN ({placeholders})
-            """, tuple(tree_ids)).fetchall()
+            """,
+                tuple(tree_ids),
+            ).fetchall()
 
             pos_map = {}
             for pid, sym, shares in pos_rows:
@@ -475,7 +527,11 @@ async def get_portfolio_tree(portfolio_id: int):
 
                 pos_value = 0.0
                 for sym, shares in pos_map.get(pid, []):
-                    price = price_map.get(sym) or price_map.get(sym[2:] if len(sym) > 2 else sym) or 0.0
+                    price = (
+                        price_map.get(sym)
+                        or price_map.get(sym[2:] if len(sym) > 2 else sym)
+                        or 0.0
+                    )
                     pos_value += shares * price
 
                 node_map[pid] = {
@@ -522,13 +578,18 @@ async def get_portfolio_tree(portfolio_id: int):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[lots] get_portfolio_tree timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] get_portfolio_tree timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "Get portfolio tree timeout")
 
 
 # ══════════════════════════════════════════════════════════════════════════
 #  Phase 3: position_summary aggregation table routes + ECharts data endpoint
 # ══════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/{portfolio_id}/lots/with_summary")
 @handle_errors(module="portfolio_lots")
@@ -543,28 +604,33 @@ async def list_lots_with_summary(
     Returns lots with pre-calculated unrealized_pnl from position_summary.
     Single endpoint replacing the need for separate /lots and /lots/summary calls.
     """
+
     def _sync_work():
         lots = get_open_lots(portfolio_id, symbol, include_children=include_children)
-        summary_rows = get_position_summary(portfolio_id, symbol, include_children=include_children)
-        summary_map = {s['symbol']: s for s in summary_rows}
+        summary_rows = get_position_summary(
+            portfolio_id, symbol, include_children=include_children
+        )
+        summary_map = {s["symbol"]: s for s in summary_rows}
 
         enriched_lots = []
         for lot in lots:
             s = summary_map.get(lot.symbol, {})
-            enriched_lots.append({
-                "id": lot.id,
-                "symbol": lot.symbol,
-                "shares": lot.shares,
-                "avg_cost": lot.avg_cost,
-                "buy_date": lot.buy_date,
-                "status": lot.status,
-                "unrealized_pnl": s.get("unrealized_pnl", 0),
-                "market_value": s.get("market_value", 0),
-                "portfolio_id": lot.portfolio_id,
-            })
+            enriched_lots.append(
+                {
+                    "id": lot.id,
+                    "symbol": lot.symbol,
+                    "shares": lot.shares,
+                    "avg_cost": lot.avg_cost,
+                    "buy_date": lot.buy_date,
+                    "status": lot.status,
+                    "unrealized_pnl": s.get("unrealized_pnl", 0),
+                    "market_value": s.get("market_value", 0),
+                    "portfolio_id": lot.portfolio_id,
+                }
+            )
 
         total = len(enriched_lots)
-        paginated = enriched_lots[offset:offset + limit]
+        paginated = enriched_lots[offset : offset + limit]
 
         return {
             "lots": paginated,
@@ -574,8 +640,8 @@ async def list_lots_with_summary(
                 "limit": limit,
                 "offset": offset,
                 "total": total,
-                "has_more": offset + len(paginated) < total
-            }
+                "has_more": offset + len(paginated) < total,
+            },
         }
 
     async def _inner():
@@ -586,7 +652,11 @@ async def list_lots_with_summary(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[lots] list_lots_with_summary timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] list_lots_with_summary timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "List lots with summary timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[lots_with_summary] 数据库操作错误: {e}", exc_info=True)
@@ -609,9 +679,16 @@ async def lots_summary(
     带 symbol → 返回单个标的聚合数据。
     include_children=True 时使用递归 CTE 聚合子树。
     """
+
     def _sync_work():
-        rows = get_position_summary(portfolio_id, symbol, include_children=include_children)
-        return {"summary": rows, "count": len(rows), "includes_children": include_children}
+        rows = get_position_summary(
+            portfolio_id, symbol, include_children=include_children
+        )
+        return {
+            "summary": rows,
+            "count": len(rows),
+            "includes_children": include_children,
+        }
 
     async def _inner():
         loop = asyncio.get_running_loop()
@@ -621,7 +698,9 @@ async def lots_summary(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[lots] lots_summary timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] lots_summary timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True
+        )
         raise HTTPException(504, "Lots summary timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[lots_summary] 数据库操作错误: {e}", exc_info=True)
@@ -640,12 +719,13 @@ async def refresh_market_value(
     portfolio_id: int,
     symbol: str = Query(..., description="标的代码"),
     current_price: float = Query(..., description="当前市价"),
-    _: None = Depends(require_api_key)
+    _: None = Depends(require_api_key),
 ):
     """
     批量刷新持仓聚合表的 market_value 和 unrealized_pnl。
     行情刷新时由调度器调用，也可在 GET /lots/summary 前调用。
     """
+
     def _sync_work():
         return update_market_value(portfolio_id, symbol, current_price)
 
@@ -657,7 +737,11 @@ async def refresh_market_value(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[lots] refresh_market_value timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] refresh_market_value timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "Refresh market value timeout")
     except ValueError as e:
         logger.error(f"[refresh_market_value] 参数错误: {e}", exc_info=True)
@@ -680,22 +764,29 @@ async def lots_echarts_data(
     返回适合 ECharts 饼图 + 列表的持仓聚合数据。
     当 include_children=True 时，使用递归 CTE 聚合所有后代子账户的持仓。
     """
+
     def _sync_work():
         rows = get_position_summary(portfolio_id, include_children=include_children)
-        total_mv = sum(r.get('market_value', 0) for r in rows)
+        total_mv = sum(r.get("market_value", 0) for r in rows)
         chart_data = []
         for r in rows:
-            mv = r.get('market_value', 0)
+            mv = r.get("market_value", 0)
             pct = round(mv / total_mv * 100, 2) if total_mv else 0
-            chart_data.append({
-                "symbol": r['symbol'],
-                "total_shares": r['total_shares'],
-                "avg_cost": r['avg_cost'],
-                "current_price": r.get('market_value', 0) / r['total_shares'] if r['total_shares'] else 0,
-                "market_value": mv,
-                "unrealized_pnl": r.get('unrealized_pnl', 0),
-                "weight_pct": pct,
-            })
+            chart_data.append(
+                {
+                    "symbol": r["symbol"],
+                    "total_shares": r["total_shares"],
+                    "avg_cost": r["avg_cost"],
+                    "current_price": (
+                        r.get("market_value", 0) / r["total_shares"]
+                        if r["total_shares"]
+                        else 0
+                    ),
+                    "market_value": mv,
+                    "unrealized_pnl": r.get("unrealized_pnl", 0),
+                    "weight_pct": pct,
+                }
+            )
         return {
             "total_market_value": round(total_mv, 2),
             "positions": chart_data,
@@ -709,7 +800,11 @@ async def lots_echarts_data(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[lots] lots_echarts_data timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[lots] lots_echarts_data timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "Lots echarts data timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[lots_echarts_data] 数据库操作错误: {e}", exc_info=True)

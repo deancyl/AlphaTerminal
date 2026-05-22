@@ -11,6 +11,7 @@ Options Data Fetcher - AKShare期权数据获取服务
 - 中文到英文字段映射
 - 空值安全处理
 """
+
 import asyncio
 import logging
 import pandas as pd
@@ -29,14 +30,18 @@ _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="options_fetch_
 
 _akshare = None
 
+
 def _get_akshare():
     global _akshare
     if _akshare is None:
         try:
             import akshare as ak
+
             _akshare = ak
         except ImportError:
-            logger.error("[Options] akshare 未安装，请运行: pip install akshare", exc_info=True)
+            logger.error(
+                "[Options] akshare 未安装，请运行: pip install akshare", exc_info=True
+            )
             raise
     return _akshare
 
@@ -44,10 +49,10 @@ def _get_akshare():
 def clean_value(val) -> Optional[float]:
     """
     安全地将值转为float，处理NaN和无效值
-    
+
     Args:
         val: 任意值
-        
+
     Returns:
         float 或 None
     """
@@ -56,6 +61,7 @@ def clean_value(val) -> Optional[float]:
     try:
         f = float(val)
         import math
+
         if pd.isna(f) or not math.isfinite(f):
             return None
         return f
@@ -66,16 +72,16 @@ def clean_value(val) -> Optional[float]:
 class OptionsFetcher(BaseMarketFetcher):
     """
     Options数据获取器
-    
+
     使用方式:
         fetcher = OptionsFetcher()
-        
+
         # 获取CFFEX期权链
         chain = await fetcher.get_cffex_chain("io2506")
-        
+
         # 获取Greeks
         greeks = await fetcher.get_sse_greeks("10004023")
-        
+
         # 获取合约列表
         contracts = await fetcher.get_contract_list("CFFEX")
     """
@@ -114,7 +120,7 @@ class OptionsFetcher(BaseMarketFetcher):
             CircuitBreakerConfig(
                 failure_threshold=5,
                 timeout=60.0,
-            )
+            ),
         )
         self._ak = None
 
@@ -128,10 +134,10 @@ class OptionsFetcher(BaseMarketFetcher):
     def _get_underlying_symbol(self, option_symbol: str) -> str:
         """
         Get underlying index symbol from option symbol.
-        
+
         Args:
             option_symbol: Option code like "io2506" or "mo2509"
-            
+
         Returns:
             Index symbol: "sh000300" for io, "sh000852" for mo
         """
@@ -147,18 +153,19 @@ class OptionsFetcher(BaseMarketFetcher):
     async def _fetch_underlying_spot(self, symbol: str) -> Optional[float]:
         """
         Fetch underlying index spot price.
-        
+
         Args:
             symbol: Index symbol like "sh000300"
-            
+
         Returns:
             Spot price or None if fetch fails
         """
         try:
             from app.services.quote_source import get_quote_with_fallback_async
+
             quote = await get_quote_with_fallback_async(symbol)
-            if quote and (quote.get('price') or quote.get('close')):
-                return float(quote.get('price') or quote.get('close'))
+            if quote and (quote.get("price") or quote.get("close")):
+                return float(quote.get("price") or quote.get("close"))
 
             return None
 
@@ -182,7 +189,10 @@ class OptionsFetcher(BaseMarketFetcher):
     def _set_cached(self, key: str, value: Any, ttl_seconds: int = 300):
         MAX_CACHE_SIZE = 50
         if len(self._cache) >= MAX_CACHE_SIZE and key not in self._cache:
-            oldest_key = min(self._cache_ttl.keys(), key=lambda k: self._cache_ttl.get(k, datetime.max))
+            oldest_key = min(
+                self._cache_ttl.keys(),
+                key=lambda k: self._cache_ttl.get(k, datetime.max),
+            )
             self._cache.pop(oldest_key, None)
             self._cache_ttl.pop(oldest_key, None)
             logger.debug(f"[Options] Cache EVICT: {oldest_key}")
@@ -194,14 +204,14 @@ class OptionsFetcher(BaseMarketFetcher):
     async def get_cffex_chain(self, symbol: str = "io2506") -> Dict[str, Any]:
         """
         获取CFFEX股指期权链
-        
+
         根据品种前缀选择正确的 akshare API:
         - io: 沪深300股指期权 → option_cffex_hs300_spot_sina
         - mo: 中证1000股指期权 → option_cffex_zz1000_spot_sina
-        
+
         Args:
             symbol: 期权品种代码，如 io2506 (沪深300股指期权2025年6月合约)
-            
+
         Returns:
             {
                 "symbol": "io2506",
@@ -223,7 +233,7 @@ class OptionsFetcher(BaseMarketFetcher):
         # 根据品种前缀选择正确的 akshare API
         prefix = symbol[:2].lower()
         akshare_api_map = {
-            "io": self.ak.option_cffex_hs300_spot_sina,   # 沪深300
+            "io": self.ak.option_cffex_hs300_spot_sina,  # 沪深300
             "mo": self.ak.option_cffex_zz1000_spot_sina,  # 中证1000
         }
 
@@ -237,12 +247,14 @@ class OptionsFetcher(BaseMarketFetcher):
 
             df = await asyncio.wait_for(
                 loop.run_in_executor(_executor, lambda: akshare_api(symbol=symbol)),
-                timeout=30.0
+                timeout=30.0,
             )
 
             if df is None or df.empty:
                 self.cb.record_failure()
-                logger.warning(f"[Options] option_cffex_hs300_spot_sina 返回空数据: {symbol}")
+                logger.warning(
+                    f"[Options] option_cffex_hs300_spot_sina 返回空数据: {symbol}"
+                )
                 return self._get_empty_chain(symbol)
 
             underlying_symbol = self._get_underlying_symbol(symbol)
@@ -255,32 +267,32 @@ class OptionsFetcher(BaseMarketFetcher):
 
             for _, row in df.iterrows():
                 call_data = {
-                    "code": str(row.get('看涨合约-标识', '')),
-                    "name": str(row.get('看涨合约-标识', '')),
-                    "strike": clean_value(row.get('行权价')),
-                    "latest": clean_value(row.get('看涨合约-最新价')),
-                    "change": clean_value(row.get('看涨合约-涨跌')),
+                    "code": str(row.get("看涨合约-标识", "")),
+                    "name": str(row.get("看涨合约-标识", "")),
+                    "strike": clean_value(row.get("行权价")),
+                    "latest": clean_value(row.get("看涨合约-最新价")),
+                    "change": clean_value(row.get("看涨合约-涨跌")),
                     "change_pct": None,
-                    "volume": clean_value(row.get('看涨合约-买量')),
-                    "open_interest": clean_value(row.get('看涨合约-持仓量')),
+                    "volume": clean_value(row.get("看涨合约-买量")),
+                    "open_interest": clean_value(row.get("看涨合约-持仓量")),
                     "is_call": True,
                 }
 
                 put_data = {
-                    "code": str(row.get('看跌合约-标识', '')),
-                    "name": str(row.get('看跌合约-标识', '')),
-                    "strike": clean_value(row.get('行权价')),
-                    "latest": clean_value(row.get('看跌合约-最新价')),
-                    "change": clean_value(row.get('看跌合约-涨跌')),
+                    "code": str(row.get("看跌合约-标识", "")),
+                    "name": str(row.get("看跌合约-标识", "")),
+                    "strike": clean_value(row.get("行权价")),
+                    "latest": clean_value(row.get("看跌合约-最新价")),
+                    "change": clean_value(row.get("看跌合约-涨跌")),
                     "change_pct": None,
-                    "volume": clean_value(row.get('看跌合约-买量')),
-                    "open_interest": clean_value(row.get('看跌合约-持仓量')),
+                    "volume": clean_value(row.get("看跌合约-买量")),
+                    "open_interest": clean_value(row.get("看跌合约-持仓量")),
                     "is_call": False,
                 }
 
-                if call_data.get('code') and call_data.get('strike'):
+                if call_data.get("code") and call_data.get("strike"):
                     calls.append(call_data)
-                if put_data.get('code') and put_data.get('strike'):
+                if put_data.get("code") and put_data.get("strike"):
                     puts.append(put_data)
 
             if spot and spot > 0:
@@ -292,14 +304,14 @@ class OptionsFetcher(BaseMarketFetcher):
                 )
             else:
                 for opt in calls + puts:
-                    opt['delta'] = None
-                    opt['gamma'] = None
-                    opt['theta'] = None
-                    opt['vega'] = None
-                    opt['iv'] = None
+                    opt["delta"] = None
+                    opt["gamma"] = None
+                    opt["theta"] = None
+                    opt["vega"] = None
+                    opt["iv"] = None
 
-            calls.sort(key=lambda x: x.get('strike', 0) or 0)
-            puts.sort(key=lambda x: x.get('strike', 0) or 0)
+            calls.sort(key=lambda x: x.get("strike", 0) or 0)
+            puts.sort(key=lambda x: x.get("strike", 0) or 0)
 
             result = {
                 "symbol": symbol,
@@ -314,7 +326,9 @@ class OptionsFetcher(BaseMarketFetcher):
 
             self._set_cached(cache_key, result, ttl_seconds=300)
             self.cb.record_success()
-            logger.info(f"[Options] 获取CFFEX期权链成功: {symbol} calls={len(calls)} puts={len(puts)} spot={spot}")
+            logger.info(
+                f"[Options] 获取CFFEX期权链成功: {symbol} calls={len(calls)} puts={len(puts)} spot={spot}"
+            )
             return result
 
         except asyncio.TimeoutError:
@@ -323,16 +337,18 @@ class OptionsFetcher(BaseMarketFetcher):
             return self._get_empty_chain(symbol)
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Options] 获取CFFEX期权链失败: {symbol} - {e}", exc_info=True)
+            logger.error(
+                f"[Options] 获取CFFEX期权链失败: {symbol} - {e}", exc_info=True
+            )
             return self._get_empty_chain(symbol)
 
     async def get_sse_greeks(self, contract_code: str) -> Dict[str, Any]:
         """
         获取上交所期权Greeks (option_sse_greeks_sina)
-        
+
         Args:
             contract_code: 合约代码，如 10004023
-            
+
         Returns:
             {
                 "code": "10004023",
@@ -358,13 +374,18 @@ class OptionsFetcher(BaseMarketFetcher):
             loop = asyncio.get_running_loop()
 
             df = await asyncio.wait_for(
-                loop.run_in_executor(_executor, lambda: self.ak.option_sse_greeks_sina(symbol=contract_code)),
-                timeout=30.0
+                loop.run_in_executor(
+                    _executor,
+                    lambda: self.ak.option_sse_greeks_sina(symbol=contract_code),
+                ),
+                timeout=30.0,
             )
 
             if df is None or df.empty:
                 self.cb.record_failure()
-                logger.warning(f"[Options] option_sse_greeks_sina 返回空数据: {contract_code}")
+                logger.warning(
+                    f"[Options] option_sse_greeks_sina 返回空数据: {contract_code}"
+                )
                 return self._get_empty_greeks(contract_code)
 
             # 解析Greeks数据
@@ -372,15 +393,15 @@ class OptionsFetcher(BaseMarketFetcher):
 
             result = {
                 "code": contract_code,
-                "name": str(row.get('名称', '')),
-                "delta": clean_value(row.get('Delta')),
-                "gamma": clean_value(row.get('Gamma')),
-                "theta": clean_value(row.get('Theta')),
-                "vega": clean_value(row.get('Vega')),
-                "iv": clean_value(row.get('隐含波动率')),
-                "price": clean_value(row.get('最新价')),
-                "strike": clean_value(row.get('行权价')),
-                "expiry": str(row.get('到期日', '')),
+                "name": str(row.get("名称", "")),
+                "delta": clean_value(row.get("Delta")),
+                "gamma": clean_value(row.get("Gamma")),
+                "theta": clean_value(row.get("Theta")),
+                "vega": clean_value(row.get("Vega")),
+                "iv": clean_value(row.get("隐含波动率")),
+                "price": clean_value(row.get("最新价")),
+                "strike": clean_value(row.get("行权价")),
+                "expiry": str(row.get("到期日", "")),
                 "update_time": datetime.now().strftime("%H:%M:%S"),
                 "source": "akshare",
             }
@@ -392,20 +413,24 @@ class OptionsFetcher(BaseMarketFetcher):
 
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning(f"[Options] 获取SSE Greeks超时: {contract_code}", exc_info=True)
+            logger.warning(
+                f"[Options] 获取SSE Greeks超时: {contract_code}", exc_info=True
+            )
             return self._get_empty_greeks(contract_code)
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Options] 获取SSE Greeks失败: {contract_code} - {e}", exc_info=True)
+            logger.error(
+                f"[Options] 获取SSE Greeks失败: {contract_code} - {e}", exc_info=True
+            )
             return self._get_empty_greeks(contract_code)
 
     async def get_contract_list(self, exchange: str = "CFFEX") -> Dict[str, Any]:
         """
         获取期权合约列表
-        
+
         Args:
             exchange: 交易所代码 (CFFEX/SSE)
-            
+
         Returns:
             {
                 "exchange": "CFFEX",
@@ -426,31 +451,50 @@ class OptionsFetcher(BaseMarketFetcher):
         if exchange.upper() == "CFFEX":
             # CFFEX股指期权
             current_year = datetime.now().year
-            months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
+            months = [
+                "01",
+                "02",
+                "03",
+                "04",
+                "05",
+                "06",
+                "07",
+                "08",
+                "09",
+                "10",
+                "11",
+                "12",
+            ]
 
             for month in months:
-                contracts.append({
-                    "code": f"io{str(current_year)[2:]}{month}",
-                    "name": f"沪深300股指期权{current_year}{month}",
-                    "type": "index",
-                    "underlying": "沪深300指数",
-                })
-                contracts.append({
-                    "code": f"mo{str(current_year)[2:]}{month}",
-                    "name": f"中证1000股指期权{current_year}{month}",
-                    "type": "index",
-                    "underlying": "中证1000指数",
-                })
+                contracts.append(
+                    {
+                        "code": f"io{str(current_year)[2:]}{month}",
+                        "name": f"沪深300股指期权{current_year}{month}",
+                        "type": "index",
+                        "underlying": "沪深300指数",
+                    }
+                )
+                contracts.append(
+                    {
+                        "code": f"mo{str(current_year)[2:]}{month}",
+                        "name": f"中证1000股指期权{current_year}{month}",
+                        "type": "index",
+                        "underlying": "中证1000指数",
+                    }
+                )
 
         elif exchange.upper() == "SSE":
             # 上交所ETF期权
             for etf in self.SSE_ETF_OPTIONS:
-                contracts.append({
-                    "code": etf,
-                    "name": f"{etf}ETF期权",
-                    "type": "etf",
-                    "underlying": f"{etf}ETF",
-                })
+                contracts.append(
+                    {
+                        "code": etf,
+                        "name": f"{etf}ETF期权",
+                        "type": "etf",
+                        "underlying": f"{etf}ETF",
+                    }
+                )
 
         result = {
             "exchange": exchange.upper(),

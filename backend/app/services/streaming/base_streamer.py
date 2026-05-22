@@ -4,6 +4,7 @@ Abstract base class for WebSocket streamers.
 All streamers (Sina, Eastmoney, etc.) inherit from this base class
 and implement the abstract methods for their specific protocols.
 """
+
 import asyncio
 import logging
 import time
@@ -25,10 +26,10 @@ class StreamerState(Enum):
 class BaseStreamer(ABC):
     """
     Abstract base class for WebSocket streamers.
-    
+
     Lifecycle:
         connect() → subscribe() → [on_message loop] → disconnect()
-        
+
     Features:
         - Automatic reconnection with exponential backoff
         - State machine for connection management
@@ -97,7 +98,9 @@ class BaseStreamer(ABC):
             self._subscribed_symbols = set(s.lower() for s in symbols)
 
         self._task = asyncio.create_task(self._run_loop())
-        logger.info(f"[{self.name}] Started with {len(self._subscribed_symbols)} symbols")
+        logger.info(
+            f"[{self.name}] Started with {len(self._subscribed_symbols)} symbols"
+        )
 
     async def stop(self):
         self._running = False
@@ -124,16 +127,22 @@ class BaseStreamer(ABC):
 
                 if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
                     self._state = StreamerState.FAILED
-                    logger.error(f"[{self.name}] Max failures reached, entering FAILED state", exc_info=True)
+                    logger.error(
+                        f"[{self.name}] Max failures reached, entering FAILED state",
+                        exc_info=True,
+                    )
                     break
 
                 self._state = StreamerState.RECONNECTING
                 delay = min(
-                    self.RECONNECT_BASE_DELAY * (self.RECONNECT_MULTIPLIER ** self._consecutive_failures),
-                    self.RECONNECT_MAX_DELAY
+                    self.RECONNECT_BASE_DELAY
+                    * (self.RECONNECT_MULTIPLIER**self._consecutive_failures),
+                    self.RECONNECT_MAX_DELAY,
                 )
                 self._reconnect_delay = delay
-                logger.info(f"[{self.name}] Reconnecting in {delay:.1f}s (failure {self._consecutive_failures})")
+                logger.info(
+                    f"[{self.name}] Reconnecting in {delay:.1f}s (failure {self._consecutive_failures})"
+                )
                 await asyncio.sleep(delay)
 
     async def _connect_and_stream(self):
@@ -185,7 +194,9 @@ class BaseStreamer(ABC):
 
     async def add_symbols(self, symbols: List[str]):
         async with self._lock:
-            new_symbols = [s.lower() for s in symbols if s.lower() not in self._subscribed_symbols]
+            new_symbols = [
+                s.lower() for s in symbols if s.lower() not in self._subscribed_symbols
+            ]
             if not new_symbols:
                 return
 
@@ -193,11 +204,15 @@ class BaseStreamer(ABC):
 
             if self.is_connected:
                 await self.subscribe(new_symbols)
-                logger.info(f"[{self.name}] Added {len(new_symbols)} symbols: {new_symbols[:5]}...")
+                logger.info(
+                    f"[{self.name}] Added {len(new_symbols)} symbols: {new_symbols[:5]}..."
+                )
 
     async def remove_symbols(self, symbols: List[str]):
         async with self._lock:
-            to_remove = [s.lower() for s in symbols if s.lower() in self._subscribed_symbols]
+            to_remove = [
+                s.lower() for s in symbols if s.lower() in self._subscribed_symbols
+            ]
             if not to_remove:
                 return
 

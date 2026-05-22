@@ -6,6 +6,7 @@ Provides lazy initialization and graceful fallback when Qlib is not available.
 
 v0.6.61: Redis removed - using SQLite only for caching.
 """
+
 import logging
 from pathlib import Path
 from typing import Optional
@@ -22,21 +23,25 @@ def is_qlib_available() -> bool:
     if _QLIB_AVAILABLE is None:
         try:
             import qlib
+
             _QLIB_AVAILABLE = True
         except ImportError:
             _QLIB_AVAILABLE = False
-            logger.warning("[Qlib] pyqlib not installed. ML features will be disabled.", exc_info=True)
+            logger.warning(
+                "[Qlib] pyqlib not installed. ML features will be disabled.",
+                exc_info=True,
+            )
     return _QLIB_AVAILABLE
 
 
 class QlibInitializer:
     """
     Initialize Qlib with AlphaTerminal's local data.
-    
+
     Usage:
         initializer = QlibInitializer()
         initializer.init()
-        
+
         # Or with custom config
         initializer = QlibInitializer(
             provider_uri="~/.qlib/qlib_data/cn_data"
@@ -63,10 +68,10 @@ class QlibInitializer:
     def init(self, force: bool = False) -> bool:
         """
         Initialize Qlib.
-        
+
         Args:
             force: Force re-initialization even if already initialized
-            
+
         Returns:
             True if initialization successful, False otherwise
         """
@@ -107,10 +112,10 @@ class QlibInitializer:
     def download_data(self, target_dir: Optional[str] = None) -> bool:
         """
         Download Qlib data if not already present.
-        
+
         Args:
             target_dir: Directory to download data to
-            
+
         Returns:
             True if download successful, False otherwise
         """

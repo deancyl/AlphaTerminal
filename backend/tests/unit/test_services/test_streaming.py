@@ -8,6 +8,7 @@ Tests:
     - StreamingManager circuit breaker
     - StreamingManager HTTP fallback
 """
+
 import asyncio
 import pytest
 

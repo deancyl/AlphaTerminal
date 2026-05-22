@@ -30,12 +30,15 @@ router = APIRouter(tags=["portfolio-analytics"])
 PORTFOLIO_TIMEOUT = 30  # seconds
 
 # Shared thread pool for non-blocking SQLite operations
-_portfolio_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="portfolio_")
+_portfolio_executor = ThreadPoolExecutor(
+    max_workers=20, thread_name_prefix="portfolio_"
+)
 
 
 # ══════════════════════════════════════════════════════════════
 #  Helper: Asset Classification
 # ══════════════════════════════════════════════════════════════
+
 
 def _classify_asset(symbol: str, name: str = "") -> dict:
     """
@@ -44,19 +47,65 @@ def _classify_asset(symbol: str, name: str = "") -> dict:
     """
     sym = symbol.strip().lower()
     name_lower = name.lower()
-    raw_code = sym.removeprefix("sh").removeprefix("sz").removeprefix("hk").removeprefix("us").removeprefix("jp").removeprefix("bj")
+    raw_code = (
+        sym.removeprefix("sh")
+        .removeprefix("sz")
+        .removeprefix("hk")
+        .removeprefix("us")
+        .removeprefix("jp")
+        .removeprefix("bj")
+    )
 
     # ── 固收：国债/国开债/地方债 ────────────────────────────────
-    if any(kw in name_lower for kw in ["国债", "国开", "地方债", "政金债", "债券", "债"]):
+    if any(
+        kw in name_lower for kw in ["国债", "国开", "地方债", "政金债", "债券", "债"]
+    ):
         return {"category": "bond", "sub_category": "利率债", "is_index": False}
 
     # ── 商品期货 ────────────────────────────────────────────────
-    if raw_code.upper() in ("AU", "AG", "CU", "AL", "ZN", "PB", "NI", "SN",
-                             "RU", "RB", "HC", "I", "J", "JM", "焦煤",
-                             "原油", "燃油", "沥青", "棕榈", "豆油", "菜油",
-                             "棉花", "白糖", "苹果", "红枣"):
+    if raw_code.upper() in (
+        "AU",
+        "AG",
+        "CU",
+        "AL",
+        "ZN",
+        "PB",
+        "NI",
+        "SN",
+        "RU",
+        "RB",
+        "HC",
+        "I",
+        "J",
+        "JM",
+        "焦煤",
+        "原油",
+        "燃油",
+        "沥青",
+        "棕榈",
+        "豆油",
+        "菜油",
+        "棉花",
+        "白糖",
+        "苹果",
+        "红枣",
+    ):
         return {"category": "futures", "sub_category": "商品期货", "is_index": False}
-    if any(kw in name_lower for kw in ["黄金", "白银", "铜", "铝", "锌", "镍", "螺纹", "铁矿石", "焦炭", "原油"]):
+    if any(
+        kw in name_lower
+        for kw in [
+            "黄金",
+            "白银",
+            "铜",
+            "铝",
+            "锌",
+            "镍",
+            "螺纹",
+            "铁矿石",
+            "焦炭",
+            "原油",
+        ]
+    ):
         return {"category": "futures", "sub_category": "商品期货", "is_index": False}
 
     # ── 货币基金 / 现金管理 ────────────────────────────────────
@@ -64,10 +113,25 @@ def _classify_asset(symbol: str, name: str = "") -> dict:
         return {"category": "money_fund", "sub_category": "货币基金", "is_index": False}
 
     # ── 宽基指数 ETF（代码特征）─────────────────────────────────
-    if raw_code.startswith("51") or raw_code.startswith("15") or raw_code.startswith("56"):
+    if (
+        raw_code.startswith("51")
+        or raw_code.startswith("15")
+        or raw_code.startswith("56")
+    ):
         return {"category": "etf", "sub_category": "宽基ETF", "is_index": True}
-    if raw_code in ("000001", "000300", "000016", "000688", "000905", "000852",
-                    "399001", "399006", "399100", "399005", "399673"):
+    if raw_code in (
+        "000001",
+        "000300",
+        "000016",
+        "000688",
+        "000905",
+        "000852",
+        "399001",
+        "399006",
+        "399100",
+        "399005",
+        "399673",
+    ):
         return {"category": "index", "sub_category": "A股指数", "is_index": True}
 
     # ── 港股 ────────────────────────────────────────────────────
@@ -84,6 +148,7 @@ def _classify_asset(symbol: str, name: str = "") -> dict:
 # ══════════════════════════════════════════════════════════════
 #  Attribution Analysis
 # ══════════════════════════════════════════════════════════════
+
 
 @router.get("/{portfolio_id}/attribution")
 @handle_errors(module="portfolio_analytics")
@@ -104,6 +169,7 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
       - risk_metrics     日VaR(95%)、年化波动率、夏普比率
       - total_exposure   各 category 的总仓位占比
     """
+
     def _sync_work():
         from app.services.sentiment_engine import SpotCache
 
@@ -111,17 +177,19 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
         try:
             if include_children:
                 all_ids = [portfolio_id]
-                cur = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,)).fetchall()
+                cur = conn.execute(
+                    "SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,)
+                ).fetchall()
                 all_ids += [r[0] for r in cur]
-                ph = ','.join(['?'] * len(all_ids))
+                ph = ",".join(["?"] * len(all_ids))
                 rows = conn.execute(
                     f"SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id IN ({ph})",
-                    tuple(all_ids)
+                    tuple(all_ids),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
-                    (portfolio_id,)
+                    (portfolio_id,),
                 ).fetchall()
         finally:
             conn.close()
@@ -147,7 +215,12 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
                 ).fetchall()
                 for r in db_rows:
                     sym, name, price, chg_pct = r
-                    price_map[sym] = {"code": sym, "name": name, "price": float(price or 0), "chg_pct": float(chg_pct or 0)}
+                    price_map[sym] = {
+                        "code": sym,
+                        "name": name,
+                        "price": float(price or 0),
+                        "chg_pct": float(chg_pct or 0),
+                    }
                     if len(sym) > 2:
                         price_map[sym[2:]] = price_map[sym]
             finally:
@@ -164,73 +237,92 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
             if not info:
                 info = price_map.get(symbol[2:]) if len(symbol) > 2 else {}
 
-            price        = info.get("price", avg_cost)
-            name         = info.get("name", symbol)
+            price = info.get("price", avg_cost)
+            name = info.get("name", symbol)
             market_value = shares * price
-            cost         = shares * avg_cost
-            pnl          = market_value - cost
-            pnl_pct      = (pnl / cost * 100) if cost > 0 else 0.0
+            cost = shares * avg_cost
+            pnl = market_value - cost
+            pnl_pct = (pnl / cost * 100) if cost > 0 else 0.0
 
             cls = _classify_asset(symbol, name)
             cat = cls["category"]
 
             if cat not in groups:
                 groups[cat] = {
-                    "category":     cat,
+                    "category": cat,
                     "sub_category": cls["sub_category"],
-                    "is_index":     cls["is_index"],
+                    "is_index": cls["is_index"],
                     "market_value": 0.0,
-                    "cost":         0.0,
-                    "pnl":          0.0,
-                    "positions":    [],
+                    "cost": 0.0,
+                    "pnl": 0.0,
+                    "positions": [],
                 }
             groups[cat]["market_value"] += market_value
-            groups[cat]["cost"]         += cost
-            groups[cat]["pnl"]          += pnl
-            groups[cat]["positions"].append({
-                "symbol":       symbol,
-                "name":         name,
-                "shares":       shares,
-                "avg_cost":     avg_cost,
-                "price":        price,
-                "market_value": round(market_value, 2),
-                "cost":         round(cost, 2),
-                "pnl":          round(pnl, 2),
-                "pnl_pct":      round(pnl_pct, 2),
-            })
+            groups[cat]["cost"] += cost
+            groups[cat]["pnl"] += pnl
+            groups[cat]["positions"].append(
+                {
+                    "symbol": symbol,
+                    "name": name,
+                    "shares": shares,
+                    "avg_cost": avg_cost,
+                    "price": price,
+                    "market_value": round(market_value, 2),
+                    "cost": round(cost, 2),
+                    "pnl": round(pnl, 2),
+                    "pnl_pct": round(pnl_pct, 2),
+                }
+            )
 
         try:
-            total_mv    = sum(g["market_value"] for g in groups.values())
-            total_cost  = sum(g["cost"]        for g in groups.values())
-            total_pnl   = sum(g["pnl"]         for g in groups.values())
+            total_mv = sum(g["market_value"] for g in groups.values())
+            total_cost = sum(g["cost"] for g in groups.values())
+            total_pnl = sum(g["pnl"] for g in groups.values())
 
             if total_mv <= 0 and total_pnl == 0:
-                return {"attribution": [], "risk_metrics": None, "total_exposure": [],
-                            "summary": {"total_market_value": 0, "total_cost": 0, "total_pnl": 0, "total_pnl_pct": 0}}
+                return {
+                    "attribution": [],
+                    "risk_metrics": None,
+                    "total_exposure": [],
+                    "summary": {
+                        "total_market_value": 0,
+                        "total_cost": 0,
+                        "total_pnl": 0,
+                        "total_pnl_pct": 0,
+                    },
+                }
 
             attribution = []
             for g in groups.values():
-                w  = g["market_value"] / total_mv if total_mv > 0 else 0
-                pc = g["pnl"] / total_pnl * 100   if total_pnl != 0 else 0
-                attribution.append({
-                    "category":        g["category"],
-                    "sub_category":    g["sub_category"],
-                    "is_index":        g["is_index"],
-                    "market_value":    round(g["market_value"], 2),
-                    "cost":            round(g["cost"], 2),
-                    "pnl":             round(g["pnl"], 2),
-                    "weight":          round(w * 100, 2),
-                    "pnl_contrib_pct": round(pc, 2),
-                    "position_count":  len(g["positions"]),
-                    "positions":       g["positions"][:5],
-                })
+                w = g["market_value"] / total_mv if total_mv > 0 else 0
+                pc = g["pnl"] / total_pnl * 100 if total_pnl != 0 else 0
+                attribution.append(
+                    {
+                        "category": g["category"],
+                        "sub_category": g["sub_category"],
+                        "is_index": g["is_index"],
+                        "market_value": round(g["market_value"], 2),
+                        "cost": round(g["cost"], 2),
+                        "pnl": round(g["pnl"], 2),
+                        "weight": round(w * 100, 2),
+                        "pnl_contrib_pct": round(pc, 2),
+                        "position_count": len(g["positions"]),
+                        "positions": g["positions"][:5],
+                    }
+                )
 
             attribution.sort(key=lambda x: x["market_value"], reverse=True)
 
             total_exposure = [
-                {"name": g["sub_category"], "category": g["category"],
-                 "value": round(g["market_value"], 2), "weight": round(g["market_value"] / total_mv * 100, 2)}
-                for g in sorted(groups.values(), key=lambda x: x["market_value"], reverse=True)
+                {
+                    "name": g["sub_category"],
+                    "category": g["category"],
+                    "value": round(g["market_value"], 2),
+                    "weight": round(g["market_value"] / total_mv * 100, 2),
+                }
+                for g in sorted(
+                    groups.values(), key=lambda x: x["market_value"], reverse=True
+                )
             ]
 
             risk_metrics = None
@@ -239,64 +331,83 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
                 try:
                     snap_rows = conn3.execute(
                         "SELECT date, total_asset FROM portfolio_snapshots WHERE portfolio_id=? ORDER BY date ASC LIMIT 60",
-                        (portfolio_id,)
+                        (portfolio_id,),
                     ).fetchall()
                 finally:
                     conn3.close()
 
                 if snap_rows and len(snap_rows) >= 5:
-                    assets  = [float(r[1]) for r in snap_rows]
-                    returns = [(assets[i] - assets[i-1]) / assets[i-1]
-                               for i in range(1, len(assets)) if assets[i-1] > 0]
+                    assets = [float(r[1]) for r in snap_rows]
+                    returns = [
+                        (assets[i] - assets[i - 1]) / assets[i - 1]
+                        for i in range(1, len(assets))
+                        if assets[i - 1] > 0
+                    ]
 
                     if returns:
-                        mean_ret  = sum(returns) / len(returns)
-                        variance  = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
+                        mean_ret = sum(returns) / len(returns)
+                        variance = sum((r - mean_ret) ** 2 for r in returns) / len(
+                            returns
+                        )
                         daily_vol = math.sqrt(variance)
-                        ann_vol   = daily_vol * math.sqrt(252)
+                        ann_vol = daily_vol * math.sqrt(252)
 
                         try:
                             z_95 = NormalDist().inv_cdf(0.95)
                         except (ValueError, AttributeError) as e:
-                            logger.debug(f"[Portfolio Attribution] NormalDist error: {e}, using default z_95=1.645")
+                            logger.debug(
+                                f"[Portfolio Attribution] NormalDist error: {e}, using default z_95=1.645"
+                            )
                             z_95 = 1.645
 
                         latest_asset = assets[-1]
                         var_daily_95 = latest_asset * z_95 * daily_vol
 
-                        risk_free     = 0.03
-                        years         = max(len(assets) / 252, 0.01)
-                        total_ret     = (assets[-1] - assets[0]) / assets[0]
-                        ann_ret       = (1 + total_ret) ** (1 / years) - 1 if years > 0 else 0
-                        sharpe        = (ann_ret - risk_free) / ann_vol if ann_vol > 0 else 0
+                        risk_free = 0.03
+                        years = max(len(assets) / 252, 0.01)
+                        total_ret = (assets[-1] - assets[0]) / assets[0]
+                        ann_ret = (1 + total_ret) ** (1 / years) - 1 if years > 0 else 0
+                        sharpe = (ann_ret - risk_free) / ann_vol if ann_vol > 0 else 0
 
                         risk_metrics = {
-                            "var_daily_95":      round(var_daily_95, 2),
-                            "var_daily_95_pct": round(var_daily_95 / latest_asset * 100, 2),
+                            "var_daily_95": round(var_daily_95, 2),
+                            "var_daily_95_pct": round(
+                                var_daily_95 / latest_asset * 100, 2
+                            ),
                             "annual_volatility": round(ann_vol * 100, 2),
-                            "sharpe_ratio":      round(sharpe, 2),
-                            "total_return_pct":  round(total_ret * 100, 2),
+                            "sharpe_ratio": round(sharpe, 2),
+                            "total_return_pct": round(total_ret * 100, 2),
                             "annual_return_pct": round(ann_ret * 100, 2),
-                            "days":              len(assets),
+                            "days": len(assets),
                         }
             except sqlite3.OperationalError as e:
-                logger.warning(f"[Attribution] 数据库操作错误，无法读取快照数据: {e}", exc_info=True)
+                logger.warning(
+                    f"[Attribution] 数据库操作错误，无法读取快照数据: {e}",
+                    exc_info=True,
+                )
             except ValueError as e:
-                logger.warning(f"[Attribution] 风险指标计算错误（数据格式问题）: {e}", exc_info=True)
+                logger.warning(
+                    f"[Attribution] 风险指标计算错误（数据格式问题）: {e}",
+                    exc_info=True,
+                )
             except ZeroDivisionError as e:
-                logger.warning(f"[Attribution] 风险指标计算错误（除零）: {e}", exc_info=True)
+                logger.warning(
+                    f"[Attribution] 风险指标计算错误（除零）: {e}", exc_info=True
+                )
             except Exception as e:
                 logger.warning(f"[Attribution] risk_metrics error: {e}", exc_info=True)
 
             return {
-                "attribution":    attribution,
-                "total_exposure":  total_exposure,
-                "risk_metrics":    risk_metrics,
+                "attribution": attribution,
+                "total_exposure": total_exposure,
+                "risk_metrics": risk_metrics,
                 "summary": {
                     "total_market_value": round(total_mv, 2),
-                    "total_cost":        round(total_cost, 2),
-                    "total_pnl":         round(total_pnl, 2),
-                    "total_pnl_pct":     round((total_pnl / total_cost * 100) if total_cost else 0, 2),
+                    "total_cost": round(total_cost, 2),
+                    "total_pnl": round(total_pnl, 2),
+                    "total_pnl_pct": round(
+                        (total_pnl / total_cost * 100) if total_cost else 0, 2
+                    ),
                 },
             }
 
@@ -308,10 +419,14 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
             raise HTTPException(status_code=400, detail=f"数据格式错误: {str(e)}")
         except ZeroDivisionError as e:
             logger.error(f"[Attribution] 计算错误（除零）: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail="归因计算时发生除零错误，请检查数据")
+            raise HTTPException(
+                status_code=500, detail="归因计算时发生除零错误，请检查数据"
+            )
         except Exception as e:
             logger.error(f"[Attribution] 计算异常: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail="归因计算时发生错误，请检查是否有异常交易数据")
+            raise HTTPException(
+                status_code=500, detail="归因计算时发生错误，请检查是否有异常交易数据"
+            )
 
     async def _inner():
         loop = asyncio.get_running_loop()
@@ -321,7 +436,11 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[analytics] get_attribution timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[analytics] get_attribution timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "Attribution analysis timeout")
 
 
@@ -329,33 +448,35 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
 #  Performance Metrics
 # ══════════════════════════════════════════════════════════════
 
+
 @router.get("/{portfolio_id}/performance")
 @handle_errors(module="portfolio_analytics")
 async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
     """
     计算组合的业绩评价指标
-    
+
     - **benchmark**: 基准指数代码（默认000300沪深300）
-    
+
     返回指标：
     - 夏普比率、特雷诺比率、詹森阿尔法
     - 最大回撤、索提诺比率、卡玛比率
     - 胜率、Beta、Alpha
     """
+
     def _sync_work():
         conn = _get_conn()
         try:
             rows = conn.execute(
                 """SELECT date, total_asset FROM portfolio_snapshots 
                    WHERE portfolio_id=? ORDER BY date ASC LIMIT 252""",
-                (portfolio_id,)
+                (portfolio_id,),
             ).fetchall()
 
             if not rows or len(rows) < 30:
                 return {
                     "metrics": None,
                     "message": "历史数据不足（需要至少30个交易日）",
-                    "days": len(rows) if rows else 0
+                    "days": len(rows) if rows else 0,
                 }
 
             portfolio_dates = [r[0] for r in rows]
@@ -363,22 +484,30 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
 
             portfolio_returns = []
             for i in range(1, len(portfolio_assets)):
-                if portfolio_assets[i-1] > 0:
-                    portfolio_returns.append((portfolio_assets[i] - portfolio_assets[i-1]) / portfolio_assets[i-1])
+                if portfolio_assets[i - 1] > 0:
+                    portfolio_returns.append(
+                        (portfolio_assets[i] - portfolio_assets[i - 1])
+                        / portfolio_assets[i - 1]
+                    )
 
-            benchmark_symbol = f"sh{benchmark}" if benchmark.startswith('000') else f"sz{benchmark}"
+            benchmark_symbol = (
+                f"sh{benchmark}" if benchmark.startswith("000") else f"sz{benchmark}"
+            )
             bench_rows = conn.execute(
                 """SELECT date, close FROM market_data_daily 
                    WHERE symbol=? AND date >= ? AND date <= ? ORDER BY date ASC""",
-                (benchmark_symbol, portfolio_dates[0], portfolio_dates[-1])
+                (benchmark_symbol, portfolio_dates[0], portfolio_dates[-1]),
             ).fetchall()
 
             benchmark_returns = []
             if bench_rows and len(bench_rows) >= 30:
                 bench_prices = [float(r[1]) for r in bench_rows]
                 for i in range(1, len(bench_prices)):
-                    if bench_prices[i-1] > 0:
-                        benchmark_returns.append((bench_prices[i] - bench_prices[i-1]) / bench_prices[i-1])
+                    if bench_prices[i - 1] > 0:
+                        benchmark_returns.append(
+                            (bench_prices[i] - bench_prices[i - 1])
+                            / bench_prices[i - 1]
+                        )
 
             n = len(portfolio_returns)
             if n < 5:
@@ -393,7 +522,11 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
             risk_free = 0.03 / 252
             risk_free_ann = 0.03
 
-            sharpe = (ann_return - risk_free_ann) / ann_volatility if ann_volatility > 0 else 0
+            sharpe = (
+                (ann_return - risk_free_ann) / ann_volatility
+                if ann_volatility > 0
+                else 0
+            )
 
             peak = portfolio_assets[0]
             max_dd = 0
@@ -405,8 +538,14 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
                     max_dd = dd
 
             downside_returns = [r for r in portfolio_returns if r < 0]
-            downside_std = stdev(downside_returns) * math.sqrt(252) if len(downside_returns) > 1 else 0.0001
-            sortino = (ann_return - risk_free_ann) / downside_std if downside_std > 0 else 0
+            downside_std = (
+                stdev(downside_returns) * math.sqrt(252)
+                if len(downside_returns) > 1
+                else 0.0001
+            )
+            sortino = (
+                (ann_return - risk_free_ann) / downside_std if downside_std > 0 else 0
+            )
 
             calmar = ann_return / max_dd if max_dd > 0 else 0
 
@@ -431,35 +570,48 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
                 b_mean = mean(b_rets)
                 p_mean = mean(p_rets)
 
-                cov_pb = sum((p - p_mean) * (b - b_mean) for p, b in zip(p_rets, b_rets)) / min_len
+                cov_pb = (
+                    sum((p - p_mean) * (b - b_mean) for p, b in zip(p_rets, b_rets))
+                    / min_len
+                )
                 var_b = sum((b - b_mean) ** 2 for b in b_rets) / min_len
 
                 beta = cov_pb / var_b if var_b > 0 else 1.0
 
                 b_ann_return = b_mean * 252
-                alpha = ann_return - (risk_free_ann + beta * (b_ann_return - risk_free_ann))
+                alpha = ann_return - (
+                    risk_free_ann + beta * (b_ann_return - risk_free_ann)
+                )
 
                 treynor = (ann_return - risk_free_ann) / beta if beta != 0 else 0
 
                 tracking_errors = [p - b for p, b in zip(p_rets, b_rets)]
-                te_std = stdev(tracking_errors) * math.sqrt(252) if len(tracking_errors) > 1 else 0.0001
+                te_std = (
+                    stdev(tracking_errors) * math.sqrt(252)
+                    if len(tracking_errors) > 1
+                    else 0.0001
+                )
                 info_ratio = (ann_return - b_ann_return) / te_std if te_std > 0 else 0
 
-                metrics.update({
-                    "beta": round(beta, 2),
-                    "alpha": round(alpha * 100, 2),
-                    "treynor_ratio": round(treynor, 2),
-                    "information_ratio": round(info_ratio, 2),
-                    "benchmark_return": round(b_ann_return * 100, 2),
-                })
+                metrics.update(
+                    {
+                        "beta": round(beta, 2),
+                        "alpha": round(alpha * 100, 2),
+                        "treynor_ratio": round(treynor, 2),
+                        "information_ratio": round(info_ratio, 2),
+                        "benchmark_return": round(b_ann_return * 100, 2),
+                    }
+                )
             else:
-                metrics.update({
-                    "beta": None,
-                    "alpha": None,
-                    "treynor_ratio": None,
-                    "information_ratio": None,
-                    "benchmark_return": None,
-                })
+                metrics.update(
+                    {
+                        "beta": None,
+                        "alpha": None,
+                        "treynor_ratio": None,
+                        "information_ratio": None,
+                        "benchmark_return": None,
+                    }
+                )
 
             return {
                 "metrics": metrics,
@@ -479,7 +631,11 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[analytics] get_performance_metrics timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[analytics] get_performance_metrics timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "Performance metrics timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Performance] 数据库操作错误: {e}", exc_info=True)
@@ -499,42 +655,46 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
 #  Risk Metrics (VaR/CVaR)
 # ══════════════════════════════════════════════════════════════
 
+
 @router.get("/{portfolio_id}/risk")
 @handle_errors(module="portfolio_analytics")
-async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon: int = 1):
+async def get_risk_metrics(
+    portfolio_id: int, confidence: float = 0.95, horizon: int = 1
+):
     """
     计算组合的风险价值（VaR）和条件风险价值（CVaR）
-    
+
     - **confidence**: 置信水平（默认0.95，支持0.90/0.95/0.99）
     - **horizon**: 持有期（天数，默认1天）
-    
+
     返回指标：
     - VaR（历史模拟法、参数法、蒙特卡洛法）
     - CVaR（Expected Shortfall）
     - 风险贡献度
     """
+
     def _sync_work():
         conn = _get_conn()
         try:
             rows = conn.execute(
                 """SELECT date, total_asset FROM portfolio_snapshots 
                    WHERE portfolio_id=? ORDER BY date ASC LIMIT 252""",
-                (portfolio_id,)
+                (portfolio_id,),
             ).fetchall()
 
             if not rows or len(rows) < 30:
                 return {
                     "risk": None,
                     "message": "历史数据不足（需要至少30个交易日）",
-                    "days": len(rows) if rows else 0
+                    "days": len(rows) if rows else 0,
                 }
 
             assets = [float(r[1]) for r in rows]
 
             returns = []
             for i in range(1, len(assets)):
-                if assets[i-1] > 0:
-                    returns.append((assets[i] - assets[i-1]) / assets[i-1])
+                if assets[i - 1] > 0:
+                    returns.append((assets[i] - assets[i - 1]) / assets[i - 1])
 
             if len(returns) < 5:
                 return {"risk": None, "message": "收益率数据不足", "days": len(returns)}
@@ -544,7 +704,9 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
 
             sorted_returns = sorted(returns)
             var_idx = int(n * (1 - confidence))
-            var_historical = sorted_returns[var_idx] if var_idx < n else sorted_returns[0]
+            var_historical = (
+                sorted_returns[var_idx] if var_idx < n else sorted_returns[0]
+            )
 
             avg_ret = mean(returns)
             std_ret = stdev(returns) if n > 1 else 0
@@ -552,7 +714,9 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
             try:
                 z_score = NormalDist().inv_cdf(confidence)
             except (ValueError, AttributeError) as e:
-                logger.debug(f"[Portfolio VaR] NormalDist error for confidence={confidence}: {e}")
+                logger.debug(
+                    f"[Portfolio VaR] NormalDist error for confidence={confidence}: {e}"
+                )
                 z_map = {0.90: 1.282, 0.95: 1.645, 0.99: 2.326}
                 z_score = z_map.get(confidence, 1.645)
 
@@ -562,7 +726,8 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
             cvar_historical = mean(cvar_returns) if cvar_returns else var_historical
 
             from math import exp, sqrt, pi
-            pdf_z = (1 / sqrt(2 * pi)) * exp(-0.5 * z_score ** 2)
+
+            pdf_z = (1 / sqrt(2 * pi)) * exp(-0.5 * z_score**2)
             cvar_parametric = -(avg_ret - std_ret * (pdf_z / (1 - confidence)))
 
             horizon_factor = math.sqrt(horizon)
@@ -574,27 +739,21 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
                 "confidence_level": confidence,
                 "horizon_days": horizon,
                 "total_days": n,
-
                 "var_historical_pct": round(-var_historical * 100, 2),
                 "var_historical_amount": round(-var_historical * current_asset, 2),
                 "var_parametric_pct": round(var_parametric * 100, 2),
                 "var_parametric_amount": round(var_parametric * current_asset, 2),
-
                 "var_horizon_pct": round(var_multi_period * 100, 2),
                 "var_horizon_amount": round(var_multi_period * current_asset, 2),
-
                 "cvar_historical_pct": round(-cvar_historical * 100, 2),
                 "cvar_historical_amount": round(-cvar_historical * current_asset, 2),
                 "cvar_parametric_pct": round(cvar_parametric * 100, 2),
                 "cvar_parametric_amount": round(cvar_parametric * current_asset, 2),
-
                 "cvar_horizon_pct": round(cvar_multi_period * 100, 2),
                 "cvar_horizon_amount": round(cvar_multi_period * current_asset, 2),
-
                 "daily_volatility_pct": round(std_ret * 100, 2),
                 "daily_return_avg_pct": round(avg_ret * 100, 2),
                 "annual_volatility_pct": round(std_ret * math.sqrt(252) * 100, 2),
-
                 "worst_day_pct": round(min(returns) * 100, 2),
                 "best_day_pct": round(max(returns) * 100, 2),
             }
@@ -616,7 +775,11 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[analytics] get_risk_metrics timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[analytics] get_risk_metrics timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "Risk metrics timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Risk] 数据库操作错误: {e}", exc_info=True)
@@ -636,86 +799,100 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
 #  Benchmark Comparison
 # ══════════════════════════════════════════════════════════════
 
+
 @router.get("/{portfolio_id}/benchmark")
 @handle_errors(module="portfolio_analytics")
 async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300"):
     """
     组合与基准指数的对比分析
-    
+
     - **benchmark**: 基准指数代码（默认000300沪深300）
-    
+
     返回：
     - 累计收益对比曲线
     - 超额收益走势
     - 跟踪误差
     - 月度/季度收益对比
     """
+
     def _sync_work():
         conn = _get_conn()
         try:
             rows = conn.execute(
                 """SELECT date, total_asset FROM portfolio_snapshots 
                    WHERE portfolio_id=? ORDER BY date ASC LIMIT 252""",
-                (portfolio_id,)
+                (portfolio_id,),
             ).fetchall()
 
             if not rows or len(rows) < 30:
                 return {
                     "comparison": None,
                     "message": "历史数据不足（需要至少30个交易日）",
-                    "days": len(rows) if rows else 0
+                    "days": len(rows) if rows else 0,
                 }
 
             portfolio_dates = [r[0] for r in rows]
             portfolio_assets = [float(r[1]) for r in rows]
 
-            benchmark_symbol = f"sh{benchmark}" if benchmark.startswith('000') else f"sz{benchmark}"
+            benchmark_symbol = (
+                f"sh{benchmark}" if benchmark.startswith("000") else f"sz{benchmark}"
+            )
             bench_rows = conn.execute(
                 """SELECT date, close FROM market_data_daily 
                    WHERE symbol=? AND date >= ? AND date <= ? ORDER BY date ASC""",
-                (benchmark_symbol, portfolio_dates[0], portfolio_dates[-1])
+                (benchmark_symbol, portfolio_dates[0], portfolio_dates[-1]),
             ).fetchall()
 
             if not bench_rows or len(bench_rows) < 30:
-                return {
-                    "comparison": None,
-                    "message": "基准数据不足",
-                    "days": 0
-                }
+                return {"comparison": None, "message": "基准数据不足", "days": 0}
 
             bench_dict = {r[0]: float(r[1]) for r in bench_rows}
 
             aligned_data = []
             for i, date in enumerate(portfolio_dates):
                 if date in bench_dict:
-                    aligned_data.append({
-                        "date": date,
-                        "portfolio_asset": portfolio_assets[i],
-                        "benchmark_price": bench_dict[date]
-                    })
+                    aligned_data.append(
+                        {
+                            "date": date,
+                            "portfolio_asset": portfolio_assets[i],
+                            "benchmark_price": bench_dict[date],
+                        }
+                    )
 
             if len(aligned_data) < 30:
                 return {
                     "comparison": None,
                     "message": "对齐后数据不足",
-                    "days": len(aligned_data)
+                    "days": len(aligned_data),
                 }
 
             first_portfolio = aligned_data[0]["portfolio_asset"]
             first_benchmark = aligned_data[0]["benchmark_price"]
 
             for item in aligned_data:
-                item["portfolio_cum_return"] = (item["portfolio_asset"] - first_portfolio) / first_portfolio
-                item["benchmark_cum_return"] = (item["benchmark_price"] - first_benchmark) / first_benchmark
-                item["excess_return"] = item["portfolio_cum_return"] - item["benchmark_cum_return"]
+                item["portfolio_cum_return"] = (
+                    item["portfolio_asset"] - first_portfolio
+                ) / first_portfolio
+                item["benchmark_cum_return"] = (
+                    item["benchmark_price"] - first_benchmark
+                ) / first_benchmark
+                item["excess_return"] = (
+                    item["portfolio_cum_return"] - item["benchmark_cum_return"]
+                )
 
             portfolio_returns = []
             benchmark_returns = []
             excess_returns = []
 
             for i in range(1, len(aligned_data)):
-                p_ret = (aligned_data[i]["portfolio_asset"] - aligned_data[i-1]["portfolio_asset"]) / aligned_data[i-1]["portfolio_asset"]
-                b_ret = (aligned_data[i]["benchmark_price"] - aligned_data[i-1]["benchmark_price"]) / aligned_data[i-1]["benchmark_price"]
+                p_ret = (
+                    aligned_data[i]["portfolio_asset"]
+                    - aligned_data[i - 1]["portfolio_asset"]
+                ) / aligned_data[i - 1]["portfolio_asset"]
+                b_ret = (
+                    aligned_data[i]["benchmark_price"]
+                    - aligned_data[i - 1]["benchmark_price"]
+                ) / aligned_data[i - 1]["benchmark_price"]
 
                 portfolio_returns.append(p_ret)
                 benchmark_returns.append(b_ret)
@@ -740,12 +917,49 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
                 month = item["date"][:7]
                 if month != current_month:
                     if current_month and month_start_portfolio:
-                        monthly_returns.append({
-                            "month": current_month,
-                            "portfolio_return": round(((item["portfolio_asset"] - month_start_portfolio) / month_start_portfolio) * 100, 2),
-                            "benchmark_return": round(((item["benchmark_price"] - month_start_benchmark) / month_start_benchmark) * 100, 2),
-                            "excess_return": round(((item["portfolio_asset"] - month_start_portfolio) / month_start_portfolio - (item["benchmark_price"] - month_start_benchmark) / month_start_benchmark) * 100, 2)
-                        })
+                        monthly_returns.append(
+                            {
+                                "month": current_month,
+                                "portfolio_return": round(
+                                    (
+                                        (
+                                            item["portfolio_asset"]
+                                            - month_start_portfolio
+                                        )
+                                        / month_start_portfolio
+                                    )
+                                    * 100,
+                                    2,
+                                ),
+                                "benchmark_return": round(
+                                    (
+                                        (
+                                            item["benchmark_price"]
+                                            - month_start_benchmark
+                                        )
+                                        / month_start_benchmark
+                                    )
+                                    * 100,
+                                    2,
+                                ),
+                                "excess_return": round(
+                                    (
+                                        (
+                                            item["portfolio_asset"]
+                                            - month_start_portfolio
+                                        )
+                                        / month_start_portfolio
+                                        - (
+                                            item["benchmark_price"]
+                                            - month_start_benchmark
+                                        )
+                                        / month_start_benchmark
+                                    )
+                                    * 100,
+                                    2,
+                                ),
+                            }
+                        )
                     current_month = month
                     month_start_portfolio = item["portfolio_asset"]
                     month_start_benchmark = item["benchmark_price"]
@@ -754,21 +968,50 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
                 "comparison": {
                     "portfolio_return_pct": round(final_portfolio_return * 100, 2),
                     "benchmark_return_pct": round(final_benchmark_return * 100, 2),
-                    "excess_return_pct": round((final_portfolio_return - final_benchmark_return) * 100, 2),
+                    "excess_return_pct": round(
+                        (final_portfolio_return - final_benchmark_return) * 100, 2
+                    ),
                     "tracking_error_pct": round(te * 100, 2),
                     "information_ratio": round(info_ratio, 2),
                     "correlation": round(
-                        sum((p - mean(portfolio_returns)) * (b - mean(benchmark_returns)) for p, b in zip(portfolio_returns, benchmark_returns)) /
-                        (math.sqrt(sum((p - mean(portfolio_returns))**2 for p in portfolio_returns)) * math.sqrt(sum((b - mean(benchmark_returns))**2 for b in benchmark_returns)))
-                        if len(portfolio_returns) > 1 else 0, 2
+                        (
+                            sum(
+                                (p - mean(portfolio_returns))
+                                * (b - mean(benchmark_returns))
+                                for p, b in zip(portfolio_returns, benchmark_returns)
+                            )
+                            / (
+                                math.sqrt(
+                                    sum(
+                                        (p - mean(portfolio_returns)) ** 2
+                                        for p in portfolio_returns
+                                    )
+                                )
+                                * math.sqrt(
+                                    sum(
+                                        (b - mean(benchmark_returns)) ** 2
+                                        for b in benchmark_returns
+                                    )
+                                )
+                            )
+                            if len(portfolio_returns) > 1
+                            else 0
+                        ),
+                        2,
                     ),
                     "total_days": len(aligned_data),
-                    "monthly_returns": monthly_returns[-12:] if len(monthly_returns) > 12 else monthly_returns,
-                    "daily_data": aligned_data[-60:] if len(aligned_data) > 60 else aligned_data,
+                    "monthly_returns": (
+                        monthly_returns[-12:]
+                        if len(monthly_returns) > 12
+                        else monthly_returns
+                    ),
+                    "daily_data": (
+                        aligned_data[-60:] if len(aligned_data) > 60 else aligned_data
+                    ),
                 },
                 "portfolio_id": portfolio_id,
                 "benchmark": benchmark,
-                "period": f"{aligned_data[0]['date']} ~ {aligned_data[-1]['date']}"
+                "period": f"{aligned_data[0]['date']} ~ {aligned_data[-1]['date']}",
             }
 
         finally:
@@ -782,7 +1025,11 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[analytics] get_benchmark_comparison timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
+        logger.warning(
+            "[analytics] get_benchmark_comparison timeout after %ds",
+            PORTFOLIO_TIMEOUT,
+            exc_info=True,
+        )
         raise HTTPException(504, "Benchmark comparison timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Benchmark] 数据库操作错误: {e}", exc_info=True)
@@ -802,34 +1049,43 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
 #  Brinson Attribution Analysis
 # ══════════════════════════════════════════════════════════════
 
+
 @router.get("/{portfolio_id}/brinson")
 @handle_errors(module="portfolio_analytics")
 async def get_brinson_attribution(
     portfolio_id: int,
     benchmark: str = Query(default="000300", description="基准指数代码（默认沪深300）"),
-    period_start: Optional[str] = Query(default=None, description="开始日期 YYYY-MM-DD"),
-    period_end: Optional[str] = Query(default=None, description="结束日期 YYYY-MM-DD")
+    period_start: Optional[str] = Query(
+        default=None, description="开始日期 YYYY-MM-DD"
+    ),
+    period_end: Optional[str] = Query(default=None, description="结束日期 YYYY-MM-DD"),
 ):
     """
     Brinson归因分析
-    
+
     将组合超额收益分解为:
     - 配置效应 (Allocation Effect): 行业配置带来的超额收益
     - 选择效应 (Selection Effect): 行业内选股带来的超额收益
     - 交互效应 (Interaction Effect): 配置与选择的交互影响
     """
-    from app.services.attribution import calculate_brinson_attribution, aggregate_to_sectors
+    from app.services.attribution import (
+        calculate_brinson_attribution,
+        aggregate_to_sectors,
+    )
 
     try:
         conn = _get_conn()
         cursor = conn.cursor()
 
         # 获取组合持仓
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT symbol, name, quantity, cost_price
             FROM positions
             WHERE portfolio_id = ? AND quantity > 0
-        """, (portfolio_id,))
+        """,
+            (portfolio_id,),
+        )
         positions = cursor.fetchall()
 
         if not positions:
@@ -843,13 +1099,15 @@ async def get_brinson_attribution(
             # 简化：使用成本价计算市值（实际应使用当前价格）
             market_value = quantity * cost_price
             total_value += market_value
-            position_list.append({
-                "symbol": symbol,
-                "name": name,
-                "quantity": quantity,
-                "cost_price": cost_price,
-                "market_value": market_value
-            })
+            position_list.append(
+                {
+                    "symbol": symbol,
+                    "name": name,
+                    "quantity": quantity,
+                    "cost_price": cost_price,
+                    "market_value": market_value,
+                }
+            )
 
         # 计算权重
         for pos in position_list:
@@ -857,7 +1115,10 @@ async def get_brinson_attribution(
 
         # 模拟收益率（实际应从历史数据计算）
         # 这里使用简化示例
-        portfolio_returns = {pos["symbol"]: 0.05 + (hash(pos["symbol"]) % 100) / 1000 for pos in position_list}
+        portfolio_returns = {
+            pos["symbol"]: 0.05 + (hash(pos["symbol"]) % 100) / 1000
+            for pos in position_list
+        }
 
         # 聚合到行业层面
         portfolio_sector_weights, portfolio_sector_returns = aggregate_to_sectors(
@@ -873,7 +1134,7 @@ async def get_brinson_attribution(
             "家电": 0.05,
             "新能源": 0.12,
             "汽车": 0.05,
-            "其他": 0.45
+            "其他": 0.45,
         }
 
         # 基准收益率（简化）
@@ -884,7 +1145,7 @@ async def get_brinson_attribution(
             "家电": 0.05,
             "新能源": 0.10,
             "汽车": 0.06,
-            "其他": 0.04
+            "其他": 0.04,
         }
 
         # 计算Brinson归因
@@ -894,34 +1155,36 @@ async def get_brinson_attribution(
             benchmark_weights=benchmark_weights,
             benchmark_returns=benchmark_returns,
             period_start=period_start or "2025-01-01",
-            period_end=period_end or "2025-12-31"
+            period_end=period_end or "2025-12-31",
         )
 
         conn.close()
 
-        return success_response({
-            "allocation_effect": round(result.allocation_effect * 100, 4),
-            "selection_effect": round(result.selection_effect * 100, 4),
-            "interaction_effect": round(result.interaction_effect * 100, 4),
-            "total_excess_return": round(result.total_excess_return * 100, 4),
-            "sector_contributions": [
-                {
-                    "sector": c.sector,
-                    "portfolio_weight": round(c.portfolio_weight * 100, 2),
-                    "benchmark_weight": round(c.benchmark_weight * 100, 2),
-                    "portfolio_return": round(c.portfolio_return * 100, 2),
-                    "benchmark_return": round(c.benchmark_return * 100, 2),
-                    "allocation_effect": round(c.allocation_effect * 100, 4),
-                    "selection_effect": round(c.selection_effect * 100, 4),
-                    "interaction_effect": round(c.interaction_effect * 100, 4),
-                    "total_effect": round(c.total_effect * 100, 4)
-                }
-                for c in result.sector_contributions
-            ],
-            "period": f"{result.period_start} ~ {result.period_end}",
-            "benchmark": benchmark,
-            "note": "注：当前使用简化数据，实际应从历史行情计算收益率"
-        })
+        return success_response(
+            {
+                "allocation_effect": round(result.allocation_effect * 100, 4),
+                "selection_effect": round(result.selection_effect * 100, 4),
+                "interaction_effect": round(result.interaction_effect * 100, 4),
+                "total_excess_return": round(result.total_excess_return * 100, 4),
+                "sector_contributions": [
+                    {
+                        "sector": c.sector,
+                        "portfolio_weight": round(c.portfolio_weight * 100, 2),
+                        "benchmark_weight": round(c.benchmark_weight * 100, 2),
+                        "portfolio_return": round(c.portfolio_return * 100, 2),
+                        "benchmark_return": round(c.benchmark_return * 100, 2),
+                        "allocation_effect": round(c.allocation_effect * 100, 4),
+                        "selection_effect": round(c.selection_effect * 100, 4),
+                        "interaction_effect": round(c.interaction_effect * 100, 4),
+                        "total_effect": round(c.total_effect * 100, 4),
+                    }
+                    for c in result.sector_contributions
+                ],
+                "period": f"{result.period_start} ~ {result.period_end}",
+                "benchmark": benchmark,
+                "note": "注：当前使用简化数据，实际应从历史行情计算收益率",
+            }
+        )
 
     except HTTPException:
         raise

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class InstructionLimitExceeded(RuntimeError):
     """Raised when instruction limit is exceeded during execution."""
+
     pass
 
 
@@ -32,11 +33,11 @@ class InstructionCounter:
         self.count = 0
 
     def __call__(self, frame, event, arg):
-        if event == 'line':
+        if event == "line":
             self.count += 1
             if self.count > self.limit:
                 raise InstructionLimitExceeded(
-                    f'Instruction limit exceeded: {self.limit}'
+                    f"Instruction limit exceeded: {self.limit}"
                 )
         return self
 
@@ -89,7 +90,11 @@ class StrategyContext:
     def buy(self, price: float, quantity: float):
         order = Order(
             id=f"buy_{len(self.orders)}",
-            symbol=self.df.iloc[self.current_index].name if hasattr(self.df.iloc[self.current_index], 'name') else str(self.current_index),
+            symbol=(
+                self.df.iloc[self.current_index].name
+                if hasattr(self.df.iloc[self.current_index], "name")
+                else str(self.current_index)
+            ),
             side=OrderSide.BUY,
             quantity=quantity,
             price=price,
@@ -101,7 +106,11 @@ class StrategyContext:
     def sell(self, price: float, quantity: float):
         order = Order(
             id=f"sell_{len(self.orders)}",
-            symbol=self.df.iloc[self.current_index].name if hasattr(self.df.iloc[self.current_index], 'name') else str(self.current_index),
+            symbol=(
+                self.df.iloc[self.current_index].name
+                if hasattr(self.df.iloc[self.current_index], "name")
+                else str(self.current_index)
+            ),
             side=OrderSide.SELL,
             quantity=quantity,
             price=price,
@@ -181,7 +190,9 @@ class ScriptStrategy:
             raise ValueError(f"Strategy compilation failed: {e}")
 
     def _create_context(self, df: pd.DataFrame) -> StrategyContext:
-        ctx = StrategyContext(df=df, balance=self.initial_capital, equity=self.initial_capital)
+        ctx = StrategyContext(
+            df=df, balance=self.initial_capital, equity=self.initial_capital
+        )
         self._namespace["ctx"] = ctx
         return ctx
 
@@ -226,14 +237,19 @@ class ScriptStrategy:
             try:
                 self._namespace["on_bar"](ctx, bar)
             except Exception as e:
-                logger.warning(f"[ScriptStrategy] on_bar error at {ctx.current_index}: {e}", exc_info=True)
+                logger.warning(
+                    f"[ScriptStrategy] on_bar error at {ctx.current_index}: {e}",
+                    exc_info=True,
+                )
             finally:
                 self._namespace["ctx"] = old_ctx
 
     def run(self, df: pd.DataFrame, user_id: str = "anonymous") -> Dict[str, Any]:
         return self._run_with_timeout(df, user_id)
 
-    def _run_with_timeout(self, df: pd.DataFrame, user_id: str = "anonymous") -> Dict[str, Any]:
+    def _run_with_timeout(
+        self, df: pd.DataFrame, user_id: str = "anonymous"
+    ) -> Dict[str, Any]:
         import signal
         import time
 
@@ -310,7 +326,9 @@ class ScriptStrategy:
 
             ctx.equity = ctx.balance
             if ctx.position:
-                ctx.position.unrealized_pnl = (bar["close"] - ctx.position.entry_price) * ctx.position.size
+                ctx.position.unrealized_pnl = (
+                    bar["close"] - ctx.position.entry_price
+                ) * ctx.position.size
                 ctx.equity += ctx.position.unrealized_pnl
 
         return {
@@ -334,13 +352,15 @@ class ScriptStrategy:
                                 size=order.quantity,
                                 entry_price=order.price,
                             )
-                            ctx.trades.append({
-                                "side": "BUY",
-                                "price": order.price,
-                                "quantity": order.quantity,
-                                "cost": cost,
-                                "index": ctx.current_index,
-                            })
+                            ctx.trades.append(
+                                {
+                                    "side": "BUY",
+                                    "price": order.price,
+                                    "quantity": order.quantity,
+                                    "cost": cost,
+                                    "index": ctx.current_index,
+                                }
+                            )
                         order.status = "filled"
                         order.filled_price = order.price
                 elif order.side == OrderSide.SELL:
@@ -350,23 +370,27 @@ class ScriptStrategy:
                         ctx.position.size -= order.quantity
                         if ctx.position.size == 0:
                             ctx.position = None
-                        ctx.trades.append({
-                            "side": "SELL",
-                            "price": order.price,
-                            "quantity": order.quantity,
-                            "proceeds": proceeds,
-                            "index": ctx.current_index,
-                        })
+                        ctx.trades.append(
+                            {
+                                "side": "SELL",
+                                "price": order.price,
+                                "quantity": order.quantity,
+                                "proceeds": proceeds,
+                                "index": ctx.current_index,
+                            }
+                        )
                         order.status = "filled"
                         order.filled_price = order.price
 
 
-def create_script_strategy(code: str, initial_capital: float = 100000.0, commission: float = 0.001) -> ScriptStrategy:
+def create_script_strategy(
+    code: str, initial_capital: float = 100000.0, commission: float = 0.001
+) -> ScriptStrategy:
     return ScriptStrategy(code, initial_capital, commission)
 
 
 EXAMPLE_SCRIPT_STRATEGIES = {
-    "ma_cross_script": '''
+    "ma_cross_script": """
 def on_init(ctx):
     ctx.log("Strategy initialized with capital: " + str(ctx.balance))
 
@@ -381,7 +405,7 @@ def on_bar(ctx, bar):
     else:
         if fast_ma < slow_ma:
             ctx.close_position()
-''',
+""",
 }
 
 

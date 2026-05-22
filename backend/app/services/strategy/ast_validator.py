@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SecurityViolation:
     """Represents a security violation found in code."""
+
     node_type: str
     message: str
     line: int
@@ -40,6 +41,7 @@ class SecurityViolation:
 @dataclass
 class ValidationResult:
     """Result of AST security validation."""
+
     is_valid: bool
     violations: List[SecurityViolation] = field(default_factory=list)
     warnings: List[SecurityViolation] = field(default_factory=list)
@@ -61,7 +63,7 @@ class ValidationResult:
 class InfiniteLoopDetector(ast.NodeVisitor):
     """
     Detects potential infinite loops by analyzing while/for loop structures.
-    
+
     Uses a stack-based approach to track nested loops and checks for break/return
     statements anywhere in the loop body tree (including nested control structures).
     """
@@ -81,12 +83,14 @@ class InfiniteLoopDetector(ast.NodeVisitor):
             has_exit = self._has_exit_statement(node.body)
 
             if not has_exit:
-                self.infinite_loops.append(SecurityViolation(
-                    node_type="While",
-                    message="Potential infinite loop: while True without break or return",
-                    line=node.lineno,
-                    column=node.col_offset,
-                ))
+                self.infinite_loops.append(
+                    SecurityViolation(
+                        node_type="While",
+                        message="Potential infinite loop: while True without break or return",
+                        line=node.lineno,
+                        column=node.col_offset,
+                    )
+                )
 
         # Continue visiting nested structures
         self.generic_visit(node)
@@ -97,17 +101,19 @@ class InfiniteLoopDetector(ast.NodeVisitor):
         if isinstance(node.iter, ast.Call):
             func_name = self._get_func_name(node.iter)
 
-            if func_name == 'range':
+            if func_name == "range":
                 # Check for range(0), range(-1), range(N, N), range(N, M) where M < N
                 range_issue = self._check_range_issue(node.iter)
                 if range_issue:
-                    self.empty_ranges.append(SecurityViolation(
-                        node_type="For",
-                        message=range_issue,
-                        line=node.lineno,
-                        column=node.col_offset,
-                        severity="warning",
-                    ))
+                    self.empty_ranges.append(
+                        SecurityViolation(
+                            node_type="For",
+                            message=range_issue,
+                            line=node.lineno,
+                            column=node.col_offset,
+                            severity="warning",
+                        )
+                    )
 
         # Continue visiting nested structures
         self.generic_visit(node)
@@ -120,25 +126,27 @@ class InfiniteLoopDetector(ast.NodeVisitor):
             return node.value is True
         return False
 
-    def _has_exit_statement(self, body: List[ast.stmt], in_nested_loop: bool = False) -> bool:
+    def _has_exit_statement(
+        self, body: List[ast.stmt], in_nested_loop: bool = False
+    ) -> bool:
         """
         Check if body contains a break or return statement anywhere in the tree.
-        
+
         This recursively checks all nested control structures including:
         - if/elif/else blocks
         - try/except/finally blocks
         - with statements
         - nested function definitions (return counts)
-        
+
         Args:
             body: List of statements to check
             in_nested_loop: If True, we're inside a nested for/while loop.
                            Break statements don't count as exit for outer loops.
-        
+
         Returns:
             True if an exit statement (break/return) is found that would exit the outer loop.
-        
-        Note: 
+
+        Note:
             - break statements in nested loops do NOT count as exit for outer loops
             - return statements ALWAYS count as exit (exits the entire function)
         """
@@ -156,16 +164,22 @@ class InfiniteLoopDetector(ast.NodeVisitor):
 
             # Check if statement
             if isinstance(stmt, ast.If):
-                if (self._has_exit_statement(stmt.body, in_nested_loop) or
-                    self._has_exit_statement(stmt.orelse, in_nested_loop)):
+                if self._has_exit_statement(
+                    stmt.body, in_nested_loop
+                ) or self._has_exit_statement(stmt.orelse, in_nested_loop):
                     return True
 
             # Check try/except/finally
             if isinstance(stmt, ast.Try):
-                if (self._has_exit_statement(stmt.body, in_nested_loop) or
-                    any(self._has_exit_statement(handler.body, in_nested_loop) for handler in stmt.handlers) or
-                    self._has_exit_statement(stmt.orelse, in_nested_loop) or
-                    self._has_exit_statement(stmt.finalbody, in_nested_loop)):
+                if (
+                    self._has_exit_statement(stmt.body, in_nested_loop)
+                    or any(
+                        self._has_exit_statement(handler.body, in_nested_loop)
+                        for handler in stmt.handlers
+                    )
+                    or self._has_exit_statement(stmt.orelse, in_nested_loop)
+                    or self._has_exit_statement(stmt.finalbody, in_nested_loop)
+                ):
                     return True
 
             # Check with statement
@@ -174,7 +188,7 @@ class InfiniteLoopDetector(ast.NodeVisitor):
                     return True
 
             # Check match statement (Python 3.10+)
-            if hasattr(ast, 'Match') and isinstance(stmt, ast.Match):
+            if hasattr(ast, "Match") and isinstance(stmt, ast.Match):
                 for case in stmt.cases:
                     if self._has_exit_statement(case.body, in_nested_loop):
                         return True
@@ -202,7 +216,7 @@ class InfiniteLoopDetector(ast.NodeVisitor):
     def _has_return_statement(self, body: List[ast.stmt]) -> bool:
         """
         Check if body contains a return statement anywhere in the tree.
-        
+
         This is a specialized version that only looks for return statements,
         ignoring break statements. Used for checking nested loops where
         break doesn't break outer loop but return does.
@@ -212,28 +226,37 @@ class InfiniteLoopDetector(ast.NodeVisitor):
                 return True
 
             if isinstance(stmt, ast.If):
-                if self._has_return_statement(stmt.body) or self._has_return_statement(stmt.orelse):
+                if self._has_return_statement(stmt.body) or self._has_return_statement(
+                    stmt.orelse
+                ):
                     return True
 
             if isinstance(stmt, ast.Try):
-                if (self._has_return_statement(stmt.body) or
-                    any(self._has_return_statement(handler.body) for handler in stmt.handlers) or
-                    self._has_return_statement(stmt.orelse) or
-                    self._has_return_statement(stmt.finalbody)):
+                if (
+                    self._has_return_statement(stmt.body)
+                    or any(
+                        self._has_return_statement(handler.body)
+                        for handler in stmt.handlers
+                    )
+                    or self._has_return_statement(stmt.orelse)
+                    or self._has_return_statement(stmt.finalbody)
+                ):
                     return True
 
             if isinstance(stmt, ast.With):
                 if self._has_return_statement(stmt.body):
                     return True
 
-            if hasattr(ast, 'Match') and isinstance(stmt, ast.Match):
+            if hasattr(ast, "Match") and isinstance(stmt, ast.Match):
                 for case in stmt.cases:
                     if self._has_return_statement(case.body):
                         return True
 
             # Recursively check nested loops for return
             if isinstance(stmt, (ast.For, ast.AsyncFor, ast.While)):
-                if self._has_return_statement(stmt.body) or self._has_return_statement(stmt.orelse):
+                if self._has_return_statement(stmt.body) or self._has_return_statement(
+                    stmt.orelse
+                ):
                     return True
 
         return False
@@ -251,7 +274,7 @@ class InfiniteLoopDetector(ast.NodeVisitor):
     def _check_range_issue(self, call_node: ast.Call) -> Optional[str]:
         """
         Check if range() call will produce empty or potentially problematic iterations.
-        
+
         Returns error message if issue found, None otherwise.
         """
         args = call_node.args
@@ -275,7 +298,9 @@ class InfiniteLoopDetector(ast.NodeVisitor):
                     if step > 0 and stop <= start:
                         return f"range({start}, {stop}) will produce no iterations"
                     elif step < 0 and stop >= start:
-                        return f"range({start}, {stop}, {step}) will produce no iterations"
+                        return (
+                            f"range({start}, {stop}, {step}) will produce no iterations"
+                        )
 
         return None
 
@@ -306,7 +331,7 @@ class InfiniteLoopDetector(ast.NodeVisitor):
 class ASTSecurityValidator(ast.NodeVisitor):
     """
     AST-based security validator for strategy code.
-    
+
     Visits all AST nodes and checks for security violations:
     - Forbidden imports
     - Forbidden function calls
@@ -316,32 +341,97 @@ class ASTSecurityValidator(ast.NodeVisitor):
     """
 
     FORBIDDEN_MODULES = {
-        'os', 'sys', 'subprocess', 'multiprocessing', 'threading',
-        'socket', 'urllib', 'http', 'requests', 'httplib', 'ftplib',
-        'smtplib', 'poplib', 'imaplib', 'telnetlib', 'socketserver',
-        'asyncio', 'concurrent', 'pickle', 'shelve', 'marshal',
-        'importlib', 'pkgutil', 'modulefinder', 'code', 'codeop',
-        'commands', 'popen2', 'pty', 'fcntl', 'pipes', 'posixpath',
-        'builtins', '__builtin__', '__builtins__',
+        "os",
+        "sys",
+        "subprocess",
+        "multiprocessing",
+        "threading",
+        "socket",
+        "urllib",
+        "http",
+        "requests",
+        "httplib",
+        "ftplib",
+        "smtplib",
+        "poplib",
+        "imaplib",
+        "telnetlib",
+        "socketserver",
+        "asyncio",
+        "concurrent",
+        "pickle",
+        "shelve",
+        "marshal",
+        "importlib",
+        "pkgutil",
+        "modulefinder",
+        "code",
+        "codeop",
+        "commands",
+        "popen2",
+        "pty",
+        "fcntl",
+        "pipes",
+        "posixpath",
+        "builtins",
+        "__builtin__",
+        "__builtins__",
     }
 
     FORBIDDEN_FUNCTIONS = {
-        'eval', 'exec', 'compile', '__import__', 'open', 'input',
-        'getattr', 'setattr', 'delattr', 'hasattr', 'globals', 'locals',
-        'vars', 'dir', 'memoryview', 'property', 'super', 'type',
-        'classmethod', 'staticmethod', 'breakpoint',
+        "eval",
+        "exec",
+        "compile",
+        "__import__",
+        "open",
+        "input",
+        "getattr",
+        "setattr",
+        "delattr",
+        "hasattr",
+        "globals",
+        "locals",
+        "vars",
+        "dir",
+        "memoryview",
+        "property",
+        "super",
+        "type",
+        "classmethod",
+        "staticmethod",
+        "breakpoint",
     }
 
     FORBIDDEN_ATTRIBUTES = {
-        '__class__', '__base__', '__bases__', '__subclasses__', '__mro__',
-        '__builtins__', '__builtin__', '__globals__', '__locals__',
-        '__code__', '__dict__', '__doc__', '__module__',
-        '__import__', '__name__', '__qualname__',
+        "__class__",
+        "__base__",
+        "__bases__",
+        "__subclasses__",
+        "__mro__",
+        "__builtins__",
+        "__builtin__",
+        "__globals__",
+        "__locals__",
+        "__code__",
+        "__dict__",
+        "__doc__",
+        "__module__",
+        "__import__",
+        "__name__",
+        "__qualname__",
     }
 
     ALLOWED_MODULES = {
-        'pandas', 'pd', 'numpy', 'np', 'math', 'statistics',
-        'datetime', 'date', 'time', 'timedelta',
+        "pandas",
+        "pd",
+        "numpy",
+        "np",
+        "math",
+        "statistics",
+        "datetime",
+        "date",
+        "time",
+        "timedelta",
     }
 
     MAX_LIST_SIZE = 10**7  # Maximum allowed list size
@@ -356,10 +446,10 @@ class ASTSecurityValidator(ast.NodeVisitor):
     def validate(self, code: str) -> ValidationResult:
         """
         Validate code by parsing AST and checking for violations.
-        
+
         Args:
             code: Python code to validate
-            
+
         Returns:
             ValidationResult with violations and warnings
         """
@@ -385,67 +475,79 @@ class ASTSecurityValidator(ast.NodeVisitor):
             # Run security validator
             self.visit(tree)
         except SyntaxError as e:
-            self.result.add_violation(SecurityViolation(
-                node_type="SyntaxError",
-                message=f"Syntax error: {e.msg}",
-                line=e.lineno or 0,
-                column=e.offset or 0,
-            ))
+            self.result.add_violation(
+                SecurityViolation(
+                    node_type="SyntaxError",
+                    message=f"Syntax error: {e.msg}",
+                    line=e.lineno or 0,
+                    column=e.offset or 0,
+                )
+            )
         except Exception as e:
-            self.result.add_violation(SecurityViolation(
-                node_type="ParseError",
-                message=f"Failed to parse code: {str(e)}",
-                line=0,
-                column=0,
-            ))
+            self.result.add_violation(
+                SecurityViolation(
+                    node_type="ParseError",
+                    message=f"Failed to parse code: {str(e)}",
+                    line=0,
+                    column=0,
+                )
+            )
 
         return self.result
 
     def visit_Import(self, node: ast.Import):
         """Check import statements."""
         for alias in node.names:
-            module_name = alias.name.split('.')[0]
+            module_name = alias.name.split(".")[0]
             self._imported_modules.add(module_name)
 
             if module_name in self.FORBIDDEN_MODULES:
-                self.result.add_violation(SecurityViolation(
-                    node_type="Import",
-                    message=f"Forbidden import: {alias.name}",
-                    line=node.lineno,
-                    column=node.col_offset,
-                ))
+                self.result.add_violation(
+                    SecurityViolation(
+                        node_type="Import",
+                        message=f"Forbidden import: {alias.name}",
+                        line=node.lineno,
+                        column=node.col_offset,
+                    )
+                )
             elif module_name not in self.ALLOWED_MODULES:
-                self.result.add_warning(SecurityViolation(
-                    node_type="Import",
-                    message=f"Potentially unsafe import: {alias.name}",
-                    line=node.lineno,
-                    column=node.col_offset,
-                    severity="warning",
-                ))
+                self.result.add_warning(
+                    SecurityViolation(
+                        node_type="Import",
+                        message=f"Potentially unsafe import: {alias.name}",
+                        line=node.lineno,
+                        column=node.col_offset,
+                        severity="warning",
+                    )
+                )
 
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom):
         """Check from ... import statements."""
         if node.module:
-            module_name = node.module.split('.')[0]
+            module_name = node.module.split(".")[0]
             self._imported_modules.add(module_name)
 
             if module_name in self.FORBIDDEN_MODULES:
-                self.result.add_violation(SecurityViolation(
-                    node_type="ImportFrom",
-                    message=f"Forbidden import from: {node.module}",
-                    line=node.lineno,
-                    column=node.col_offset,
-                ))
+                self.result.add_violation(
+                    SecurityViolation(
+                        node_type="ImportFrom",
+                        message=f"Forbidden import from: {node.module}",
+                        line=node.lineno,
+                        column=node.col_offset,
+                    )
+                )
             elif module_name not in self.ALLOWED_MODULES:
-                self.result.add_warning(SecurityViolation(
-                    node_type="ImportFrom",
-                    message=f"Potentially unsafe import from: {node.module}",
-                    line=node.lineno,
-                    column=node.col_offset,
-                    severity="warning",
-                ))
+                self.result.add_warning(
+                    SecurityViolation(
+                        node_type="ImportFrom",
+                        message=f"Potentially unsafe import from: {node.module}",
+                        line=node.lineno,
+                        column=node.col_offset,
+                        severity="warning",
+                    )
+                )
 
         self.generic_visit(node)
 
@@ -454,66 +556,78 @@ class ASTSecurityValidator(ast.NodeVisitor):
         func_name = self._get_func_name(node)
 
         if func_name in self.FORBIDDEN_FUNCTIONS:
-            self.result.add_violation(SecurityViolation(
-                node_type="Call",
-                message=f"Forbidden function call: {func_name}",
-                line=node.lineno,
-                column=node.col_offset,
-            ))
+            self.result.add_violation(
+                SecurityViolation(
+                    node_type="Call",
+                    message=f"Forbidden function call: {func_name}",
+                    line=node.lineno,
+                    column=node.col_offset,
+                )
+            )
 
         # Check for __import__ calls
-        if func_name == '__import__':
-            self.result.add_violation(SecurityViolation(
-                node_type="Call",
-                message="Dynamic import via __import__ is forbidden",
-                line=node.lineno,
-                column=node.col_offset,
-            ))
+        if func_name == "__import__":
+            self.result.add_violation(
+                SecurityViolation(
+                    node_type="Call",
+                    message="Dynamic import via __import__ is forbidden",
+                    line=node.lineno,
+                    column=node.col_offset,
+                )
+            )
 
         # Check for method calls on forbidden attributes
         if isinstance(node.func, ast.Attribute):
             if node.func.attr in self.FORBIDDEN_ATTRIBUTES:
-                self.result.add_violation(SecurityViolation(
-                    node_type="Call",
-                    message=f"Forbidden attribute access: {node.func.attr}",
-                    line=node.lineno,
-                    column=node.col_offset,
-                ))
+                self.result.add_violation(
+                    SecurityViolation(
+                        node_type="Call",
+                        message=f"Forbidden attribute access: {node.func.attr}",
+                        line=node.lineno,
+                        column=node.col_offset,
+                    )
+                )
 
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute):
         """Check attribute access for forbidden attributes."""
         if node.attr in self.FORBIDDEN_ATTRIBUTES:
-            self.result.add_violation(SecurityViolation(
-                node_type="Attribute",
-                message=f"Forbidden attribute access: {node.attr}",
-                line=node.lineno,
-                column=node.col_offset,
-            ))
-
-        # Check for dunder methods
-        if node.attr.startswith('__') and node.attr.endswith('__'):
-            if node.attr not in {'__init__', '__str__', '__repr__', '__len__'}:
-                self.result.add_warning(SecurityViolation(
+            self.result.add_violation(
+                SecurityViolation(
                     node_type="Attribute",
-                    message=f"Accessing dunder method: {node.attr}",
+                    message=f"Forbidden attribute access: {node.attr}",
                     line=node.lineno,
                     column=node.col_offset,
-                    severity="warning",
-                ))
+                )
+            )
+
+        # Check for dunder methods
+        if node.attr.startswith("__") and node.attr.endswith("__"):
+            if node.attr not in {"__init__", "__str__", "__repr__", "__len__"}:
+                self.result.add_warning(
+                    SecurityViolation(
+                        node_type="Attribute",
+                        message=f"Accessing dunder method: {node.attr}",
+                        line=node.lineno,
+                        column=node.col_offset,
+                        severity="warning",
+                    )
+                )
 
         self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name):
         """Check name references for forbidden builtins."""
         if node.id in self.FORBIDDEN_FUNCTIONS:
-            self.result.add_violation(SecurityViolation(
-                node_type="Name",
-                message=f"Reference to forbidden builtin: {node.id}",
-                line=node.lineno,
-                column=node.col_offset,
-            ))
+            self.result.add_violation(
+                SecurityViolation(
+                    node_type="Name",
+                    message=f"Reference to forbidden builtin: {node.id}",
+                    line=node.lineno,
+                    column=node.col_offset,
+                )
+            )
 
         self.generic_visit(node)
 
@@ -525,12 +639,14 @@ class ASTSecurityValidator(ast.NodeVisitor):
             right_size = self._estimate_size(node.right)
 
             if left_size > self.MAX_LIST_SIZE or right_size > self.MAX_LIST_SIZE:
-                self.result.add_violation(SecurityViolation(
-                    node_type="BinOp",
-                    message="Potential memory bomb: large multiplication detected",
-                    line=node.lineno,
-                    column=node.col_offset,
-                ))
+                self.result.add_violation(
+                    SecurityViolation(
+                        node_type="BinOp",
+                        message="Potential memory bomb: large multiplication detected",
+                        line=node.lineno,
+                        column=node.col_offset,
+                    )
+                )
 
         self.generic_visit(node)
 
@@ -538,27 +654,33 @@ class ASTSecurityValidator(ast.NodeVisitor):
         """Check list creation for large lists."""
         # Check for list comprehension that might create large lists
         if len(node.elts) > 1000:
-            self.result.add_warning(SecurityViolation(
-                node_type="List",
-                message=f"Large list literal with {len(node.elts)} elements",
-                line=node.lineno,
-                column=node.col_offset,
-                severity="warning",
-            ))
+            self.result.add_warning(
+                SecurityViolation(
+                    node_type="List",
+                    message=f"Large list literal with {len(node.elts)} elements",
+                    line=node.lineno,
+                    column=node.col_offset,
+                    severity="warning",
+                )
+            )
 
         self.generic_visit(node)
 
     def visit_ListComp(self, node: ast.ListComp):
         """Check list comprehensions for potential issues."""
         # Warn about nested comprehensions
-        if any(isinstance(generator.iter, ast.ListComp) for generator in node.generators):
-            self.result.add_warning(SecurityViolation(
-                node_type="ListComp",
-                message="Nested list comprehension may be slow",
-                line=node.lineno,
-                column=node.col_offset,
-                severity="warning",
-            ))
+        if any(
+            isinstance(generator.iter, ast.ListComp) for generator in node.generators
+        ):
+            self.result.add_warning(
+                SecurityViolation(
+                    node_type="ListComp",
+                    message="Nested list comprehension may be slow",
+                    line=node.lineno,
+                    column=node.col_offset,
+                    severity="warning",
+                )
+            )
 
         self.generic_visit(node)
 
@@ -606,7 +728,7 @@ class ASTSecurityValidator(ast.NodeVisitor):
             if isinstance(node.op, ast.Pow):
                 left = self._estimate_size(node.left)
                 right = self._estimate_size(node.right)
-                return left ** right if left < 100 and right < 10 else 10**10
+                return left**right if left < 100 and right < 10 else 10**10
             elif isinstance(node.op, ast.Mult):
                 return self._estimate_size(node.left) * self._estimate_size(node.right)
         return 1
@@ -615,10 +737,10 @@ class ASTSecurityValidator(ast.NodeVisitor):
 def validate_strategy_ast(code: str) -> Tuple[bool, List[str]]:
     """
     Validate strategy code using AST analysis.
-    
+
     Args:
         code: Python code to validate
-        
+
     Returns:
         Tuple of (is_valid, error_messages)
     """
@@ -631,10 +753,10 @@ def validate_strategy_ast(code: str) -> Tuple[bool, List[str]]:
 def get_security_report(code: str) -> ValidationResult:
     """
     Get detailed security report for strategy code.
-    
+
     Args:
         code: Python code to validate
-        
+
     Returns:
         ValidationResult with detailed violations and warnings
     """
@@ -646,46 +768,65 @@ def get_security_report(code: str) -> ValidationResult:
 if __name__ == "__main__":
     test_codes = [
         # Test 1: Valid code
-        ("""
+        (
+            """
 import pandas as pd
 
 def on_bar(ctx, bar):
     if bar['close'] > bar['open']:
         ctx.buy(bar['close'], 100)
-""", True, "Valid pandas import"),
-
+""",
+            True,
+            "Valid pandas import",
+        ),
         # Test 2: Forbidden import
-        ("""
+        (
+            """
 import os
 
 def on_bar(ctx, bar):
     os.system('ls')
-""", False, "Forbidden os import"),
-
+""",
+            False,
+            "Forbidden os import",
+        ),
         # Test 3: Eval attack
-        ("""
+        (
+            """
 def on_bar(ctx, bar):
     eval("print('hello')")
-""", False, "Forbidden eval call"),
-
+""",
+            False,
+            "Forbidden eval call",
+        ),
         # Test 4: Class introspection
-        ("""
+        (
+            """
 def on_bar(ctx, bar):
     x = ''.__class__.__base__.__subclasses__()
-""", False, "Forbidden attribute access"),
-
+""",
+            False,
+            "Forbidden attribute access",
+        ),
         # Test 5: Infinite loop
-        ("""
+        (
+            """
 def on_bar(ctx, bar):
     while True:
         pass
-""", False, "Infinite loop detection"),
-
+""",
+            False,
+            "Infinite loop detection",
+        ),
         # Test 6: Memory bomb
-        ("""
+        (
+            """
 def on_bar(ctx, bar):
     x = [0] * 10**10
-""", False, "Memory bomb detection"),
+""",
+            False,
+            "Memory bomb detection",
+        ),
     ]
 
     print("=" * 80)

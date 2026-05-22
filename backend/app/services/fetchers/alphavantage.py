@@ -14,6 +14,7 @@ API Key: 从环境变量 ALPHA_VANTAGE_API_KEY 读取
 - 支持 FX (USD/CNY 等) 和 US Stock (IBM, AAPL 等)
 - symbol 格式: "IBM", "AAPL" (美股), "USD/CNY" (外汇)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,11 +42,29 @@ SYMBOL_TO_MARKET = {
 
 # 常见美股 → AShare 代码映射（Alphavantage 格式）
 US_SYMBOLS = {
-    "IBM", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA",
-    "JPM", "GS", "MS", "BAC", "WFC",
-    "JNJ", "UNH", "PFE", "ABBV",
-    "XOM", "CVX", "COP",
-    "DIS", "NFLX", "CMCSA",
+    "IBM",
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "AMZN",
+    "META",
+    "TSLA",
+    "NVDA",
+    "JPM",
+    "GS",
+    "MS",
+    "BAC",
+    "WFC",
+    "JNJ",
+    "UNH",
+    "PFE",
+    "ABBV",
+    "XOM",
+    "CVX",
+    "COP",
+    "DIS",
+    "NFLX",
+    "CMCSA",
 }
 
 # 外汇对
@@ -53,7 +72,13 @@ FOREX_PAIRS = {"USD/CNY", "EUR/USD", "USD/JPY", "GBP/USD", "USD/HKD"}
 
 
 def _is_forex(symbol: str) -> bool:
-    return "/" in symbol.upper() or symbol.upper() in {"USDCNY", "EURUSD", "USDJPY", "GBPUDS", "USDHKD"}
+    return "/" in symbol.upper() or symbol.upper() in {
+        "USDCNY",
+        "EURUSD",
+        "USDJPY",
+        "GBPUDS",
+        "USDHKD",
+    }
 
 
 def _is_us_stock(symbol: str) -> bool:
@@ -125,7 +150,9 @@ class AlphavantageFetcher(BaseMarketFetcher):
             else:
                 return await self._get_stock_quote(symbol)
         except Exception as e:
-            logger.error(f"[Alphavantage] get_quote({symbol}) failed: {e}", exc_info=True)
+            logger.error(
+                f"[Alphavantage] get_quote({symbol}) failed: {e}", exc_info=True
+            )
             if self.cb:
                 self.cb.record_failure()
             return None
@@ -185,7 +212,9 @@ class AlphavantageFetcher(BaseMarketFetcher):
                 source="alphavantage",
             )
         except (ValueError, KeyError) as e:
-            logger.error(f"[Alphavantage] 解析失败 {symbol}: {e}, quote={quote}", exc_info=True)
+            logger.error(
+                f"[Alphavantage] 解析失败 {symbol}: {e}, quote={quote}", exc_info=True
+            )
             return None
 
     async def _get_forex_quote(self, symbol: str) -> Optional[QuoteData]:
@@ -234,7 +263,7 @@ class AlphavantageFetcher(BaseMarketFetcher):
                 open=from_rate,
                 high=from_rate,
                 low=from_rate,
-                change_pct=0.0,   # FX 无涨跌幅概念
+                change_pct=0.0,  # FX 无涨跌幅概念
                 change=0.0,
                 volume=0.0,
                 timestamp=int(time.time()),
@@ -309,18 +338,20 @@ class AlphavantageFetcher(BaseMarketFetcher):
         klines = []
         for date_str, vals in series.items():
             try:
-                klines.append({
-                    "symbol": symbol.upper(),
-                    "date": date_str,
-                    "period": period,
-                    "open": float(vals.get("1. open", 0)),
-                    "high": float(vals.get("2. high", 0)),
-                    "low": float(vals.get("3. low", 0)),
-                    "close": float(vals.get("4. close", 0)),
-                    "volume": float(vals.get("5. volume", 0)),
-                    "timestamp": int(datetime.fromisoformat(date_str).timestamp()),
-                    "source": "alphavantage",
-                })
+                klines.append(
+                    {
+                        "symbol": symbol.upper(),
+                        "date": date_str,
+                        "period": period,
+                        "open": float(vals.get("1. open", 0)),
+                        "high": float(vals.get("2. high", 0)),
+                        "low": float(vals.get("3. low", 0)),
+                        "close": float(vals.get("4. close", 0)),
+                        "volume": float(vals.get("5. volume", 0)),
+                        "timestamp": int(datetime.fromisoformat(date_str).timestamp()),
+                        "source": "alphavantage",
+                    }
+                )
             except (ValueError, KeyError):
                 continue
 
@@ -354,24 +385,30 @@ class AlphavantageFetcher(BaseMarketFetcher):
         if "Note" in data or "Information" in data:
             return None
 
-        key = {"FX_DAILY": "Time Series FX (Daily)", "FX_WEEKLY": "Weekly FX Rates", "FX_MONTHLY": "Monthly FX Rates"}.get(func, "")
+        key = {
+            "FX_DAILY": "Time Series FX (Daily)",
+            "FX_WEEKLY": "Weekly FX Rates",
+            "FX_MONTHLY": "Monthly FX Rates",
+        }.get(func, "")
         series = data.get(key, {})
 
         klines = []
         for date_str, vals in series.items():
             try:
-                klines.append({
-                    "symbol": symbol.upper(),
-                    "date": date_str,
-                    "period": period,
-                    "open": float(vals.get("1. open", 0)),
-                    "high": float(vals.get("2. high", 0)),
-                    "low": float(vals.get("3. low", 0)),
-                    "close": float(vals.get("4. close", 0)),
-                    "volume": 0.0,
-                    "timestamp": int(datetime.fromisoformat(date_str).timestamp()),
-                    "source": "alphavantage",
-                })
+                klines.append(
+                    {
+                        "symbol": symbol.upper(),
+                        "date": date_str,
+                        "period": period,
+                        "open": float(vals.get("1. open", 0)),
+                        "high": float(vals.get("2. high", 0)),
+                        "low": float(vals.get("3. low", 0)),
+                        "close": float(vals.get("4. close", 0)),
+                        "volume": 0.0,
+                        "timestamp": int(datetime.fromisoformat(date_str).timestamp()),
+                        "source": "alphavantage",
+                    }
+                )
             except (ValueError, KeyError):
                 continue
         return klines

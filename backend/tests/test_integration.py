@@ -16,6 +16,7 @@ Debug Cycles:
   Cycle 4: Performance benchmarking
   Cycle 5: Cleanup and summary
 """
+
 import pytest
 import logging
 import time
@@ -29,18 +30,18 @@ import numpy as np
 
 # Setup logging
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Add app directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 # ═══════════════════════════════════════════════════════════════
 # Debug Cycle Tracking
 # ═══════════════════════════════════════════════════════════════
+
 
 class DebugCycleTracker:
     """Track and log 5 comprehensive debug cycles"""
@@ -57,7 +58,9 @@ class DebugCycleTracker:
         logger.debug("=" * 80)
         self.cycle_times[f"cycle_{cycle_num}_start"] = time.time()
 
-    def end_cycle(self, cycle_num: int, name: str, success: bool, details: Dict[str, Any] = None):
+    def end_cycle(
+        self, cycle_num: int, name: str, success: bool, details: Dict[str, Any] = None
+    ):
         """End a debug cycle"""
         end_time = time.time()
         start_time = self.cycle_times.get(f"cycle_{cycle_num}_start", end_time)
@@ -67,7 +70,7 @@ class DebugCycleTracker:
             "name": name,
             "success": success,
             "duration_seconds": round(duration, 3),
-            "details": details or {}
+            "details": details or {},
         }
 
         status = "✅ PASSED" if success else "❌ FAILED"
@@ -90,7 +93,7 @@ class DebugCycleTracker:
             "successful_cycles": successful,
             "failed_cycles": total - successful,
             "total_duration_seconds": round(total_duration, 3),
-            "cycles": self.cycle_results
+            "cycles": self.cycle_results,
         }
 
 
@@ -102,10 +105,11 @@ cycle_tracker = DebugCycleTracker()
 # Fixtures
 # ═══════════════════════════════════════════════════════════════
 
+
 @pytest.fixture(scope="module")
 def test_db():
     """Create temporary test database"""
-    fd, path = tempfile.mkstemp(suffix='.db')
+    fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
 
     logger.debug(f"[FIXTURE] Created test database: {path}")
@@ -125,6 +129,7 @@ def agent_db(test_db):
 
     # Override database path
     import app.db.agent_db as agent_db_module
+
     original_db_path = agent_db_module.DB_PATH
     agent_db_module.DB_PATH = test_db
 
@@ -150,7 +155,7 @@ def risk_manager():
         default_stop_pct=8.0,
         default_profit_pct=15.0,
         trailing_stop_enabled=True,
-        trailing_activation_pct=5.0
+        trailing_activation_pct=5.0,
     )
 
     manager = RiskManager(config=config)
@@ -162,13 +167,13 @@ def risk_manager():
 @pytest.fixture(scope="module")
 def notification_service():
     """Create NotificationService instance"""
-    from app.services.notification_service import NotificationService, NotificationConfig
+    from app.services.notification_service import (
+        NotificationService,
+        NotificationConfig,
+    )
 
     config = NotificationConfig(
-        enabled=True,
-        retry_attempts=3,
-        email_enabled=True,
-        webhook_enabled=True
+        enabled=True, retry_attempts=3, email_enabled=True, webhook_enabled=True
     )
 
     service = NotificationService(config=config)
@@ -182,10 +187,7 @@ def performance_calculator():
     """Create PerformanceMetricsCalculator instance"""
     from app.services.performance_analyzer import PerformanceMetricsCalculator
 
-    calculator = PerformanceMetricsCalculator(
-        risk_free_rate=0.02,
-        trading_days=252
-    )
+    calculator = PerformanceMetricsCalculator(risk_free_rate=0.02, trading_days=252)
     logger.debug("[FIXTURE] Created PerformanceMetricsCalculator instance")
 
     return calculator
@@ -197,7 +199,7 @@ def sample_market_data():
     logger.debug("[FIXTURE] Generating sample market data")
 
     # Generate 100 days of sample data
-    dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
+    dates = pd.date_range(start="2024-01-01", periods=100, freq="D")
 
     # Create realistic price data with trend
     np.random.seed(42)
@@ -206,13 +208,16 @@ def sample_market_data():
     prices = base_price * np.cumprod(1 + returns)
 
     # Create OHLCV data
-    data = pd.DataFrame({
-        'open': prices * (1 + np.random.uniform(-0.01, 0.01, 100)),
-        'high': prices * (1 + np.random.uniform(0, 0.02, 100)),
-        'low': prices * (1 + np.random.uniform(-0.02, 0, 100)),
-        'close': prices,
-        'volume': np.random.randint(1000000, 10000000, 100)
-    }, index=dates)
+    data = pd.DataFrame(
+        {
+            "open": prices * (1 + np.random.uniform(-0.01, 0.01, 100)),
+            "high": prices * (1 + np.random.uniform(0, 0.02, 100)),
+            "low": prices * (1 + np.random.uniform(-0.02, 0, 100)),
+            "close": prices,
+            "volume": np.random.randint(1000000, 10000000, 100),
+        },
+        index=dates,
+    )
 
     logger.debug(f"[FIXTURE] Generated {len(data)} rows of market data")
 
@@ -223,10 +228,11 @@ def sample_market_data():
 # Test 1: Agent Token Full Workflow
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestAgentTokenWorkflow:
     """
     Test 1: Agent Token full workflow
-    
+
     Steps:
       1. Create token
       2. Verify token
@@ -254,7 +260,7 @@ class TestAgentTokenWorkflow:
             markets=["sh", "sz"],
             instruments=["stock"],
             paper_only=True,
-            rate_limit=120
+            rate_limit=120,
         )
 
         # Save token
@@ -317,10 +323,11 @@ class TestAgentTokenWorkflow:
 # Test 2: Strategy Execution End-to-End
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestStrategyExecution:
     """
     Test 2: Strategy execution end-to-end
-    
+
     Steps:
       1. Compile strategy
       2. Execute backtest
@@ -329,50 +336,61 @@ class TestStrategyExecution:
 
     def test_01_compile_strategy(self):
         """Test strategy compilation"""
-        from app.services.backtest.engine import BacktestEngine, BacktestConfig, TimeFrame
+        from app.services.backtest.engine import (
+            BacktestEngine,
+            BacktestConfig,
+            TimeFrame,
+        )
 
         # Create backtest config
         config = BacktestConfig(
             initial_capital=100000.0,
             commission=0.0003,
             slippage=0.0001,
-            timeframe=TimeFrame.D1
+            timeframe=TimeFrame.D1,
         )
 
         # Create engine
         engine = BacktestEngine(config=config)
 
         assert engine is not None, "Engine creation failed"
-        logger.debug(f"[TEST] Created backtest engine with config: {config.initial_capital}")
+        logger.debug(
+            f"[TEST] Created backtest engine with config: {config.initial_capital}"
+        )
 
         # Store for later tests
         self.__class__.engine = engine
 
     def test_02_execute_backtest(self, sample_market_data):
         """Test backtest execution"""
-        from app.services.backtest.engine import BacktestEngine, BacktestConfig, TimeFrame, StrategyContext
+        from app.services.backtest.engine import (
+            BacktestEngine,
+            BacktestConfig,
+            TimeFrame,
+            StrategyContext,
+        )
 
         # Create engine
         config = BacktestConfig(
             initial_capital=100000.0,
             commission=0.0003,
             slippage=0.0001,
-            timeframe=TimeFrame.D1
+            timeframe=TimeFrame.D1,
         )
         engine = BacktestEngine(config=config)
 
         # Run simple moving average strategy
         data = sample_market_data.copy()
         data = data.reset_index()
-        data.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        data.columns = ["timestamp", "open", "high", "low", "close", "volume"]
 
         # Define simple SMA crossover strategy
         def sma_strategy(ctx: StrategyContext):
             if len(ctx.data) < 30:
                 return
 
-            sma_fast = ctx.data['close'].rolling(10).mean().iloc[-1]
-            sma_slow = ctx.data['close'].rolling(30).mean().iloc[-1]
+            sma_fast = ctx.data["close"].rolling(10).mean().iloc[-1]
+            sma_slow = ctx.data["close"].rolling(30).mean().iloc[-1]
 
             if sma_fast > sma_slow and ctx.position is None:
                 ctx.buy(size=100)
@@ -381,13 +399,11 @@ class TestStrategyExecution:
 
         # Run backtest
         results = engine.run_strategy(
-            strategy_func=sma_strategy,
-            data=data,
-            symbol="TEST"
+            strategy_func=sma_strategy, data=data, symbol="TEST"
         )
 
         assert results is not None, "Backtest failed to produce results"
-        assert hasattr(results, 'metrics'), "Results should contain metrics"
+        assert hasattr(results, "metrics"), "Results should contain metrics"
 
         logger.debug("[TEST] Backtest completed")
 
@@ -401,7 +417,7 @@ class TestStrategyExecution:
         assert results is not None, "No backtest results available"
 
         # Check metrics
-        metrics = results.metrics if hasattr(results, 'metrics') else {}
+        metrics = results.metrics if hasattr(results, "metrics") else {}
 
         assert metrics is not None, "Metrics should be available"
 
@@ -412,10 +428,11 @@ class TestStrategyExecution:
 # Test 3: Performance Metrics Pipeline
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestPerformanceMetrics:
     """
     Test 3: Performance metrics pipeline
-    
+
     Steps:
       1. Generate equity curve
       2. Calculate metrics
@@ -425,7 +442,7 @@ class TestPerformanceMetrics:
     def test_01_generate_equity_curve(self, sample_market_data):
         """Test equity curve generation"""
         # Simulate equity curve from price data
-        prices = sample_market_data['close']
+        prices = sample_market_data["close"]
         initial_capital = 100000.0
 
         # Simple buy and hold strategy
@@ -437,8 +454,10 @@ class TestPerformanceMetrics:
         assert len(equity_curve) > 0, "Equity curve is empty"
         assert equity_curve.iloc[0] > 0, "Initial equity should be positive"
 
-        logger.debug(f"[TEST] Generated equity curve: {len(equity_curve)} points, "
-                    f"start={equity_curve.iloc[0]:.2f}, end={equity_curve.iloc[-1]:.2f}")
+        logger.debug(
+            f"[TEST] Generated equity curve: {len(equity_curve)} points, "
+            f"start={equity_curve.iloc[0]:.2f}, end={equity_curve.iloc[-1]:.2f}"
+        )
 
         # Store for later tests
         self.__class__.equity_curve = equity_curve
@@ -460,15 +479,17 @@ class TestPerformanceMetrics:
 
         # Calculate max drawdown (returns dict)
         max_dd_dict = performance_calculator.calculate_max_drawdown(equity_curve)
-        max_dd = max_dd_dict.get('max_drawdown', 0.0)
+        max_dd = max_dd_dict.get("max_drawdown", 0.0)
 
-        logger.debug(f"[TEST] Metrics: sharpe={sharpe:.2f}, sortino={sortino:.2f}, max_dd={max_dd:.2%}")
+        logger.debug(
+            f"[TEST] Metrics: sharpe={sharpe:.2f}, sortino={sortino:.2f}, max_dd={max_dd:.2%}"
+        )
 
         # Store metrics
         self.__class__.metrics = {
-            'sharpe_ratio': sharpe,
-            'sortino_ratio': sortino,
-            'max_drawdown': max_dd
+            "sharpe_ratio": sharpe,
+            "sortino_ratio": sortino,
+            "max_drawdown": max_dd,
         }
 
     def test_03_generate_report(self):
@@ -477,30 +498,35 @@ class TestPerformanceMetrics:
 
         # Generate summary report
         report = {
-            'performance_summary': {
-                'sharpe_ratio': round(metrics['sharpe_ratio'], 2),
-                'sortino_ratio': round(metrics['sortino_ratio'], 2),
-                'max_drawdown_pct': round(metrics['max_drawdown'] * 100, 2),
-                'timestamp': datetime.now().isoformat()
+            "performance_summary": {
+                "sharpe_ratio": round(metrics["sharpe_ratio"], 2),
+                "sortino_ratio": round(metrics["sortino_ratio"], 2),
+                "max_drawdown_pct": round(metrics["max_drawdown"] * 100, 2),
+                "timestamp": datetime.now().isoformat(),
             }
         }
 
-        assert 'performance_summary' in report, "Report missing performance_summary"
+        assert "performance_summary" in report, "Report missing performance_summary"
 
         logger.debug("[TEST] Generated performance report")
         logger.debug(f"  Sharpe Ratio: {report['performance_summary']['sharpe_ratio']}")
-        logger.debug(f"  Sortino Ratio: {report['performance_summary']['sortino_ratio']}")
-        logger.debug(f"  Max Drawdown: {report['performance_summary']['max_drawdown_pct']}%")
+        logger.debug(
+            f"  Sortino Ratio: {report['performance_summary']['sortino_ratio']}"
+        )
+        logger.debug(
+            f"  Max Drawdown: {report['performance_summary']['max_drawdown_pct']}%"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
 # Test 4: Risk Management Flow
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestRiskManagement:
     """
     Test 4: Risk management flow
-    
+
     Steps:
       1. Create position
       2. Set stop loss
@@ -517,14 +543,16 @@ class TestRiskManagement:
             entry_price=1800.0,
             shares=100,
             stop_pct=8.0,
-            profit_pct=15.0
+            profit_pct=15.0,
         )
 
         assert position is not None, "Position creation failed"
         assert position.symbol == "600519", "Symbol mismatch"
         assert position.shares == 100, "Shares mismatch"
 
-        logger.debug(f"[TEST] Created position: {position.symbol} {position.shares} shares @ {position.entry_price}")
+        logger.debug(
+            f"[TEST] Created position: {position.symbol} {position.shares} shares @ {position.entry_price}"
+        )
         logger.debug(f"  Stop loss: {position.stop_price}")
         logger.debug(f"  Take profit: {position.target_price}")
 
@@ -541,7 +569,9 @@ class TestRiskManagement:
         # Calculate expected stop
         expected_stop = position.entry_price * (1 - 0.08)  # 8% stop
 
-        assert abs(position.stop_price - expected_stop) < 0.01, "Stop price calculation incorrect"
+        assert (
+            abs(position.stop_price - expected_stop) < 0.01
+        ), "Stop price calculation incorrect"
 
         logger.debug(f"[TEST] Stop loss verified: {position.stop_price}")
 
@@ -553,9 +583,7 @@ class TestRiskManagement:
         current_price = position.entry_price * 1.05
 
         trailing_stop = risk_manager.update_trailing_stop(
-            position=position,
-            current_price=current_price,
-            trail_pct=8.0
+            position=position, current_price=current_price, trail_pct=8.0
         )
 
         # Trailing stop should be activated
@@ -567,9 +595,7 @@ class TestRiskManagement:
         # Simulate further price increase
         new_price = position.entry_price * 1.10
         new_trailing = risk_manager.update_trailing_stop(
-            position=position,
-            current_price=new_price,
-            trail_pct=8.0
+            position=position, current_price=new_price, trail_pct=8.0
         )
 
         # Trailing stop should move up
@@ -583,8 +609,7 @@ class TestRiskManagement:
 
         # Test stop loss trigger
         stop_triggered = risk_manager.check_stop_triggered(
-            position=position,
-            current_price=position.stop_price - 10  # Below stop
+            position=position, current_price=position.stop_price - 10  # Below stop
         )
 
         assert stop_triggered, "Stop loss should be triggered"
@@ -593,8 +618,7 @@ class TestRiskManagement:
 
         # Test profit target
         profit_reached = risk_manager.check_profit_target(
-            position=position,
-            current_price=position.target_price + 10  # Above target
+            position=position, current_price=position.target_price + 10  # Above target
         )
 
         assert profit_reached, "Profit target should be reached"
@@ -606,10 +630,11 @@ class TestRiskManagement:
 # Test 5: Notification Flow
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestNotificationFlow:
     """
     Test 5: Notification flow
-    
+
     Steps:
       1. Create event
       2. Render template
@@ -620,17 +645,19 @@ class TestNotificationFlow:
     def test_01_create_event(self):
         """Test event creation"""
         event = {
-            'type': 'trade',
-            'symbol': '600519',
-            'action': 'BUY',
-            'shares': 100,
-            'price': 1800.0,
-            'timestamp': datetime.now().isoformat()
+            "type": "trade",
+            "symbol": "600519",
+            "action": "BUY",
+            "shares": 100,
+            "price": 1800.0,
+            "timestamp": datetime.now().isoformat(),
         }
 
-        assert event['type'] == 'trade', "Event type mismatch"
+        assert event["type"] == "trade", "Event type mismatch"
 
-        logger.debug(f"[TEST] Created event: {event['type']} - {event['action']} {event['shares']} {event['symbol']}")
+        logger.debug(
+            f"[TEST] Created event: {event['type']} - {event['action']} {event['shares']} {event['symbol']}"
+        )
 
         # Store for later tests
         self.__class__.event = event
@@ -641,18 +668,18 @@ class TestNotificationFlow:
 
         # Create template
         message = notification_service.create_template(
-            template_name='trade',
+            template_name="trade",
             variables={
-                'symbol': event['symbol'],
-                'action': event['action'],
-                'shares': event['shares'],
-                'price': event['price']
-            }
+                "symbol": event["symbol"],
+                "action": event["action"],
+                "shares": event["shares"],
+                "price": event["price"],
+            },
         )
 
         assert message is not None, "Template rendering failed"
-        assert event['symbol'] in message, "Message should contain symbol"
-        assert event['action'] in message.upper(), "Message should contain action"
+        assert event["symbol"] in message, "Message should contain symbol"
+        assert event["action"] in message.upper(), "Message should contain action"
 
         logger.debug("[TEST] Template rendered successfully")
 
@@ -669,8 +696,8 @@ class TestNotificationFlow:
         success = notification_service.send_notification(
             channel=NotificationChannel.EMAIL,
             message=message,
-            recipient='test@example.com',
-            subject='Trade Notification'
+            recipient="test@example.com",
+            subject="Trade Notification",
         )
 
         assert success, "Notification send failed"
@@ -683,21 +710,24 @@ class TestNotificationFlow:
         stats = notification_service.get_statistics()
 
         assert stats is not None, "Statistics should be available"
-        assert stats['total_notifications'] > 0, "Should have at least one notification"
-        assert stats['sent'] > 0, "Should have sent notifications"
+        assert stats["total_notifications"] > 0, "Should have at least one notification"
+        assert stats["sent"] > 0, "Should have sent notifications"
 
-        logger.debug(f"[TEST] Notification statistics: total={stats['total_notifications']}, "
-                    f"sent={stats['sent']}, success_rate={stats['success_rate']:.1f}%")
+        logger.debug(
+            f"[TEST] Notification statistics: total={stats['total_notifications']}, "
+            f"sent={stats['sent']}, success_rate={stats['success_rate']:.1f}%"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
 # Debug Cycle Tests
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestDebugCycles:
     """
     5 Comprehensive Debug Cycles
-    
+
     Cycle 1: Test initialization
     Cycle 2: Component integration check
     Cycle 3: Data flow validation
@@ -705,7 +735,9 @@ class TestDebugCycles:
     Cycle 5: Cleanup and summary
     """
 
-    def test_cycle_1_initialization(self, agent_db, risk_manager, notification_service, performance_calculator):
+    def test_cycle_1_initialization(
+        self, agent_db, risk_manager, notification_service, performance_calculator
+    ):
         """Cycle 1: Test initialization"""
         cycle_tracker.start_cycle(1, "Test Initialization")
 
@@ -713,15 +745,19 @@ class TestDebugCycles:
             # Verify all components initialized
             assert agent_db is not None, "AgentDB not initialized"
             assert risk_manager is not None, "RiskManager not initialized"
-            assert notification_service is not None, "NotificationService not initialized"
-            assert performance_calculator is not None, "PerformanceMetricsCalculator not initialized"
+            assert (
+                notification_service is not None
+            ), "NotificationService not initialized"
+            assert (
+                performance_calculator is not None
+            ), "PerformanceMetricsCalculator not initialized"
 
             # Log component details
             details = {
                 "agent_db": "initialized",
                 "risk_manager": "initialized",
                 "notification_service": "initialized",
-                "performance_calculator": "initialized"
+                "performance_calculator": "initialized",
             }
 
             cycle_tracker.end_cycle(1, "Test Initialization", True, details)
@@ -743,37 +779,47 @@ class TestDebugCycles:
 
             # Test 1: Agent DB + Risk Manager
             position = risk_manager.register_position(
-                symbol="TEST",
-                entry_price=100.0,
-                shares=10
+                symbol="TEST", entry_price=100.0, shares=10
             )
             integration_tests.append(("risk_manager_position", position is not None))
 
             # Test 2: Notification Service
             from app.services.notification_service import NotificationChannel
+
             success = notification_service.send_notification(
                 channel=NotificationChannel.EMAIL,
                 message="Integration test",
                 recipient="test@example.com",
-                subject="Test"
+                subject="Test",
             )
             integration_tests.append(("notification_service", success))
 
             # Verify all integration tests passed
             all_passed = all(result for _, result in integration_tests)
 
-            details = {name: "passed" if result else "failed" for name, result in integration_tests}
+            details = {
+                name: "passed" if result else "failed"
+                for name, result in integration_tests
+            }
 
-            cycle_tracker.end_cycle(2, "Component Integration Check", all_passed, details)
+            cycle_tracker.end_cycle(
+                2, "Component Integration Check", all_passed, details
+            )
 
         except AssertionError as e:
-            cycle_tracker.end_cycle(2, "Component Integration Check", False, {"error": str(e)})
+            cycle_tracker.end_cycle(
+                2, "Component Integration Check", False, {"error": str(e)}
+            )
             raise
         except ValueError as e:
-            cycle_tracker.end_cycle(2, "Component Integration Check", False, {"error": str(e)})
+            cycle_tracker.end_cycle(
+                2, "Component Integration Check", False, {"error": str(e)}
+            )
             raise
         except Exception as e:
-            cycle_tracker.end_cycle(2, "Component Integration Check", False, {"error": str(e)})
+            cycle_tracker.end_cycle(
+                2, "Component Integration Check", False, {"error": str(e)}
+            )
             raise
 
     def test_cycle_3_data_flow(self, sample_market_data, performance_calculator):
@@ -788,7 +834,7 @@ class TestDebugCycles:
             data_flow_tests.append(("input_data", len(sample_market_data) > 0))
 
             # Step 2: Calculate returns
-            equity_curve = sample_market_data['close'] * 1000
+            equity_curve = sample_market_data["close"] * 1000
             returns = performance_calculator.calculate_returns(equity_curve)
             data_flow_tests.append(("returns_calculation", len(returns) > 0))
 
@@ -798,12 +844,17 @@ class TestDebugCycles:
 
             # Step 4: Calculate drawdown (returns dict)
             max_dd_dict = performance_calculator.calculate_max_drawdown(equity_curve)
-            data_flow_tests.append(("drawdown_calculation", isinstance(max_dd_dict, dict)))
+            data_flow_tests.append(
+                ("drawdown_calculation", isinstance(max_dd_dict, dict))
+            )
 
             # Verify all data flow tests passed
             all_passed = all(result for _, result in data_flow_tests)
 
-            details = {name: "passed" if result else "failed" for name, result in data_flow_tests}
+            details = {
+                name: "passed" if result else "failed"
+                for name, result in data_flow_tests
+            }
             details["data_points"] = len(sample_market_data)
             details["returns_count"] = len(returns)
 
@@ -832,7 +883,7 @@ class TestDebugCycles:
 
             # Benchmark 1: Returns calculation
             start = time.time()
-            equity_curve = sample_market_data['close'] * 1000
+            equity_curve = sample_market_data["close"] * 1000
             for _ in range(100):
                 returns = performance_calculator.calculate_returns(equity_curve)
             elapsed = time.time() - start
@@ -848,23 +899,33 @@ class TestDebugCycles:
             # Benchmark 3: Max drawdown calculation
             start = time.time()
             for _ in range(100):
-                max_dd_dict = performance_calculator.calculate_max_drawdown(equity_curve)
+                max_dd_dict = performance_calculator.calculate_max_drawdown(
+                    equity_curve
+                )
             elapsed = time.time() - start
             benchmarks["drawdown_calculation_100x"] = f"{elapsed:.3f}s"
 
             # All benchmarks should complete in reasonable time
             all_passed = True
 
-            cycle_tracker.end_cycle(4, "Performance Benchmarking", all_passed, benchmarks)
+            cycle_tracker.end_cycle(
+                4, "Performance Benchmarking", all_passed, benchmarks
+            )
 
         except KeyError as e:
-            cycle_tracker.end_cycle(4, "Performance Benchmarking", False, {"error": str(e)})
+            cycle_tracker.end_cycle(
+                4, "Performance Benchmarking", False, {"error": str(e)}
+            )
             raise
         except ValueError as e:
-            cycle_tracker.end_cycle(4, "Performance Benchmarking", False, {"error": str(e)})
+            cycle_tracker.end_cycle(
+                4, "Performance Benchmarking", False, {"error": str(e)}
+            )
             raise
         except Exception as e:
-            cycle_tracker.end_cycle(4, "Performance Benchmarking", False, {"error": str(e)})
+            cycle_tracker.end_cycle(
+                4, "Performance Benchmarking", False, {"error": str(e)}
+            )
             raise
 
     def test_cycle_5_cleanup(self):
@@ -885,19 +946,21 @@ class TestDebugCycles:
             logger.info(f"Total Duration: {summary['total_duration_seconds']:.3f}s")
             logger.info("=" * 80)
 
-            for cycle_id, cycle_info in summary['cycles'].items():
-                status = "✅" if cycle_info['success'] else "❌"
-                logger.info(f"{status} {cycle_info['name']}: {cycle_info['duration_seconds']:.3f}s")
+            for cycle_id, cycle_info in summary["cycles"].items():
+                status = "✅" if cycle_info["success"] else "❌"
+                logger.info(
+                    f"{status} {cycle_info['name']}: {cycle_info['duration_seconds']:.3f}s"
+                )
 
             logger.info("=" * 80)
 
             # Verify all cycles passed
-            all_passed = summary['successful_cycles'] == summary['total_cycles']
+            all_passed = summary["successful_cycles"] == summary["total_cycles"]
 
             details = {
-                "total_cycles": summary['total_cycles'],
-                "successful_cycles": summary['successful_cycles'],
-                "total_duration": f"{summary['total_duration_seconds']:.3f}s"
+                "total_cycles": summary["total_cycles"],
+                "successful_cycles": summary["successful_cycles"],
+                "total_duration": f"{summary['total_duration_seconds']:.3f}s",
             }
 
             cycle_tracker.end_cycle(5, "Cleanup and Summary", all_passed, details)
@@ -917,6 +980,7 @@ class TestDebugCycles:
 # Error Handling Tests
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestErrorHandling:
     """Test error handling across all components"""
 
@@ -931,7 +995,7 @@ class TestErrorHandling:
                 name="Test",
                 token_hash="test_hash",
                 token_prefix="test",
-                scopes=["read"]
+                scopes=["read"],
             )
             success = agent_db.save_token(token)
             # Should handle gracefully
@@ -945,9 +1009,7 @@ class TestErrorHandling:
         # Try to create position with invalid parameters
         try:
             position = risk_manager.register_position(
-                symbol="TEST",
-                entry_price=-100.0,  # Invalid negative price
-                shares=10
+                symbol="TEST", entry_price=-100.0, shares=10  # Invalid negative price
             )
             assert False, "Should have raised error for negative price"
         except ValueError as e:
@@ -963,7 +1025,7 @@ class TestErrorHandling:
                 channel=NotificationChannel.EMAIL,
                 message="Test",
                 recipient="invalid-email",  # Invalid email format
-                subject="Test"
+                subject="Test",
             )
             # Should handle gracefully
             assert not success or True, "Should handle invalid recipient"

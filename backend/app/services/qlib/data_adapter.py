@@ -4,6 +4,7 @@ Data Adapter for Qlib Integration
 Converts AlphaTerminal's DataFrame format to Qlib's Dataset format.
 Handles symbol mapping, date alignment, and feature generation.
 """
+
 import logging
 import pandas as pd
 from typing import Dict, List, Optional, Any
@@ -20,11 +21,11 @@ class SymbolFormat(Enum):
 class DataAdapter:
     """
     Adapter for converting AlphaTerminal data to Qlib format.
-    
+
     AlphaTerminal format:
         - Symbols: sh600519, sz000001
         - DataFrame columns: date, open, high, low, close, volume
-        
+
     Qlib format:
         - Symbols: SH600519, SZ000001
         - Dataset with instrument and time index
@@ -40,7 +41,9 @@ class DataAdapter:
     def __init__(self):
         self._symbol_cache: Dict[str, str] = {}
 
-    def convert_symbol(self, symbol: str, to_format: SymbolFormat = SymbolFormat.QLIB) -> str:
+    def convert_symbol(
+        self, symbol: str, to_format: SymbolFormat = SymbolFormat.QLIB
+    ) -> str:
         """Convert symbol between AlphaTerminal and Qlib formats."""
         if symbol in self._symbol_cache:
             return self._symbol_cache[symbol]
@@ -50,14 +53,14 @@ class DataAdapter:
         if to_format == SymbolFormat.QLIB:
             for prefix, qlib_prefix in self.SYMBOL_PREFIX_MAP.items():
                 if symbol_lower.startswith(prefix):
-                    converted = qlib_prefix + symbol_lower[len(prefix):]
+                    converted = qlib_prefix + symbol_lower[len(prefix) :]
                     self._symbol_cache[symbol] = converted
                     return converted
             return symbol.upper()
         else:
             for qlib_prefix, prefix in self.SYMBOL_PREFIX_MAP.items():
                 if symbol.upper().startswith(qlib_prefix):
-                    converted = prefix + symbol[len(qlib_prefix):].lower()
+                    converted = prefix + symbol[len(qlib_prefix) :].lower()
                     self._symbol_cache[symbol] = converted
                     return converted
             return symbol.lower()
@@ -70,12 +73,12 @@ class DataAdapter:
     ) -> pd.DataFrame:
         """
         Convert AlphaTerminal DataFrame to Qlib format.
-        
+
         Args:
             df: DataFrame with columns [date, open, high, low, close, volume]
             symbol: Stock symbol in AlphaTerminal format
             date_column: Name of date column
-            
+
         Returns:
             DataFrame in Qlib format with MultiIndex (instrument, datetime)
         """
@@ -122,11 +125,11 @@ class DataAdapter:
     ) -> pd.DataFrame:
         """
         Convert multiple DataFrames to Qlib format.
-        
+
         Args:
             data_dict: Dict mapping symbols to DataFrames
             date_column: Name of date column
-            
+
         Returns:
             Combined DataFrame in Qlib format
         """
@@ -150,12 +153,12 @@ class DataAdapter:
     ) -> Any:
         """
         Create Qlib Dataset from DataFrame.
-        
+
         Args:
             df: DataFrame in Qlib format
             start_date: Start date filter
             end_date: End date filter
-            
+
         Returns:
             Qlib Dataset object or None if Qlib not available
         """
@@ -175,7 +178,9 @@ class DataAdapter:
             return DatasetH(handler=handler)
 
         except ImportError:
-            logger.warning("[DataAdapter] Qlib not available, returning None", exc_info=True)
+            logger.warning(
+                "[DataAdapter] Qlib not available, returning None", exc_info=True
+            )
             return None
 
     def extract_features(
@@ -185,11 +190,11 @@ class DataAdapter:
     ) -> pd.DataFrame:
         """
         Extract features from DataFrame for ML model input.
-        
+
         Args:
             df: DataFrame with OHLCV data
             feature_columns: Columns to use as features
-            
+
         Returns:
             DataFrame with features
         """

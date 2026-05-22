@@ -228,15 +228,22 @@ class TestPreTradeValidator:
             )
         """)
 
-        conn.execute("INSERT INTO portfolios (id, name, cash_balance, initial_capital) VALUES (1, 'Test', 100000.0, 50000.0)")
-        conn.execute("INSERT INTO position_summary (portfolio_id, symbol, total_shares) VALUES (1, '600519', 200)")
-        conn.execute("INSERT INTO market_data_realtime (symbol, price) VALUES ('600519', 1800.0)")
+        conn.execute(
+            "INSERT INTO portfolios (id, name, cash_balance, initial_capital) VALUES (1, 'Test', 100000.0, 50000.0)"
+        )
+        conn.execute(
+            "INSERT INTO position_summary (portfolio_id, symbol, total_shares) VALUES (1, '600519', 200)"
+        )
+        conn.execute(
+            "INSERT INTO market_data_realtime (symbol, price) VALUES ('600519', 1800.0)"
+        )
         conn.commit()
         conn.close()
 
         original_path = None
         try:
             from app.db import database
+
             original_path = database._db_path
             database._db_path = path
         except:
@@ -246,6 +253,7 @@ class TestPreTradeValidator:
 
         try:
             from app.db import database
+
             if original_path:
                 database._db_path = original_path
         except:
@@ -406,16 +414,25 @@ class TestOrderExecutionEngine:
             )
         """)
 
-        conn.execute("INSERT INTO portfolios (id, name, cash_balance, initial_capital) VALUES (1, 'Test', 100000.0, 50000.0)")
-        conn.execute("INSERT INTO position_summary (portfolio_id, symbol, total_shares, avg_cost) VALUES (1, '600519', 200, 1750.0)")
-        conn.execute("INSERT INTO position_lots (portfolio_id, symbol, shares, avg_cost, buy_date, status, created_at) VALUES (1, '600519', 200, 1750.0, '2024-01-01', 'open', datetime('now'))")
-        conn.execute("INSERT INTO market_data_realtime (symbol, price) VALUES ('600519', 1800.0)")
+        conn.execute(
+            "INSERT INTO portfolios (id, name, cash_balance, initial_capital) VALUES (1, 'Test', 100000.0, 50000.0)"
+        )
+        conn.execute(
+            "INSERT INTO position_summary (portfolio_id, symbol, total_shares, avg_cost) VALUES (1, '600519', 200, 1750.0)"
+        )
+        conn.execute(
+            "INSERT INTO position_lots (portfolio_id, symbol, shares, avg_cost, buy_date, status, created_at) VALUES (1, '600519', 200, 1750.0, '2024-01-01', 'open', datetime('now'))"
+        )
+        conn.execute(
+            "INSERT INTO market_data_realtime (symbol, price) VALUES ('600519', 1800.0)"
+        )
         conn.commit()
         conn.close()
 
         original_path = None
         try:
             from app.db import database
+
             original_path = database._db_path
             database._db_path = path
         except:
@@ -425,6 +442,7 @@ class TestOrderExecutionEngine:
 
         try:
             from app.db import database
+
             if original_path:
                 database._db_path = original_path
         except:

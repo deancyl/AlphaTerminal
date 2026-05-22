@@ -5,6 +5,7 @@
 数据源：新浪财经行业板块 + 概念板块（vip.stock.finance.sina.com.cn）
 稳定性：直连国内 CDN（不走代理），失败重试 3 次
 """
+
 import json
 import logging
 import re
@@ -21,22 +22,78 @@ _LOCK = threading.Lock()
 
 # 静态兜底数据（所有 API 全挂时使用）
 _FALLBACK_SECTORS = [
-    {"name": "酿酒行业",    "symbol": "BK0442", "change_pct": 1.23,  "price": 0, "volume": 0,
-     "top_stock": {"name": "贵州茅台", "code": "600519"}, "status": "交易中"},
-    {"name": "医疗器械",    "symbol": "BK0531", "change_pct": 0.87,  "price": 0, "volume": 0,
-     "top_stock": {"name": "迈瑞医疗", "code": "300760"}, "status": "交易中"},
-    {"name": "半导体",      "symbol": "BK0361", "change_pct": 0.54,  "price": 0, "volume": 0,
-     "top_stock": {"name": "中芯国际", "code": "688981"}, "status": "交易中"},
-    {"name": "电池",        "symbol": "BK0988", "change_pct": 0.32,  "price": 0, "volume": 0,
-     "top_stock": {"name": "宁德时代", "code": "300750"}, "status": "交易中"},
-    {"name": "银行",        "symbol": "BK0401", "change_pct": -0.21, "price": 0, "volume": 0,
-     "top_stock": {"name": "招商银行", "code": "600036"}, "status": "交易中"},
-    {"name": "证券",        "symbol": "BK0728", "change_pct": -0.45, "price": 0, "volume": 0,
-     "top_stock": {"name": "中信证券", "code": "600030"}, "status": "交易中"},
-    {"name": "房地产",       "symbol": "BK0451", "change_pct": -0.67, "price": 0, "volume": 0,
-     "top_stock": {"name": "万科A",    "code": "000002"}, "status": "交易中"},
-    {"name": "煤炭开采",     "symbol": "BK0014", "change_pct": -0.88, "price": 0, "volume": 0,
-     "top_stock": {"name": "中国神华", "code": "601088"}, "status": "交易中"},
+    {
+        "name": "酿酒行业",
+        "symbol": "BK0442",
+        "change_pct": 1.23,
+        "price": 0,
+        "volume": 0,
+        "top_stock": {"name": "贵州茅台", "code": "600519"},
+        "status": "交易中",
+    },
+    {
+        "name": "医疗器械",
+        "symbol": "BK0531",
+        "change_pct": 0.87,
+        "price": 0,
+        "volume": 0,
+        "top_stock": {"name": "迈瑞医疗", "code": "300760"},
+        "status": "交易中",
+    },
+    {
+        "name": "半导体",
+        "symbol": "BK0361",
+        "change_pct": 0.54,
+        "price": 0,
+        "volume": 0,
+        "top_stock": {"name": "中芯国际", "code": "688981"},
+        "status": "交易中",
+    },
+    {
+        "name": "电池",
+        "symbol": "BK0988",
+        "change_pct": 0.32,
+        "price": 0,
+        "volume": 0,
+        "top_stock": {"name": "宁德时代", "code": "300750"},
+        "status": "交易中",
+    },
+    {
+        "name": "银行",
+        "symbol": "BK0401",
+        "change_pct": -0.21,
+        "price": 0,
+        "volume": 0,
+        "top_stock": {"name": "招商银行", "code": "600036"},
+        "status": "交易中",
+    },
+    {
+        "name": "证券",
+        "symbol": "BK0728",
+        "change_pct": -0.45,
+        "price": 0,
+        "volume": 0,
+        "top_stock": {"name": "中信证券", "code": "600030"},
+        "status": "交易中",
+    },
+    {
+        "name": "房地产",
+        "symbol": "BK0451",
+        "change_pct": -0.67,
+        "price": 0,
+        "volume": 0,
+        "top_stock": {"name": "万科A", "code": "000002"},
+        "status": "交易中",
+    },
+    {
+        "name": "煤炭开采",
+        "symbol": "BK0014",
+        "change_pct": -0.88,
+        "price": 0,
+        "volume": 0,
+        "top_stock": {"name": "中国神华", "code": "601088"},
+        "status": "交易中",
+    },
 ]
 
 SINA_HEADERS = {
@@ -50,9 +107,10 @@ def update_sectors(sectors: list[dict]):
     """后台 Job 调用此函数更新板块缓存"""
     global _SECTORS_CACHE, _CACHE_READY, _SECTORS_CACHE_TS
     import time
+
     with _LOCK:
         # 检查是否所有数据都是0，如果是则使用兜底数据
-        non_zero = [s for s in sectors if s.get('change_pct', 0) != 0]
+        non_zero = [s for s in sectors if s.get("change_pct", 0) != 0]
         if not non_zero:
             logger.warning("[SectorsCache] All data is 0, using fallback")
             _SECTORS_CACHE = list(_FALLBACK_SECTORS)
@@ -80,6 +138,7 @@ async def refresh_sectors_cache() -> list[dict]:
     适用于 /market/sectors/refresh 接口
     """
     import asyncio
+
     loop = asyncio.get_event_loop()
     sectors = await loop.run_in_executor(None, fetch_and_cache_sectors)
     return sectors
@@ -125,8 +184,12 @@ def _fetch_sina_boards(param: str) -> list[dict]:
 
     for attempt in range(3):
         try:
-            with httpx.Client(timeout=12.0, http1=True, http2=False,
-                              limits=httpx.Limits(max_keepalive_connections=1, max_connections=1)) as client:
+            with httpx.Client(
+                timeout=12.0,
+                http1=True,
+                http2=False,
+                limits=httpx.Limits(max_keepalive_connections=1, max_connections=1),
+            ) as client:
                 resp = client.get(url, params={"param": param}, headers=SINA_HEADERS)
                 text = resp.text
 
@@ -146,8 +209,12 @@ def _fetch_sina_boards(param: str) -> list[dict]:
                         continue
 
                     name = parts[1].strip()
-                    change_pct = round(float(parts[4]), 2) if parts[4] not in ("-", "") else 0.0
-                    amount = float(parts[7]) if parts[7] not in ("-", "") else 0.0  # 成交额（元）
+                    change_pct = (
+                        round(float(parts[4]), 2) if parts[4] not in ("-", "") else 0.0
+                    )
+                    amount = (
+                        float(parts[7]) if parts[7] not in ("-", "") else 0.0
+                    )  # 成交额（元）
                     top_code = parts[8].strip()
                     top_name = parts[12].strip() if len(parts) > 12 else ""
 
@@ -155,18 +222,22 @@ def _fetch_sina_boards(param: str) -> list[dict]:
                     norm_code = top_code
                     for p in ("sz", "sh", "bj", "hk", "us", "jp"):
                         if norm_code.lower().startswith(p):
-                            norm_code = norm_code[len(p):]
+                            norm_code = norm_code[len(p) :]
                             break
 
-                    rows.append({
-                        "name":       name,
-                        "symbol":     raw_key,          # Sina 的原始 board_code，如 "hangye_ZA01"、"gn_hwqc"
-                        "change_pct": change_pct,
-                        "price":      amount,            # Sina 无总市值，用成交额代替（>0 即有交易）
-                        "volume":     float(parts[6]) if parts[6] not in ("-", "") else 0.0,
-                        "top_stock":  {"name": top_name, "code": norm_code},
-                        "status":     "交易中",
-                    })
+                    rows.append(
+                        {
+                            "name": name,
+                            "symbol": raw_key,  # Sina 的原始 board_code，如 "hangye_ZA01"、"gn_hwqc"
+                            "change_pct": change_pct,
+                            "price": amount,  # Sina 无总市值，用成交额代替（>0 即有交易）
+                            "volume": (
+                                float(parts[6]) if parts[6] not in ("-", "") else 0.0
+                            ),
+                            "top_stock": {"name": top_name, "code": norm_code},
+                            "status": "交易中",
+                        }
+                    )
                 except (ValueError, IndexError, TypeError) as exc:
                     logger.debug(f"[SectorsCache] 跳过异常行 {raw_key}: {exc}")
                     continue
@@ -175,7 +246,9 @@ def _fetch_sina_boards(param: str) -> list[dict]:
             return rows
 
         except Exception as e:
-            logger.warning(f"[SectorsCache] Sina {param} 第{attempt+1}/3次失败: {e}", exc_info=True)
+            logger.warning(
+                f"[SectorsCache] Sina {param} 第{attempt+1}/3次失败: {e}", exc_info=True
+            )
             if attempt == 2:
                 raise
 
@@ -187,9 +260,24 @@ def fetch_and_cache_sectors():
     后台 Job — 抓取行业+概念板块，合并去重，关键词加权排序，缓存所有板块。
     绝不在 API 路由线程中调用！
     """
-    WEIGHT_KEYWORDS = ["算力", "人工智能", "AI", "中特估", "半导体设备",
-                        "高股息", "芯片", "机器人", "量子", "氢能", "固态电池",
-                        "算力", "大模型", "RISC", "光刻", "自主可控"]
+    WEIGHT_KEYWORDS = [
+        "算力",
+        "人工智能",
+        "AI",
+        "中特估",
+        "半导体设备",
+        "高股息",
+        "芯片",
+        "机器人",
+        "量子",
+        "氢能",
+        "固态电池",
+        "算力",
+        "大模型",
+        "RISC",
+        "光刻",
+        "自主可控",
+    ]
     WEIGHT_BOOST = 5.0
 
     all_rows: list[dict] = []
@@ -230,7 +318,9 @@ def fetch_and_cache_sectors():
         # Return ALL sectors so frontend can slice as needed for expand/collapse
         update_sectors(all_rows)
         top_names = [r["name"] for r in all_rows[:20]]
-        logger.info(f"[SectorsCache] 综合排序完成，共 {len(all_rows)} 个板块, Top 20: {top_names}")
+        logger.info(
+            f"[SectorsCache] 综合排序完成，共 {len(all_rows)} 个板块, Top 20: {top_names}"
+        )
         return
 
     # 全挂：使用静态兜底

@@ -108,7 +108,10 @@ class BacktestOptimizer:
             from skopt import Optimizer
             from skopt.space import Real, Integer, Categorical
         except ImportError:
-            logger.warning("[Bayesian] scikit-optimize not installed, falling back to random search", exc_info=True)
+            logger.warning(
+                "[Bayesian] scikit-optimize not installed, falling back to random search",
+                exc_info=True,
+            )
             return self._generate_random_variants(max_variants)
 
         if not self.parameter_space:
@@ -124,30 +127,44 @@ class BacktestOptimizer:
             values = param.values
 
             if not values:
-                logger.warning(f"[Bayesian] Empty values for parameter {param.name}, skipping")
+                logger.warning(
+                    f"[Bayesian] Empty values for parameter {param.name}, skipping"
+                )
                 continue
 
             if all(isinstance(v, bool) for v in values):
-                dimensions.append(Categorical(values, name=param.name, transform="onehot"))
+                dimensions.append(
+                    Categorical(values, name=param.name, transform="onehot")
+                )
                 param_types[param.name] = "categorical"
             elif all(isinstance(v, int) for v in values):
                 if len(values) == 1:
                     dimensions.append(Integer(values[0], values[0], name=param.name))
                 else:
-                    dimensions.append(Integer(min(values), max(values), name=param.name))
+                    dimensions.append(
+                        Integer(min(values), max(values), name=param.name)
+                    )
                 param_types[param.name] = "integer"
             elif all(isinstance(v, (int, float)) for v in values):
                 if len(values) == 1:
-                    dimensions.append(Real(float(values[0]), float(values[0]), name=param.name))
+                    dimensions.append(
+                        Real(float(values[0]), float(values[0]), name=param.name)
+                    )
                 else:
-                    dimensions.append(Real(float(min(values)), float(max(values)), name=param.name))
+                    dimensions.append(
+                        Real(float(min(values)), float(max(values)), name=param.name)
+                    )
                 param_types[param.name] = "real"
             else:
-                dimensions.append(Categorical(values, name=param.name, transform="onehot"))
+                dimensions.append(
+                    Categorical(values, name=param.name, transform="onehot")
+                )
                 param_types[param.name] = "categorical"
 
         if not dimensions:
-            logger.warning("[Bayesian] No valid dimensions after processing parameter space")
+            logger.warning(
+                "[Bayesian] No valid dimensions after processing parameter space"
+            )
             return []
 
         optimizer = Optimizer(
@@ -160,7 +177,7 @@ class BacktestOptimizer:
         )
 
         variants = []
-        best_score = float('-inf')
+        best_score = float("-inf")
         no_improvement_count = 0
 
         for i in range(max_variants):
@@ -182,7 +199,9 @@ class BacktestOptimizer:
                 if param.name in variant and param.values:
                     if variant[param.name] not in param.values:
                         if isinstance(variant[param.name], (int, float)):
-                            closest = min(param.values, key=lambda x: abs(x - variant[param.name]))
+                            closest = min(
+                                param.values, key=lambda x: abs(x - variant[param.name])
+                            )
                             variant[param.name] = closest
                         else:
                             variant[param.name] = random.choice(param.values)
@@ -192,12 +211,16 @@ class BacktestOptimizer:
             if i >= n_initial - 1:
                 if len(variants) > 1:
                     recent_scores = [0.0] * (i + 1)
-                    if best_score != float('-inf'):
-                        improvement = abs(recent_scores[-1] - best_score) if recent_scores else 0
+                    if best_score != float("-inf"):
+                        improvement = (
+                            abs(recent_scores[-1] - best_score) if recent_scores else 0
+                        )
                         if improvement < convergence_threshold:
                             no_improvement_count += 1
                             if no_improvement_count >= patience:
-                                logger.info(f"[Bayesian] Early stopping at iteration {i+1} due to convergence")
+                                logger.info(
+                                    f"[Bayesian] Early stopping at iteration {i+1} due to convergence"
+                                )
                                 break
                         else:
                             no_improvement_count = 0
@@ -227,20 +250,27 @@ class BacktestOptimizer:
                 metrics = self._extract_metrics(backtest_result)
                 score = metrics.get(self.metric, 0.0)
 
-                results.append(OptimizationResult(
-                    params=params,
-                    metrics=metrics,
-                    score=score,
-                    rank=0,
-                ))
+                results.append(
+                    OptimizationResult(
+                        params=params,
+                        metrics=metrics,
+                        score=score,
+                        rank=0,
+                    )
+                )
                 successful += 1
 
                 if convergence_history is not None:
                     convergence_history.append(score)
 
-                logger.debug(f"[Optimizer] Variant {i+1}/{len(variants)}: score={score:.4f}")
+                logger.debug(
+                    f"[Optimizer] Variant {i+1}/{len(variants)}: score={score:.4f}"
+                )
             except Exception as e:
-                logger.warning(f"[Optimizer] Variant {i+1}/{len(variants)} failed: {e}", exc_info=True)
+                logger.warning(
+                    f"[Optimizer] Variant {i+1}/{len(variants)} failed: {e}",
+                    exc_info=True,
+                )
                 failed += 1
 
         results.sort(key=lambda x: x.score, reverse=True)
@@ -252,7 +282,11 @@ class BacktestOptimizer:
         best = results[0] if results else None
 
         uncertainty_estimate = None
-        if self.method == OptimizationMethod.BAYESIAN and convergence_history and len(convergence_history) > 5:
+        if (
+            self.method == OptimizationMethod.BAYESIAN
+            and convergence_history
+            and len(convergence_history) > 5
+        ):
             recent_scores = convergence_history[-5:]
             uncertainty_estimate = float(np.std(recent_scores))
 
@@ -275,7 +309,9 @@ class BacktestOptimizer:
         if "total_return" in result:
             metrics["total_return"] = float(result["total_return"])
         if "annual_return" in result:
-            metrics["annual_return"] = float(str(result["annual_return"]).replace("%", ""))
+            metrics["annual_return"] = float(
+                str(result["annual_return"]).replace("%", "")
+            )
         if "sharpe_ratio" in result:
             val = result["sharpe_ratio"]
             try:
@@ -321,6 +357,7 @@ def quick_optimize(
 
     def run_backtest(code: str, df: pd.DataFrame, params: Dict) -> Dict:
         from .indicator_strategy import create_indicator_strategy
+
         strategy = create_indicator_strategy(code)
         signals = strategy.to_signal_df(df, params)
         equity = simulate_equity(df, signals)
@@ -337,7 +374,7 @@ def simulate_equity(df: pd.DataFrame, signals: pd.DataFrame) -> pd.Series:
             position = 1
         elif signals.iloc[i]["signal"] == -1 and position > 0:
             position = 0
-        ret = (df.iloc[i]["close"] / df.iloc[i-1]["close"]) - 1 if position else 0
+        ret = (df.iloc[i]["close"] / df.iloc[i - 1]["close"]) - 1 if position else 0
         equity.append(equity[-1] * (1 + ret))
     return pd.Series(equity, index=df.index)
 
@@ -352,7 +389,7 @@ def analyze_simple_performance(equity: pd.Series) -> Dict[str, Any]:
 
     sharpe = 0.0
     if returns.std() != 0:
-        sharpe = (returns.mean() / returns.std()) * (252 ** 0.5)
+        sharpe = (returns.mean() / returns.std()) * (252**0.5)
 
     max_dd = 0.0
     running_max = equity.expanding().max()

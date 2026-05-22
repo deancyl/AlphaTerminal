@@ -88,19 +88,12 @@ class TestSingleflight:
 
         async def cancelled_waiter():
             try:
-                await asyncio.wait_for(
-                    sf.do("test_key", slow_fetch),
-                    timeout=0.05
-                )
+                await asyncio.wait_for(sf.do("test_key", slow_fetch), timeout=0.05)
             except asyncio.TimeoutError:
                 pass
 
         await asyncio.gather(
-            waiter(1),
-            waiter(2),
-            cancelled_waiter(),
-            waiter(3),
-            return_exceptions=True
+            waiter(1), waiter(2), cancelled_waiter(), waiter(3), return_exceptions=True
         )
 
         await asyncio.sleep(0.3)

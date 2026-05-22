@@ -3,6 +3,7 @@ Copilot Rate Limiting Tests
 
 Tests for rate limiting on /api/v1/chat and /api/v1/copilot/* endpoints.
 """
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 def reset_limiter():
     """Reset the in-memory rate limiter before each test"""
     from app.middleware.rate_limit import get_limiter
+
     limiter = get_limiter()
     limiter.reset()
     yield
@@ -74,6 +76,7 @@ class TestCopilotRateLimitMiddleware:
     def reset_rate_limiter(self):
         """Reset rate limiter before each test"""
         from app.middleware.rate_limit import get_limiter
+
         get_limiter().reset()
         yield
         get_limiter().reset()
@@ -97,11 +100,7 @@ class TestCopilotRateLimitMiddleware:
         async def copilot_message():
             return {"message": "AI message"}
 
-        config = RateLimitConfig(
-            global_limit=200,
-            global_period=60,
-            enabled=True
-        )
+        config = RateLimitConfig(global_limit=200, global_period=60, enabled=True)
         app.add_middleware(RateLimitMiddleware, config=config)
 
         return app
@@ -129,6 +128,7 @@ class TestCopilotRateLimitMiddleware:
         assert response.status_code == 429
 
         import json
+
         body = json.loads(response.content)
         assert body["code"] == 429
         assert "retry_after" in body
@@ -190,6 +190,7 @@ class TestCopilotRateLimitIsolation:
     def reset_rate_limiter(self):
         """Reset rate limiter before each test"""
         from app.middleware.rate_limit import get_limiter
+
         get_limiter().reset()
         yield
         get_limiter().reset()
@@ -209,11 +210,7 @@ class TestCopilotRateLimitIsolation:
         async def market():
             return {"market": "data"}
 
-        config = RateLimitConfig(
-            global_limit=200,
-            global_period=60,
-            enabled=True
-        )
+        config = RateLimitConfig(global_limit=200, global_period=60, enabled=True)
         app.add_middleware(RateLimitMiddleware, config=config)
 
         return app

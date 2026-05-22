@@ -3,6 +3,7 @@ ML Model Management API
 
 Provides endpoints for model registration, training, and prediction.
 """
+
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -24,7 +25,10 @@ _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="ml_")
 
 class ModelCreateRequest(BaseModel):
     model_id: str = Field(..., min_length=1, max_length=100)
-    model_type: str = Field(default="LightGBM", pattern="^(LightGBM|HIST|GATE|GRU|LSTM|MLP|XGBoost|CatBoost|Custom)$")
+    model_type: str = Field(
+        default="LightGBM",
+        pattern="^(LightGBM|HIST|GATE|GRU|LSTM|MLP|XGBoost|CatBoost|Custom)$",
+    )
     provider: str = Field(default="qlib", pattern="^(qlib|sklearn|custom)$")
     feature_set: str = Field(default="Alpha158", pattern="^(Alpha158|Alpha360|Custom)$")
     params: Optional[Dict[str, Any]] = Field(default=None)
@@ -69,17 +73,19 @@ async def list_models():
 
     result = []
     for m in models:
-        result.append({
-            "model_id": m.model_id,
-            "model_type": m.model_type.value,
-            "provider": m.provider.value,
-            "feature_set": m.feature_set,
-            "created_at": m.created_at.isoformat(),
-            "updated_at": m.updated_at.isoformat(),
-            "metrics": m.metrics,
-            "params": m.params,
-            "is_loaded": m.is_loaded,
-        })
+        result.append(
+            {
+                "model_id": m.model_id,
+                "model_type": m.model_type.value,
+                "provider": m.provider.value,
+                "feature_set": m.feature_set,
+                "created_at": m.created_at.isoformat(),
+                "updated_at": m.updated_at.isoformat(),
+                "metrics": m.metrics,
+                "params": m.params,
+                "is_loaded": m.is_loaded,
+            }
+        )
 
     return success_response({"models": result, "total": len(result)})
 
@@ -88,28 +94,38 @@ async def list_models():
 @handle_errors(module="ml")
 async def create_model(req: ModelCreateRequest, _: None = Depends(require_api_key)):
     """Register a new ML model."""
-    from app.services.qlib.model_loader import get_model_loader, ModelType, ModelProvider
+    from app.services.qlib.model_loader import (
+        get_model_loader,
+        ModelType,
+        ModelProvider,
+    )
 
     loader = get_model_loader()
 
     existing = loader.load_model(req.model_id)
     if existing is not None:
-        return error_response(ErrorCode.BAD_REQUEST, f"Model {req.model_id} already exists")
+        return error_response(
+            ErrorCode.BAD_REQUEST, f"Model {req.model_id} already exists"
+        )
 
     try:
         model_type = ModelType(req.model_type)
         provider = ModelProvider(req.provider)
 
-        return success_response({
-            "model_id": req.model_id,
-            "model_type": req.model_type,
-            "provider": req.provider,
-            "feature_set": req.feature_set,
-            "message": "Model registered. Use /train to train the model.",
-        })
+        return success_response(
+            {
+                "model_id": req.model_id,
+                "model_type": req.model_type,
+                "provider": req.provider,
+                "feature_set": req.feature_set,
+                "message": "Model registered. Use /train to train the model.",
+            }
+        )
 
     except ValueError as e:
-        return error_response(ErrorCode.BAD_REQUEST, f"Invalid model type or provider: {e}")
+        return error_response(
+            ErrorCode.BAD_REQUEST, f"Invalid model type or provider: {e}"
+        )
 
 
 @router.get("/models/{model_id}")
@@ -123,17 +139,19 @@ async def get_model(model_id: str):
 
     for m in models:
         if m.model_id == model_id:
-            return success_response({
-                "model_id": m.model_id,
-                "model_type": m.model_type.value,
-                "provider": m.provider.value,
-                "feature_set": m.feature_set,
-                "created_at": m.created_at.isoformat(),
-                "updated_at": m.updated_at.isoformat(),
-                "metrics": m.metrics,
-                "params": m.params,
-                "is_loaded": m.is_loaded,
-            })
+            return success_response(
+                {
+                    "model_id": m.model_id,
+                    "model_type": m.model_type.value,
+                    "provider": m.provider.value,
+                    "feature_set": m.feature_set,
+                    "created_at": m.created_at.isoformat(),
+                    "updated_at": m.updated_at.isoformat(),
+                    "metrics": m.metrics,
+                    "params": m.params,
+                    "is_loaded": m.is_loaded,
+                }
+            )
 
     return error_response(ErrorCode.NOT_FOUND, f"Model {model_id} not found")
 
@@ -171,12 +189,15 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
     def _sync_fetch_data():
         conn = _get_conn()
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT date, open, high, low, close, volume
                 FROM market_data_daily
                 WHERE symbol = ? AND date >= ? AND date <= ?
                 ORDER BY date ASC
-            """, (db_symbol, req.start_date, req.end_date)).fetchall()
+            """,
+                (db_symbol, req.start_date, req.end_date),
+            ).fetchall()
             conn.close()
             return rows
         finally:
@@ -185,14 +206,18 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
     rows = await loop.run_in_executor(_executor, _sync_fetch_data)
 
     if len(rows) < 100:
-        return error_response(ErrorCode.BAD_REQUEST,
-            f"Insufficient data ({len(rows)} rows). Need at least 100 rows for training.")
+        return error_response(
+            ErrorCode.BAD_REQUEST,
+            f"Insufficient data ({len(rows)} rows). Need at least 100 rows for training.",
+        )
 
     df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
     df["date"] = pd.to_datetime(df["date"])
     df = df.set_index("date")
 
-    feature_set = FeatureSet.ALPHA158 if req.feature_set == "Alpha158" else FeatureSet.ALPHA360
+    feature_set = (
+        FeatureSet.ALPHA158 if req.feature_set == "Alpha158" else FeatureSet.ALPHA360
+    )
     pipeline = FeaturePipeline(feature_set)
     features = pipeline.generate_features(df)
 
@@ -209,7 +234,11 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
     y_train = target.iloc[:train_size]
 
     try:
-        model_type = ModelType(req.model_id.split("_")[0]) if "_" in req.model_id else ModelType.LIGHTGBM
+        model_type = (
+            ModelType(req.model_id.split("_")[0])
+            if "_" in req.model_id
+            else ModelType.LIGHTGBM
+        )
     except ValueError:
         model_type = ModelType.LIGHTGBM
 
@@ -235,25 +264,29 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
 
         loader._save_model_metadata(req.model_id, loader._model_info.get(req.model_id))
 
-        return success_response({
-            "model_id": req.model_id,
-            "symbol": req.symbol,
-            "train_samples": len(X_train),
-            "test_samples": len(X_test),
-            "metrics": {
-                "mse": round(mse, 6),
-                "mae": round(mae, 6),
-            },
-            "feature_count": len(features.columns),
-            "training_date": datetime.now().isoformat(),
-        })
+        return success_response(
+            {
+                "model_id": req.model_id,
+                "symbol": req.symbol,
+                "train_samples": len(X_train),
+                "test_samples": len(X_test),
+                "metrics": {
+                    "mse": round(mse, 6),
+                    "mae": round(mae, 6),
+                },
+                "feature_count": len(features.columns),
+                "training_date": datetime.now().isoformat(),
+            }
+        )
     else:
-        return success_response({
-            "model_id": req.model_id,
-            "symbol": req.symbol,
-            "train_samples": len(X_train),
-            "message": "Model trained successfully",
-        })
+        return success_response(
+            {
+                "model_id": req.model_id,
+                "symbol": req.symbol,
+                "train_samples": len(X_train),
+                "message": "Model trained successfully",
+            }
+        )
 
 
 @router.post("/predict")
@@ -278,12 +311,15 @@ async def predict_model(req: ModelPredictRequest, _: None = Depends(require_api_
     def _sync_fetch_data():
         conn = _get_conn()
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT date, open, high, low, close, volume
                 FROM market_data_daily
                 WHERE symbol = ? AND date >= ? AND date <= ?
                 ORDER BY date ASC
-            """, (db_symbol, req.start_date, req.end_date)).fetchall()
+            """,
+                (db_symbol, req.start_date, req.end_date),
+            ).fetchall()
             conn.close()
             return rows
         finally:
@@ -292,7 +328,9 @@ async def predict_model(req: ModelPredictRequest, _: None = Depends(require_api_
     rows = await loop.run_in_executor(_executor, _sync_fetch_data)
 
     if len(rows) == 0:
-        return error_response(ErrorCode.NOT_FOUND, f"No data for {req.symbol} in date range")
+        return error_response(
+            ErrorCode.NOT_FOUND, f"No data for {req.symbol} in date range"
+        )
 
     df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
     df["date"] = pd.to_datetime(df["date"])
@@ -316,19 +354,23 @@ async def predict_model(req: ModelPredictRequest, _: None = Depends(require_api_
         else:
             signals.append(0)
 
-    result_df = pd.DataFrame({
-        "date": df.index.astype(str),
-        "close": df["close"],
-        "prediction": predictions,
-        "signal": signals,
-    })
+    result_df = pd.DataFrame(
+        {
+            "date": df.index.astype(str),
+            "close": df["close"],
+            "prediction": predictions,
+            "signal": signals,
+        }
+    )
 
-    return success_response({
-        "model_id": req.model_id,
-        "symbol": req.symbol,
-        "predictions": result_df.to_dict(orient="records"),
-        "total": len(predictions),
-    })
+    return success_response(
+        {
+            "model_id": req.model_id,
+            "symbol": req.symbol,
+            "predictions": result_df.to_dict(orient="records"),
+            "total": len(predictions),
+        }
+    )
 
 
 @router.get("/health")
@@ -341,12 +383,14 @@ async def ml_health_check():
     loader = get_model_loader()
     models = loader.list_models()
 
-    return success_response({
-        "status": "healthy",
-        "qlib_available": qlib_available,
-        "models_count": len(models),
-        "models_dir": str(loader.model_dir),
-    })
+    return success_response(
+        {
+            "status": "healthy",
+            "qlib_available": qlib_available,
+            "models_count": len(models),
+            "models_dir": str(loader.model_dir),
+        }
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -359,40 +403,67 @@ from app.utils.error_decorator import handle_errors
 
 class PortfolioOptimizeRequest(BaseModel):
     """Portfolio optimization request."""
-    symbols: List[str] = Field(..., min_length=1, max_length=50, description="List of stock symbols")
+
+    symbols: List[str] = Field(
+        ..., min_length=1, max_length=50, description="List of stock symbols"
+    )
     start_date: str = Field(..., description="Start date YYYY-MM-DD")
     end_date: str = Field(..., description="End date YYYY-MM-DD")
-    method: str = Field(default="mvo", pattern="^(gmv|mvo|rp|inv)$",
-                        description="Optimization method: gmv=Global Min Variance, mvo=Mean-Variance, rp=Risk Parity, inv=Inverse Volatility")
-    risk_aversion: float = Field(default=1.0, ge=0, le=10, description="Risk aversion parameter (higher = more conservative)")
-    turnover_limit: float = Field(default=0.2, ge=0, le=1, description="Maximum turnover from current weights")
-    target_return: Optional[float] = Field(default=None, description="Target return for optimization")
-    max_weight: float = Field(default=0.3, ge=0.01, le=1.0, description="Maximum weight per asset")
+    method: str = Field(
+        default="mvo",
+        pattern="^(gmv|mvo|rp|inv)$",
+        description="Optimization method: gmv=Global Min Variance, mvo=Mean-Variance, rp=Risk Parity, inv=Inverse Volatility",
+    )
+    risk_aversion: float = Field(
+        default=1.0,
+        ge=0,
+        le=10,
+        description="Risk aversion parameter (higher = more conservative)",
+    )
+    turnover_limit: float = Field(
+        default=0.2, ge=0, le=1, description="Maximum turnover from current weights"
+    )
+    target_return: Optional[float] = Field(
+        default=None, description="Target return for optimization"
+    )
+    max_weight: float = Field(
+        default=0.3, ge=0.01, le=1.0, description="Maximum weight per asset"
+    )
 
 
 class FactorAnalysisRequest(BaseModel):
     """Factor exposure analysis request."""
+
     symbol: str = Field(..., pattern="^(sh|sz)[0-9]{6}$", description="Stock symbol")
     start_date: str = Field(..., description="Start date YYYY-MM-DD")
     end_date: str = Field(..., description="End date YYYY-MM-DD")
-    factors: List[str] = Field(default=["momentum", "value", "quality", "size", "volatility"],
-                               description="Factors to analyze")
+    factors: List[str] = Field(
+        default=["momentum", "value", "quality", "size", "volatility"],
+        description="Factors to analyze",
+    )
 
 
 class RiskMetricsRequest(BaseModel):
     """Risk metrics calculation request."""
-    daily_returns: List[float] = Field(..., min_length=10, description="Daily returns series")
+
+    daily_returns: List[float] = Field(
+        ..., min_length=10, description="Daily returns series"
+    )
     freq: str = Field(default="day", pattern="^(day|week|month)$")
-    annual_periods: int = Field(default=252, description="Periods per year for annualization")
+    annual_periods: int = Field(
+        default=252, description="Periods per year for annualization"
+    )
 
 
 @router.post("/optimize")
 @handle_errors(module="ml")
 @handle_errors(module="ml")
-async def optimize_portfolio(req: PortfolioOptimizeRequest, _: None = Depends(require_api_key)):
+async def optimize_portfolio(
+    req: PortfolioOptimizeRequest, _: None = Depends(require_api_key)
+):
     """
     Optimize portfolio weights using specified method.
-    
+
     Methods:
     - gmv: Global Minimum Variance (minimize risk only)
     - mvo: Mean-Variance Optimization (balance return vs risk)
@@ -404,12 +475,14 @@ async def optimize_portfolio(req: PortfolioOptimizeRequest, _: None = Depends(re
 
     try:
         result = await asyncio.wait_for(
-            _run_portfolio_optimization(req),
-            timeout=PORTFOLIO_OPT_TIMEOUT
+            _run_portfolio_optimization(req), timeout=PORTFOLIO_OPT_TIMEOUT
         )
         return success_response(result)
     except asyncio.TimeoutError:
-        return error_response(ErrorCode.TIMEOUT, f"Portfolio optimization timed out after {PORTFOLIO_OPT_TIMEOUT}s")
+        return error_response(
+            ErrorCode.TIMEOUT,
+            f"Portfolio optimization timed out after {PORTFOLIO_OPT_TIMEOUT}s",
+        )
     except Exception as e:
         logger.error(f"[ML] Portfolio optimization error: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, str(e))
@@ -428,16 +501,21 @@ async def _run_portfolio_optimization(req: PortfolioOptimizeRequest) -> Dict:
             all_data = {}
             for symbol in req.symbols:
                 db_symbol = symbol.replace("sh", "").replace("sz", "")
-                rows = conn.execute("""
+                rows = conn.execute(
+                    """
                     SELECT date, close
                     FROM market_data_daily
                     WHERE symbol = ? AND date >= ? AND date <= ?
                     ORDER BY date ASC
-                """, (db_symbol, req.start_date, req.end_date)).fetchall()
+                """,
+                    (db_symbol, req.start_date, req.end_date),
+                ).fetchall()
 
                 if len(rows) < 30:
                     conn.close()
-                    raise ValueError(f"Insufficient data for {symbol}: {len(rows)} rows")
+                    raise ValueError(
+                        f"Insufficient data for {symbol}: {len(rows)} rows"
+                    )
 
                 df = pd.DataFrame(rows, columns=["date", "close"])
                 df["date"] = pd.to_datetime(df["date"])
@@ -460,18 +538,30 @@ async def _run_portfolio_optimization(req: PortfolioOptimizeRequest) -> Dict:
     if req.method == "gmv":
         weights = _optimize_gmv(cov_matrix, req.max_weight)
     elif req.method == "mvo":
-        weights = _optimize_mvo(expected_returns, cov_matrix, req.risk_aversion, req.max_weight)
+        weights = _optimize_mvo(
+            expected_returns, cov_matrix, req.risk_aversion, req.max_weight
+        )
     elif req.method == "rp":
         weights = _optimize_risk_parity(cov_matrix, req.max_weight)
     else:
         weights = _optimize_inverse_vol(returns, req.max_weight)
 
-    portfolio_return = sum(weights.get(s, 0) * expected_returns.get(s, 0) for s in req.symbols)
-    portfolio_volatility = np.sqrt(np.dot(
-        list(weights.values()),
-        np.dot(cov_matrix.values, list(weights.values()))
-    )) if len(weights) > 0 else 0
-    sharpe_ratio = portfolio_return / portfolio_volatility if portfolio_volatility > 0 else 0
+    portfolio_return = sum(
+        weights.get(s, 0) * expected_returns.get(s, 0) for s in req.symbols
+    )
+    portfolio_volatility = (
+        np.sqrt(
+            np.dot(
+                list(weights.values()),
+                np.dot(cov_matrix.values, list(weights.values())),
+            )
+        )
+        if len(weights) > 0
+        else 0
+    )
+    sharpe_ratio = (
+        portfolio_return / portfolio_volatility if portfolio_volatility > 0 else 0
+    )
 
     return {
         "weights": weights,
@@ -501,12 +591,16 @@ def _optimize_gmv(cov_matrix, max_weight: float) -> Dict[str, float]:
     bounds = [(0, max_weight) for _ in range(n)]  # Long only, max weight
 
     x0 = np.ones(n) / n  # Equal weight initial
-    result = minimize(objective, x0, method="SLSQP", bounds=bounds, constraints=constraints)
+    result = minimize(
+        objective, x0, method="SLSQP", bounds=bounds, constraints=constraints
+    )
 
     return {s: round(w, 4) for s, w in zip(symbols, result.x) if w > 0.001}
 
 
-def _optimize_mvo(expected_returns, cov_matrix, risk_aversion: float, max_weight: float) -> Dict[str, float]:
+def _optimize_mvo(
+    expected_returns, cov_matrix, risk_aversion: float, max_weight: float
+) -> Dict[str, float]:
     """Mean-Variance Optimization."""
     import numpy as np
     from scipy.optimize import minimize
@@ -527,7 +621,9 @@ def _optimize_mvo(expected_returns, cov_matrix, risk_aversion: float, max_weight
     bounds = [(0, max_weight) for _ in range(n)]
 
     x0 = np.ones(n) / n
-    result = minimize(objective, x0, method="SLSQP", bounds=bounds, constraints=constraints)
+    result = minimize(
+        objective, x0, method="SLSQP", bounds=bounds, constraints=constraints
+    )
 
     return {s: round(w, 4) for s, w in zip(symbols, result.x) if w > 0.001}
 
@@ -543,7 +639,11 @@ def _optimize_risk_parity(cov_matrix, max_weight: float) -> Dict[str, float]:
     def risk_contribution(w):
         portfolio_var = np.dot(w, np.dot(cov_matrix.values, w))
         marginal_contrib = np.dot(cov_matrix.values, w)
-        risk_contrib = w * marginal_contrib / np.sqrt(portfolio_var) if portfolio_var > 0 else np.zeros(n)
+        risk_contrib = (
+            w * marginal_contrib / np.sqrt(portfolio_var)
+            if portfolio_var > 0
+            else np.zeros(n)
+        )
         return risk_contrib
 
     def objective(w):
@@ -557,7 +657,9 @@ def _optimize_risk_parity(cov_matrix, max_weight: float) -> Dict[str, float]:
     bounds = [(0.001, max_weight) for _ in range(n)]
 
     x0 = np.ones(n) / n
-    result = minimize(objective, x0, method="SLSQP", bounds=bounds, constraints=constraints)
+    result = minimize(
+        objective, x0, method="SLSQP", bounds=bounds, constraints=constraints
+    )
 
     return {s: round(w, 4) for s, w in zip(symbols, result.x) if w > 0.001}
 
@@ -580,10 +682,12 @@ def _optimize_inverse_vol(returns, max_weight: float) -> Dict[str, float]:
 
 @router.post("/factors")
 @handle_errors(module="ml")
-async def analyze_factors(req: FactorAnalysisRequest, _: None = Depends(require_api_key)):
+async def analyze_factors(
+    req: FactorAnalysisRequest, _: None = Depends(require_api_key)
+):
     """
     Analyze factor exposures for a given symbol.
-    
+
     Returns:
     - Factor exposures (beta coefficients)
     - IC and Rank IC for each factor
@@ -594,12 +698,14 @@ async def analyze_factors(req: FactorAnalysisRequest, _: None = Depends(require_
 
     try:
         result = await asyncio.wait_for(
-            _run_factor_analysis(req),
-            timeout=FACTOR_ANALYSIS_TIMEOUT
+            _run_factor_analysis(req), timeout=FACTOR_ANALYSIS_TIMEOUT
         )
         return success_response(result)
     except asyncio.TimeoutError:
-        return error_response(ErrorCode.TIMEOUT, f"Factor analysis timed out after {FACTOR_ANALYSIS_TIMEOUT}s")
+        return error_response(
+            ErrorCode.TIMEOUT,
+            f"Factor analysis timed out after {FACTOR_ANALYSIS_TIMEOUT}s",
+        )
     except Exception as e:
         logger.error(f"[ML] Factor analysis error: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, str(e))
@@ -617,12 +723,15 @@ async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:
         conn = _get_conn()
         try:
             db_symbol = req.symbol.replace("sh", "").replace("sz", "")
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT date, close, volume
                 FROM market_data_daily
                 WHERE symbol = ? AND date >= ? AND date <= ?
                 ORDER BY date ASC
-            """, (db_symbol, req.start_date, req.end_date)).fetchall()
+            """,
+                (db_symbol, req.start_date, req.end_date),
+            ).fetchall()
             conn.close()
             return rows
         finally:
@@ -665,10 +774,9 @@ async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:
         factor_data["volatility"] = df["volatility"]
 
     for factor_name, factor_series in factor_data.items():
-        aligned = pd.DataFrame({
-            "return": df["return"],
-            "factor": factor_series
-        }).dropna()
+        aligned = pd.DataFrame(
+            {"return": df["return"], "factor": factor_series}
+        ).dropna()
 
         if len(aligned) < 30:
             continue
@@ -680,7 +788,7 @@ async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:
             "beta": round(slope, 4),
             "t_stat": round(slope / std_err, 3) if std_err > 0 else 0,
             "p_value": round(p_value, 4),
-            "r_squared": round(r_value ** 2, 4),
+            "r_squared": round(r_value**2, 4),
         }
 
         ic = aligned["factor"].corr(aligned["return"])
@@ -706,7 +814,7 @@ async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:
 async def calculate_risk_metrics(req: RiskMetricsRequest):
     """
     Calculate portfolio risk metrics.
-    
+
     Returns:
     - Annualized return
     - Annualized volatility
@@ -741,53 +849,65 @@ async def calculate_risk_metrics(req: RiskMetricsRequest):
     # Win rate
     win_rate = np.sum(returns > 0) / len(returns) * 100
 
-    return success_response({
-        "annualized_return": round(ann_return * 100, 2),
-        "annualized_volatility": round(ann_volatility * 100, 2),
-        "sharpe_ratio": round(sharpe_ratio, 3),
-        "max_drawdown": round(max_drawdown * 100, 2),
-        "win_rate": round(win_rate, 1),
-        "total_trades": len(returns),
-        "freq": req.freq,
-    })
+    return success_response(
+        {
+            "annualized_return": round(ann_return * 100, 2),
+            "annualized_volatility": round(ann_volatility * 100, 2),
+            "sharpe_ratio": round(sharpe_ratio, 3),
+            "max_drawdown": round(max_drawdown * 100, 2),
+            "win_rate": round(win_rate, 1),
+            "total_trades": len(returns),
+            "freq": req.freq,
+        }
+    )
 
 
 @router.get("/methods")
 @handle_errors(module="ml")
 async def list_optimization_methods():
     """List available portfolio optimization methods."""
-    return success_response({
-        "methods": [
-            {
-                "id": "gmv",
-                "name": "Global Minimum Variance",
-                "description": "Minimize portfolio variance without considering returns",
-                "best_for": "Risk-averse investors in volatile markets",
-            },
-            {
-                "id": "mvo",
-                "name": "Mean-Variance Optimization",
-                "description": "Balance expected return vs risk using risk aversion parameter",
-                "best_for": "Investors seeking optimal risk-return tradeoff",
-            },
-            {
-                "id": "rp",
-                "name": "Risk Parity",
-                "description": "Equal risk contribution from each asset",
-                "best_for": "Diversified portfolios with balanced risk",
-            },
-            {
-                "id": "inv",
-                "name": "Inverse Volatility",
-                "description": "Weight inversely proportional to volatility",
-                "best_for": "Simple risk-adjusted allocation",
-            },
-        ],
-        "factors": [
-            {"id": "momentum", "name": "动量因子", "description": "过去12个月收益率（排除最近1个月）"},
-            {"id": "value", "name": "价值因子", "description": "价格水平的倒数"},
-            {"id": "quality", "name": "质量因子", "description": "收益稳定性"},
-            {"id": "size", "name": "规模因子", "description": "市值规模"},
-            {"id": "volatility", "name": "波动率因子", "description": "20日收益波动率"},
-        ],
-    })
+    return success_response(
+        {
+            "methods": [
+                {
+                    "id": "gmv",
+                    "name": "Global Minimum Variance",
+                    "description": "Minimize portfolio variance without considering returns",
+                    "best_for": "Risk-averse investors in volatile markets",
+                },
+                {
+                    "id": "mvo",
+                    "name": "Mean-Variance Optimization",
+                    "description": "Balance expected return vs risk using risk aversion parameter",
+                    "best_for": "Investors seeking optimal risk-return tradeoff",
+                },
+                {
+                    "id": "rp",
+                    "name": "Risk Parity",
+                    "description": "Equal risk contribution from each asset",
+                    "best_for": "Diversified portfolios with balanced risk",
+                },
+                {
+                    "id": "inv",
+                    "name": "Inverse Volatility",
+                    "description": "Weight inversely proportional to volatility",
+                    "best_for": "Simple risk-adjusted allocation",
+                },
+            ],
+            "factors": [
+                {
+                    "id": "momentum",
+                    "name": "动量因子",
+                    "description": "过去12个月收益率（排除最近1个月）",
+                },
+                {"id": "value", "name": "价值因子", "description": "价格水平的倒数"},
+                {"id": "quality", "name": "质量因子", "description": "收益稳定性"},
+                {"id": "size", "name": "规模因子", "description": "市值规模"},
+                {
+                    "id": "volatility",
+                    "name": "波动率因子",
+                    "description": "20日收益波动率",
+                },
+            ],
+        }
+    )

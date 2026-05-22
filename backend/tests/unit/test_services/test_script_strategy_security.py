@@ -26,7 +26,6 @@ from app.services.strategy.script_strategy import (
 )
 from app.services.strategy.sandbox import StrategySecurityError, StrategyTimeoutError
 
-
 # ============================================================================
 # Malicious Code Patterns
 # ============================================================================
@@ -36,49 +35,40 @@ MALICIOUS_PATTERNS = {
 def on_bar(ctx, bar):
     __import__('os').system('rm -rf /')
 """,
-
     "file_read": """
 def on_bar(ctx, bar):
     data = open('/etc/passwd').read()
 """,
-
     "subprocess_exec": """
 import subprocess
 def on_bar(ctx, bar):
     subprocess.Popen(['cat', '/etc/passwd'])
 """,
-
     "eval_attack": """
 def on_bar(ctx, bar):
     eval("__import__('os').system('id')")
 """,
-
     "exec_attack": """
 def on_bar(ctx, bar):
     exec("import os; os.system('id')")
 """,
-
     "lambda_import": """
 def on_bar(ctx, bar):
     (lambda: __import__('os'))()
 """,
-
     "getattr_builtins": """
 def on_bar(ctx, bar):
     getattr(__builtins__, 'eval')('1+1')
 """,
-
     "class_introspection": """
 def on_bar(ctx, bar):
     ''.__class__.__base__.__subclasses__()
 """,
-
     "infinite_loop": """
 def on_bar(ctx, bar):
     while True:
         pass
 """,
-
     "memory_bomb": """
 def on_bar(ctx, bar):
     x = [0] * 10**10
@@ -90,19 +80,22 @@ def on_bar(ctx, bar):
 # Security Validation Tests
 # ============================================================================
 
+
 class TestScriptStrategySecurity:
     """Test suite for ScriptStrategy security validation."""
 
     @pytest.fixture
     def sample_df(self):
         """Create sample DataFrame for testing."""
-        return pd.DataFrame({
-            'open': [100.0, 101.0, 102.0],
-            'high': [101.0, 102.0, 103.0],
-            'low': [99.0, 100.0, 101.0],
-            'close': [100.5, 101.5, 102.5],
-            'volume': [1000000, 1100000, 1050000],
-        })
+        return pd.DataFrame(
+            {
+                "open": [100.0, 101.0, 102.0],
+                "high": [101.0, 102.0, 103.0],
+                "low": [99.0, 100.0, 101.0],
+                "close": [100.5, 101.5, 102.5],
+                "volume": [1000000, 1100000, 1050000],
+            }
+        )
 
     # ========================================================================
     # Test 1: Dynamic Import Attack
@@ -199,7 +192,9 @@ class TestScriptStrategySecurity:
         """Pattern 9: while True: pass should timeout."""
         code = MALICIOUS_PATTERNS["infinite_loop"]
 
-        with pytest.raises((TimeoutError, StrategyTimeoutError, ValueError, StrategySecurityError)):
+        with pytest.raises(
+            (TimeoutError, StrategyTimeoutError, ValueError, StrategySecurityError)
+        ):
             strategy = ScriptStrategy(code)
             start_time = time.time()
             try:
@@ -207,7 +202,15 @@ class TestScriptStrategySecurity:
                 elapsed = time.time() - start_time
                 assert elapsed < 35, "Infinite loop should timeout within 35 seconds"
             except Exception as e:
-                assert isinstance(e, (TimeoutError, StrategyTimeoutError, ValueError, StrategySecurityError))
+                assert isinstance(
+                    e,
+                    (
+                        TimeoutError,
+                        StrategyTimeoutError,
+                        ValueError,
+                        StrategySecurityError,
+                    ),
+                )
 
     # ========================================================================
     # Test 10: Memory Bomb
@@ -225,23 +228,26 @@ class TestScriptStrategySecurity:
 # Valid Strategy Tests (Ensure backward compatibility)
 # ============================================================================
 
+
 class TestValidStrategies:
     """Test that valid strategies still work after security hardening."""
 
     @pytest.fixture
     def sample_df(self):
         """Create sample DataFrame for testing."""
-        return pd.DataFrame({
-            'open': [100.0, 101.0, 102.0, 103.0, 104.0],
-            'high': [101.0, 102.0, 103.0, 104.0, 105.0],
-            'low': [99.0, 100.0, 101.0, 102.0, 103.0],
-            'close': [100.5, 101.5, 102.5, 103.5, 104.5],
-            'volume': [1000000, 1100000, 1050000, 1200000, 1150000],
-        })
+        return pd.DataFrame(
+            {
+                "open": [100.0, 101.0, 102.0, 103.0, 104.0],
+                "high": [101.0, 102.0, 103.0, 104.0, 105.0],
+                "low": [99.0, 100.0, 101.0, 102.0, 103.0],
+                "close": [100.5, 101.5, 102.5, 103.5, 104.5],
+                "volume": [1000000, 1100000, 1050000, 1200000, 1150000],
+            }
+        )
 
     def test_valid_ma_cross_strategy(self, sample_df):
         """Valid MA cross strategy should execute successfully."""
-        code = '''
+        code = """
 def on_init(ctx):
     ctx.log("Strategy initialized")
 
@@ -253,18 +259,18 @@ def on_bar(ctx, bar):
     else:
         if bar['close'] < bar['open']:
             ctx.close_position()
-'''
+"""
         strategy = ScriptStrategy(code)
         result = strategy.run(sample_df)
 
-        assert 'context' in result
-        assert 'final_equity' in result
-        assert 'total_return' in result
-        assert result['final_equity'] > 0
+        assert "context" in result
+        assert "final_equity" in result
+        assert "total_return" in result
+        assert result["final_equity"] > 0
 
     def test_valid_rsi_strategy(self, sample_df):
         """Valid RSI strategy should execute successfully."""
-        code = '''
+        code = """
 def on_init(ctx):
     ctx.log("RSI strategy initialized")
 
@@ -276,13 +282,13 @@ def on_bar(ctx, bar):
     else:
         if bar['close'] < bar['open']:
             ctx.sell(bar['close'], 100)
-'''
+"""
         strategy = ScriptStrategy(code)
         result = strategy.run(sample_df)
 
-        assert 'context' in result
-        assert 'final_equity' in result
-        assert isinstance(result['trades'], list)
+        assert "context" in result
+        assert "final_equity" in result
+        assert isinstance(result["trades"], list)
 
     def test_builtin_strategy(self, sample_df):
         """Builtin strategies should work."""
@@ -291,13 +297,14 @@ def on_bar(ctx, bar):
         strategy = get_builtin_script_strategy("ma_cross_script")
         result = strategy.run(sample_df)
 
-        assert 'context' in result
-        assert 'final_equity' in result
+        assert "context" in result
+        assert "final_equity" in result
 
 
 # ============================================================================
 # Edge Cases and Additional Security Tests
 # ============================================================================
+
 
 class TestEdgeCases:
     """Test edge cases and additional security scenarios."""
@@ -305,13 +312,15 @@ class TestEdgeCases:
     @pytest.fixture
     def sample_df(self):
         """Create sample DataFrame for testing."""
-        return pd.DataFrame({
-            'open': [100.0],
-            'high': [101.0],
-            'low': [99.0],
-            'close': [100.5],
-            'volume': [1000000],
-        })
+        return pd.DataFrame(
+            {
+                "open": [100.0],
+                "high": [101.0],
+                "low": [99.0],
+                "close": [100.5],
+                "volume": [1000000],
+            }
+        )
 
     def test_empty_code(self, sample_df):
         """Empty code should be rejected."""
@@ -331,82 +340,82 @@ class TestEdgeCases:
 
     def test_import_pandas_allowed(self, sample_df):
         """Pandas import should be allowed via safe import."""
-        code = '''
+        code = """
 import pandas as pd
 
 def on_bar(ctx, bar):
     df = pd.DataFrame({'a': [1, 2, 3]})
-'''
+"""
         strategy = ScriptStrategy(code, validate_security=False)
         result = strategy.run(sample_df)
-        assert 'context' in result
+        assert "context" in result
 
     def test_import_numpy_allowed(self, sample_df):
         """Numpy import should be allowed via safe import."""
-        code = '''
+        code = """
 import numpy as np
 
 def on_bar(ctx, bar):
     arr = np.array([1, 2, 3])
-'''
+"""
         strategy = ScriptStrategy(code, validate_security=False)
         result = strategy.run(sample_df)
-        assert 'context' in result
+        assert "context" in result
 
     def test_math_operations_allowed(self, sample_df):
         """Math operations should be allowed."""
-        code = '''
+        code = """
 import math
 
 def on_bar(ctx, bar):
     x = math.sqrt(100)
     y = abs(-5)
     z = max(1, 2, 3)
-'''
+"""
         strategy = ScriptStrategy(code, validate_security=False)
         result = strategy.run(sample_df)
-        assert 'context' in result
+        assert "context" in result
 
     def test_nested_dangerous_pattern(self, sample_df):
         """Nested dangerous patterns should be detected."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     f = lambda: __import__('os')
     f()
-'''
+"""
         with pytest.raises((ValueError, StrategySecurityError)):
             ScriptStrategy(code)
 
     def test_obfuscated_import(self, sample_df):
         """Obfuscated imports should be detected."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     x = '__im' + 'port__'
     eval(x + "('os')")
-'''
+"""
         with pytest.raises((ValueError, StrategySecurityError)):
             ScriptStrategy(code)
         strategy = ScriptStrategy(code)
         result = strategy.run(sample_df)
-        assert 'context' in result
+        assert "context" in result
 
     def test_nested_dangerous_pattern(self, sample_df):
         """Nested dangerous patterns should be detected."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     f = lambda: __import__('os')
     f()
-'''
+"""
         with pytest.raises((ValueError, StrategySecurityError)):
             ScriptStrategy(code)
 
     def test_obfuscated_import(self, sample_df):
         """Obfuscated imports should be detected."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     x = '__im' + 'port__'
     eval(x + "('os')")
-'''
+"""
         with pytest.raises((ValueError, StrategySecurityError)):
             ScriptStrategy(code)
 
@@ -415,97 +424,100 @@ def on_bar(ctx, bar):
 # Nested Loop Detection Tests
 # ============================================================================
 
+
 class TestNestedLoopDetection:
     """Test infinite loop detection with nested control structures."""
 
     @pytest.fixture
     def sample_df(self):
         """Create sample DataFrame for testing."""
-        return pd.DataFrame({
-            'open': [100.0, 101.0, 102.0],
-            'high': [101.0, 102.0, 103.0],
-            'low': [99.0, 100.0, 101.0],
-            'close': [100.5, 101.5, 102.5],
-            'volume': [1000000, 1100000, 1050000],
-        })
+        return pd.DataFrame(
+            {
+                "open": [100.0, 101.0, 102.0],
+                "high": [101.0, 102.0, 103.0],
+                "low": [99.0, 100.0, 101.0],
+                "close": [100.5, 101.5, 102.5],
+                "volume": [1000000, 1100000, 1050000],
+            }
+        )
 
     def test_break_in_nested_if_detected(self, sample_df):
         """break in nested if should be detected as exit for while True."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     while True:
         if bar['close'] > 100:
             break
-'''
+"""
         strategy = ScriptStrategy(code)
         result = strategy.run(sample_df)
-        assert 'context' in result
+        assert "context" in result
 
     def test_break_in_nested_for_not_detected(self, sample_df):
         """break in nested for should NOT be detected as exit for while True."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     while True:
         for i in range(10):
             if i == 5:
                 break
-'''
+"""
         with pytest.raises((ValueError, StrategySecurityError)):
             ScriptStrategy(code)
 
     def test_return_in_nested_for_detected(self, sample_df):
         """return in nested for should be detected as exit for while True."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     while True:
         for i in range(10):
             if i == 5:
                 return
-'''
+"""
         strategy = ScriptStrategy(code)
         result = strategy.run(sample_df)
-        assert 'context' in result
+        assert "context" in result
 
     def test_break_in_nested_while_not_detected(self, sample_df):
         """break in nested while should NOT be detected as exit for outer while True."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     while True:
         while x > 0:
             break
-'''
+"""
         with pytest.raises((ValueError, StrategySecurityError)):
             ScriptStrategy(code)
 
     def test_return_in_nested_while_detected(self, sample_df):
         """return in nested while should be detected as exit for outer while True."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     while True:
         while x > 0:
             return
-'''
+"""
         strategy = ScriptStrategy(code)
         result = strategy.run(sample_df)
-        assert 'context' in result
+        assert "context" in result
 
     def test_deeply_nested_return_detected(self, sample_df):
         """return in deeply nested loops should be detected."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     while True:
         for i in range(10):
             for j in range(5):
                 if i + j == 10:
                     return
-'''
+"""
         strategy = ScriptStrategy(code)
         result = strategy.run(sample_df)
-        assert 'context' in result
+        assert "context" in result
 
     def test_break_in_try_in_for_not_detected(self, sample_df):
         """break in try block inside for should NOT break outer while."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     while True:
         for i in range(10):
@@ -513,13 +525,13 @@ def on_bar(ctx, bar):
                 break
             except:
                 pass
-'''
+"""
         with pytest.raises((ValueError, StrategySecurityError)):
             ScriptStrategy(code)
 
     def test_return_in_try_in_for_detected(self, sample_df):
         """return in try block inside for should break outer while."""
-        code = '''
+        code = """
 def on_bar(ctx, bar):
     while True:
         for i in range(10):
@@ -527,26 +539,27 @@ def on_bar(ctx, bar):
                 return
             except:
                 pass
-'''
+"""
         strategy = ScriptStrategy(code)
         result = strategy.run(sample_df)
-        assert 'context' in result
+        assert "context" in result
 
 
 # ============================================================================
 # Performance Tests
 # ============================================================================
 
+
 class TestPerformance:
     """Test performance of security validation."""
 
     def test_validation_speed(self):
         """Security validation should be fast (< 100ms)."""
-        valid_code = '''
+        valid_code = """
 def on_bar(ctx, bar):
     if bar['close'] > bar['open']:
         ctx.buy(bar['close'], 100)
-'''
+"""
         start = time.time()
         for _ in range(100):
             ScriptStrategy(valid_code)

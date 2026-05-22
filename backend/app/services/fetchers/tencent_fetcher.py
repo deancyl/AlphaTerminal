@@ -11,6 +11,7 @@ Features:
 - curl_cffi for TLS fingerprint bypass
 - Unified DataCache integration
 """
+
 import asyncio
 import logging
 import re
@@ -31,9 +32,11 @@ _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="tencent_")
 # Try to import curl_cffi for TLS fingerprint bypass
 try:
     from curl_cffi import requests as curl_requests
+
     HAS_CURL_CFFI = True
 except ImportError:
     import requests as curl_requests
+
     HAS_CURL_CFFI = False
     logger.warning("[Tencent] curl_cffi not installed, using standard requests")
 
@@ -41,15 +44,15 @@ except ImportError:
 class TencentFinanceFetcher(BaseMarketFetcher):
     """
     Tencent Finance Data Fetcher
-    
+
     Uses curl_cffi to bypass TLS fingerprint detection and proxy blocking.
-    
+
     Usage:
         fetcher = TencentFinanceFetcher()
-        
+
         # Get real-time quote
         quote = await fetcher.get_quote("sh600519")
-        
+
         # Get multiple quotes
         quotes = await fetcher.get_quotes(["sh600519", "sz000001"])
     """
@@ -65,7 +68,9 @@ class TencentFinanceFetcher(BaseMarketFetcher):
     supports_us = False
 
     QUOTE_API = "http://qt.gtimg.cn/q="
-    KLINE_API = "https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData"
+    KLINE_API = (
+        "https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData"
+    )
 
     def __init__(self, circuit_breaker: Optional[CircuitBreaker] = None):
         settings = get_settings()
@@ -75,17 +80,14 @@ class TencentFinanceFetcher(BaseMarketFetcher):
             CircuitBreakerConfig(
                 failure_threshold=5,
                 timeout=60.0,
-            )
+            ),
         )
         self._data_cache = get_cache()
         self._cache_lock = asyncio.Lock()
 
         # Prepare proxies dict for curl_cffi
         if self.proxy:
-            self._proxies = {
-                "http": self.proxy,
-                "https": self.proxy
-            }
+            self._proxies = {"http": self.proxy, "https": self.proxy}
         else:
             self._proxies = None
 
@@ -94,16 +96,11 @@ class TencentFinanceFetcher(BaseMarketFetcher):
         try:
             if HAS_CURL_CFFI:
                 response = curl_requests.get(
-                    url,
-                    timeout=timeout,
-                    impersonate="chrome120",
-                    proxies=self._proxies
+                    url, timeout=timeout, impersonate="chrome120", proxies=self._proxies
                 )
             else:
                 response = curl_requests.get(
-                    url,
-                    timeout=timeout,
-                    proxies=self._proxies
+                    url, timeout=timeout, proxies=self._proxies
                 )
             return response
         except Exception as e:
@@ -113,9 +110,9 @@ class TencentFinanceFetcher(BaseMarketFetcher):
     def _parse_tencent_quote(self, data: str, symbol: str) -> Optional[Dict[str, Any]]:
         """
         Parse Tencent quote response format.
-        
+
         Format: v_sh600519="1~贵州茅台~600519~1311.00~1315.00~..."
-        
+
         Fields (separated by ~):
         0: unknown
         1: name
@@ -142,7 +139,7 @@ class TencentFinanceFetcher(BaseMarketFetcher):
             if not match:
                 return None
 
-            parts = match.group(1).split('~')
+            parts = match.group(1).split("~")
             if len(parts) < 35:
                 return None
 
@@ -188,10 +185,10 @@ class TencentFinanceFetcher(BaseMarketFetcher):
     async def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
         Get real-time quote for a single symbol.
-        
+
         Args:
             symbol: Stock symbol with prefix (e.g., "sh600519", "sz000001")
-            
+
         Returns:
             Quote dict or None if failed
         """
@@ -207,21 +204,19 @@ class TencentFinanceFetcher(BaseMarketFetcher):
             return None
 
         # Normalize symbol
-        if not symbol.startswith(('sh', 'sz', 'hk')):
-            if symbol.startswith('6'):
+        if not symbol.startswith(("sh", "sz", "hk")):
+            if symbol.startswith("6"):
                 symbol = f"sh{symbol}"
-            elif symbol.startswith(('0', '3')):
+            elif symbol.startswith(("0", "3")):
                 symbol = f"sz{symbol}"
 
         try:
             loop = asyncio.get_running_loop()
             response = await asyncio.wait_for(
                 loop.run_in_executor(
-                    _executor,
-                    self._make_request,
-                    f"{self.QUOTE_API}{symbol}"
+                    _executor, self._make_request, f"{self.QUOTE_API}{symbol}"
                 ),
-                timeout=15.0
+                timeout=15.0,
             )
 
             if response.status_code != 200:
@@ -243,17 +238,19 @@ class TencentFinanceFetcher(BaseMarketFetcher):
             self.cb.record_failure()
             return None
         except Exception as e:
-            logger.error(f"[Tencent] Error fetching quote for {symbol}: {e}", exc_info=True)
+            logger.error(
+                f"[Tencent] Error fetching quote for {symbol}: {e}", exc_info=True
+            )
             self.cb.record_failure()
             return None
 
     async def get_quotes(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
         """
         Get real-time quotes for multiple symbols.
-        
+
         Args:
             symbols: List of stock symbols with prefix
-            
+
         Returns:
             Dict mapping symbol to quote
         """
@@ -268,10 +265,10 @@ class TencentFinanceFetcher(BaseMarketFetcher):
         # Normalize symbols
         normalized = []
         for s in symbols:
-            if not s.startswith(('sh', 'sz', 'hk')):
-                if s.startswith('6'):
+            if not s.startswith(("sh", "sz", "hk")):
+                if s.startswith("6"):
                     normalized.append(f"sh{s}")
-                elif s.startswith(('0', '3')):
+                elif s.startswith(("0", "3")):
                     normalized.append(f"sz{s}")
                 else:
                     normalized.append(s)
@@ -284,9 +281,9 @@ class TencentFinanceFetcher(BaseMarketFetcher):
                 loop.run_in_executor(
                     _executor,
                     self._make_request,
-                    f"{self.QUOTE_API}{','.join(normalized)}"
+                    f"{self.QUOTE_API}{','.join(normalized)}",
                 ),
-                timeout=15.0
+                timeout=15.0,
             )
 
             if response.status_code != 200:
@@ -295,7 +292,7 @@ class TencentFinanceFetcher(BaseMarketFetcher):
 
             # Parse each quote
             results = {}
-            lines = response.text.strip().split('\n')
+            lines = response.text.strip().split("\n")
 
             for i, line in enumerate(lines):
                 if i < len(normalized):
@@ -327,17 +324,19 @@ class TencentFinanceFetcher(BaseMarketFetcher):
     async def get_kline(self, symbol: str, period: str = "day") -> Optional[List[Dict]]:
         """
         Get K-line (candlestick) data from Sina (works through proxy).
-        
+
         Args:
             symbol: Stock symbol with prefix (e.g., "sh600519")
             period: "day", "week", "month" (minute not supported)
-            
+
         Returns:
             List of dicts with keys: date, open, high, low, close, volume
             or None if fetch failed
         """
         if not self.cb.is_available():
-            logger.warning(f"[Tencent] Circuit breaker open, skipping kline fetch for {symbol}")
+            logger.warning(
+                f"[Tencent] Circuit breaker open, skipping kline fetch for {symbol}"
+            )
             return None
 
         period_map = {"day": 240, "week": 1200, "month": 5200}
@@ -349,7 +348,7 @@ class TencentFinanceFetcher(BaseMarketFetcher):
             loop = asyncio.get_running_loop()
             response = await asyncio.wait_for(
                 loop.run_in_executor(_executor, self._make_request, url, 15),
-                timeout=20.0
+                timeout=20.0,
             )
 
             if response.status_code != 200:
@@ -358,18 +357,21 @@ class TencentFinanceFetcher(BaseMarketFetcher):
                 return None
 
             import json
+
             data = json.loads(response.text)
 
             kline_data = []
             for item in data:
-                kline_data.append({
-                    "date": item.get("day"),
-                    "open": float(item.get("open", 0)),
-                    "close": float(item.get("close", 0)),
-                    "high": float(item.get("high", 0)),
-                    "low": float(item.get("low", 0)),
-                    "volume": int(float(item.get("volume", 0))),
-                })
+                kline_data.append(
+                    {
+                        "date": item.get("day"),
+                        "open": float(item.get("open", 0)),
+                        "close": float(item.get("close", 0)),
+                        "high": float(item.get("high", 0)),
+                        "low": float(item.get("low", 0)),
+                        "volume": int(float(item.get("volume", 0))),
+                    }
+                )
 
             if kline_data:
                 self.cb.record_success()
@@ -388,24 +390,28 @@ class TencentFinanceFetcher(BaseMarketFetcher):
             self.cb.record_failure()
             return None
 
-    def get_kline_sync(self, symbol: str, period: str = "day", days: int = 60) -> Optional[List[Dict]]:
+    def get_kline_sync(
+        self, symbol: str, period: str = "day", days: int = 60
+    ) -> Optional[List[Dict]]:
         """
         Synchronous K-line fetch for use in thread pool executors.
-        
+
         This method is designed to be called from synchronous contexts
         (e.g., inside ThreadPoolExecutor) where async/await is not available.
-        
+
         Args:
             symbol: Stock symbol with prefix (e.g., "sh600519")
             period: "day", "week", "month" (minute not supported)
             days: Number of days of data to return (default 60)
-            
+
         Returns:
             List of dicts with keys: date, open, high, low, close, volume
             or None if fetch failed
         """
         if not self.cb.is_available():
-            logger.warning(f"[Tencent] Circuit breaker open, skipping kline fetch for {symbol}")
+            logger.warning(
+                f"[Tencent] Circuit breaker open, skipping kline fetch for {symbol}"
+            )
             return None
 
         period_map = {"day": 240, "week": 1200, "month": 5200}
@@ -423,18 +429,21 @@ class TencentFinanceFetcher(BaseMarketFetcher):
                 return None
 
             import json
+
             data = json.loads(response.text)
 
             kline_data = []
             for item in data:
-                kline_data.append({
-                    "date": item.get("day"),
-                    "open": float(item.get("open", 0)),
-                    "close": float(item.get("close", 0)),
-                    "high": float(item.get("high", 0)),
-                    "low": float(item.get("low", 0)),
-                    "volume": int(float(item.get("volume", 0))),
-                })
+                kline_data.append(
+                    {
+                        "date": item.get("day"),
+                        "open": float(item.get("open", 0)),
+                        "close": float(item.get("close", 0)),
+                        "high": float(item.get("high", 0)),
+                        "low": float(item.get("low", 0)),
+                        "volume": int(float(item.get("volume", 0))),
+                    }
+                )
 
             if kline_data:
                 self.cb.record_success()
@@ -461,12 +470,14 @@ class TencentFinanceFetcher(BaseMarketFetcher):
             self.cb._stats._last_failure_time = None
             self.cb._state = CircuitState.CLOSED
 
-            logger.info(f"[Tencent] Circuit breaker manually reset: {old_state} -> closed")
+            logger.info(
+                f"[Tencent] Circuit breaker manually reset: {old_state} -> closed"
+            )
 
             return {
                 "success": True,
                 "state": "closed",
-                "message": "Circuit breaker reset successfully"
+                "message": "Circuit breaker reset successfully",
             }
 
     def get_circuit_breaker_status(self) -> dict:

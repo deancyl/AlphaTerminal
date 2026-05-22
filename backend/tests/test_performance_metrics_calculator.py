@@ -13,6 +13,7 @@ Tests cover all 10 debug cycles:
 - Cycle 9: Trade analysis
 - Cycle 10: Metrics aggregation
 """
+
 import pytest
 import pandas as pd
 import numpy as np
@@ -34,10 +35,10 @@ class TestPerformanceMetricsCalculator:
     @pytest.fixture
     def sample_equity_curve(self):
         """Create sample equity curve with known properties"""
-        dates = pd.date_range(start='2023-01-01', periods=252, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=252, freq="D")
         # Simulate 10% annual return with 15% volatility
         np.random.seed(42)
-        returns = np.random.normal(0.10/252, 0.15/np.sqrt(252), 252)
+        returns = np.random.normal(0.10 / 252, 0.15 / np.sqrt(252), 252)
         equity = 100000 * (1 + returns).cumprod()
         return pd.Series(equity, index=dates)
 
@@ -45,11 +46,36 @@ class TestPerformanceMetricsCalculator:
     def sample_trades(self):
         """Create sample trade list"""
         return [
-            {"entry_date": "2023-01-05", "exit_date": "2023-01-10", "pnl": 1000, "pnl_pct": 0.02},
-            {"entry_date": "2023-01-15", "exit_date": "2023-01-20", "pnl": -500, "pnl_pct": -0.01},
-            {"entry_date": "2023-01-25", "exit_date": "2023-01-30", "pnl": 1500, "pnl_pct": 0.03},
-            {"entry_date": "2023-02-05", "exit_date": "2023-02-10", "pnl": -750, "pnl_pct": -0.015},
-            {"entry_date": "2023-02-15", "exit_date": "2023-02-20", "pnl": 2000, "pnl_pct": 0.04},
+            {
+                "entry_date": "2023-01-05",
+                "exit_date": "2023-01-10",
+                "pnl": 1000,
+                "pnl_pct": 0.02,
+            },
+            {
+                "entry_date": "2023-01-15",
+                "exit_date": "2023-01-20",
+                "pnl": -500,
+                "pnl_pct": -0.01,
+            },
+            {
+                "entry_date": "2023-01-25",
+                "exit_date": "2023-01-30",
+                "pnl": 1500,
+                "pnl_pct": 0.03,
+            },
+            {
+                "entry_date": "2023-02-05",
+                "exit_date": "2023-02-10",
+                "pnl": -750,
+                "pnl_pct": -0.015,
+            },
+            {
+                "entry_date": "2023-02-15",
+                "exit_date": "2023-02-20",
+                "pnl": 2000,
+                "pnl_pct": 0.04,
+            },
         ]
 
     # ==================== Cycle 1: Input Validation ====================
@@ -75,27 +101,49 @@ class TestPerformanceMetricsCalculator:
 
     def test_cycle1_validate_single_point(self, calculator):
         """Test Cycle 1: Single point should fail validation"""
-        single_point = pd.Series([100000], index=pd.date_range(start='2023-01-01', periods=1, freq='D'))
+        single_point = pd.Series(
+            [100000], index=pd.date_range(start="2023-01-01", periods=1, freq="D")
+        )
         is_valid, error = calculator._validate_inputs(single_point)
         assert is_valid is False
         assert "insufficient" in error.lower()
 
     def test_cycle1_validate_inf_values(self, calculator):
         """Test Cycle 1: Infinite values should fail validation"""
-        dates = pd.date_range(start='2023-01-01', periods=10, freq='D')
-        equity = pd.Series([100000, np.inf, 101000, 102000, 103000, 104000, 105000, 106000, 107000, 108000], index=dates)
+        dates = pd.date_range(start="2023-01-01", periods=10, freq="D")
+        equity = pd.Series(
+            [
+                100000,
+                np.inf,
+                101000,
+                102000,
+                103000,
+                104000,
+                105000,
+                106000,
+                107000,
+                108000,
+            ],
+            index=dates,
+        )
         is_valid, error = calculator._validate_inputs(equity)
         assert is_valid is False
         assert "infinite" in error.lower()
 
-    def test_cycle1_validate_with_trades(self, calculator, sample_equity_curve, sample_trades):
+    def test_cycle1_validate_with_trades(
+        self, calculator, sample_equity_curve, sample_trades
+    ):
         """Test Cycle 1: Validation should accept valid trades"""
-        is_valid, error = calculator._validate_inputs(sample_equity_curve, sample_trades)
+        is_valid, error = calculator._validate_inputs(
+            sample_equity_curve, sample_trades
+        )
         assert is_valid is True
 
     def test_cycle1_validate_invalid_trades_type(self, calculator, sample_equity_curve):
         """Test Cycle 1: Invalid trades type should fail"""
-        is_valid, error = calculator._validate_inputs(sample_equity_curve, trades="not_a_list")
+        is_valid, error = calculator._validate_inputs(
+            sample_equity_curve, trades="not_a_list"
+        )
         assert is_valid is False
         assert "list" in error.lower()
 
@@ -103,8 +151,10 @@ class TestPerformanceMetricsCalculator:
 
     def test_cycle2_calculate_returns_basic(self, calculator):
         """Test Cycle 2: Basic returns calculation"""
-        equity = pd.Series([100, 101, 102, 101.5, 103],
-                          index=pd.date_range(start='2023-01-01', periods=5, freq='D'))
+        equity = pd.Series(
+            [100, 101, 102, 101.5, 103],
+            index=pd.date_range(start="2023-01-01", periods=5, freq="D"),
+        )
         returns = calculator.calculate_returns(equity)
 
         assert len(returns) == 4
@@ -120,8 +170,10 @@ class TestPerformanceMetricsCalculator:
 
     def test_cycle2_calculate_returns_with_nan(self, calculator):
         """Test Cycle 2: NaN values should be handled"""
-        equity = pd.Series([100, np.nan, 102, 103],
-                          index=pd.date_range(start='2023-01-01', periods=4, freq='D'))
+        equity = pd.Series(
+            [100, np.nan, 102, 103],
+            index=pd.date_range(start="2023-01-01", periods=4, freq="D"),
+        )
         returns = calculator.calculate_returns(equity)
 
         assert len(returns) > 0
@@ -129,8 +181,10 @@ class TestPerformanceMetricsCalculator:
 
     def test_cycle2_calculate_returns_constant_equity(self, calculator):
         """Test Cycle 2: Constant equity should return zero returns"""
-        equity = pd.Series([100, 100, 100, 100],
-                          index=pd.date_range(start='2023-01-01', periods=4, freq='D'))
+        equity = pd.Series(
+            [100, 100, 100, 100],
+            index=pd.date_range(start="2023-01-01", periods=4, freq="D"),
+        )
         returns = calculator.calculate_returns(equity)
 
         assert all(returns == 0)
@@ -227,8 +281,10 @@ class TestPerformanceMetricsCalculator:
     def test_cycle5_max_drawdown_basic(self, calculator):
         """Test Cycle 5: Basic drawdown calculation"""
         # Equity curve: 100 -> 110 -> 105 -> 115 -> 110
-        equity = pd.Series([100, 110, 105, 115, 110],
-                         index=pd.date_range(start='2023-01-01', periods=5, freq='D'))
+        equity = pd.Series(
+            [100, 110, 105, 115, 110],
+            index=pd.date_range(start="2023-01-01", periods=5, freq="D"),
+        )
         dd_metrics = calculator.calculate_max_drawdown(equity)
 
         # Max drawdown should be from 110 to 105 = -4.55%
@@ -237,8 +293,10 @@ class TestPerformanceMetricsCalculator:
 
     def test_cycle5_max_drawdown_no_drawdown(self, calculator):
         """Test Cycle 5: Monotonically increasing equity"""
-        equity = pd.Series([100, 101, 102, 103, 104],
-                         index=pd.date_range(start='2023-01-01', periods=5, freq='D'))
+        equity = pd.Series(
+            [100, 101, 102, 103, 104],
+            index=pd.date_range(start="2023-01-01", periods=5, freq="D"),
+        )
         dd_metrics = calculator.calculate_max_drawdown(equity)
 
         assert dd_metrics["max_drawdown"] == 0.0
@@ -246,8 +304,10 @@ class TestPerformanceMetricsCalculator:
     def test_cycle5_max_drawdown_large(self, calculator):
         """Test Cycle 5: Large drawdown scenario"""
         # Equity drops from 100 to 50 (50% drawdown from peak)
-        equity = pd.Series([100, 90, 80, 70, 50],
-                         index=pd.date_range(start='2023-01-01', periods=5, freq='D'))
+        equity = pd.Series(
+            [100, 90, 80, 70, 50],
+            index=pd.date_range(start="2023-01-01", periods=5, freq="D"),
+        )
         dd_metrics = calculator.calculate_max_drawdown(equity)
 
         # Max drawdown should be -50% (from 100 to 50)
@@ -256,8 +316,10 @@ class TestPerformanceMetricsCalculator:
     def test_cycle5_drawdown_duration(self, calculator):
         """Test Cycle 5: Drawdown duration calculation"""
         # Create equity with known drawdown period
-        equity = pd.Series([100, 110, 100, 105, 115, 120],
-                         index=pd.date_range(start='2023-01-01', periods=6, freq='D'))
+        equity = pd.Series(
+            [100, 110, 100, 105, 115, 120],
+            index=pd.date_range(start="2023-01-01", periods=6, freq="D"),
+        )
         dd_metrics = calculator.calculate_max_drawdown(equity)
 
         assert dd_metrics["drawdown_duration"] >= 0
@@ -349,7 +411,7 @@ class TestPerformanceMetricsCalculator:
         ]
         profit_factor = calculator.calculate_profit_factor(trades)
 
-        assert profit_factor == float('inf')
+        assert profit_factor == float("inf")
 
     def test_cycle7_profit_factor_no_profits(self, calculator):
         """Test Cycle 7: No profits should return 0"""
@@ -500,9 +562,9 @@ class TestPerformanceMetricsCalculator:
         """Test Cycle 9: Trade distribution analysis"""
         trades = [
             {"pnl": 1000},  # Large win
-            {"pnl": 100},   # Small win
+            {"pnl": 100},  # Small win
             {"pnl": -100},  # Small loss
-            {"pnl": -1000}, # Large loss
+            {"pnl": -1000},  # Large loss
         ]
         analysis = calculator.analyze_trades(trades)
 
@@ -511,7 +573,9 @@ class TestPerformanceMetricsCalculator:
 
     # ==================== Cycle 10: Metrics Aggregation ====================
 
-    def test_cycle10_calculate_all_metrics(self, calculator, sample_equity_curve, sample_trades):
+    def test_cycle10_calculate_all_metrics(
+        self, calculator, sample_equity_curve, sample_trades
+    ):
         """Test Cycle 10: Full metrics calculation"""
         metrics = calculator.calculate_all_metrics(sample_equity_curve, sample_trades)
 
@@ -543,7 +607,9 @@ class TestPerformanceMetricsCalculator:
         assert "error" in metrics
         assert metrics["sharpe_ratio"] == 0.0
 
-    def test_cycle10_metrics_values_reasonable(self, calculator, sample_equity_curve, sample_trades):
+    def test_cycle10_metrics_values_reasonable(
+        self, calculator, sample_equity_curve, sample_trades
+    ):
         """Test Cycle 10: All metrics should have reasonable values"""
         metrics = calculator.calculate_all_metrics(sample_equity_curve, sample_trades)
 
@@ -571,8 +637,10 @@ class TestPerformanceMetricsCalculator:
 
     def test_edge_case_zero_equity(self, calculator):
         """Test edge case: Zero equity values"""
-        equity = pd.Series([100, 0, 100, 100],
-                         index=pd.date_range(start='2023-01-01', periods=4, freq='D'))
+        equity = pd.Series(
+            [100, 0, 100, 100],
+            index=pd.date_range(start="2023-01-01", periods=4, freq="D"),
+        )
 
         # Should handle gracefully
         is_valid, _ = calculator._validate_inputs(equity)
@@ -580,8 +648,10 @@ class TestPerformanceMetricsCalculator:
 
     def test_edge_case_very_small_returns(self, calculator):
         """Test edge case: Very small returns"""
-        equity = pd.Series([100.0, 100.0001, 100.0002, 100.0003],
-                         index=pd.date_range(start='2023-01-01', periods=4, freq='D'))
+        equity = pd.Series(
+            [100.0, 100.0001, 100.0002, 100.0003],
+            index=pd.date_range(start="2023-01-01", periods=4, freq="D"),
+        )
         returns = calculator.calculate_returns(equity)
 
         # Should handle very small returns
@@ -589,8 +659,10 @@ class TestPerformanceMetricsCalculator:
 
     def test_edge_case_large_numbers(self, calculator):
         """Test edge case: Large equity values"""
-        equity = pd.Series([1e9, 1.1e9, 1.05e9, 1.2e9],
-                         index=pd.date_range(start='2023-01-01', periods=4, freq='D'))
+        equity = pd.Series(
+            [1e9, 1.1e9, 1.05e9, 1.2e9],
+            index=pd.date_range(start="2023-01-01", periods=4, freq="D"),
+        )
         metrics = calculator.calculate_all_metrics(equity)
 
         # Should handle large numbers without overflow
@@ -605,7 +677,7 @@ class TestPerformanceMetricsCalculator:
         profit_factor = calculator.calculate_profit_factor(trades)
 
         assert win_rate == 1.0
-        assert profit_factor == float('inf')
+        assert profit_factor == float("inf")
 
     def test_edge_case_break_even_trades(self, calculator):
         """Test edge case: Break-even trades"""
@@ -634,7 +706,7 @@ class TestPerformanceMetricsCalculatorIntegration:
         """Test complete workflow with realistic data"""
         # Generate realistic equity curve
         np.random.seed(42)
-        dates = pd.date_range(start='2023-01-01', periods=252, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=252, freq="D")
         returns = np.random.normal(0.0004, 0.02, 252)  # ~10% annual return, 32% vol
         equity = 100000 * (1 + returns).cumprod()
         equity_curve = pd.Series(equity, index=dates)
@@ -642,12 +714,16 @@ class TestPerformanceMetricsCalculatorIntegration:
         # Generate realistic trades
         trades = []
         for i in range(50):
-            pnl = np.random.choice([np.random.normal(500, 200), np.random.normal(-300, 150)])
-            trades.append({
-                "entry_date": f"2023-{(i // 4) + 1:02d}-{(i % 28) + 1:02d}",
-                "exit_date": f"2023-{(i // 4) + 1:02d}-{(i % 28) + 5:02d}",
-                "pnl": pnl
-            })
+            pnl = np.random.choice(
+                [np.random.normal(500, 200), np.random.normal(-300, 150)]
+            )
+            trades.append(
+                {
+                    "entry_date": f"2023-{(i // 4) + 1:02d}-{(i % 28) + 1:02d}",
+                    "exit_date": f"2023-{(i // 4) + 1:02d}-{(i % 28) + 5:02d}",
+                    "pnl": pnl,
+                }
+            )
 
         # Calculate all metrics
         metrics = calculator.calculate_all_metrics(equity_curve, trades)
@@ -661,8 +737,10 @@ class TestPerformanceMetricsCalculatorIntegration:
     def test_comparison_with_known_values(self, calculator):
         """Test against known metric values"""
         # Create equity curve with known properties
-        equity = pd.Series([100, 102, 101, 103, 102, 104, 103, 105],
-                         index=pd.date_range(start='2023-01-01', periods=8, freq='D'))
+        equity = pd.Series(
+            [100, 102, 101, 103, 102, 104, 103, 105],
+            index=pd.date_range(start="2023-01-01", periods=8, freq="D"),
+        )
 
         returns = calculator.calculate_returns(equity)
 
@@ -673,18 +751,29 @@ class TestPerformanceMetricsCalculatorIntegration:
     def test_debug_logging_all_cycles(self, calculator, caplog):
         """Test that all 10 debug cycles produce logging output"""
         import logging
+
         caplog.set_level(logging.DEBUG)
 
         # Create sample data inline
         np.random.seed(42)
-        dates = pd.date_range(start='2023-01-01', periods=252, freq='D')
-        returns = np.random.normal(0.10/252, 0.15/np.sqrt(252), 252)
+        dates = pd.date_range(start="2023-01-01", periods=252, freq="D")
+        returns = np.random.normal(0.10 / 252, 0.15 / np.sqrt(252), 252)
         equity = 100000 * (1 + returns).cumprod()
         sample_equity_curve = pd.Series(equity, index=dates)
 
         sample_trades = [
-            {"entry_date": "2023-01-05", "exit_date": "2023-01-10", "pnl": 1000, "pnl_pct": 0.02},
-            {"entry_date": "2023-01-15", "exit_date": "2023-01-20", "pnl": -500, "pnl_pct": -0.01},
+            {
+                "entry_date": "2023-01-05",
+                "exit_date": "2023-01-10",
+                "pnl": 1000,
+                "pnl_pct": 0.02,
+            },
+            {
+                "entry_date": "2023-01-15",
+                "exit_date": "2023-01-20",
+                "pnl": -500,
+                "pnl_pct": -0.01,
+            },
         ]
 
         # Run full calculation

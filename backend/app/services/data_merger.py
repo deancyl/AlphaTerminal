@@ -26,20 +26,22 @@ class DataMerger:
     def __init__(self, fetchers: Dict[str, Any]):
         """
         初始化合并器
-        
+
         Args:
             fetchers: 数据源获取器字典 {'sina': SinaFetcher, 'tencent': TencentFetcher, ...}
         """
         self.fetchers = fetchers
 
-    async def fetch_and_merge(self, symbol: str, fields: List[str] = None) -> Dict[str, Any]:
+    async def fetch_and_merge(
+        self, symbol: str, fields: List[str] = None
+    ) -> Dict[str, Any]:
         """
         并行从多个数据源获取数据，按字段优先级合并
-        
+
         Args:
             symbol: 股票代码
             fields: 需要获取的字段列表，None表示获取所有字段
-            
+
         Returns:
             合并后的数据字典
         """
@@ -68,19 +70,19 @@ class DataMerger:
 
         # 按字段优先级合并
         merged = self._merge_by_priority(source_data, fields)
-        merged['_sources'] = list(source_data.keys())
+        merged["_sources"] = list(source_data.keys())
 
         return merged
 
     async def _safe_fetch(self, name: str, fetcher: Any, symbol: str) -> Optional[Dict]:
         """
         安全获取数据（捕获异常）
-        
+
         Args:
             name: 数据源名称
             fetcher: 数据源获取器
             symbol: 股票代码
-            
+
         Returns:
             数据字典或None
         """
@@ -92,21 +94,25 @@ class DataMerger:
                 result = await asyncio.to_thread(fetcher.get_quote, symbol)
 
             if result:
-                logger.debug(f"[DataMerger] {name} fetched {symbol}: {len(result)} fields")
+                logger.debug(
+                    f"[DataMerger] {name} fetched {symbol}: {len(result)} fields"
+                )
             return result
 
         except Exception as e:
             logger.debug(f"[DataMerger] {name} error: {e}")
             return None
 
-    def _merge_by_priority(self, source_data: Dict[str, Dict], fields: List[str] = None) -> Dict[str, Any]:
+    def _merge_by_priority(
+        self, source_data: Dict[str, Dict], fields: List[str] = None
+    ) -> Dict[str, Any]:
         """
         按字段优先级合并数据
-        
+
         Args:
             source_data: 源数据字典 {'sina': {...}, 'tencent': {...}, ...}
             fields: 需要合并的字段列表，None表示合并所有字段
-            
+
         Returns:
             合并后的数据字典
         """
@@ -123,7 +129,7 @@ class DataMerger:
         conflicts = []
 
         for field in fields:
-            if field.startswith('_'):  # 跳过内部字段
+            if field.startswith("_"):  # 跳过内部字段
                 continue
 
             priorities = field_priority.get_priority(field)
@@ -138,7 +144,7 @@ class DataMerger:
 
             if selected_value is not None:
                 merged[field] = selected_value
-                merged[f'_source_{field}'] = selected_source
+                merged[f"_source_{field}"] = selected_source
 
             # 检测冲突：多个数据源都有该字段但值不同
             values = {}
@@ -149,11 +155,9 @@ class DataMerger:
             if len(values) > 1:
                 unique_values = set(str(v) for v in values.values())
                 if len(unique_values) > 1:
-                    conflicts.append({
-                        'field': field,
-                        'values': values,
-                        'selected': selected_source
-                    })
+                    conflicts.append(
+                        {"field": field, "values": values, "selected": selected_source}
+                    )
 
         # 记录冲突日志
         if conflicts:
@@ -174,7 +178,7 @@ class DataMerger:
 def create_default_merger():
     """
     创建默认的数据源合并器
-    
+
     Returns:
         DataMerger实例
     """
@@ -183,9 +187,9 @@ def create_default_merger():
     from app.services.fetchers.eastmoney import EastmoneyFetcher
 
     fetchers = {
-        'sina': SinaFetcher(),
-        'tencent': TencentFetcher(),
-        'eastmoney': EastmoneyFetcher(),
+        "sina": SinaFetcher(),
+        "tencent": TencentFetcher(),
+        "eastmoney": EastmoneyFetcher(),
     }
 
     return DataMerger(fetchers)

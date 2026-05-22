@@ -12,6 +12,7 @@
 - 可配置：通过 admin_config 表持久化开关状态
 - 自包含：watchdog 作为独立线程运行，不阻塞主服务
 """
+
 import logging
 import os
 import signal
@@ -38,7 +39,10 @@ MAX_RESTART_ATTEMPTS = 3  # 连续重启失败的最大次数
 RESTART_COOLDOWN = 300  # 秒，超过此次数后进入冷却期
 
 # 后端启动命令（使用绝对路径）
-BACKEND_START_CMD = [sys.executable, str(Path(__file__).resolve().parent.parent.parent / "start_backend.py")]
+BACKEND_START_CMD = [
+    sys.executable,
+    str(Path(__file__).resolve().parent.parent.parent / "start_backend.py"),
+]
 BACKEND_HEALTH_URL = "http://localhost:8002/health"  # 健康检查端点
 BACKEND_PID_FILE = "/tmp/alphaterminal_backend.pid"  # PID 文件路径
 
@@ -47,8 +51,10 @@ BACKEND_PID_FILE = "/tmp/alphaterminal_backend.pid"  # PID 文件路径
 # Watchdog 状态管理
 # ═══════════════════════════════════════════════════════════════
 
+
 class WatchdogState:
     """Watchdog 运行时状态"""
+
     def __init__(self):
         self.enabled: bool = False  # 是否启用保活
         self.running: bool = False  # watchdog 线程是否运行中
@@ -65,7 +71,9 @@ class WatchdogState:
                 "enabled": self.enabled,
                 "running": self.running,
                 "last_check": self.last_check.isoformat() if self.last_check else None,
-                "last_restart": self.last_restart.isoformat() if self.last_restart else None,
+                "last_restart": (
+                    self.last_restart.isoformat() if self.last_restart else None
+                ),
                 "restart_count": self.restart_count,
                 "total_restarts": self.total_restarts,
                 "recent_errors": self.errors[-5:],  # 最近5条
@@ -73,10 +81,12 @@ class WatchdogState:
 
     def record_error(self, error: str):
         with self._lock:
-            self.errors.append({
-                "time": datetime.now().isoformat(),
-                "error": error,
-            })
+            self.errors.append(
+                {
+                    "time": datetime.now().isoformat(),
+                    "error": error,
+                }
+            )
             # 只保留最近10条
             if len(self.errors) > 10:
                 self.errors = self.errors[-10:]
@@ -107,9 +117,11 @@ def get_watchdog_state() -> Dict[str, Any]:
 # 配置持久化
 # ═══════════════════════════════════════════════════════════════
 
+
 def _get_db_conn():
     """获取数据库连接"""
     from app.db.database import _get_conn
+
     return _get_conn()
 
 
@@ -118,8 +130,7 @@ def load_watchdog_config() -> bool:
     try:
         conn = _get_db_conn()
         cursor = conn.execute(
-            "SELECT value FROM admin_config WHERE key = ?",
-            (WATCHDOG_CONFIG_KEY,)
+            "SELECT value FROM admin_config WHERE key = ?", (WATCHDOG_CONFIG_KEY,)
         )
         row = cursor.fetchone()
         conn.close()
@@ -141,7 +152,7 @@ def save_watchdog_config(enabled: bool) -> bool:
         conn.execute(
             """INSERT OR REPLACE INTO admin_config (key, value, updated_at) 
                VALUES (?, ?, ?)""",
-            (WATCHDOG_CONFIG_KEY, str(enabled).lower(), datetime.now().isoformat())
+            (WATCHDOG_CONFIG_KEY, str(enabled).lower(), datetime.now().isoformat()),
         )
         conn.commit()
         conn.close()
@@ -158,6 +169,7 @@ def save_watchdog_config(enabled: bool) -> bool:
 # 健康检查与重启逻辑
 # ═══════════════════════════════════════════════════════════════
 
+
 def _check_backend_health() -> bool:
     """检查后端健康状态"""
     try:
@@ -173,7 +185,7 @@ def _get_backend_pid() -> Optional[int]:
     """从 PID 文件读取后端进程 ID"""
     try:
         if os.path.exists(BACKEND_PID_FILE):
-            with open(BACKEND_PID_FILE, 'r') as f:
+            with open(BACKEND_PID_FILE, "r") as f:
                 return int(f.read().strip())
     except Exception as e:
         logger.debug(f"[Watchdog] 读取 PID 文件失败: {e}")
@@ -218,7 +230,9 @@ def _restart_backend() -> bool:
                 logger.warning(f"[Watchdog] 终止旧进程失败: {e}", exc_info=True)
 
         # 2. 启动新进程
-        backend_dir = Path(__file__).resolve().parent.parent.parent  # app/services/ → app/ → backend/
+        backend_dir = (
+            Path(__file__).resolve().parent.parent.parent
+        )  # app/services/ → app/ → backend/
         proc = subprocess.Popen(
             BACKEND_START_CMD,
             cwd=backend_dir,
@@ -228,7 +242,7 @@ def _restart_backend() -> bool:
         )
 
         # 3. 写入 PID 文件
-        with open(BACKEND_PID_FILE, 'w') as f:
+        with open(BACKEND_PID_FILE, "w") as f:
             f.write(str(proc.pid))
 
         logger.info(f"[Watchdog] 后端已重启，新 PID: {proc.pid}")
@@ -243,6 +257,7 @@ def _restart_backend() -> bool:
 # ═══════════════════════════════════════════════════════════════
 # Watchdog 主循环
 # ═══════════════════════════════════════════════════════════════
+
 
 def _watchdog_loop():
     """Watchdog 主循环（在独立线程中运行）"""
@@ -264,8 +279,12 @@ def _watchdog_loop():
 
                 # 检查连续重启次数
                 if _watchdog_state.restart_count >= MAX_RESTART_ATTEMPTS:
-                    logger.error(f"[Watchdog] 连续重启 {_watchdog_state.restart_count} 次仍未恢复，进入冷却期")
-                    _watchdog_state.record_error(f"进入冷却期（连续{MAX_RESTART_ATTEMPTS}次重启失败）")
+                    logger.error(
+                        f"[Watchdog] 连续重启 {_watchdog_state.restart_count} 次仍未恢复，进入冷却期"
+                    )
+                    _watchdog_state.record_error(
+                        f"进入冷却期（连续{MAX_RESTART_ATTEMPTS}次重启失败）"
+                    )
                     time.sleep(RESTART_COOLDOWN)
                     _watchdog_state.reset_restart_count()
                     continue
@@ -302,6 +321,7 @@ def _watchdog_loop():
 # ═══════════════════════════════════════════════════════════════
 # 对外接口
 # ═══════════════════════════════════════════════════════════════
+
 
 def start_watchdog():
     """启动 watchdog 线程"""
@@ -356,6 +376,7 @@ def toggle_watchdog(enabled: bool) -> bool:
 # ═══════════════════════════════════════════════════════════════
 # 初始化
 # ═══════════════════════════════════════════════════════════════
+
 
 def init_watchdog():
     """应用启动时初始化 watchdog"""

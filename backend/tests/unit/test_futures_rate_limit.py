@@ -4,6 +4,7 @@ P1 Reliability Tests for Futures Endpoints
 Tests for rate limiting, input validation, and WebSocket fallback
 on futures-related API endpoints.
 """
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -39,16 +40,14 @@ class TestFuturesRateLimit:
         async def health():
             return {"status": "healthy"}
 
-        config = RateLimitConfig(
-            global_limit=60,
-            global_period=60,
-            enabled=True
-        )
+        config = RateLimitConfig(global_limit=60, global_period=60, enabled=True)
         app.add_middleware(RateLimitMiddleware, config=config)
 
         return app
 
-    def test_futures_endpoint_returns_200_under_limit(self, app_with_futures_rate_limit):
+    def test_futures_endpoint_returns_200_under_limit(
+        self, app_with_futures_rate_limit
+    ):
         """Test that requests under limit return 200"""
         client = TestClient(app_with_futures_rate_limit)
 
@@ -125,6 +124,7 @@ class TestFuturesInputValidation:
         """Create test client for the main app"""
         from fastapi.testclient import TestClient
         from app.main import app
+
         return TestClient(app)
 
     def test_term_structure_validates_symbol(self, client):
@@ -150,7 +150,9 @@ class TestFuturesInputValidation:
         valid_periods = ["daily", "1min", "5min", "15min", "30min", "60min"]
 
         for period in valid_periods:
-            response = client.get(f"/api/v1/futures/index_history?symbol=IF&period={period}")
+            response = client.get(
+                f"/api/v1/futures/index_history?symbol=IF&period={period}"
+            )
             assert response.status_code == 200
 
     def test_index_history_limit_parameter(self, client):
@@ -207,7 +209,9 @@ class TestFuturesWebSocketFallback:
         assert len(cache["index_futures"]) > 0 or len(cache["commodities"]) > 0
 
 
-@pytest.mark.skip(reason="Rate limiting is disabled in test config (RATE_LIMIT_ENABLED=false)")
+@pytest.mark.skip(
+    reason="Rate limiting is disabled in test config (RATE_LIMIT_ENABLED=false)"
+)
 class TestFuturesRateLimitIntegration:
     """Integration tests for futures rate limiting with real app"""
 
@@ -216,6 +220,7 @@ class TestFuturesRateLimitIntegration:
         """Create test client for the main app"""
         from fastapi.testclient import TestClient
         from app.main import app
+
         return TestClient(app)
 
     def test_futures_main_indexes_rate_limit_headers(self, client):

@@ -3,7 +3,7 @@ Brinson归因分析模型
 
 将组合超额收益分解为:
 1. 配置效应 (Allocation Effect)
-2. 选择效应 (Selection Effect)  
+2. 选择效应 (Selection Effect)
 3. 交互效应 (Interaction Effect)
 
 公式:
@@ -18,11 +18,13 @@ Brinson归因分析模型
 - R_p: 组合收益率
 - R_b: 基准收益率
 """
+
 import logging
 from typing import Dict, List
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
 
 class SectorContribution(BaseModel):
     sector: str
@@ -35,6 +37,7 @@ class SectorContribution(BaseModel):
     interaction_effect: float
     total_effect: float
 
+
 class BrinsonResult(BaseModel):
     allocation_effect: float
     selection_effect: float
@@ -44,17 +47,18 @@ class BrinsonResult(BaseModel):
     period_start: str
     period_end: str
 
+
 def calculate_brinson_attribution(
     portfolio_weights: Dict[str, float],
     portfolio_returns: Dict[str, float],
     benchmark_weights: Dict[str, float],
     benchmark_returns: Dict[str, float],
     period_start: str,
-    period_end: str
+    period_end: str,
 ) -> BrinsonResult:
     """
     计算Brinson归因分析
-    
+
     Args:
         portfolio_weights: 组合各板块权重 {sector: weight}
         portfolio_returns: 组合各板块收益率 {sector: return}
@@ -62,7 +66,7 @@ def calculate_brinson_attribution(
         benchmark_returns: 基准各板块收益率 {sector: return}
         period_start: 开始日期
         period_end: 结束日期
-    
+
     Returns:
         BrinsonResult: 归因分析结果
     """
@@ -91,17 +95,19 @@ def calculate_brinson_attribution(
         # 总效应
         total_effect = allocation + selection + interaction
 
-        sector_contributions.append(SectorContribution(
-            sector=sector,
-            portfolio_weight=w_p,
-            benchmark_weight=w_b,
-            portfolio_return=r_p,
-            benchmark_return=r_b,
-            allocation_effect=allocation,
-            selection_effect=selection,
-            interaction_effect=interaction,
-            total_effect=total_effect
-        ))
+        sector_contributions.append(
+            SectorContribution(
+                sector=sector,
+                portfolio_weight=w_p,
+                benchmark_weight=w_b,
+                portfolio_return=r_p,
+                benchmark_return=r_b,
+                allocation_effect=allocation,
+                selection_effect=selection,
+                interaction_effect=interaction,
+                total_effect=total_effect,
+            )
+        )
 
         total_allocation += allocation
         total_selection += selection
@@ -114,39 +120,40 @@ def calculate_brinson_attribution(
         total_excess_return=total_allocation + total_selection + total_interaction,
         sector_contributions=sector_contributions,
         period_start=period_start,
-        period_end=period_end
+        period_end=period_end,
     )
+
 
 def get_sector_from_symbol(symbol: str) -> str:
     """
     根据股票代码获取行业分类
-    
+
     简化版本，实际应该从数据源获取
     """
     # 简化映射
     sector_map = {
-        '600519': '白酒',
-        '000858': '白酒',
-        '000333': '家电',
-        '600036': '银行',
-        '601318': '保险',
-        '000001': '银行',
-        '300750': '新能源',
-        '002594': '汽车',
+        "600519": "白酒",
+        "000858": "白酒",
+        "000333": "家电",
+        "600036": "银行",
+        "601318": "保险",
+        "000001": "银行",
+        "300750": "新能源",
+        "002594": "汽车",
     }
-    return sector_map.get(symbol, '其他')
+    return sector_map.get(symbol, "其他")
+
 
 def aggregate_to_sectors(
-    positions: List[Dict],
-    returns: Dict[str, float]
+    positions: List[Dict], returns: Dict[str, float]
 ) -> tuple[Dict[str, float], Dict[str, float]]:
     """
     将持仓聚合到行业层面
-    
+
     Args:
         positions: 持仓列表 [{symbol, weight, ...}]
         returns: 各股票收益率 {symbol: return}
-    
+
     Returns:
         (sector_weights, sector_returns): 行业权重和收益率
     """
@@ -155,8 +162,8 @@ def aggregate_to_sectors(
     sector_weighted_returns = {}
 
     for pos in positions:
-        symbol = pos.get('symbol', '')
-        weight = pos.get('weight', 0.0)
+        symbol = pos.get("symbol", "")
+        weight = pos.get("weight", 0.0)
         ret = returns.get(symbol, 0.0)
 
         sector = get_sector_from_symbol(symbol)
@@ -165,12 +172,16 @@ def aggregate_to_sectors(
         sector_weights[sector] = sector_weights.get(sector, 0.0) + weight
 
         # 累加行业加权收益（用于计算行业收益率）
-        sector_weighted_returns[sector] = sector_weighted_returns.get(sector, 0.0) + weight * ret
+        sector_weighted_returns[sector] = (
+            sector_weighted_returns.get(sector, 0.0) + weight * ret
+        )
 
     # 计算行业收益率（加权平均）
     for sector in sector_weights:
         if sector_weights[sector] > 0:
-            sector_returns[sector] = sector_weighted_returns[sector] / sector_weights[sector]
+            sector_returns[sector] = (
+                sector_weighted_returns[sector] / sector_weights[sector]
+            )
         else:
             sector_returns[sector] = 0.0
 

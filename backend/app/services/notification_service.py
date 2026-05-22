@@ -8,6 +8,7 @@ Features:
   - Status tracking and error handling
   - Comprehensive debug logging (5 cycles)
 """
+
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 # ── Notification Status ──────────────────────────────────────────────────────
 class NotificationStatus(str, Enum):
     """Notification status enumeration."""
+
     PENDING = "pending"
     SENT = "sent"
     FAILED = "failed"
@@ -30,6 +32,7 @@ class NotificationStatus(str, Enum):
 
 class NotificationChannel(str, Enum):
     """Notification channel enumeration."""
+
     EMAIL = "email"
     WEBHOOK = "webhook"
 
@@ -39,7 +42,7 @@ class NotificationChannel(str, Enum):
 class Notification:
     """
     Notification data structure for tracking notifications.
-    
+
     Attributes:
         id: Unique notification identifier
         channel: Notification channel (email, webhook)
@@ -52,6 +55,7 @@ class Notification:
         subject: Subject line (for email notifications)
         metadata: Additional metadata for the notification
     """
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     channel: NotificationChannel = NotificationChannel.EMAIL
     message: str = ""
@@ -84,7 +88,7 @@ class Notification:
 class NotificationConfig:
     """
     Notification configuration with sensible defaults.
-    
+
     Attributes:
         enabled: Enable/disable notifications (default: True)
         retry_attempts: Number of retry attempts for failed notifications (default: 3)
@@ -94,6 +98,7 @@ class NotificationConfig:
         email_enabled: Enable email notifications (default: True)
         webhook_enabled: Enable webhook notifications (default: True)
     """
+
     enabled: bool = True
     retry_attempts: int = 3
     retry_delay_seconds: int = 5
@@ -122,16 +127,27 @@ class NotificationConfig:
         errors = []
 
         if self.retry_attempts < 0 or self.retry_attempts > 10:
-            errors.append(f"retry_attempts must be in [0, 10], got {self.retry_attempts}")
+            errors.append(
+                f"retry_attempts must be in [0, 10], got {self.retry_attempts}"
+            )
 
         if self.retry_delay_seconds < 0 or self.retry_delay_seconds > 60:
-            errors.append(f"retry_delay_seconds must be in [0, 60], got {self.retry_delay_seconds}")
+            errors.append(
+                f"retry_delay_seconds must be in [0, 60], got {self.retry_delay_seconds}"
+            )
 
         if self.timeout_seconds < 1 or self.timeout_seconds > 300:
-            errors.append(f"timeout_seconds must be in [1, 300], got {self.timeout_seconds}")
+            errors.append(
+                f"timeout_seconds must be in [1, 300], got {self.timeout_seconds}"
+            )
 
-        if self.max_notifications_per_hour < 1 or self.max_notifications_per_hour > 1000:
-            errors.append(f"max_notifications_per_hour must be in [1, 1000], got {self.max_notifications_per_hour}")
+        if (
+            self.max_notifications_per_hour < 1
+            or self.max_notifications_per_hour > 1000
+        ):
+            errors.append(
+                f"max_notifications_per_hour must be in [1, 1000], got {self.max_notifications_per_hour}"
+            )
 
         if errors:
             logger.error(f"  [VALIDATION FAILED] {len(errors)} errors:")
@@ -147,7 +163,7 @@ class NotificationConfig:
 class NotificationTemplates:
     """
     Notification templates for common scenarios.
-    
+
     Provides pre-defined templates for:
         - Trade notifications (buy/sell)
         - Risk alerts (stop loss, position limit)
@@ -164,14 +180,14 @@ class NotificationTemplates:
     ) -> Dict[str, str]:
         """
         Create trade notification template.
-        
+
         Args:
             symbol: Trading symbol
             action: Trade action (BUY/SELL)
             shares: Number of shares
             price: Trade price
             pnl: Profit/loss (for SELL orders)
-            
+
         Returns:
             Dictionary with subject and message
         """
@@ -218,14 +234,14 @@ Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     ) -> Dict[str, str]:
         """
         Create risk alert notification template.
-        
+
         Args:
             alert_type: Type of risk alert (stop_loss, position_limit, drawdown)
             symbol: Trading symbol (if applicable)
             current_value: Current value (if applicable)
             threshold: Threshold value (if applicable)
             message: Custom message (if provided)
-            
+
         Returns:
             Dictionary with subject and message
         """
@@ -292,7 +308,7 @@ Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     ) -> Dict[str, str]:
         """
         Create performance summary notification template.
-        
+
         Args:
             period: Performance period (daily/weekly/monthly)
             total_return: Total return in currency
@@ -301,7 +317,7 @@ Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             max_drawdown: Maximum drawdown percentage
             win_rate: Win rate percentage
             total_trades: Total number of trades
-            
+
         Returns:
             Dictionary with subject and message
         """
@@ -327,7 +343,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 class NotificationService:
     """
     Comprehensive notification service for sending alerts and notifications.
-    
+
     Features:
         - Multiple notification channels (email, webhook)
         - Template-based notifications
@@ -356,14 +372,14 @@ class NotificationService:
     ) -> str:
         """
         Create notification from template with variables.
-        
+
         Args:
             template_name: Name of the template (trade, risk_alert, performance)
             variables: Dictionary of template variables
-            
+
         Returns:
             Rendered notification message
-            
+
         Raises:
             ValueError: If template name is invalid or required variables missing
         """
@@ -381,8 +397,12 @@ class NotificationService:
                 missing_vars = [v for v in required_vars if v not in variables]
 
                 if missing_vars:
-                    logger.error(f"  [ERROR] Missing required variables: {missing_vars}")
-                    raise ValueError(f"Missing required variables for trade template: {missing_vars}")
+                    logger.error(
+                        f"  [ERROR] Missing required variables: {missing_vars}"
+                    )
+                    raise ValueError(
+                        f"Missing required variables for trade template: {missing_vars}"
+                    )
 
                 template = NotificationTemplates.trade_notification(
                     symbol=variables["symbol"],
@@ -401,8 +421,12 @@ class NotificationService:
                 missing_vars = [v for v in required_vars if v not in variables]
 
                 if missing_vars:
-                    logger.error(f"  [ERROR] Missing required variables: {missing_vars}")
-                    raise ValueError(f"Missing required variables for risk_alert template: {missing_vars}")
+                    logger.error(
+                        f"  [ERROR] Missing required variables: {missing_vars}"
+                    )
+                    raise ValueError(
+                        f"Missing required variables for risk_alert template: {missing_vars}"
+                    )
 
                 template = NotificationTemplates.risk_alert(
                     alert_type=variables["alert_type"],
@@ -417,13 +441,24 @@ class NotificationService:
                 result = template["body"]
 
             elif template_name_lower == "performance":
-                required_vars = ["period", "total_return", "total_return_pct",
-                               "sharpe_ratio", "max_drawdown", "win_rate", "total_trades"]
+                required_vars = [
+                    "period",
+                    "total_return",
+                    "total_return_pct",
+                    "sharpe_ratio",
+                    "max_drawdown",
+                    "win_rate",
+                    "total_trades",
+                ]
                 missing_vars = [v for v in required_vars if v not in variables]
 
                 if missing_vars:
-                    logger.error(f"  [ERROR] Missing required variables: {missing_vars}")
-                    raise ValueError(f"Missing required variables for performance template: {missing_vars}")
+                    logger.error(
+                        f"  [ERROR] Missing required variables: {missing_vars}"
+                    )
+                    raise ValueError(
+                        f"Missing required variables for performance template: {missing_vars}"
+                    )
 
                 template = NotificationTemplates.performance_summary(
                     period=variables["period"],
@@ -470,14 +505,14 @@ class NotificationService:
     ) -> bool:
         """
         Validate notification channel and recipient.
-        
+
         Args:
             channel: Notification channel
             recipient: Recipient information
-            
+
         Returns:
             True if valid, False otherwise
-            
+
         Raises:
             ValueError: If channel is disabled or invalid
         """
@@ -543,14 +578,14 @@ class NotificationService:
     ) -> bool:
         """
         Send notification through specified channel.
-        
+
         Args:
             channel: Notification channel
             message: Notification message
             recipient: Recipient information
             subject: Subject line (for email)
             metadata: Additional metadata
-            
+
         Returns:
             True if sent successfully, False otherwise
         """
@@ -609,13 +644,15 @@ class NotificationService:
 
             # Store notification
             self.notifications[notification.id] = notification
-            self.notification_history.append({
-                "id": notification.id,
-                "channel": channel.value,
-                "recipient": recipient,
-                "status": notification.status.value,
-                "timestamp": datetime.now().isoformat(),
-            })
+            self.notification_history.append(
+                {
+                    "id": notification.id,
+                    "channel": channel.value,
+                    "recipient": recipient,
+                    "status": notification.status.value,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
             logger.debug(f"  [RESULT] Status: {notification.status.value}")
             logger.debug("=" * 60)
@@ -643,12 +680,12 @@ class NotificationService:
     ) -> bool:
         """
         Send email notification (MOCKED - does not actually send).
-        
+
         Args:
             to: Recipient email address
             subject: Email subject
             body: Email body
-            
+
         Returns:
             True if mock send successful, False otherwise
         """
@@ -670,11 +707,11 @@ class NotificationService:
     ) -> bool:
         """
         Send webhook notification (MOCKED - does not actually send).
-        
+
         Args:
             url: Webhook URL
             payload: Webhook payload
-            
+
         Returns:
             True if mock send successful, False otherwise
         """
@@ -696,10 +733,10 @@ class NotificationService:
     ) -> Optional[Dict[str, Any]]:
         """
         Get notification status by ID.
-        
+
         Args:
             notification_id: Notification ID
-            
+
         Returns:
             Notification status dictionary or None if not found
         """
@@ -720,7 +757,9 @@ class NotificationService:
             "channel": notification.channel.value,
             "status": notification.status.value,
             "created_at": notification.created_at.isoformat(),
-            "sent_at": notification.sent_at.isoformat() if notification.sent_at else None,
+            "sent_at": (
+                notification.sent_at.isoformat() if notification.sent_at else None
+            ),
             "error": notification.error,
             "recipient": notification.recipient,
         }
@@ -741,14 +780,16 @@ class NotificationService:
     ) -> List[Dict[str, Any]]:
         """
         Get notification history.
-        
+
         Args:
             limit: Maximum number of notifications to return
-            
+
         Returns:
             List of notification history entries
         """
-        logger.debug(f"[NotificationService] Getting notification history (limit: {limit})")
+        logger.debug(
+            f"[NotificationService] Getting notification history (limit: {limit})"
+        )
 
         # Return most recent notifications
         history = self.notification_history[-limit:]
@@ -760,16 +801,28 @@ class NotificationService:
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get notification statistics.
-        
+
         Returns:
             Dictionary with notification statistics
         """
         logger.debug("[NotificationService] Getting notification statistics")
 
         total = len(self.notifications)
-        sent = sum(1 for n in self.notifications.values() if n.status == NotificationStatus.SENT)
-        failed = sum(1 for n in self.notifications.values() if n.status == NotificationStatus.FAILED)
-        pending = sum(1 for n in self.notifications.values() if n.status == NotificationStatus.PENDING)
+        sent = sum(
+            1
+            for n in self.notifications.values()
+            if n.status == NotificationStatus.SENT
+        )
+        failed = sum(
+            1
+            for n in self.notifications.values()
+            if n.status == NotificationStatus.FAILED
+        )
+        pending = sum(
+            1
+            for n in self.notifications.values()
+            if n.status == NotificationStatus.PENDING
+        )
 
         stats = {
             "total_notifications": total,
@@ -797,7 +850,7 @@ class NotificationService:
     ) -> bool:
         """
         Send trade notification using template.
-        
+
         Args:
             symbol: Trading symbol
             action: Trade action (BUY/SELL)
@@ -805,7 +858,7 @@ class NotificationService:
             price: Trade price
             recipient: Notification recipient
             pnl: Profit/loss (for SELL orders)
-            
+
         Returns:
             True if sent successfully, False otherwise
         """
@@ -835,7 +888,7 @@ class NotificationService:
     ) -> bool:
         """
         Send risk alert notification using template.
-        
+
         Args:
             alert_type: Type of risk alert
             recipient: Notification recipient
@@ -843,7 +896,7 @@ class NotificationService:
             current_value: Current value (if applicable)
             threshold: Threshold value (if applicable)
             message: Custom message (if provided)
-            
+
         Returns:
             True if sent successfully, False otherwise
         """
@@ -875,7 +928,7 @@ class NotificationService:
     ) -> bool:
         """
         Send performance summary notification using template.
-        
+
         Args:
             period: Performance period
             recipient: Notification recipient
@@ -885,7 +938,7 @@ class NotificationService:
             max_drawdown: Maximum drawdown percentage
             win_rate: Win rate percentage
             total_trades: Total number of trades
-            
+
         Returns:
             True if sent successfully, False otherwise
         """

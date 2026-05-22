@@ -4,6 +4,7 @@ Feature Pipeline for Qlib Integration
 Generates Alpha158 and Alpha360 features from OHLCV data.
 These are the standard feature sets used in Qlib's ML models.
 """
+
 import logging
 import pandas as pd
 import numpy as np
@@ -22,13 +23,13 @@ class FeatureSet(Enum):
 class FeaturePipeline:
     """
     Generate features for ML-based trading strategies.
-    
+
     Alpha158: 158 features including:
         - Price-based: MA, MACD, RSI, BOLL
         - Volume-based: OBV, VWAP
         - Momentum: ROC, MOM
         - Volatility: ATR, STD
-    
+
     Alpha360: 360 features with extended time windows
     """
 
@@ -77,11 +78,11 @@ class FeaturePipeline:
     ) -> pd.DataFrame:
         """
         Generate features from OHLCV DataFrame.
-        
+
         Args:
             df: DataFrame with columns [open, high, low, close, volume]
             custom_features: Additional custom feature functions
-            
+
         Returns:
             DataFrame with generated features
         """
@@ -99,14 +100,20 @@ class FeaturePipeline:
                     col_name = f"{name}_{window}"
                     features[col_name] = feature_values
                 except Exception as e:
-                    logger.warning(f"[FeaturePipeline] Failed to calculate {name}_{window}: {e}", exc_info=True)
+                    logger.warning(
+                        f"[FeaturePipeline] Failed to calculate {name}_{window}: {e}",
+                        exc_info=True,
+                    )
 
         if custom_features:
             for name, func in custom_features.items():
                 try:
                     features[name] = func(df)
                 except Exception as e:
-                    logger.warning(f"[FeaturePipeline] Failed to calculate custom feature {name}: {e}", exc_info=True)
+                    logger.warning(
+                        f"[FeaturePipeline] Failed to calculate custom feature {name}: {e}",
+                        exc_info=True,
+                    )
 
         features["$close"] = df["close"]
         features["$volume"] = df["volume"] if "volume" in df.columns else 0
@@ -136,7 +143,9 @@ class FeaturePipeline:
         return (df["close"] - mid) / (2 * std)
 
     def _calc_roc(self, df: pd.DataFrame, window: int) -> pd.Series:
-        return (df["close"] - df["close"].shift(window)) / df["close"].shift(window) * 100
+        return (
+            (df["close"] - df["close"].shift(window)) / df["close"].shift(window) * 100
+        )
 
     def _calc_mom(self, df: pd.DataFrame, window: int) -> pd.Series:
         return df["close"] - df["close"].shift(window)
@@ -159,14 +168,16 @@ class FeaturePipeline:
 
     def _calc_vwap(self, df: pd.DataFrame, window: int) -> pd.Series:
         typical_price = (df["high"] + df["low"] + df["close"]) / 3
-        return (typical_price * df["volume"]).rolling(window=window).sum() / df["volume"].rolling(window=window).sum()
+        return (typical_price * df["volume"]).rolling(window=window).sum() / df[
+            "volume"
+        ].rolling(window=window).sum()
 
     def _calc_kdj(self, df: pd.DataFrame, window: int) -> pd.Series:
         low_min = df["low"].rolling(window=window).min()
         high_max = df["high"].rolling(window=window).max()
         rsv = (df["close"] - low_min) / (high_max - low_min) * 100
-        k = rsv.ewm(alpha=1/3, adjust=False).mean()
-        d = k.ewm(alpha=1/3, adjust=False).mean()
+        k = rsv.ewm(alpha=1 / 3, adjust=False).mean()
+        d = k.ewm(alpha=1 / 3, adjust=False).mean()
         return 3 * k - 2 * d
 
     def _calc_willr(self, df: pd.DataFrame, window: int) -> pd.Series:
@@ -191,6 +202,8 @@ class FeaturePipeline:
         return names
 
 
-def create_feature_pipeline(feature_set: FeatureSet = FeatureSet.ALPHA158) -> FeaturePipeline:
+def create_feature_pipeline(
+    feature_set: FeatureSet = FeatureSet.ALPHA158,
+) -> FeaturePipeline:
     """Factory function to create FeaturePipeline."""
     return FeaturePipeline(feature_set)

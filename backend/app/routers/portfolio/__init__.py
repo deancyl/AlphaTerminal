@@ -13,6 +13,7 @@ Modules:
 
 Total: 29 endpoints
 """
+
 from fastapi import APIRouter
 
 from .accounts import router as accounts_router

@@ -2,10 +2,16 @@
 数据源工厂 - FetcherFactory with Circuit Breaker
 带熔断器模式的数据源管理器，支持故障自动切换
 """
+
 import logging
 from typing import Optional, Dict, Type, List, Callable
 from app.services.fetchers.base import BaseMarketFetcher
-from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen, CircuitContext
+from .circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerOpen,
+    CircuitContext,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +19,7 @@ logger = logging.getLogger(__name__)
 class FetcherFactory:
     """
     Factory for creating market data fetchers with circuit breaker support.
-    
+
     Features:
     - Dynamic switching between data sources
     - Circuit breaker pattern for fault tolerance
@@ -27,16 +33,16 @@ class FetcherFactory:
     _proxy: Optional[str] = None
     _fallback_order: List[str] = []
     _default_config = CircuitBreakerConfig(
-        failure_threshold=3,
-        success_threshold=2,
-        timeout=30.0
+        failure_threshold=3, success_threshold=2, timeout=30.0
     )
 
     @classmethod
-    def register(cls, name: str, fetcher_class: Type[BaseMarketFetcher], as_default: bool = False):
+    def register(
+        cls, name: str, fetcher_class: Type[BaseMarketFetcher], as_default: bool = False
+    ):
         """
         Register a new fetcher type.
-        
+
         Args:
             name: Fetcher identifier
             fetcher_class: Fetcher class (must extend BaseMarketFetcher)
@@ -57,10 +63,10 @@ class FetcherFactory:
     def get_fetcher(cls, name: Optional[str] = None) -> Optional[BaseMarketFetcher]:
         """
         Get a fetcher instance by name.
-        
+
         Args:
             name: Fetcher name. If None, returns current default fetcher.
-            
+
         Returns:
             Fetcher instance or None if not found.
         """
@@ -73,7 +79,9 @@ class FetcherFactory:
         return cls._fetchers[name](proxy=cls._proxy)
 
     @classmethod
-    def get_circuit_breaker(cls, name: Optional[str] = None) -> Optional[CircuitBreaker]:
+    def get_circuit_breaker(
+        cls, name: Optional[str] = None
+    ) -> Optional[CircuitBreaker]:
         """Get circuit breaker for a fetcher."""
         if name is None:
             name = cls._current_fetcher
@@ -157,21 +165,19 @@ def get_market_fetcher(name: Optional[str] = None) -> Optional[BaseMarketFetcher
 
 
 async def fetch_with_fallback(
-    fetch_func: Callable,
-    symbol: str,
-    fallback_order: Optional[List[str]] = None
+    fetch_func: Callable, symbol: str, fallback_order: Optional[List[str]] = None
 ):
     """
     使用熔断器执行fetch，失败时自动切换数据源。
-    
+
     Args:
         fetch_func: Async function to call (fetcher.get_quote, etc.)
         symbol: Symbol to fetch
         fallback_order: List of fetcher names to try in order
-        
+
     Returns:
         Fetch result or None if all failed
-        
+
     Raises:
         CircuitBreakerOpen: 如果所有数据源都熔断中
     """

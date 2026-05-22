@@ -3,6 +3,7 @@ Time-Machine Replay API Router.
 
 Provides endpoints for historical K-line playback with paper trading.
 """
+
 import asyncio
 import logging
 import uuid
@@ -18,12 +19,9 @@ from app.utils.errors import success_response, error_response
 from app.services.timemachine.playback_engine import (
     PlaybackEngine,
     DailyPlaybackEngine,
-    Bar
+    Bar,
 )
-from app.services.timemachine.paper_trading import (
-    PaperPortfolio,
-    PaperTradingError
-)
+from app.services.timemachine.paper_trading import PaperPortfolio, PaperTradingError
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
@@ -42,25 +40,27 @@ class SessionCreateRequest(BaseModel):
     symbol: str = Field(..., description="Stock symbol, e.g., sh600519")
     start_date: str = Field(..., description="Start date, YYYY-MM-DD")
     end_date: str = Field(..., description="End date, YYYY-MM-DD")
-    initial_capital: float = Field(1000000, ge=1000, le=1e9, description="Initial capital")
+    initial_capital: float = Field(
+        1000000, ge=1000, le=1e9, description="Initial capital"
+    )
     speed: int = Field(1, ge=1, le=100, description="Bars per second during playback")
     interval: str = Field("daily", description="K-line interval: daily or minute")
 
-    @field_validator('symbol')
+    @field_validator("symbol")
     @classmethod
     def validate_symbol(cls, v):
         if not v:
-            raise ValueError('symbol is required')
+            raise ValueError("symbol is required")
         return v.lower()
 
-    @field_validator('start_date', 'end_date')
+    @field_validator("start_date", "end_date")
     @classmethod
     def validate_date(cls, v):
         try:
             datetime.strptime(v, "%Y-%m-%d")
             return v
         except ValueError:
-            raise ValueError('date must be in YYYY-MM-DD format')
+            raise ValueError("date must be in YYYY-MM-DD format")
 
 
 class PlayRequest(BaseModel):
@@ -82,20 +82,22 @@ class SpeedRequest(BaseModel):
 class TradeRequest(BaseModel):
     action: str = Field(..., description="buy or sell")
     quantity: float = Field(..., gt=0, description="Number of shares")
-    price: Optional[float] = Field(None, ge=0, description="Execution price (null = market)")
+    price: Optional[float] = Field(
+        None, ge=0, description="Execution price (null = market)"
+    )
 
-    @field_validator('action')
+    @field_validator("action")
     @classmethod
     def validate_action(cls, v):
-        if v.lower() not in ('buy', 'sell'):
-            raise ValueError('action must be buy or sell')
+        if v.lower() not in ("buy", "sell"):
+            raise ValueError("action must be buy or sell")
         return v.lower()
 
 
 class TimeMachineSession:
     """
     Time-machine replay session.
-    
+
     Manages:
     - K-line data
     - Playback state
@@ -112,7 +114,7 @@ class TimeMachineSession:
         end_date: date,
         initial_capital: float,
         speed: int,
-        interval: str
+        interval: str,
     ):
         self.session_id = session_id
         self.symbol = symbol
@@ -217,7 +219,7 @@ class SessionManager:
         end_date: str,
         initial_capital: float,
         speed: int,
-        interval: str
+        interval: str,
     ) -> TimeMachineSession:
         """Create a new session."""
         session_id = f"tm_{uuid.uuid4().hex[:8]}"
@@ -229,7 +231,7 @@ class SessionManager:
             end_date=date.fromisoformat(end_date),
             initial_capital=initial_capital,
             speed=speed,
-            interval=interval
+            interval=interval,
         )
 
         self._sessions[session_id] = session
@@ -265,18 +267,15 @@ _session_manager = SessionManager()
 @handle_errors(module="timemachine")
 async def health_check():
     """Health check endpoint."""
-    return success_response({
-        "status": "ok",
-        "active_sessions": len(_session_manager._sessions)
-    })
+    return success_response(
+        {"status": "ok", "active_sessions": len(_session_manager._sessions)}
+    )
 
 
 @router.get("/history/{symbol}")
 @handle_errors(module="timemachine")
 async def get_history(
-    symbol: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    symbol: str, start_date: Optional[str] = None, end_date: Optional[str] = None
 ):
     """Get historical K-line data up to a date."""
     try:
@@ -290,32 +289,36 @@ async def get_history(
         bars = await engine.get_bars(
             symbol=symbol.lower(),
             start_date=date.fromisoformat(start_date),
-            end_date=date.fromisoformat(end_date)
+            end_date=date.fromisoformat(end_date),
         )
 
-        return success_response({
-            "symbol": symbol,
-            "start_date": start_date,
-            "end_date": end_date,
-            "interval": engine.get_interval(),
-            "bars": [
-                {
-                    "date": b.date,
-                    "open": b.open,
-                    "high": b.high,
-                    "low": b.low,
-                    "close": b.close,
-                    "volume": b.volume,
-                    "amount": b.amount,
-                    "change_pct": b.change_pct,
-                }
-                for b in bars
-            ],
-            "total": len(bars)
-        })
+        return success_response(
+            {
+                "symbol": symbol,
+                "start_date": start_date,
+                "end_date": end_date,
+                "interval": engine.get_interval(),
+                "bars": [
+                    {
+                        "date": b.date,
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "volume": b.volume,
+                        "amount": b.amount,
+                        "change_pct": b.change_pct,
+                    }
+                    for b in bars
+                ],
+                "total": len(bars),
+            }
+        )
 
     except Exception as e:
-        logger.error(f"[TimeMachine] Failed to get history for {symbol}: {e}", exc_info=True)
+        logger.error(
+            f"[TimeMachine] Failed to get history for {symbol}: {e}", exc_info=True
+        )
         return error_response(f"Failed to get history: {str(e)}")
 
 
@@ -332,7 +335,7 @@ async def create_session(request: SessionCreateRequest):
             end_date=request.end_date,
             initial_capital=request.initial_capital,
             speed=request.speed,
-            interval=request.interval
+            interval=request.interval,
         )
 
         if request.interval == "daily":
@@ -343,7 +346,7 @@ async def create_session(request: SessionCreateRequest):
         session.bars = await session.engine.get_bars(
             symbol=request.symbol,
             start_date=date.fromisoformat(request.start_date),
-            end_date=date.fromisoformat(request.end_date)
+            end_date=date.fromisoformat(request.end_date),
         )
 
         if not session.bars:
@@ -353,7 +356,9 @@ async def create_session(request: SessionCreateRequest):
         session.status = SessionStatus.PAUSED
         session.current_bar_index = 0
 
-        logger.info(f"[TimeMachine] Created session {session.session_id} for {request.symbol}")
+        logger.info(
+            f"[TimeMachine] Created session {session.session_id} for {request.symbol}"
+        )
 
         return success_response(session.to_dict(include_bars=True))
 
@@ -452,11 +457,13 @@ async def seek_to(session_id: str, request: SeekRequest):
     max_bar = len(session.bars) - 1
     session.current_bar_index = max(0, min(request.target_bar, max_bar))
 
-    return success_response({
-        "success": True,
-        "current_bar": session.current_bar_index,
-        "total_bars": len(session.bars)
-    })
+    return success_response(
+        {
+            "success": True,
+            "current_bar": session.current_bar_index,
+            "total_bars": len(session.bars),
+        }
+    )
 
 
 @router.post("/session/{session_id}/speed")
@@ -470,10 +477,7 @@ async def set_speed(session_id: str, request: SpeedRequest):
     session.touch()
     session.speed = request.speed
 
-    return success_response({
-        "success": True,
-        "speed": session.speed
-    })
+    return success_response({"success": True, "speed": session.speed})
 
 
 @router.post("/session/{session_id}/trade")
@@ -501,25 +505,31 @@ async def execute_trade(session_id: str, request: TradeRequest):
             quantity=request.quantity,
             price=price,
             current_date=session.current_date(),
-            current_bar_index=session.current_bar_index
+            current_bar_index=session.current_bar_index,
         )
 
-        logger.info(f"[TimeMachine] Trade executed: {trade.action.value} {trade.quantity} @ {trade.price}")
+        logger.info(
+            f"[TimeMachine] Trade executed: {trade.action.value} {trade.quantity} @ {trade.price}"
+        )
 
-        return success_response({
-            "success": True,
-            "trade": {
-                "id": trade.id,
-                "date": trade.date,
-                "action": trade.action.value,
-                "price": round(trade.price, 2),
-                "quantity": trade.quantity,
-                "value": round(trade.value, 2),
-                "commission": round(trade.commission, 2),
-                "pnl": round(trade.pnl, 2),
-            },
-            "portfolio": session.portfolio.to_dict({session.symbol: session.current_price()})
-        })
+        return success_response(
+            {
+                "success": True,
+                "trade": {
+                    "id": trade.id,
+                    "date": trade.date,
+                    "action": trade.action.value,
+                    "price": round(trade.price, 2),
+                    "quantity": trade.quantity,
+                    "value": round(trade.value, 2),
+                    "commission": round(trade.commission, 2),
+                    "pnl": round(trade.pnl, 2),
+                },
+                "portfolio": session.portfolio.to_dict(
+                    {session.symbol: session.current_price()}
+                ),
+            }
+        )
 
     except PaperTradingError as e:
         raise HTTPException(400, str(e))
@@ -535,10 +545,14 @@ async def get_portfolio(session_id: str):
 
     session.touch()
 
-    return success_response({
-        "portfolio": session.portfolio.to_dict({session.symbol: session.current_price()}),
-        "trades": session.portfolio.trades_to_dict()
-    })
+    return success_response(
+        {
+            "portfolio": session.portfolio.to_dict(
+                {session.symbol: session.current_price()}
+            ),
+            "trades": session.portfolio.trades_to_dict(),
+        }
+    )
 
 
 @router.delete("/session/{session_id}")

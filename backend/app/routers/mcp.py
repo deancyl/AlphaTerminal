@@ -15,28 +15,30 @@ from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(
-    prefix="/mcp",
-    tags=["mcp"]
-)
+router = APIRouter(prefix="/mcp", tags=["mcp"])
 
 
 # ═══════════════════════════════════════════════════════════════
 # Pydantic Models
 # ═══════════════════════════════════════════════════════════════
 
+
 class MCPConfig(BaseModel):
     """MCP Server Configuration"""
+
     base_url: str = Field(default="http://localhost:8765", max_length=500)
     transport_mode: str = Field(default="sse", pattern="^(sse|stdio|websocket)$")
     port: int = Field(default=8765, ge=1, le=65535)
     timeout: int = Field(default=30, ge=1, le=300)
     auto_start: bool = False
-    log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
+    log_level: str = Field(
+        default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$"
+    )
 
 
 class MCPTool(BaseModel):
     """MCP Tool Definition"""
+
     name: str
     description: str
     input_schema: Dict[str, Any] = {}
@@ -45,6 +47,7 @@ class MCPTool(BaseModel):
 
 class MCPStatus(BaseModel):
     """MCP Server Status"""
+
     running: bool = False
     uptime: Optional[int] = None  # seconds
     last_heartbeat: Optional[str] = None
@@ -74,9 +77,9 @@ _mcp_tools = [
             "properties": {
                 "symbol": {"type": "string", "description": "股票代码，如 sh600519"}
             },
-            "required": ["symbol"]
+            "required": ["symbol"],
         },
-        scope="read"
+        scope="read",
     ),
     MCPTool(
         name="get_kline_data",
@@ -85,12 +88,20 @@ _mcp_tools = [
             "type": "object",
             "properties": {
                 "symbol": {"type": "string", "description": "股票代码"},
-                "period": {"type": "string", "enum": ["daily", "weekly", "monthly"], "description": "K线周期"},
-                "limit": {"type": "integer", "description": "返回数据条数", "default": 100}
+                "period": {
+                    "type": "string",
+                    "enum": ["daily", "weekly", "monthly"],
+                    "description": "K线周期",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "返回数据条数",
+                    "default": 100,
+                },
             },
-            "required": ["symbol"]
+            "required": ["symbol"],
         },
-        scope="read"
+        scope="read",
     ),
     MCPTool(
         name="get_financial_report",
@@ -99,11 +110,15 @@ _mcp_tools = [
             "type": "object",
             "properties": {
                 "symbol": {"type": "string", "description": "股票代码"},
-                "report_type": {"type": "string", "enum": ["balance", "income", "cashflow"], "description": "报表类型"}
+                "report_type": {
+                    "type": "string",
+                    "enum": ["balance", "income", "cashflow"],
+                    "description": "报表类型",
+                },
             },
-            "required": ["symbol", "report_type"]
+            "required": ["symbol", "report_type"],
         },
-        scope="read"
+        scope="read",
     ),
     MCPTool(
         name="analyze_technical_indicators",
@@ -112,11 +127,15 @@ _mcp_tools = [
             "type": "object",
             "properties": {
                 "symbol": {"type": "string", "description": "股票代码"},
-                "indicators": {"type": "array", "items": {"type": "string"}, "description": "指标列表"}
+                "indicators": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "指标列表",
+                },
             },
-            "required": ["symbol"]
+            "required": ["symbol"],
         },
-        scope="read"
+        scope="read",
     ),
     MCPTool(
         name="screen_stocks",
@@ -124,12 +143,20 @@ _mcp_tools = [
         input_schema={
             "type": "object",
             "properties": {
-                "conditions": {"type": "array", "items": {"type": "object"}, "description": "筛选条件"},
-                "limit": {"type": "integer", "description": "返回数量限制", "default": 50}
+                "conditions": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "筛选条件",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "返回数量限制",
+                    "default": 50,
+                },
             },
-            "required": ["conditions"]
+            "required": ["conditions"],
         },
-        scope="read"
+        scope="read",
     ),
     MCPTool(
         name="get_market_sentiment",
@@ -137,10 +164,14 @@ _mcp_tools = [
         input_schema={
             "type": "object",
             "properties": {
-                "type": {"type": "string", "enum": ["limit_up", "limit_down", "north_flow", "sector_heat"], "description": "情绪类型"}
-            }
+                "type": {
+                    "type": "string",
+                    "enum": ["limit_up", "limit_down", "north_flow", "sector_heat"],
+                    "description": "情绪类型",
+                }
+            },
         },
-        scope="read"
+        scope="read",
     ),
     MCPTool(
         name="execute_backtest",
@@ -149,13 +180,17 @@ _mcp_tools = [
             "type": "object",
             "properties": {
                 "strategy": {"type": "string", "description": "策略名称或代码"},
-                "symbols": {"type": "array", "items": {"type": "string"}, "description": "股票代码列表"},
+                "symbols": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "股票代码列表",
+                },
                 "start_date": {"type": "string", "description": "开始日期 YYYY-MM-DD"},
-                "end_date": {"type": "string", "description": "结束日期 YYYY-MM-DD"}
+                "end_date": {"type": "string", "description": "结束日期 YYYY-MM-DD"},
             },
-            "required": ["strategy", "symbols", "start_date", "end_date"]
+            "required": ["strategy", "symbols", "start_date", "end_date"],
         },
-        scope="write"
+        scope="write",
     ),
     MCPTool(
         name="set_alert",
@@ -165,11 +200,15 @@ _mcp_tools = [
             "properties": {
                 "symbol": {"type": "string", "description": "股票代码"},
                 "condition": {"type": "string", "description": "预警条件"},
-                "notify_type": {"type": "string", "enum": ["email", "webhook", "popup"], "description": "通知方式"}
+                "notify_type": {
+                    "type": "string",
+                    "enum": ["email", "webhook", "popup"],
+                    "description": "通知方式",
+                },
             },
-            "required": ["symbol", "condition"]
+            "required": ["symbol", "condition"],
         },
-        scope="write"
+        scope="write",
     ),
     MCPTool(
         name="manage_portfolio",
@@ -177,13 +216,21 @@ _mcp_tools = [
         input_schema={
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["add", "remove", "update", "list"], "description": "操作类型"},
+                "action": {
+                    "type": "string",
+                    "enum": ["add", "remove", "update", "list"],
+                    "description": "操作类型",
+                },
                 "portfolio_id": {"type": "string", "description": "组合ID"},
-                "holdings": {"type": "array", "items": {"type": "object"}, "description": "持仓列表"}
+                "holdings": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "持仓列表",
+                },
             },
-            "required": ["action"]
+            "required": ["action"],
         },
-        scope="write"
+        scope="write",
     ),
     MCPTool(
         name="admin_restart_service",
@@ -191,12 +238,20 @@ _mcp_tools = [
         input_schema={
             "type": "object",
             "properties": {
-                "service": {"type": "string", "enum": ["backend", "scheduler", "watchdog"], "description": "服务名称"},
-                "force": {"type": "boolean", "description": "强制重启", "default": False}
+                "service": {
+                    "type": "string",
+                    "enum": ["backend", "scheduler", "watchdog"],
+                    "description": "服务名称",
+                },
+                "force": {
+                    "type": "boolean",
+                    "description": "强制重启",
+                    "default": False,
+                },
             },
-            "required": ["service"]
+            "required": ["service"],
         },
-        scope="admin"
+        scope="admin",
     ),
 ]
 
@@ -214,6 +269,7 @@ _env_vars = {
 # API Endpoints
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.get("/status")
 @handle_errors(module="mcp")
 def get_mcp_status():
@@ -224,22 +280,14 @@ def get_mcp_status():
         _mcp_status.uptime = int(time.time() - _start_time)
         _mcp_status.last_heartbeat = datetime.now().isoformat()
 
-    return {
-        "code": 0,
-        "message": "success",
-        "data": _mcp_status.model_dump()
-    }
+    return {"code": 0, "message": "success", "data": _mcp_status.model_dump()}
 
 
 @router.get("/config")
 @handle_errors(module="mcp")
 def get_mcp_config():
     """Get MCP server configuration"""
-    return {
-        "code": 0,
-        "message": "success",
-        "data": _mcp_config.model_dump()
-    }
+    return {"code": 0, "message": "success", "data": _mcp_config.model_dump()}
 
 
 @router.post("/config")
@@ -253,23 +301,19 @@ def update_mcp_config(config: MCPConfig):
         return {
             "code": 1,
             "message": "Invalid transport mode. Must be one of: sse, stdio, websocket",
-            "data": None
+            "data": None,
         }
 
     # Validate port
     if not (1 <= config.port <= 65535):
-        return {
-            "code": 1,
-            "message": "Port must be between 1 and 65535",
-            "data": None
-        }
+        return {"code": 1, "message": "Port must be between 1 and 65535", "data": None}
 
     # Validate timeout
     if not (1 <= config.timeout <= 300):
         return {
             "code": 1,
             "message": "Timeout must be between 1 and 300 seconds",
-            "data": None
+            "data": None,
         }
 
     _mcp_config = config
@@ -279,7 +323,7 @@ def update_mcp_config(config: MCPConfig):
     return {
         "code": 0,
         "message": "Configuration updated successfully",
-        "data": _mcp_config.model_dump()
+        "data": _mcp_config.model_dump(),
     }
 
 
@@ -292,10 +336,7 @@ def list_mcp_tools():
     return {
         "code": 0,
         "message": "success",
-        "data": {
-            "total": len(tools_data),
-            "tools": tools_data
-        }
+        "data": {"total": len(tools_data), "tools": tools_data},
     }
 
 
@@ -322,8 +363,8 @@ async def test_mcp_connection():
                     "connected": True,
                     "latency_ms": latency_ms,
                     "server_version": "QuantDinger-MCP-1.0.0",
-                    "protocol_version": "2024-11-05"
-                }
+                    "protocol_version": "2024-11-05",
+                },
             }
         else:
             return {
@@ -332,8 +373,8 @@ async def test_mcp_connection():
                 "data": {
                     "connected": False,
                     "latency_ms": latency_ms,
-                    "error": "MCP server is not running. Please start the server first."
-                }
+                    "error": "MCP server is not running. Please start the server first.",
+                },
             }
 
     except asyncio.CancelledError:
@@ -346,8 +387,8 @@ async def test_mcp_connection():
             "data": {
                 "connected": False,
                 "latency_ms": latency_ms,
-                "error": "Request was cancelled"
-            }
+                "error": "Request was cancelled",
+            },
         }
 
     except Exception as e:
@@ -357,11 +398,7 @@ async def test_mcp_connection():
         return {
             "code": 1,
             "message": f"Connection failed: {str(e)}",
-            "data": {
-                "connected": False,
-                "latency_ms": latency_ms,
-                "error": str(e)
-            }
+            "data": {"connected": False, "latency_ms": latency_ms, "error": str(e)},
         }
 
 
@@ -375,7 +412,7 @@ def start_mcp_server():
         return {
             "code": 0,
             "message": "Server is already running",
-            "data": _mcp_status.model_dump()
+            "data": _mcp_status.model_dump(),
         }
 
     # Mock start
@@ -390,7 +427,7 @@ def start_mcp_server():
     return {
         "code": 0,
         "message": "MCP server started successfully",
-        "data": _mcp_status.model_dump()
+        "data": _mcp_status.model_dump(),
     }
 
 
@@ -404,7 +441,7 @@ def stop_mcp_server():
         return {
             "code": 0,
             "message": "Server is already stopped",
-            "data": _mcp_status.model_dump()
+            "data": _mcp_status.model_dump(),
         }
 
     # Mock stop
@@ -418,7 +455,7 @@ def stop_mcp_server():
     return {
         "code": 0,
         "message": "MCP server stopped successfully",
-        "data": _mcp_status.model_dump()
+        "data": _mcp_status.model_dump(),
     }
 
 
@@ -431,6 +468,6 @@ def get_mcp_env():
         "message": "success",
         "data": {
             "variables": _env_vars,
-            "note": "Environment variables are read-only. Update via system environment or .env file."
-        }
+            "note": "Environment variables are read-only. Update via system environment or .env file.",
+        },
     }

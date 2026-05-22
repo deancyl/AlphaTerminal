@@ -1,4 +1,5 @@
 """Health check router - Backend initialization status tracking"""
+
 import time
 import psutil
 import sqlite3
@@ -30,7 +31,10 @@ def _get_db_status():
         cursor = conn.execute("PRAGMA integrity_check")
         result = cursor.fetchone()[0]
         conn.close()
-        return {"status": "ok" if result == "ok" else "corrupted", "path": str(_db_path)}
+        return {
+            "status": "ok" if result == "ok" else "corrupted",
+            "path": str(_db_path),
+        }
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -42,7 +46,7 @@ def _get_memory_status():
         return {
             "rss_mb": round(mem_info.rss / 1024 / 1024, 2),
             "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
-            "percent": round(process.memory_percent(), 2)
+            "percent": round(process.memory_percent(), 2),
         }
     except (psutil.NoSuchProcess, psutil.AccessDenied, OSError) as e:
         logger.debug(f"[Health] Memory info unavailable: {type(e).__name__}: {e}")
@@ -60,20 +64,24 @@ async def health_ready():
 @handle_errors(module="health")
 async def health_live():
     """Liveness probe - basic check that the process is running"""
-    return success_response({"status": "alive", "uptime_seconds": round(time.time() - _start_time, 2)})
+    return success_response(
+        {"status": "alive", "uptime_seconds": round(time.time() - _start_time, 2)}
+    )
 
 
 @router.get("/detailed")
 @handle_errors(module="health")
 async def health_detailed():
     """Detailed health check with system metrics"""
-    return success_response({
-        "ready": _backend_ready,
-        "uptime_seconds": round(time.time() - _start_time, 2),
-        "database": _get_db_status(),
-        "memory": _get_memory_status(),
-        "backend_version": "0.6.39"
-    })
+    return success_response(
+        {
+            "ready": _backend_ready,
+            "uptime_seconds": round(time.time() - _start_time, 2),
+            "database": _get_db_status(),
+            "memory": _get_memory_status(),
+            "backend_version": "0.6.39",
+        }
+    )
 
 
 @router.get("/cache")
@@ -81,11 +89,14 @@ async def health_detailed():
 async def health_cache():
     """Cache health check with DataCache statistics"""
     from app.services.data_cache import get_cache
+
     cache = get_cache()
     stats = cache.get_stats()
-    return success_response({
-        "cache": stats,
-        "forex_keys": ["forex:spot_quotes", "forex:matrix"],
-        "macro_keys": ["macro:dashboard"],
-        "status": "ok" if stats["entry_count"] > 0 else "empty"
-    })
+    return success_response(
+        {
+            "cache": stats,
+            "forex_keys": ["forex:spot_quotes", "forex:matrix"],
+            "macro_keys": ["macro:dashboard"],
+            "status": "ok" if stats["entry_count"] > 0 else "empty",
+        }
+    )

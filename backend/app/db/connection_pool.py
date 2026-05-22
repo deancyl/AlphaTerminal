@@ -15,27 +15,29 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # Default database path (same as database.py)
-DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "alphaterminal.db")
+DEFAULT_DB_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "data", "alphaterminal.db"
+)
 
 
 class SQLiteConnectionPool:
     """Thread-safe SQLite connection pool with WAL mode support.
-    
+
     Features:
     - Connection pooling for efficient resource reuse
     - WAL mode for better concurrent read/write performance
     - Busy timeout for handling concurrent access
     - Thread-safe connection management
     - Context manager support for automatic connection cleanup
-    
+
     Example:
         pool = SQLiteConnectionPool("/path/to/db.sqlite")
-        
+
         # Using context manager (recommended)
         with pool.connection() as conn:
             cursor = conn.execute("SELECT * FROM users")
             results = cursor.fetchall()
-        
+
         # Manual connection management
         conn = pool.get()
         try:
@@ -47,14 +49,16 @@ class SQLiteConnectionPool:
 
     def __init__(self, db_path: str, max_connections: int = 20):
         """Initialize the connection pool.
-        
+
         Args:
             db_path: Path to the SQLite database file
             max_connections: Maximum number of connections in the pool
         """
         self.db_path = os.path.abspath(db_path)
         self.max_connections = max_connections
-        self._pool: queue.Queue[sqlite3.Connection] = queue.Queue(maxsize=max_connections)
+        self._pool: queue.Queue[sqlite3.Connection] = queue.Queue(
+            maxsize=max_connections
+        )
         self._lock = threading.Lock()
         self._created = 0
         self._closed = False
@@ -66,10 +70,10 @@ class SQLiteConnectionPool:
 
     def _create_connection(self) -> sqlite3.Connection:
         """Create a new database connection with optimized settings.
-        
+
         Returns:
             sqlite3.Connection: A new database connection
-            
+
         Raises:
             sqlite3.Error: If connection creation fails
         """
@@ -77,7 +81,7 @@ class SQLiteConnectionPool:
             self.db_path,
             timeout=30,
             check_same_thread=False,
-            isolation_level=None  # Autocommit mode for better control
+            isolation_level=None,  # Autocommit mode for better control
         )
         conn.row_factory = sqlite3.Row
 
@@ -99,17 +103,17 @@ class SQLiteConnectionPool:
 
     def get(self, timeout: float = 5.0) -> sqlite3.Connection:
         """Get a connection from the pool.
-        
+
         If the pool is empty and we haven't reached max_connections,
         create a new connection. Otherwise, wait for a connection
         to become available.
-        
+
         Args:
             timeout: Maximum time to wait for a connection (seconds)
-            
+
         Returns:
             sqlite3.Connection: A database connection
-            
+
         Raises:
             queue.Empty: If no connection is available within timeout
             RuntimeError: If the pool is closed
@@ -158,7 +162,7 @@ class SQLiteConnectionPool:
 
     def put(self, conn: sqlite3.Connection) -> None:
         """Return a connection to the pool.
-        
+
         Args:
             conn: The connection to return to the pool
         """
@@ -193,13 +197,13 @@ class SQLiteConnectionPool:
     @contextmanager
     def connection(self, timeout: float = 5.0):
         """Context manager for automatic connection management.
-        
+
         Args:
             timeout: Maximum time to wait for a connection (seconds)
-            
+
         Yields:
             sqlite3.Connection: A database connection
-            
+
         Example:
             with pool.connection() as conn:
                 cursor = conn.execute("SELECT * FROM users")
@@ -214,13 +218,13 @@ class SQLiteConnectionPool:
     @contextmanager
     def transaction(self, timeout: float = 5.0):
         """Context manager for transaction with automatic commit/rollback.
-        
+
         Args:
             timeout: Maximum time to wait for a connection (seconds)
-            
+
         Yields:
             sqlite3.Connection: A database connection with active transaction
-            
+
         Example:
             with pool.transaction() as conn:
                 conn.execute("INSERT INTO users (name) VALUES (?)", ("John",))
@@ -233,11 +237,17 @@ class SQLiteConnectionPool:
             yield conn
             conn.commit()
         except sqlite3.Error as e:
-            logger.error(f"[Pool] Database error in transaction: {type(e).__name__}: {e}", exc_info=True)
+            logger.error(
+                f"[Pool] Database error in transaction: {type(e).__name__}: {e}",
+                exc_info=True,
+            )
             conn.rollback()
             raise
         except Exception as e:
-            logger.error(f"[Pool] Unexpected error in transaction: {type(e).__name__}: {e}", exc_info=True)
+            logger.error(
+                f"[Pool] Unexpected error in transaction: {type(e).__name__}: {e}",
+                exc_info=True,
+            )
             conn.rollback()
             raise
         finally:
@@ -282,13 +292,15 @@ _global_pool: Optional[SQLiteConnectionPool] = None
 _global_pool_lock = threading.Lock()
 
 
-def get_connection_pool(db_path: Optional[str] = None, max_connections: int = 20) -> SQLiteConnectionPool:
+def get_connection_pool(
+    db_path: Optional[str] = None, max_connections: int = 20
+) -> SQLiteConnectionPool:
     """Get or create the global connection pool.
-    
+
     Args:
         db_path: Path to the database file (uses default if not provided)
         max_connections: Maximum number of connections
-        
+
     Returns:
         SQLiteConnectionPool: The global connection pool instance
     """
@@ -322,13 +334,13 @@ def close_connection_pool() -> None:
 @contextmanager
 def get_db_connection(timeout: float = 5.0):
     """Convenience context manager for getting a connection from the global pool.
-    
+
     Args:
         timeout: Maximum time to wait for a connection (seconds)
-        
+
     Yields:
         sqlite3.Connection: A database connection
-        
+
     Example:
         with get_db_connection() as conn:
             cursor = conn.execute("SELECT * FROM users")
@@ -342,13 +354,13 @@ def get_db_connection(timeout: float = 5.0):
 @contextmanager
 def get_db_transaction(timeout: float = 5.0):
     """Convenience context manager for getting a transaction from the global pool.
-    
+
     Args:
         timeout: Maximum time to wait for a connection (seconds)
-        
+
     Yields:
         sqlite3.Connection: A database connection with active transaction
-        
+
     Example:
         with get_db_transaction() as conn:
             conn.execute("INSERT INTO users (name) VALUES (?)", ("John",))

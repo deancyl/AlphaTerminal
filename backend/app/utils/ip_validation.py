@@ -19,10 +19,10 @@ _trusted_proxies: Optional[Set[IPv4Network | IPv6Network]] = None
 def _load_trusted_proxies() -> Set[IPv4Network | IPv6Network]:
     """
     Load trusted proxy CIDR ranges from environment variable.
-    
+
     Environment variable format:
         TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-    
+
     Default (if not configured):
         - 10.0.0.0/8 (Class A private)
         - 172.16.0.0/12 (Class B private)
@@ -30,7 +30,7 @@ def _load_trusted_proxies() -> Set[IPv4Network | IPv6Network]:
         - 127.0.0.0/8 (Loopback)
         - ::1/128 (IPv6 loopback)
         - fc00::/7 (IPv6 ULA)
-    
+
     Returns:
         Set of ip_network objects representing trusted proxy ranges
     """
@@ -48,12 +48,12 @@ def _load_trusted_proxies() -> Set[IPv4Network | IPv6Network]:
     else:
         # Default: trust private networks
         cidr_list = [
-            "10.0.0.0/8",      # Class A private
-            "172.16.0.0/12",   # Class B private
+            "10.0.0.0/8",  # Class A private
+            "172.16.0.0/12",  # Class B private
             "192.168.0.0/16",  # Class C private
-            "127.0.0.0/8",     # Loopback
-            "::1/128",         # IPv6 loopback
-            "fc00::/7",        # IPv6 ULA
+            "127.0.0.0/8",  # Loopback
+            "::1/128",  # IPv6 loopback
+            "fc00::/7",  # IPv6 ULA
         ]
         logger.info("[IPValidation] Using default trusted proxies (private networks)")
 
@@ -75,10 +75,10 @@ def _load_trusted_proxies() -> Set[IPv4Network | IPv6Network]:
 def is_trusted_proxy(ip_str: str) -> bool:
     """
     Check if an IP address is in the trusted proxy list.
-    
+
     Args:
         ip_str: IP address string (IPv4 or IPv6)
-    
+
     Returns:
         True if IP is in a trusted proxy CIDR range, False otherwise
     """
@@ -106,10 +106,10 @@ def is_trusted_proxy(ip_str: str) -> bool:
 def validate_ip_format(ip_str: str) -> bool:
     """
     Validate that a string is a valid IP address format.
-    
+
     Args:
         ip_str: String to validate
-    
+
     Returns:
         True if valid IPv4 or IPv6 address, False otherwise
     """
@@ -124,13 +124,11 @@ def validate_ip_format(ip_str: str) -> bool:
 
 
 def extract_client_ip(
-    x_forwarded_for: Optional[str],
-    x_real_ip: Optional[str],
-    remote_addr: Optional[str]
+    x_forwarded_for: Optional[str], x_real_ip: Optional[str], remote_addr: Optional[str]
 ) -> str:
     """
     Extract the real client IP from request headers.
-    
+
     Security Logic:
         1. If remote_addr is NOT from a trusted proxy, use remote_addr directly
            (untrusted source, ignore X-Forwarded-For to prevent spoofing)
@@ -138,20 +136,20 @@ def extract_client_ip(
            and find the rightmost non-trusted IP (the original client)
         3. If X-Forwarded-For is empty or all IPs are trusted, fall back to
            X-Real-IP or remote_addr
-    
+
     Args:
         x_forwarded_for: Value of X-Forwarded-For header (comma-separated IPs)
         x_real_ip: Value of X-Real-IP header
         remote_addr: Direct connection IP (from request.client.host)
-    
+
     Returns:
         The real client IP address
-    
+
     Example:
         # Trusted proxy scenario (remote_addr = 10.0.0.1, trusted)
         # X-Forwarded-For: 1.1.1.1, 10.0.0.1
         # Returns: 1.1.1.1 (the original client)
-        
+
         # Untrusted source scenario (remote_addr = 203.0.113.1, not trusted)
         # X-Forwarded-For: 1.1.1.1 (spoofed)
         # Returns: 203.0.113.1 (ignore spoofed header)
@@ -173,7 +171,9 @@ def extract_client_ip(
     # Step 2: If remote_addr is NOT trusted, ignore X-Forwarded-For
     # (prevents spoofing from untrusted sources)
     if not is_trusted_proxy(remote_addr):
-        logger.debug(f"[IPValidation] Untrusted source {remote_addr}, ignoring X-Forwarded-For")
+        logger.debug(
+            f"[IPValidation] Untrusted source {remote_addr}, ignoring X-Forwarded-For"
+        )
         return remote_addr
 
     # Step 3: remote_addr IS trusted, parse X-Forwarded-For
@@ -186,7 +186,9 @@ def extract_client_ip(
         # Iterate from right to left
         for ip in reversed(ips):
             if validate_ip_format(ip) and not is_trusted_proxy(ip):
-                logger.debug(f"[IPValidation] Extracted client IP {ip} from trusted proxy chain")
+                logger.debug(
+                    f"[IPValidation] Extracted client IP {ip} from trusted proxy chain"
+                )
                 return ip
 
         # All IPs in chain are trusted, use the leftmost
@@ -205,18 +207,16 @@ def extract_client_ip(
 
 
 def get_client_ip_safe(
-    x_forwarded_for: Optional[str],
-    x_real_ip: Optional[str],
-    remote_addr: Optional[str]
+    x_forwarded_for: Optional[str], x_real_ip: Optional[str], remote_addr: Optional[str]
 ) -> str:
     """
     Simplified version of extract_client_ip for use in middleware.
-    
+
     Args:
         x_forwarded_for: Value of X-Forwarded-For header
         x_real_ip: Value of X-Real-IP header
         remote_addr: Direct connection IP
-    
+
     Returns:
         The real client IP address (or "unknown" if all fail)
     """

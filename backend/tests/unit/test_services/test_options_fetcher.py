@@ -18,26 +18,26 @@ from app.services.fetchers.options_fetcher import (
 )
 from app.services.circuit_breaker import CircuitBreaker
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_cffex_chain_df():
     """Mock DataFrame returned by akshare.option_cffex_hs300_spot_sina."""
     data = {
-        '看涨合约-标识': ['IO2506C3800', 'IO2506C3850', 'IO2506C3900'],
-        '看涨合约-最新价': [125.5, 98.2, 72.8],
-        '看涨合约-涨跌': [2.5, -1.2, 0.8],
-        '看涨合约-买量': [1000, 800, 600],
-        '看涨合约-持仓量': [5000, 4500, 4000],
-        '行权价': [3800, 3850, 3900],
-        '看跌合约-标识': ['IO2506P3800', 'IO2506P3850', 'IO2506P3900'],
-        '看跌合约-最新价': [45.2, 68.5, 92.3],
-        '看跌合约-涨跌': [-1.5, 0.8, 2.2],
-        '看跌合约-买量': [500, 700, 900],
-        '看跌合约-持仓量': [3000, 3500, 4000],
+        "看涨合约-标识": ["IO2506C3800", "IO2506C3850", "IO2506C3900"],
+        "看涨合约-最新价": [125.5, 98.2, 72.8],
+        "看涨合约-涨跌": [2.5, -1.2, 0.8],
+        "看涨合约-买量": [1000, 800, 600],
+        "看涨合约-持仓量": [5000, 4500, 4000],
+        "行权价": [3800, 3850, 3900],
+        "看跌合约-标识": ["IO2506P3800", "IO2506P3850", "IO2506P3900"],
+        "看跌合约-最新价": [45.2, 68.5, 92.3],
+        "看跌合约-涨跌": [-1.5, 0.8, 2.2],
+        "看跌合约-买量": [500, 700, 900],
+        "看跌合约-持仓量": [3000, 3500, 4000],
     }
     return pd.DataFrame(data)
 
@@ -46,15 +46,15 @@ def mock_cffex_chain_df():
 def mock_sse_greeks_df():
     """Mock DataFrame returned by akshare.option_sse_greeks_sina."""
     data = {
-        '名称': ['50ETF购6月2500'],
-        'Delta': [0.523],
-        'Gamma': [0.089],
-        'Theta': [-0.012],
-        'Vega': [0.234],
-        '隐含波动率': [0.185],
-        '最新价': [0.0456],
-        '行权价': [2.5],
-        '到期日': ['2025-06-26'],
+        "名称": ["50ETF购6月2500"],
+        "Delta": [0.523],
+        "Gamma": [0.089],
+        "Theta": [-0.012],
+        "Vega": [0.234],
+        "隐含波动率": [0.185],
+        "最新价": [0.0456],
+        "行权价": [2.5],
+        "到期日": ["2025-06-26"],
     }
     return pd.DataFrame(data)
 
@@ -102,6 +102,7 @@ def mock_akshare():
 # TestOptionsFetcherChain - Tests for fetch_options_chain function
 # ============================================================================
 
+
 class TestOptionsFetcherChain:
     """Tests for fetch_options_chain function."""
 
@@ -141,13 +142,11 @@ class TestOptionsFetcherChain:
         assert "source" in result
 
     @pytest.mark.asyncio
-    async def test_fetch_chain_sse_format(
-        self, options_fetcher_with_mock_cb
-    ):
+    async def test_fetch_chain_sse_format(self, options_fetcher_with_mock_cb):
         """Should handle SSE format (via get_sse_greeks)."""
         fetcher = options_fetcher_with_mock_cb
 
-        assert hasattr(fetcher, 'get_sse_greeks')
+        assert hasattr(fetcher, "get_sse_greeks")
         assert callable(fetcher.get_sse_greeks)
 
     @pytest.mark.asyncio
@@ -204,6 +203,7 @@ class TestOptionsFetcherChain:
 # ============================================================================
 # TestOptionsFetcherGreeks - Tests for fetch_greeks function
 # ============================================================================
+
 
 class TestOptionsFetcherGreeks:
     """Tests for fetch_greeks function."""
@@ -298,6 +298,7 @@ class TestOptionsFetcherGreeks:
 # TestOptionsFetcherHistory - Tests for fetch_options_history function
 # ============================================================================
 
+
 class TestOptionsFetcherHistory:
     """Tests for fetch_options_history function."""
 
@@ -316,9 +317,7 @@ class TestOptionsFetcherHistory:
         fetcher = options_fetcher_with_mock_cb
 
         result = await fetcher.get_kline(
-            "IO2506C3800",
-            start_date="2024-01-01",
-            end_date="2024-12-31"
+            "IO2506C3800", start_date="2024-01-01", end_date="2024-12-31"
         )
 
         assert result is None
@@ -333,7 +332,7 @@ class TestOptionsFetcherHistory:
             period="daily",
             adjust="qfq",
             start_date="2024-01-01",
-            end_date="2024-12-31"
+            end_date="2024-12-31",
         )
 
         assert result is None
@@ -342,6 +341,7 @@ class TestOptionsFetcherHistory:
 # ============================================================================
 # TestOptionsFetcherDataValidation - Tests for data validation
 # ============================================================================
+
 
 class TestOptionsFetcherDataValidation:
     """Tests for data validation."""
@@ -382,7 +382,7 @@ class TestOptionsFetcherDataValidation:
         assert clean_value("3850.5") == 3850.5
         assert clean_value(None) is None
         assert clean_value("N/A") is None
-        assert clean_value(float('nan')) is None
+        assert clean_value(float("nan")) is None
 
     def test_iv_is_percentage(self):
         """IV should be a valid percentage value."""
@@ -411,6 +411,7 @@ class TestOptionsFetcherDataValidation:
 # TestOptionsFetcherErrorHandling - Tests for error handling
 # ============================================================================
 
+
 class TestOptionsFetcherErrorHandling:
     """Tests for error handling."""
 
@@ -420,7 +421,9 @@ class TestOptionsFetcherErrorHandling:
     ):
         """Should handle network errors gracefully."""
         fetcher = options_fetcher_with_mock_cb
-        mock_akshare.option_cffex_hs300_spot_sina.side_effect = ConnectionError("Network error")
+        mock_akshare.option_cffex_hs300_spot_sina.side_effect = ConnectionError(
+            "Network error"
+        )
         fetcher._ak = mock_akshare
 
         result = await fetcher.get_cffex_chain("io2506")
@@ -430,14 +433,12 @@ class TestOptionsFetcherErrorHandling:
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_timeout_handling(
-        self, options_fetcher_with_mock_cb, mock_akshare
-    ):
+    async def test_timeout_handling(self, options_fetcher_with_mock_cb, mock_akshare):
         """Should handle timeout gracefully."""
         fetcher = options_fetcher_with_mock_cb
         fetcher._ak = mock_akshare
 
-        with patch('asyncio.wait_for') as mock_wait:
+        with patch("asyncio.wait_for") as mock_wait:
             mock_wait.side_effect = asyncio.TimeoutError()
 
             result = await fetcher.get_cffex_chain("io2506")
@@ -451,7 +452,9 @@ class TestOptionsFetcherErrorHandling:
     ):
         """Should handle invalid symbol gracefully."""
         fetcher = options_fetcher_with_mock_cb
-        mock_akshare.option_cffex_hs300_spot_sina.side_effect = ValueError("Invalid symbol")
+        mock_akshare.option_cffex_hs300_spot_sina.side_effect = ValueError(
+            "Invalid symbol"
+        )
         fetcher._ak = mock_akshare
 
         result = await fetcher.get_cffex_chain("invalid_symbol")
@@ -460,9 +463,7 @@ class TestOptionsFetcherErrorHandling:
         assert result["source"] == "empty"
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_handling(
-        self, mock_circuit_breaker_open
-    ):
+    async def test_circuit_breaker_handling(self, mock_circuit_breaker_open):
         """Should respect circuit breaker state."""
         fetcher = OptionsFetcher(circuit_breaker=mock_circuit_breaker_open)
 
@@ -476,6 +477,7 @@ class TestOptionsFetcherErrorHandling:
 # ============================================================================
 # TestOptionsFetcherCache - Tests for caching
 # ============================================================================
+
 
 class TestOptionsFetcherCache:
     """Tests for caching."""
@@ -533,6 +535,7 @@ class TestOptionsFetcherCache:
 # TestOptionsFetcherContractList - Tests for contract list
 # ============================================================================
 
+
 class TestOptionsFetcherContractList:
     """Tests for contract list functionality."""
 
@@ -559,7 +562,9 @@ class TestOptionsFetcherContractList:
         assert len(result["contracts"]) > 0
 
     @pytest.mark.asyncio
-    async def test_contract_list_has_required_fields(self, options_fetcher_with_mock_cb):
+    async def test_contract_list_has_required_fields(
+        self, options_fetcher_with_mock_cb
+    ):
         """Contract list should have required fields."""
         fetcher = options_fetcher_with_mock_cb
 
@@ -574,6 +579,7 @@ class TestOptionsFetcherContractList:
 # ============================================================================
 # TestOptionsFetcherHealth - Tests for health check
 # ============================================================================
+
 
 class TestOptionsFetcherHealth:
     """Tests for health check functionality."""
@@ -619,6 +625,7 @@ class TestOptionsFetcherHealth:
 # TestCleanValue - Tests for clean_value utility function
 # ============================================================================
 
+
 class TestCleanValue:
     """Tests for clean_value utility function."""
 
@@ -639,13 +646,14 @@ class TestCleanValue:
     def test_clean_value_with_nan(self):
         """Should return None for NaN."""
         import math
-        assert clean_value(float('nan')) is None
+
+        assert clean_value(float("nan")) is None
         assert clean_value(math.nan) is None
 
     def test_clean_value_with_inf(self):
         """Should return None for infinity."""
-        assert clean_value(float('inf')) is None
-        assert clean_value(float('-inf')) is None
+        assert clean_value(float("inf")) is None
+        assert clean_value(float("-inf")) is None
 
     def test_clean_value_with_invalid_string(self):
         """Should return None for invalid strings."""
@@ -657,6 +665,7 @@ class TestCleanValue:
 # ============================================================================
 # TestOptionsFetcherSingleton - Tests for singleton instance
 # ============================================================================
+
 
 class TestOptionsFetcherSingleton:
     """Tests for singleton instance."""
@@ -670,8 +679,8 @@ class TestOptionsFetcherSingleton:
     def test_singleton_has_required_methods(self):
         """Singleton should have all required methods."""
 
-        assert hasattr(options_fetcher, 'get_cffex_chain')
-        assert hasattr(options_fetcher, 'get_sse_greeks')
-        assert hasattr(options_fetcher, 'get_contract_list')
-        assert hasattr(options_fetcher, 'is_healthy')
-        assert hasattr(options_fetcher, 'ping')
+        assert hasattr(options_fetcher, "get_cffex_chain")
+        assert hasattr(options_fetcher, "get_sse_greeks")
+        assert hasattr(options_fetcher, "get_contract_list")
+        assert hasattr(options_fetcher, "is_healthy")
+        assert hasattr(options_fetcher, "ping")

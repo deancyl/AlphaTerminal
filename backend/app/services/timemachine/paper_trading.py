@@ -3,6 +3,7 @@ Paper Trading State Machine for Time-Machine Replay.
 
 Manages portfolio state, positions, and trade execution during historical replay.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -17,12 +18,14 @@ class TradeAction(Enum):
 
 class PaperTradingError(Exception):
     """Paper trading error."""
+
     pass
 
 
 @dataclass
 class Position:
     """Single position in the portfolio."""
+
     symbol: str
     quantity: float
     avg_cost: float
@@ -44,6 +47,7 @@ class Position:
 @dataclass
 class Trade:
     """Single trade record."""
+
     id: str
     date: str
     bar_index: int
@@ -60,7 +64,7 @@ class Trade:
 class PaperPortfolio:
     """
     Paper trading portfolio for time-machine replay.
-    
+
     Tracks:
     - Cash balance
     - Positions (with average cost)
@@ -111,11 +115,11 @@ class PaperPortfolio:
         quantity: float,
         price: float,
         current_date: str,
-        current_bar_index: int
+        current_bar_index: int,
     ) -> Trade:
         """
         Execute a paper trade.
-        
+
         Args:
             action: "buy" or "sell"
             symbol: Stock symbol
@@ -123,17 +127,19 @@ class PaperPortfolio:
             price: Execution price
             current_date: Current replay date
             current_bar_index: Current bar index
-            
+
         Returns:
             Trade record
-            
+
         Raises:
             PaperTradingError: If trade cannot be executed
         """
         try:
             trade_action = TradeAction(action.lower())
         except ValueError:
-            raise PaperTradingError(f"Invalid action: {action}. Must be 'buy' or 'sell'")
+            raise PaperTradingError(
+                f"Invalid action: {action}. Must be 'buy' or 'sell'"
+            )
 
         if quantity <= 0:
             raise PaperTradingError("Quantity must be positive")
@@ -157,17 +163,21 @@ class PaperPortfolio:
             existing = self.get_position(symbol)
             if existing:
                 total_qty = existing.quantity + quantity
-                new_avg_cost = (existing.avg_cost * existing.quantity + trade_value) / total_qty
+                new_avg_cost = (
+                    existing.avg_cost * existing.quantity + trade_value
+                ) / total_qty
                 existing.quantity = total_qty
                 existing.avg_cost = new_avg_cost
             else:
-                self.positions.append(Position(
-                    symbol=symbol,
-                    quantity=quantity,
-                    avg_cost=price,
-                    opened_at=current_date,
-                    opened_bar_index=current_bar_index
-                ))
+                self.positions.append(
+                    Position(
+                        symbol=symbol,
+                        quantity=quantity,
+                        avg_cost=price,
+                        opened_at=current_date,
+                        opened_bar_index=current_bar_index,
+                    )
+                )
 
             trade = Trade(
                 id=str(uuid.uuid4())[:8],
@@ -178,7 +188,7 @@ class PaperPortfolio:
                 quantity=quantity,
                 value=trade_value,
                 commission=commission,
-                pnl=0.0
+                pnl=0.0,
             )
 
         else:  # SELL
@@ -208,27 +218,31 @@ class PaperPortfolio:
                 quantity=quantity,
                 value=trade_value,
                 commission=commission,
-                pnl=realized_pnl
+                pnl=realized_pnl,
             )
 
         self.trades.append(trade)
         return trade
 
-    def to_dict(self, current_prices: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+    def to_dict(
+        self, current_prices: Optional[Dict[str, float]] = None
+    ) -> Dict[str, Any]:
         """Serialize portfolio to dict."""
         current_prices = current_prices or {}
 
         positions_dict = []
         for pos in self.positions:
             price = current_prices.get(pos.symbol, pos.avg_cost)
-            positions_dict.append({
-                "symbol": pos.symbol,
-                "quantity": pos.quantity,
-                "avg_cost": pos.avg_cost,
-                "market_value": pos.market_value(price),
-                "unrealized_pnl": pos.unrealized_pnl(price),
-                "unrealized_pnl_pct": pos.unrealized_pnl_pct(price),
-            })
+            positions_dict.append(
+                {
+                    "symbol": pos.symbol,
+                    "quantity": pos.quantity,
+                    "avg_cost": pos.avg_cost,
+                    "market_value": pos.market_value(price),
+                    "unrealized_pnl": pos.unrealized_pnl(price),
+                    "unrealized_pnl_pct": pos.unrealized_pnl_pct(price),
+                }
+            )
 
         return {
             "initial_capital": self.initial_capital,

@@ -33,13 +33,13 @@ FREQ_WEEKLY = 5
 FREQ_MONTHLY = 6
 
 PERIOD_MAP = {
-    'daily': FREQ_DAILY,
-    'weekly': FREQ_WEEKLY,
-    'monthly': FREQ_MONTHLY,
-    '5min': FREQ_5M,
-    '15min': FREQ_15M,
-    '30min': FREQ_30M,
-    '60min': FREQ_1H,
+    "daily": FREQ_DAILY,
+    "weekly": FREQ_WEEKLY,
+    "monthly": FREQ_MONTHLY,
+    "5min": FREQ_5M,
+    "15min": FREQ_15M,
+    "30min": FREQ_30M,
+    "60min": FREQ_1H,
 }
 
 _mootdx_client = None
@@ -51,16 +51,15 @@ def _get_mootdx_client():
     if _mootdx_client is None:
         try:
             from mootdx.quotes import Quotes
+
             _mootdx_client = Quotes.factory(
-                market='std',
-                multithread=True,
-                heartbeat=True,
-                timeout=15,
-                quiet=True
+                market="std", multithread=True, heartbeat=True, timeout=15, quiet=True
             )
             logger.info("[Mootdx] Client initialized successfully")
         except ImportError:
-            logger.warning("[Mootdx] mootdx not installed, fetcher will return None", exc_info=True)
+            logger.warning(
+                "[Mootdx] mootdx not installed, fetcher will return None", exc_info=True
+            )
         except Exception as e:
             logger.warning(f"[Mootdx] Failed to initialize client: {e}", exc_info=True)
     return _mootdx_client
@@ -69,7 +68,7 @@ def _get_mootdx_client():
 class MootdxFetcher(BaseMarketFetcher):
     """
     Mootdx数据源获取器
-    
+
     特点：
     - 高性能：直接连接交易所数据（TCP协议）
     - 实时性：延迟11-13ms，低于Sina/Tencent
@@ -93,22 +92,22 @@ class MootdxFetcher(BaseMarketFetcher):
         """解析股票代码，返回 (market, code)"""
         symbol_lower = symbol.lower().strip()
 
-        if symbol_lower.startswith('sh') or symbol_lower.startswith('sz'):
-            market = 1 if symbol_lower.startswith('sh') else 0
+        if symbol_lower.startswith("sh") or symbol_lower.startswith("sz"):
+            market = 1 if symbol_lower.startswith("sh") else 0
             code = symbol_lower[2:]
         else:
             code = symbol_lower
-            market = 0 if code.startswith(('0', '3')) else 1
+            market = 0 if code.startswith(("0", "3")) else 1
 
         return market, code
 
     async def get_quote(self, symbol: str) -> Optional[Dict]:
         """
         获取实时行情
-        
+
         Args:
             symbol: 股票代码 (如 'sh600519', 'sz000001')
-            
+
         Returns:
             行情数据字典或None
         """
@@ -128,17 +127,17 @@ class MootdxFetcher(BaseMarketFetcher):
             row = data.iloc[0]
 
             return {
-                'symbol': symbol,
-                'price': float(row.get('price', 0)),
-                'open': float(row.get('open', 0)),
-                'high': float(row.get('high', 0)),
-                'low': float(row.get('low', 0)),
-                'prev_close': float(row.get('last_close', 0)),
-                'volume': int(row.get('vol', 0)),
-                'amount': float(row.get('amount', 0)),
-                'chg': float(row.get('change', 0)),
-                'chg_pct': float(row.get('pct_change', 0)),
-                'source': 'mootdx'
+                "symbol": symbol,
+                "price": float(row.get("price", 0)),
+                "open": float(row.get("open", 0)),
+                "high": float(row.get("high", 0)),
+                "low": float(row.get("low", 0)),
+                "prev_close": float(row.get("last_close", 0)),
+                "volume": int(row.get("vol", 0)),
+                "amount": float(row.get("amount", 0)),
+                "chg": float(row.get("change", 0)),
+                "chg_pct": float(row.get("pct_change", 0)),
+                "source": "mootdx",
             }
 
         except Exception as e:
@@ -148,10 +147,10 @@ class MootdxFetcher(BaseMarketFetcher):
     async def get_quotes_batch(self, symbols: List[str]) -> List[Dict]:
         """
         批量获取行情（比循环调用更高效）
-        
+
         Args:
             symbols: 股票代码列表
-            
+
         Returns:
             行情数据列表
         """
@@ -173,19 +172,23 @@ class MootdxFetcher(BaseMarketFetcher):
 
             results = []
             for idx, row in data.iterrows():
-                results.append({
-                    'symbol': symbols[idx] if idx < len(symbols) else row.get('code', ''),
-                    'price': float(row.get('price', 0)),
-                    'open': float(row.get('open', 0)),
-                    'high': float(row.get('high', 0)),
-                    'low': float(row.get('low', 0)),
-                    'prev_close': float(row.get('last_close', 0)),
-                    'volume': int(row.get('vol', 0)),
-                    'amount': float(row.get('amount', 0)),
-                    'chg': float(row.get('change', 0)),
-                    'chg_pct': float(row.get('pct_change', 0)),
-                    'source': 'mootdx'
-                })
+                results.append(
+                    {
+                        "symbol": (
+                            symbols[idx] if idx < len(symbols) else row.get("code", "")
+                        ),
+                        "price": float(row.get("price", 0)),
+                        "open": float(row.get("open", 0)),
+                        "high": float(row.get("high", 0)),
+                        "low": float(row.get("low", 0)),
+                        "prev_close": float(row.get("last_close", 0)),
+                        "volume": int(row.get("vol", 0)),
+                        "amount": float(row.get("amount", 0)),
+                        "chg": float(row.get("change", 0)),
+                        "chg_pct": float(row.get("pct_change", 0)),
+                        "source": "mootdx",
+                    }
+                )
 
             return results
 
@@ -200,21 +203,21 @@ class MootdxFetcher(BaseMarketFetcher):
     async def get_history(
         self,
         symbol: str,
-        period: str = 'daily',
+        period: str = "daily",
         start_date: str = None,
         end_date: str = None,
-        offset: int = 800
+        offset: int = 800,
     ) -> Optional[List[Dict]]:
         """
         获取历史K线
-        
+
         Args:
             symbol: 股票代码
             period: 周期 ('daily', 'weekly', 'monthly', '5min', '15min', '30min', '60min')
             start_date: 开始日期 (YYYY-MM-DD)
             end_date: 结束日期 (YYYY-MM-DD)
             offset: K线条数（最大800）
-            
+
         Returns:
             K线数据列表或None
         """
@@ -226,21 +229,21 @@ class MootdxFetcher(BaseMarketFetcher):
             frequency = PERIOD_MAP.get(period, FREQ_DAILY)
 
             if start_date and end_date:
-                start_fmt = start_date.replace('-', '')
-                end_fmt = end_date.replace('-', '')
+                start_fmt = start_date.replace("-", "")
+                end_fmt = end_date.replace("-", "")
 
                 data = await asyncio.to_thread(
                     self.client.k,  # type: ignore
                     symbol=code,
                     begin=start_fmt,
-                    end=end_fmt
+                    end=end_fmt,
                 )
             else:
                 data = await asyncio.to_thread(
                     self.client.bars,  # type: ignore
                     symbol=code,
                     frequency=frequency,
-                    offset=min(offset, 800)
+                    offset=min(offset, 800),
                 )
 
             if data is None or data.empty:
@@ -248,16 +251,18 @@ class MootdxFetcher(BaseMarketFetcher):
 
             results = []
             for _, row in data.iterrows():
-                results.append({
-                    'date': str(row.get('datetime', row.get('date', ''))),
-                    'open': float(row.get('open', 0)),
-                    'high': float(row.get('high', 0)),
-                    'low': float(row.get('low', 0)),
-                    'close': float(row.get('close', 0)),
-                    'volume': int(row.get('vol', row.get('volume', 0))),
-                    'amount': float(row.get('amount', 0)),
-                    'source': 'mootdx'
-                })
+                results.append(
+                    {
+                        "date": str(row.get("datetime", row.get("date", ""))),
+                        "open": float(row.get("open", 0)),
+                        "high": float(row.get("high", 0)),
+                        "low": float(row.get("low", 0)),
+                        "close": float(row.get("close", 0)),
+                        "volume": int(row.get("vol", row.get("volume", 0))),
+                        "amount": float(row.get("amount", 0)),
+                        "source": "mootdx",
+                    }
+                )
 
             return results
 
@@ -266,19 +271,16 @@ class MootdxFetcher(BaseMarketFetcher):
             return None
 
     async def get_ticks(
-        self,
-        symbol: str,
-        date: str = None,
-        offset: int = 1000
+        self, symbol: str, date: str = None, offset: int = 1000
     ) -> Optional[List[Dict]]:
         """
         获取分笔成交数据
-        
+
         Args:
             symbol: 股票代码
             date: 日期 (YYYYMMDD)，None表示当天
             offset: 返回条数（最大2000）
-            
+
         Returns:
             分笔成交列表或None
         """
@@ -294,14 +296,14 @@ class MootdxFetcher(BaseMarketFetcher):
                     symbol=code,
                     date=date,
                     start=0,
-                    offset=min(offset, 2000)
+                    offset=min(offset, 2000),
                 )
             else:
                 data = await asyncio.to_thread(
                     self.client.transaction,  # type: ignore
                     symbol=code,
                     start=0,
-                    offset=min(offset, 2000)
+                    offset=min(offset, 2000),
                 )
 
             if data is None or data.empty:
@@ -309,14 +311,16 @@ class MootdxFetcher(BaseMarketFetcher):
 
             results = []
             for _, row in data.iterrows():
-                results.append({
-                    'time': str(row.get('time', '')),
-                    'price': float(row.get('price', 0)),
-                    'volume': int(row.get('vol', 0)),
-                    'num': int(row.get('num', 0)),
-                    'buyorsell': int(row.get('buyorsell', 0)),
-                    'source': 'mootdx'
-                })
+                results.append(
+                    {
+                        "time": str(row.get("time", "")),
+                        "price": float(row.get("price", 0)),
+                        "volume": int(row.get("vol", 0)),
+                        "num": int(row.get("num", 0)),
+                        "buyorsell": int(row.get("buyorsell", 0)),
+                        "source": "mootdx",
+                    }
+                )
 
             return results
 
@@ -327,10 +331,10 @@ class MootdxFetcher(BaseMarketFetcher):
     async def get_xdxr(self, symbol: str) -> Optional[List[Dict]]:
         """
         获取除权除息数据
-        
+
         Args:
             symbol: 股票代码
-            
+
         Returns:
             除权除息列表或None
         """
@@ -349,14 +353,16 @@ class MootdxFetcher(BaseMarketFetcher):
 
             results = []
             for _, row in data.iterrows():
-                results.append({
-                    'date': str(row.get('date', '')),
-                    'category': row.get('category', ''),
-                    'fhps': float(row.get('fhps', 0)),
-                    'sg': float(row.get('sg', 0)),
-                    'pg': float(row.get('pg', 0)),
-                    'source': 'mootdx'
-                })
+                results.append(
+                    {
+                        "date": str(row.get("date", "")),
+                        "category": row.get("category", ""),
+                        "fhps": float(row.get("fhps", 0)),
+                        "sg": float(row.get("sg", 0)),
+                        "pg": float(row.get("pg", 0)),
+                        "source": "mootdx",
+                    }
+                )
 
             return results
 
@@ -367,10 +373,10 @@ class MootdxFetcher(BaseMarketFetcher):
     async def get_finance(self, symbol: str) -> Optional[Dict]:
         """
         获取财务数据（简要）
-        
+
         Args:
             symbol: 股票代码
-            
+
         Returns:
             财务数据字典或None
         """
@@ -390,11 +396,11 @@ class MootdxFetcher(BaseMarketFetcher):
             row = data.iloc[0]
 
             return {
-                'symbol': symbol,
-                'eps': float(row.get('eps', 0)),
-                'bvps': float(row.get('bvps', 0)),
-                'roe': float(row.get('roe', 0)),
-                'source': 'mootdx'
+                "symbol": symbol,
+                "eps": float(row.get("eps", 0)),
+                "bvps": float(row.get("bvps", 0)),
+                "roe": float(row.get("roe", 0)),
+                "source": "mootdx",
             }
 
         except Exception as e:
@@ -408,19 +414,19 @@ class MootdxFetcher(BaseMarketFetcher):
     async def get_kline(self, symbol: str, period: str = "day") -> Optional[List[Dict]]:
         """
         获取K线数据（BaseMarketFetcher接口要求）
-        
+
         Args:
             symbol: 股票代码
             period: "minute", "day", "week", "month"
-            
+
         Returns:
             K线数据列表或None
         """
         period_map = {
-            'minute': '5min',
-            'day': 'daily',
-            'week': 'weekly',
-            'month': 'monthly'
+            "minute": "5min",
+            "day": "daily",
+            "week": "weekly",
+            "month": "monthly",
         }
-        mootdx_period = period_map.get(period, 'daily')
+        mootdx_period = period_map.get(period, "daily")
         return await self.get_history(symbol, period=mootdx_period)

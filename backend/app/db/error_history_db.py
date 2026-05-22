@@ -6,6 +6,7 @@ v0.6.64: 异常历史持久化存储
 - 支持查询和统计
 - 7天自动清理
 """
+
 import sqlite3
 import json
 import os
@@ -86,7 +87,7 @@ def log_error_to_db(
                 trace_id,
                 request_path,
                 request_method,
-            )
+            ),
         )
         conn.commit()
         return cursor.lastrowid
@@ -129,7 +130,7 @@ def get_error_stats(since_hours: int = 24) -> Dict[str, Any]:
 
         total = conn.execute(
             "SELECT COUNT(*) FROM error_history WHERE timestamp >= ?",
-            (cutoff.isoformat(),)
+            (cutoff.isoformat(),),
         ).fetchone()[0]
 
         by_module = conn.execute(
@@ -141,7 +142,7 @@ def get_error_stats(since_hours: int = 24) -> Dict[str, Any]:
             ORDER BY count DESC
             LIMIT 10
             """,
-            (cutoff.isoformat(),)
+            (cutoff.isoformat(),),
         ).fetchall()
 
         by_type = conn.execute(
@@ -153,7 +154,7 @@ def get_error_stats(since_hours: int = 24) -> Dict[str, Any]:
             ORDER BY count DESC
             LIMIT 10
             """,
-            (cutoff.isoformat(),)
+            (cutoff.isoformat(),),
         ).fetchall()
 
         unresolved = conn.execute(
@@ -161,7 +162,7 @@ def get_error_stats(since_hours: int = 24) -> Dict[str, Any]:
             SELECT COUNT(*) FROM error_history 
             WHERE timestamp >= ? AND resolved = 0
             """,
-            (cutoff.isoformat(),)
+            (cutoff.isoformat(),),
         ).fetchone()[0]
 
         return {
@@ -176,8 +177,7 @@ def get_error_stats(since_hours: int = 24) -> Dict[str, Any]:
 def mark_error_resolved(error_id: int) -> bool:
     with get_connection() as conn:
         cursor = conn.execute(
-            "UPDATE error_history SET resolved = 1 WHERE id = ?",
-            (error_id,)
+            "UPDATE error_history SET resolved = 1 WHERE id = ?", (error_id,)
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -187,8 +187,7 @@ def cleanup_old_errors(days: int = 7) -> int:
     with get_connection() as conn:
         cutoff = datetime.now() - timedelta(days=days)
         cursor = conn.execute(
-            "DELETE FROM error_history WHERE timestamp < ?",
-            (cutoff.isoformat(),)
+            "DELETE FROM error_history WHERE timestamp < ?", (cutoff.isoformat(),)
         )
         conn.commit()
         return cursor.rowcount

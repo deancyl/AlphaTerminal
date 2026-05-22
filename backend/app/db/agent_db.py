@@ -38,7 +38,7 @@ if DEBUG_MODE:
         handler = logging.StreamHandler()
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s'
+            "%(asctime)s - %(name)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s"
         )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
@@ -47,7 +47,7 @@ if DEBUG_MODE:
 DB_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
     "cache",
-    "agent_tokens.db"
+    "agent_tokens.db",
 )
 
 # Thread-local storage for connections
@@ -63,9 +63,11 @@ _USE_WAL = True
 # Data Classes
 # ============================================================================
 
+
 @dataclass
 class AgentToken:
     """Agent token data class with all attributes."""
+
     id: str
     name: str
     token_hash: str
@@ -95,6 +97,7 @@ class AgentToken:
 @dataclass
 class AuditLog:
     """Audit log entry data class."""
+
     id: Optional[int] = None
     token_id: str = ""
     action: str = ""
@@ -113,6 +116,7 @@ class AuditLog:
 # Database Connection Management
 # ============================================================================
 
+
 def _ensure_db_directory():
     """Ensure database directory exists."""
     db_dir = os.path.dirname(DB_PATH)
@@ -125,16 +129,20 @@ def _ensure_db_directory():
 def _get_thread_conn() -> sqlite3.Connection:
     """
     Get thread-local database connection.
-    
+
     Creates a new connection per thread for thread safety.
     Uses WAL mode for better concurrency.
     """
     global _WAL_MODE_CHECKED, _USE_WAL
 
-    logger.debug(f"[AGENT_DB_CONN] Getting connection for thread: {threading.current_thread().name}")
+    logger.debug(
+        f"[AGENT_DB_CONN] Getting connection for thread: {threading.current_thread().name}"
+    )
 
-    if not hasattr(_thread_local, 'conn') or _thread_local.conn is None:
-        logger.info(f"[AGENT_DB_CONN] Creating new connection for thread: {threading.current_thread().name}")
+    if not hasattr(_thread_local, "conn") or _thread_local.conn is None:
+        logger.info(
+            f"[AGENT_DB_CONN] Creating new connection for thread: {threading.current_thread().name}"
+        )
 
         _ensure_db_directory()
 
@@ -148,14 +156,18 @@ def _get_thread_conn() -> sqlite3.Connection:
             logger.debug("[AGENT_DB_CONN] Checking WAL mode compatibility")
             if "/vol3/" in DB_PATH or "/tmp/" in DB_PATH or "/nas/" in DB_PATH:
                 _USE_WAL = False
-                logger.debug("[AGENT_DB_CONN] Network path detected, disabling WAL mode")
+                logger.debug(
+                    "[AGENT_DB_CONN] Network path detected, disabling WAL mode"
+                )
             else:
                 try:
                     cur = conn.execute("PRAGMA journal_mode=WAL")
                     result = cur.fetchone()[0]
                     if result != "wal":
                         _USE_WAL = False
-                        logger.debug(f"[AGENT_DB_CONN] WAL mode not available, got: {result}")
+                        logger.debug(
+                            f"[AGENT_DB_CONN] WAL mode not available, got: {result}"
+                        )
                     else:
                         logger.debug("[AGENT_DB_CONN] WAL mode enabled successfully")
                 except sqlite3.OperationalError as e:
@@ -176,21 +188,30 @@ def _get_thread_conn() -> sqlite3.Connection:
         logger.debug("[AGENT_DB_CONN] Set busy timeout to 30000ms")
 
         _thread_local.conn = conn
-        logger.info(f"[AGENT_DB_CONN] Connection created successfully for thread: {threading.current_thread().name}")
+        logger.info(
+            f"[AGENT_DB_CONN] Connection created successfully for thread: {threading.current_thread().name}"
+        )
 
     return _thread_local.conn
 
 
 def _close_thread_conn():
     """Close thread-local connection."""
-    logger.debug(f"[AGENT_DB_CONN_CLOSE] Closing connection for thread: {threading.current_thread().name}")
+    logger.debug(
+        f"[AGENT_DB_CONN_CLOSE] Closing connection for thread: {threading.current_thread().name}"
+    )
 
-    if hasattr(_thread_local, 'conn') and _thread_local.conn:
+    if hasattr(_thread_local, "conn") and _thread_local.conn:
         try:
             _thread_local.conn.close()
-            logger.info(f"[AGENT_DB_CONN_CLOSE] Connection closed for thread: {threading.current_thread().name}")
+            logger.info(
+                f"[AGENT_DB_CONN_CLOSE] Connection closed for thread: {threading.current_thread().name}"
+            )
         except Exception as e:
-            logger.error(f"[AGENT_DB_CONN_CLOSE] Failed to close connection: {e}\n{traceback.format_exc()}", exc_info=True)
+            logger.error(
+                f"[AGENT_DB_CONN_CLOSE] Failed to close connection: {e}\n{traceback.format_exc()}",
+                exc_info=True,
+            )
         finally:
             _thread_local.conn = None
 
@@ -204,12 +225,18 @@ def get_conn():
         yield conn
         logger.debug("[AGENT_DB_CTX] Connection context completed successfully")
     except Exception as e:
-        logger.error(f"[AGENT_DB_CTX] Exception in connection context: {e}\n{traceback.format_exc()}", exc_info=True)
+        logger.error(
+            f"[AGENT_DB_CTX] Exception in connection context: {e}\n{traceback.format_exc()}",
+            exc_info=True,
+        )
         try:
             conn.rollback()
             logger.debug("[AGENT_DB_CTX] Transaction rolled back")
         except Exception as e:
-            logger.warning(f"[AGENT_DB_CTX] Rollback failed: {type(e).__name__}: {e}", exc_info=True)
+            logger.warning(
+                f"[AGENT_DB_CTX] Rollback failed: {type(e).__name__}: {e}",
+                exc_info=True,
+            )
         raise
 
 
@@ -217,10 +244,11 @@ def get_conn():
 # AgentDB Class
 # ============================================================================
 
+
 class AgentDB:
     """
     Agent Token Database Manager.
-    
+
     Provides comprehensive CRUD operations for agent tokens with:
     - Thread-safe operations
     - Comprehensive debug logging
@@ -242,7 +270,7 @@ class AgentDB:
 
     def __init__(self):
         """Initialize database manager."""
-        if hasattr(self, '_initialized') and self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             logger.debug("[AGENT_DB_INIT] Already initialized, skipping")
             return
 
@@ -265,12 +293,12 @@ class AgentDB:
     def init_db(self) -> bool:
         """
         Initialize database tables and indexes.
-        
+
         Creates:
         - agent_tokens table with all required columns
         - agent_audit_logs table for audit trail
         - Performance indexes on key columns
-        
+
         Returns:
             True if initialization successful, False otherwise
         """
@@ -321,42 +349,69 @@ class AgentDB:
 
                 # Create indexes for agent_tokens
                 logger.debug("[AGENT_DB_INIT_DB] Creating indexes for agent_tokens")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_token_hash ON agent_tokens(token_hash)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_token_id ON agent_tokens(id)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_token_expires ON agent_tokens(expires_at)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_token_active ON agent_tokens(is_active)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_token_name ON agent_tokens(name)")
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_agent_token_hash ON agent_tokens(token_hash)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_agent_token_id ON agent_tokens(id)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_agent_token_expires ON agent_tokens(expires_at)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_agent_token_active ON agent_tokens(is_active)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_agent_token_name ON agent_tokens(name)"
+                )
                 logger.debug("[AGENT_DB_INIT_DB] agent_tokens indexes created")
 
                 # Create indexes for agent_audit_logs
                 logger.debug("[AGENT_DB_INIT_DB] Creating indexes for agent_audit_logs")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_token_id ON agent_audit_logs(token_id)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON agent_audit_logs(action)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON agent_audit_logs(timestamp)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_resource ON agent_audit_logs(resource)")
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_audit_token_id ON agent_audit_logs(token_id)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_audit_action ON agent_audit_logs(action)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON agent_audit_logs(timestamp)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_audit_resource ON agent_audit_logs(resource)"
+                )
                 logger.debug("[AGENT_DB_INIT_DB] agent_audit_logs indexes created")
 
                 conn.commit()
-                logger.info("[AGENT_DB_INIT_DB] Database initialization completed successfully")
+                logger.info(
+                    "[AGENT_DB_INIT_DB] Database initialization completed successfully"
+                )
                 return True
 
             except Exception as e:
-                logger.error(f"[AGENT_DB_INIT_DB] Database initialization failed: {e}\n{traceback.format_exc()}", exc_info=True)
+                logger.error(
+                    f"[AGENT_DB_INIT_DB] Database initialization failed: {e}\n{traceback.format_exc()}",
+                    exc_info=True,
+                )
                 return False
 
     def save_token(self, token: AgentToken) -> bool:
         """
         Save a new token to the database.
-        
+
         Args:
             token: AgentToken object to save
-            
+
         Returns:
             True if saved successfully, False otherwise
         """
         logger.info(f"[AGENT_DB_SAVE] Saving token: id={token.id}, name={token.name}")
-        logger.debug(f"[AGENT_DB_SAVE] Token details: hash={token.token_hash[:16]}***, prefix={token.token_prefix}")
-        logger.debug(f"[AGENT_DB_SAVE] Token attributes: scopes={token.scopes}, markets={token.markets}, paper_only={token.paper_only}")
+        logger.debug(
+            f"[AGENT_DB_SAVE] Token details: hash={token.token_hash[:16]}***, prefix={token.token_prefix}"
+        )
+        logger.debug(
+            f"[AGENT_DB_SAVE] Token attributes: scopes={token.scopes}, markets={token.markets}, paper_only={token.paper_only}"
+        )
 
         with _lock:
             conn = _get_thread_conn()
@@ -364,10 +419,20 @@ class AgentDB:
             try:
                 # Serialize list fields
                 scopes_str = ",".join(token.scopes) if token.scopes else ""
-                markets_str = ",".join(token.markets) if token.markets and token.markets != ["*"] else "*"
-                instruments_str = ",".join(token.instruments) if token.instruments and token.instruments != ["*"] else "*"
+                markets_str = (
+                    ",".join(token.markets)
+                    if token.markets and token.markets != ["*"]
+                    else "*"
+                )
+                instruments_str = (
+                    ",".join(token.instruments)
+                    if token.instruments and token.instruments != ["*"]
+                    else "*"
+                )
 
-                logger.debug(f"[AGENT_DB_SAVE] Serialized fields: scopes='{scopes_str}', markets='{markets_str}', instruments='{instruments_str}'")
+                logger.debug(
+                    f"[AGENT_DB_SAVE] Serialized fields: scopes='{scopes_str}', markets='{markets_str}', instruments='{instruments_str}'"
+                )
 
                 # SQL query with parameters
                 sql = """
@@ -405,19 +470,25 @@ class AgentDB:
                 return True
 
             except sqlite3.IntegrityError as e:
-                logger.error(f"[AGENT_DB_SAVE] Integrity error (duplicate token): {e}\n{traceback.format_exc()}", exc_info=True)
+                logger.error(
+                    f"[AGENT_DB_SAVE] Integrity error (duplicate token): {e}\n{traceback.format_exc()}",
+                    exc_info=True,
+                )
                 return False
             except Exception as e:
-                logger.error(f"[AGENT_DB_SAVE] Failed to save token: {e}\n{traceback.format_exc()}", exc_info=True)
+                logger.error(
+                    f"[AGENT_DB_SAVE] Failed to save token: {e}\n{traceback.format_exc()}",
+                    exc_info=True,
+                )
                 return False
 
     def get_token_by_hash(self, token_hash: str) -> Optional[AgentToken]:
         """
         Get token by hash.
-        
+
         Args:
             token_hash: Token hash to search for
-            
+
         Returns:
             AgentToken if found, None otherwise
         """
@@ -434,25 +505,34 @@ class AgentDB:
             row = conn.execute(sql, (token_hash,)).fetchone()
 
             if row is None:
-                logger.warning(f"[AGENT_DB_GET_HASH] Token not found: {token_hash[:16]}***")
+                logger.warning(
+                    f"[AGENT_DB_GET_HASH] Token not found: {token_hash[:16]}***"
+                )
                 return None
 
-            logger.debug(f"[AGENT_DB_GET_HASH] Token found: id={row['id']}, name={row['name']}")
+            logger.debug(
+                f"[AGENT_DB_GET_HASH] Token found: id={row['id']}, name={row['name']}"
+            )
             token = self._row_to_token(row)
-            logger.info(f"[AGENT_DB_GET_HASH] Retrieved token successfully: id={token.id}")
+            logger.info(
+                f"[AGENT_DB_GET_HASH] Retrieved token successfully: id={token.id}"
+            )
             return token
 
         except Exception as e:
-            logger.error(f"[AGENT_DB_GET_HASH] Failed to get token: {e}\n{traceback.format_exc()}", exc_info=True)
+            logger.error(
+                f"[AGENT_DB_GET_HASH] Failed to get token: {e}\n{traceback.format_exc()}",
+                exc_info=True,
+            )
             return None
 
     def get_token_by_id(self, token_id: str) -> Optional[AgentToken]:
         """
         Get token by ID.
-        
+
         Args:
             token_id: Token ID to search for
-            
+
         Returns:
             AgentToken if found, None otherwise
         """
@@ -471,22 +551,29 @@ class AgentDB:
                 logger.warning(f"[AGENT_DB_GET_ID] Token not found: {token_id}")
                 return None
 
-            logger.debug(f"[AGENT_DB_GET_ID] Token found: name={row['name']}, prefix={row['token_prefix']}")
+            logger.debug(
+                f"[AGENT_DB_GET_ID] Token found: name={row['name']}, prefix={row['token_prefix']}"
+            )
             token = self._row_to_token(row)
-            logger.info(f"[AGENT_DB_GET_ID] Retrieved token successfully: id={token.id}")
+            logger.info(
+                f"[AGENT_DB_GET_ID] Retrieved token successfully: id={token.id}"
+            )
             return token
 
         except Exception as e:
-            logger.error(f"[AGENT_DB_GET_ID] Failed to get token: {e}\n{traceback.format_exc()}", exc_info=True)
+            logger.error(
+                f"[AGENT_DB_GET_ID] Failed to get token: {e}\n{traceback.format_exc()}",
+                exc_info=True,
+            )
             return None
 
     def list_tokens(self, active_only: bool = True) -> List[AgentToken]:
         """
         List all tokens.
-        
+
         Args:
             active_only: If True, only return active tokens
-            
+
         Returns:
             List of AgentToken objects
         """
@@ -510,29 +597,41 @@ class AgentDB:
                 try:
                     token = self._row_to_token(row)
                     tokens.append(token)
-                    logger.debug(f"[AGENT_DB_LIST] Parsed token: id={token.id}, name={token.name}")
+                    logger.debug(
+                        f"[AGENT_DB_LIST] Parsed token: id={token.id}, name={token.name}"
+                    )
                 except Exception as e:
-                    logger.error(f"[AGENT_DB_LIST] Failed to parse token row: {e}\n{traceback.format_exc()}", exc_info=True)
+                    logger.error(
+                        f"[AGENT_DB_LIST] Failed to parse token row: {e}\n{traceback.format_exc()}",
+                        exc_info=True,
+                    )
 
             logger.info(f"[AGENT_DB_LIST] Listed {len(tokens)} tokens successfully")
             return tokens
 
         except Exception as e:
-            logger.error(f"[AGENT_DB_LIST] Failed to list tokens: {e}\n{traceback.format_exc()}", exc_info=True)
+            logger.error(
+                f"[AGENT_DB_LIST] Failed to list tokens: {e}\n{traceback.format_exc()}",
+                exc_info=True,
+            )
             return []
 
     def update_token(self, token: AgentToken) -> bool:
         """
         Update an existing token.
-        
+
         Args:
             token: AgentToken object with updated values
-            
+
         Returns:
             True if updated successfully, False otherwise
         """
-        logger.info(f"[AGENT_DB_UPDATE] Updating token: id={token.id}, name={token.name}")
-        logger.debug(f"[AGENT_DB_UPDATE] Token details: is_active={token.is_active}, last_used_at={token.last_used_at}")
+        logger.info(
+            f"[AGENT_DB_UPDATE] Updating token: id={token.id}, name={token.name}"
+        )
+        logger.debug(
+            f"[AGENT_DB_UPDATE] Token details: is_active={token.is_active}, last_used_at={token.last_used_at}"
+        )
 
         with _lock:
             conn = _get_thread_conn()
@@ -540,8 +639,16 @@ class AgentDB:
             try:
                 # Serialize list fields
                 scopes_str = ",".join(token.scopes) if token.scopes else ""
-                markets_str = ",".join(token.markets) if token.markets and token.markets != ["*"] else "*"
-                instruments_str = ",".join(token.instruments) if token.instruments and token.instruments != ["*"] else "*"
+                markets_str = (
+                    ",".join(token.markets)
+                    if token.markets and token.markets != ["*"]
+                    else "*"
+                )
+                instruments_str = (
+                    ",".join(token.instruments)
+                    if token.instruments and token.instruments != ["*"]
+                    else "*"
+                )
 
                 sql = """
                     UPDATE agent_tokens SET
@@ -573,23 +680,30 @@ class AgentDB:
 
                 updated = cursor.rowcount > 0
                 if updated:
-                    logger.info(f"[AGENT_DB_UPDATE] Token updated successfully: id={token.id}")
+                    logger.info(
+                        f"[AGENT_DB_UPDATE] Token updated successfully: id={token.id}"
+                    )
                 else:
-                    logger.warning(f"[AGENT_DB_UPDATE] Token not found for update: id={token.id}")
+                    logger.warning(
+                        f"[AGENT_DB_UPDATE] Token not found for update: id={token.id}"
+                    )
 
                 return updated
 
             except Exception as e:
-                logger.error(f"[AGENT_DB_UPDATE] Failed to update token: {e}\n{traceback.format_exc()}", exc_info=True)
+                logger.error(
+                    f"[AGENT_DB_UPDATE] Failed to update token: {e}\n{traceback.format_exc()}",
+                    exc_info=True,
+                )
                 return False
 
     def revoke_token(self, token_id: str) -> bool:
         """
         Revoke a token (soft delete).
-        
+
         Args:
             token_id: Token ID to revoke
-            
+
         Returns:
             True if revoked successfully, False otherwise
         """
@@ -603,21 +717,30 @@ class AgentDB:
 
                 sql = "UPDATE agent_tokens SET is_active = 0, last_used_at = ? WHERE id = ?"
                 logger.debug(f"[AGENT_DB_REVOKE] Executing SQL: {sql}")
-                logger.debug(f"[AGENT_DB_REVOKE] Parameters: last_used_at={now}, id={token_id}")
+                logger.debug(
+                    f"[AGENT_DB_REVOKE] Parameters: last_used_at={now}, id={token_id}"
+                )
 
                 cursor = conn.execute(sql, (now, token_id))
                 conn.commit()
 
                 revoked = cursor.rowcount > 0
                 if revoked:
-                    logger.info(f"[AGENT_DB_REVOKE] Token revoked successfully: id={token_id}")
+                    logger.info(
+                        f"[AGENT_DB_REVOKE] Token revoked successfully: id={token_id}"
+                    )
                 else:
-                    logger.warning(f"[AGENT_DB_REVOKE] Token not found for revocation: id={token_id}")
+                    logger.warning(
+                        f"[AGENT_DB_REVOKE] Token not found for revocation: id={token_id}"
+                    )
 
                 return revoked
 
             except Exception as e:
-                logger.error(f"[AGENT_DB_REVOKE] Failed to revoke token: {e}\n{traceback.format_exc()}", exc_info=True)
+                logger.error(
+                    f"[AGENT_DB_REVOKE] Failed to revoke token: {e}\n{traceback.format_exc()}",
+                    exc_info=True,
+                )
                 return False
 
     def log_audit(
@@ -627,11 +750,11 @@ class AgentDB:
         resource: str = "",
         details: Optional[Dict[str, Any]] = None,
         ip_address: str = "",
-        user_agent: str = ""
+        user_agent: str = "",
     ) -> bool:
         """
         Log an audit event.
-        
+
         Args:
             token_id: Token ID performing the action
             action: Action type (e.g., 'create', 'verify', 'revoke')
@@ -639,12 +762,16 @@ class AgentDB:
             details: Additional details as dict
             ip_address: Client IP address
             user_agent: Client user agent
-            
+
         Returns:
             True if logged successfully, False otherwise
         """
-        logger.info(f"[AGENT_DB_AUDIT] Logging audit: token_id={token_id}, action={action}")
-        logger.debug(f"[AGENT_DB_AUDIT] Audit details: resource={resource}, ip={ip_address}")
+        logger.info(
+            f"[AGENT_DB_AUDIT] Logging audit: token_id={token_id}, action={action}"
+        )
+        logger.debug(
+            f"[AGENT_DB_AUDIT] Audit details: resource={resource}, ip={ip_address}"
+        )
         logger.debug(f"[AGENT_DB_AUDIT] Details: {details}")
 
         with _lock:
@@ -652,14 +779,24 @@ class AgentDB:
 
             try:
                 now = datetime.now().isoformat()
-                details_str = json.dumps(details, ensure_ascii=False) if details else None
+                details_str = (
+                    json.dumps(details, ensure_ascii=False) if details else None
+                )
 
                 sql = """
                     INSERT INTO agent_audit_logs
                     (token_id, action, resource, details, ip_address, user_agent, timestamp)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 """
-                params = (token_id, action, resource, details_str, ip_address, user_agent, now)
+                params = (
+                    token_id,
+                    action,
+                    resource,
+                    details_str,
+                    ip_address,
+                    user_agent,
+                    now,
+                )
 
                 logger.debug(f"[AGENT_DB_AUDIT] Executing SQL: {sql.strip()}")
                 logger.debug(f"[AGENT_DB_AUDIT] Parameters: {params}")
@@ -667,11 +804,16 @@ class AgentDB:
                 conn.execute(sql, params)
                 conn.commit()
 
-                logger.info(f"[AGENT_DB_AUDIT] Audit logged successfully: token_id={token_id}, action={action}")
+                logger.info(
+                    f"[AGENT_DB_AUDIT] Audit logged successfully: token_id={token_id}, action={action}"
+                )
                 return True
 
             except Exception as e:
-                logger.error(f"[AGENT_DB_AUDIT] Failed to log audit: {e}\n{traceback.format_exc()}", exc_info=True)
+                logger.error(
+                    f"[AGENT_DB_AUDIT] Failed to log audit: {e}\n{traceback.format_exc()}",
+                    exc_info=True,
+                )
                 return False
 
     def get_audit_logs(
@@ -679,21 +821,23 @@ class AgentDB:
         token_id: Optional[str] = None,
         action: Optional[str] = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[AuditLog]:
         """
         Get audit logs with optional filters.
-        
+
         Args:
             token_id: Filter by token ID
             action: Filter by action type
             limit: Maximum number of results
             offset: Offset for pagination
-            
+
         Returns:
             List of AuditLog objects
         """
-        logger.info(f"[AGENT_DB_AUDIT_GET] Getting audit logs: token_id={token_id}, action={action}, limit={limit}")
+        logger.info(
+            f"[AGENT_DB_AUDIT_GET] Getting audit logs: token_id={token_id}, action={action}, limit={limit}"
+        )
 
         conn = _get_thread_conn()
 
@@ -732,21 +876,31 @@ class AgentDB:
                 try:
                     log = self._row_to_audit_log(row)
                     logs.append(log)
-                    logger.debug(f"[AGENT_DB_AUDIT_GET] Parsed audit log: id={log.id}, action={log.action}")
+                    logger.debug(
+                        f"[AGENT_DB_AUDIT_GET] Parsed audit log: id={log.id}, action={log.action}"
+                    )
                 except Exception as e:
-                    logger.error(f"[AGENT_DB_AUDIT_GET] Failed to parse audit log row: {e}\n{traceback.format_exc()}", exc_info=True)
+                    logger.error(
+                        f"[AGENT_DB_AUDIT_GET] Failed to parse audit log row: {e}\n{traceback.format_exc()}",
+                        exc_info=True,
+                    )
 
-            logger.info(f"[AGENT_DB_AUDIT_GET] Retrieved {len(logs)} audit logs successfully")
+            logger.info(
+                f"[AGENT_DB_AUDIT_GET] Retrieved {len(logs)} audit logs successfully"
+            )
             return logs
 
         except Exception as e:
-            logger.error(f"[AGENT_DB_AUDIT_GET] Failed to get audit logs: {e}\n{traceback.format_exc()}", exc_info=True)
+            logger.error(
+                f"[AGENT_DB_AUDIT_GET] Failed to get audit logs: {e}\n{traceback.format_exc()}",
+                exc_info=True,
+            )
             return []
 
     def delete_expired_tokens(self) -> int:
         """
         Delete expired tokens from database.
-        
+
         Returns:
             Number of tokens deleted
         """
@@ -770,16 +924,19 @@ class AgentDB:
                 return deleted
 
             except Exception as e:
-                logger.error(f"[AGENT_DB_CLEANUP] Failed to delete expired tokens: {e}\n{traceback.format_exc()}", exc_info=True)
+                logger.error(
+                    f"[AGENT_DB_CLEANUP] Failed to delete expired tokens: {e}\n{traceback.format_exc()}",
+                    exc_info=True,
+                )
                 return 0
 
     def get_token_count(self, active_only: bool = True) -> int:
         """
         Get total token count.
-        
+
         Args:
             active_only: If True, only count active tokens
-            
+
         Returns:
             Number of tokens
         """
@@ -800,7 +957,10 @@ class AgentDB:
             return count
 
         except Exception as e:
-            logger.error(f"[AGENT_DB_COUNT] Failed to get token count: {e}\n{traceback.format_exc()}", exc_info=True)
+            logger.error(
+                f"[AGENT_DB_COUNT] Failed to get token count: {e}\n{traceback.format_exc()}",
+                exc_info=True,
+            )
             return 0
 
     def _row_to_token(self, row: sqlite3.Row) -> AgentToken:
@@ -809,10 +969,20 @@ class AgentDB:
 
         # Parse list fields
         scopes = row["scopes"].split(",") if row["scopes"] else []
-        markets = row["markets"].split(",") if row["markets"] and row["markets"] != "*" else ["*"]
-        instruments = row["instruments"].split(",") if row["instruments"] and row["instruments"] != "*" else ["*"]
+        markets = (
+            row["markets"].split(",")
+            if row["markets"] and row["markets"] != "*"
+            else ["*"]
+        )
+        instruments = (
+            row["instruments"].split(",")
+            if row["instruments"] and row["instruments"] != "*"
+            else ["*"]
+        )
 
-        logger.debug(f"[AGENT_DB_PARSE] Parsed fields: scopes={scopes}, markets={markets}, instruments={instruments}")
+        logger.debug(
+            f"[AGENT_DB_PARSE] Parsed fields: scopes={scopes}, markets={markets}, instruments={instruments}"
+        )
 
         return AgentToken(
             id=row["id"],
@@ -843,7 +1013,9 @@ class AgentDB:
                 details = json.loads(row["details"])
                 logger.debug(f"[AGENT_DB_PARSE] Parsed details: {details}")
             except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(f"[AGENT_DB_PARSE] Failed to parse details JSON: {e}", exc_info=True)
+                logger.warning(
+                    f"[AGENT_DB_PARSE] Failed to parse details JSON: {e}", exc_info=True
+                )
                 details = {}
 
         return AuditLog(
@@ -861,6 +1033,7 @@ class AgentDB:
 # ============================================================================
 # Module-level convenience functions
 # ============================================================================
+
 
 def get_agent_db() -> AgentDB:
     """Get AgentDB singleton instance."""

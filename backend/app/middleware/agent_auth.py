@@ -39,7 +39,7 @@ if DEBUG_MODE:
         handler = logging.StreamHandler()
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s'
+            "%(asctime)s - %(name)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s"
         )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
@@ -52,10 +52,16 @@ security = HTTPBearer(auto_error=False)
 # Request Context Injection
 # ============================================================================
 
+
 class RequestContext:
     """Request context for storing token information."""
 
-    def __init__(self, token: Optional[AgentToken] = None, ip_address: str = "", user_agent: str = ""):
+    def __init__(
+        self,
+        token: Optional[AgentToken] = None,
+        ip_address: str = "",
+        user_agent: str = "",
+    ):
         self.token = token
         self.ip_address = ip_address
         self.user_agent = user_agent
@@ -85,7 +91,9 @@ def get_request_context(request: Request) -> RequestContext:
         logger.warning("[AUTH_CONTEXT] No context found, creating empty context")
         context = RequestContext()
 
-    logger.debug(f"[AUTH_CONTEXT] Context retrieved: token_id={context.token.id if context.token else 'None'}")
+    logger.debug(
+        f"[AUTH_CONTEXT] Context retrieved: token_id={context.token.id if context.token else 'None'}"
+    )
     return context
 
 
@@ -108,40 +116,49 @@ def get_current_token(request: Request) -> Optional[AgentToken]:
 # Token Verification Dependency
 # ============================================================================
 
+
 async def verify_agent_token(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> AgentToken:
     """
     Verify Bearer token from Authorization header.
-    
+
     This dependency:
     1. Extracts Bearer token from Authorization header
     2. Verifies token using TokenService
     3. Checks expiration
     4. Checks rate limit
     5. Injects token info into request state
-    
+
     Returns:
         AgentToken if valid
-        
+
     Raises:
         HTTPException: 401 if invalid/expired, 429 if rate limited
     """
     request_id = id(request)
-    logger.info(f"[AUTH_VERIFY] Starting token verification for request_id={request_id}")
+    logger.info(
+        f"[AUTH_VERIFY] Starting token verification for request_id={request_id}"
+    )
     logger.debug(f"[AUTH_VERIFY] Request path: {request.url.path}")
     logger.debug(f"[AUTH_VERIFY] Request method: {request.method}")
-    logger.debug(f"[AUTH_VERIFY] Client IP: {request.client.host if request.client else 'unknown'}")
+    logger.debug(
+        f"[AUTH_VERIFY] Client IP: {request.client.host if request.client else 'unknown'}"
+    )
 
     # Extract client info
     ip_address = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
-    logger.debug(f"[AUTH_VERIFY] Client info: ip={ip_address}, user_agent={user_agent[:50]}")
+    logger.debug(
+        f"[AUTH_VERIFY] Client info: ip={ip_address}, user_agent={user_agent[:50]}"
+    )
 
     # Check if Authorization header exists
     if credentials is None:
-        logger.warning(f"[AUTH_VERIFY] Missing Authorization header for request_id={request_id}")
+        logger.warning(
+            f"[AUTH_VERIFY] Missing Authorization header for request_id={request_id}"
+        )
         logger.debug(f"[AUTH_VERIFY] Available headers: {list(request.headers.keys())}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -152,7 +169,9 @@ async def verify_agent_token(
     # Extract token
     raw_token = credentials.credentials
     token_prefix = raw_token[:12] if len(raw_token) >= 12 else raw_token
-    logger.debug(f"[AUTH_VERIFY] Token extracted: prefix={token_prefix}***, length={len(raw_token)}")
+    logger.debug(
+        f"[AUTH_VERIFY] Token extracted: prefix={token_prefix}***, length={len(raw_token)}"
+    )
 
     # Get token service
     service = get_token_service()
@@ -163,7 +182,9 @@ async def verify_agent_token(
     token = service.verify_token(raw_token)
 
     if token is None:
-        logger.warning(f"[AUTH_VERIFY] Token verification failed: prefix={token_prefix}***")
+        logger.warning(
+            f"[AUTH_VERIFY] Token verification failed: prefix={token_prefix}***"
+        )
         logger.debug("[AUTH_VERIFY] Token may be invalid, expired, or rate limited")
 
         # Log audit event for failed authentication
@@ -176,7 +197,7 @@ async def verify_agent_token(
                 "ip_address": ip_address,
                 "user_agent": user_agent,
                 "reason": "invalid_or_expired_token",
-            }
+            },
         )
 
         raise HTTPException(
@@ -185,18 +206,28 @@ async def verify_agent_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    logger.info(f"[AUTH_VERIFY] Token verified successfully: id={token.id}, name={token.name}")
-    logger.debug(f"[AUTH_VERIFY] Token details: scopes={[s.value for s in token.scopes]}, markets={token.markets}")
-    logger.debug(f"[AUTH_VERIFY] Token usage: access_count={token.access_count}, last_used={token.last_used_at}")
+    logger.info(
+        f"[AUTH_VERIFY] Token verified successfully: id={token.id}, name={token.name}"
+    )
+    logger.debug(
+        f"[AUTH_VERIFY] Token details: scopes={[s.value for s in token.scopes]}, markets={token.markets}"
+    )
+    logger.debug(
+        f"[AUTH_VERIFY] Token usage: access_count={token.access_count}, last_used={token.last_used_at}"
+    )
 
     # Check expiration explicitly
     if token.expires_at:
         now = datetime.now()
         is_expired = token.expires_at <= now
-        logger.debug(f"[AUTH_VERIFY] Expiration check: expires_at={token.expires_at.isoformat()}, now={now.isoformat()}, is_expired={is_expired}")
+        logger.debug(
+            f"[AUTH_VERIFY] Expiration check: expires_at={token.expires_at.isoformat()}, now={now.isoformat()}, is_expired={is_expired}"
+        )
 
         if is_expired:
-            logger.warning(f"[AUTH_VERIFY] Token expired: id={token.id}, expired_at={token.expires_at.isoformat()}")
+            logger.warning(
+                f"[AUTH_VERIFY] Token expired: id={token.id}, expired_at={token.expires_at.isoformat()}"
+            )
 
             # Log audit event
             service.log_audit(
@@ -206,7 +237,7 @@ async def verify_agent_token(
                 details={
                     "expired_at": token.expires_at.isoformat(),
                     "ip_address": ip_address,
-                }
+                },
             )
 
             raise HTTPException(
@@ -216,11 +247,15 @@ async def verify_agent_token(
             )
 
     # Check rate limit
-    logger.debug(f"[AUTH_VERIFY] Checking rate limit: limit={token.rate_limit} requests/minute")
+    logger.debug(
+        f"[AUTH_VERIFY] Checking rate limit: limit={token.rate_limit} requests/minute"
+    )
     rate_allowed = service.check_rate_limit(token)
 
     if not rate_allowed:
-        logger.warning(f"[AUTH_VERIFY] Rate limit exceeded: id={token.id}, limit={token.rate_limit}")
+        logger.warning(
+            f"[AUTH_VERIFY] Rate limit exceeded: id={token.id}, limit={token.rate_limit}"
+        )
 
         # Log audit event
         service.log_audit(
@@ -230,7 +265,7 @@ async def verify_agent_token(
             details={
                 "rate_limit": token.rate_limit,
                 "ip_address": ip_address,
-            }
+            },
         )
 
         raise HTTPException(
@@ -261,10 +296,12 @@ async def verify_agent_token(
             "method": request.method,
             "ip_address": ip_address,
             "user_agent": user_agent[:100],
-        }
+        },
     )
 
-    logger.info(f"[AUTH_VERIFY] Authentication successful: token_id={token.id}, request_id={request_id}")
+    logger.info(
+        f"[AUTH_VERIFY] Authentication successful: token_id={token.id}, request_id={request_id}"
+    )
 
     return token
 
@@ -273,16 +310,17 @@ async def verify_agent_token(
 # Scope Authorization Dependency Factory
 # ============================================================================
 
+
 def require_scope(required_scope: TokenScope) -> Callable:
     """
     Create a dependency that checks if token has required scope.
-    
+
     Args:
         required_scope: Required scope (TokenScope enum)
-        
+
     Returns:
         Dependency function that validates scope
-        
+
     Usage:
         @router.get("/protected")
         async def protected_endpoint(
@@ -290,15 +328,18 @@ def require_scope(required_scope: TokenScope) -> Callable:
         ):
             ...
     """
-    logger.debug(f"[AUTH_SCOPE_FACTORY] Creating scope checker for: {required_scope.value}")
+    logger.debug(
+        f"[AUTH_SCOPE_FACTORY] Creating scope checker for: {required_scope.value}"
+    )
 
     async def scope_checker(
-        request: Request,
-        token: AgentToken = Depends(verify_agent_token)
+        request: Request, token: AgentToken = Depends(verify_agent_token)
     ) -> AgentToken:
         """Check if token has required scope."""
         request_id = id(request)
-        logger.info(f"[AUTH_SCOPE] Checking scope: required={required_scope.value}, token_id={token.id}, request_id={request_id}")
+        logger.info(
+            f"[AUTH_SCOPE] Checking scope: required={required_scope.value}, token_id={token.id}, request_id={request_id}"
+        )
         logger.debug(f"[AUTH_SCOPE] Token scopes: {[s.value for s in token.scopes]}")
 
         # Get request context for IP and user agent
@@ -309,7 +350,9 @@ def require_scope(required_scope: TokenScope) -> Callable:
         has_scope = service.check_scope(token, required_scope)
 
         if not has_scope:
-            logger.warning(f"[AUTH_SCOPE] Scope check failed: required={required_scope.value}, available={[s.value for s in token.scopes]}")
+            logger.warning(
+                f"[AUTH_SCOPE] Scope check failed: required={required_scope.value}, available={[s.value for s in token.scopes]}"
+            )
 
             # Log audit event
             service.log_audit(
@@ -320,7 +363,7 @@ def require_scope(required_scope: TokenScope) -> Callable:
                     "required_scope": required_scope.value,
                     "available_scopes": [s.value for s in token.scopes],
                     "ip_address": context.ip_address,
-                }
+                },
             )
 
             raise HTTPException(
@@ -328,7 +371,9 @@ def require_scope(required_scope: TokenScope) -> Callable:
                 detail=f"Insufficient scope. Required: {required_scope.value}, Available: {[s.value for s in token.scopes]}",
             )
 
-        logger.info(f"[AUTH_SCOPE] Scope check passed: token_id={token.id}, scope={required_scope.value}")
+        logger.info(
+            f"[AUTH_SCOPE] Scope check passed: token_id={token.id}, scope={required_scope.value}"
+        )
 
         # Log successful scope check
         service.log_audit(
@@ -338,7 +383,7 @@ def require_scope(required_scope: TokenScope) -> Callable:
             details={
                 "required_scope": required_scope.value,
                 "ip_address": context.ip_address,
-            }
+            },
         )
 
         return token
@@ -350,10 +395,11 @@ def require_scope(required_scope: TokenScope) -> Callable:
 # Audit Middleware
 # ============================================================================
 
+
 class AuditMiddleware(BaseHTTPMiddleware):
     """
     Middleware for logging all agent API requests.
-    
+
     Logs:
     - Request start/end
     - Token ID, action, resource
@@ -374,14 +420,18 @@ class AuditMiddleware(BaseHTTPMiddleware):
             logger.debug(f"[AUDIT_SKIP] Non-agent API request: {request.url.path}")
             return await call_next(request)
 
-        logger.info(f"[AUDIT_START] Request started: path={request.url.path}, method={request.method}, request_id={request_id}")
+        logger.info(
+            f"[AUDIT_START] Request started: path={request.url.path}, method={request.method}, request_id={request_id}"
+        )
         logger.debug(f"[AUDIT_START] Headers: {dict(request.headers)}")
 
         # Extract client info
         ip_address = request.client.host if request.client else "unknown"
         user_agent = request.headers.get("user-agent", "unknown")
 
-        logger.debug(f"[AUDIT_START] Client: ip={ip_address}, user_agent={user_agent[:50]}")
+        logger.debug(
+            f"[AUDIT_START] Client: ip={ip_address}, user_agent={user_agent[:50]}"
+        )
 
         # Process request
         try:
@@ -389,13 +439,17 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
             # Calculate duration
             duration = time.time() - request_start_time
-            logger.debug(f"[AUDIT_END] Request completed: status={response.status_code}, duration={duration:.3f}s")
+            logger.debug(
+                f"[AUDIT_END] Request completed: status={response.status_code}, duration={duration:.3f}s"
+            )
 
             # Get token from request state (if authenticated)
             token = get_current_token(request)
 
             if token:
-                logger.info(f"[AUDIT_LOG] Logging audit: token_id={token.id}, path={request.url.path}, status={response.status_code}")
+                logger.info(
+                    f"[AUDIT_LOG] Logging audit: token_id={token.id}, path={request.url.path}, status={response.status_code}"
+                )
 
                 # Log to audit service
                 service = get_token_service()
@@ -410,19 +464,26 @@ class AuditMiddleware(BaseHTTPMiddleware):
                         "ip_address": ip_address,
                         "user_agent": user_agent[:200],
                         "request_id": request_id,
-                    }
+                    },
                 )
 
-                logger.info(f"[AUDIT_COMPLETE] Audit logged: token_id={token.id}, duration={duration:.3f}s, status={response.status_code}")
+                logger.info(
+                    f"[AUDIT_COMPLETE] Audit logged: token_id={token.id}, duration={duration:.3f}s, status={response.status_code}"
+                )
             else:
-                logger.debug("[AUDIT_NO_TOKEN] No token in request state, skipping audit log")
+                logger.debug(
+                    "[AUDIT_NO_TOKEN] No token in request state, skipping audit log"
+                )
 
             return response
 
         except HTTPException as e:
             # Log HTTP exceptions (authentication/authorization errors)
             duration = time.time() - request_start_time
-            logger.warning(f"[AUDIT_ERROR] HTTP exception: status={e.status_code}, detail={e.detail}, duration={duration:.3f}s", exc_info=True)
+            logger.warning(
+                f"[AUDIT_ERROR] HTTP exception: status={e.status_code}, detail={e.detail}, duration={duration:.3f}s",
+                exc_info=True,
+            )
 
             # Get token if available
             token = get_current_token(request)
@@ -442,7 +503,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     "ip_address": ip_address,
                     "user_agent": user_agent[:200],
                     "request_id": request_id,
-                }
+                },
             )
 
             raise
@@ -450,7 +511,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
         except AttributeError as e:
             # Log attribute errors (e.g., missing request state attributes)
             duration = time.time() - request_start_time
-            logger.error(f"[AUDIT_ATTR_ERROR] Attribute error: {e}\n{traceback.format_exc()}", exc_info=True)
+            logger.error(
+                f"[AUDIT_ATTR_ERROR] Attribute error: {e}\n{traceback.format_exc()}",
+                exc_info=True,
+            )
 
             # Get token if available
             token = get_current_token(request)
@@ -470,7 +534,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     "ip_address": ip_address,
                     "user_agent": user_agent[:200],
                     "request_id": request_id,
-                }
+                },
             )
 
             raise HTTPException(
@@ -481,7 +545,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
         except (KeyError, ValueError, TypeError) as e:
             # Log data processing errors
             duration = time.time() - request_start_time
-            logger.error(f"[AUDIT_DATA_ERROR] Data processing error: {type(e).__name__}: {e}\n{traceback.format_exc()}", exc_info=True)
+            logger.error(
+                f"[AUDIT_DATA_ERROR] Data processing error: {type(e).__name__}: {e}\n{traceback.format_exc()}",
+                exc_info=True,
+            )
 
             # Get token if available
             token = get_current_token(request)
@@ -501,7 +568,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     "ip_address": ip_address,
                     "user_agent": user_agent[:200],
                     "request_id": request_id,
-                }
+                },
             )
 
             raise HTTPException(
@@ -512,7 +579,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             # Log unexpected exceptions (fallback)
             duration = time.time() - request_start_time
-            logger.error(f"[AUDIT_EXCEPTION] Unexpected exception: {e}\n{traceback.format_exc()}", exc_info=True)
+            logger.error(
+                f"[AUDIT_EXCEPTION] Unexpected exception: {e}\n{traceback.format_exc()}",
+                exc_info=True,
+            )
 
             # Get token if available
             token = get_current_token(request)
@@ -532,7 +602,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     "ip_address": ip_address,
                     "user_agent": user_agent[:200],
                     "request_id": request_id,
-                }
+                },
             )
 
             raise

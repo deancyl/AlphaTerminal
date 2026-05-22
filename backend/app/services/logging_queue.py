@@ -1,12 +1,14 @@
 """
 日志队列服务 - 将日志重定向到 WebSocket 队列
 """
+
 import asyncio
 import logging
 from typing import Optional
 
 # 全局日志队列
 _log_queue: Optional[asyncio.Queue] = None
+
 
 def get_log_queue() -> asyncio.Queue:
     """获取日志队列单例"""
@@ -22,9 +24,9 @@ class WebSocketLogHandler(logging.Handler):
     def __init__(self):
         super().__init__()
         self.setLevel(logging.INFO)
-        self.setFormatter(logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        ))
+        self.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
 
     def emit(self, record):
         """发送日志到队列"""
@@ -45,8 +47,10 @@ class WebSocketLogHandler(logging.Handler):
             msg = {
                 "timestamp": int(record.created),
                 "level": level,
-                "message": log_msg[:2000] if len(log_msg) > 2000 else log_msg,  # 提高上限到2000字符
-                "truncated": len(log_msg) > 2000  # 标记是否被截断
+                "message": (
+                    log_msg[:2000] if len(log_msg) > 2000 else log_msg
+                ),  # 提高上限到2000字符
+                "truncated": len(log_msg) > 2000,  # 标记是否被截断
             }
 
             # 推送到队列（不阻塞）

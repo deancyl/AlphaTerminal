@@ -18,6 +18,7 @@ from app.db.database import _get_conn
 @dataclass
 class ValidationError:
     """Single validation error."""
+
     code: str
     message: str
     field: Optional[str] = None
@@ -27,6 +28,7 @@ class ValidationError:
 @dataclass
 class ValidationResult:
     """Result of pre-trade validation."""
+
     is_valid: bool
     errors: List[ValidationError] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -39,7 +41,9 @@ class ValidationResult:
         field: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
     ) -> None:
-        self.errors.append(ValidationError(code=code, message=message, field=field, details=details))
+        self.errors.append(
+            ValidationError(code=code, message=message, field=field, details=details)
+        )
         self.is_valid = False
 
     def add_warning(self, message: str) -> None:
@@ -49,7 +53,7 @@ class ValidationResult:
 class PreTradeValidator:
     """
     Pre-trade validation middleware.
-    
+
     Validates orders before submission:
     1. Cash availability (for buy orders)
     2. Position availability (for sell orders)
@@ -75,7 +79,9 @@ class PreTradeValidator:
         result = ValidationResult(is_valid=True)
 
         if side == "buy":
-            self._validate_buy_order(portfolio_id, symbol, quantity, price, order_type, result)
+            self._validate_buy_order(
+                portfolio_id, symbol, quantity, price, order_type, result
+            )
         elif side == "sell":
             self._validate_sell_order(portfolio_id, symbol, quantity, result)
 
@@ -101,7 +107,9 @@ class PreTradeValidator:
             ).fetchone()
 
             if not row:
-                result.add_error("PORTFOLIO_NOT_FOUND", f"Portfolio {portfolio_id} not found")
+                result.add_error(
+                    "PORTFOLIO_NOT_FOUND", f"Portfolio {portfolio_id} not found"
+                )
                 return
 
             cash_balance = row["cash_balance"] or 0.0
@@ -122,10 +130,12 @@ class PreTradeValidator:
                         "required": estimated_cost,
                         "available": cash_balance,
                         "shortfall": estimated_cost - cash_balance,
-                    }
+                    },
                 )
 
-            self._check_position_limit(portfolio_id, symbol, quantity, market_price, result)
+            self._check_position_limit(
+                portfolio_id, symbol, quantity, market_price, result
+            )
 
         finally:
             conn.close()
@@ -154,7 +164,7 @@ class PreTradeValidator:
                         "required": quantity,
                         "available": available,
                         "shortfall": quantity - available,
-                    }
+                    },
                 )
         finally:
             conn.close()

@@ -6,6 +6,7 @@ trading.py — Phase 2: 持仓批次追踪与 FIFO 平仓引擎
   - execute_sell()   — FIFO 平仓，返回已实现盈亏明细
   - 计算已实现/未实现盈亏
 """
+
 import sqlite3
 import logging
 import asyncio
@@ -20,52 +21,54 @@ logger = logging.getLogger(__name__)
 # ── 异步执行器（用于包装阻塞 SQLite 操作）──────────────────────────────
 _trading_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="trading_")
 
+
 # ── 持仓批次（Lot）数据结构 ──────────────────────────────────────────────
 class LotRecord(NamedTuple):
-    id:          int
-    portfolio_id:int
-    symbol:      str
-    shares:      int
-    avg_cost:    float
-    buy_date:    str
+    id: int
+    portfolio_id: int
+    symbol: str
+    shares: int
+    avg_cost: float
+    buy_date: str
     buy_order_id: Optional[str]
-    status:      str
-    closed_at:    Optional[str]
+    status: str
+    closed_at: Optional[str]
     realized_pnl: float
-    created_at:   str
+    created_at: str
 
 
 # ── 平仓结果 ──────────────────────────────────────────────────────────
 class CloseLotResult(NamedTuple):
-    lot_id:       int
-    shares_closed:int
-    avg_cost:     float
-    sell_price:   float
+    lot_id: int
+    shares_closed: int
+    avg_cost: float
+    sell_price: float
     realized_pnl: float
 
 
 class SellResult(NamedTuple):
     total_realized_pnl: float
-    lots_closed:        list[CloseLotResult]
-    shares_remaining:  int
-    sell_price:        float
-    timestamp:         str
+    lots_closed: list[CloseLotResult]
+    shares_remaining: int
+    sell_price: float
+    timestamp: str
 
 
 # ── 数据库工具 ────────────────────────────────────────────────────────
 def _get_lots_conn():
     from app.db.database import _get_conn
+
     return _get_conn()
 
 
 # ── 核心：FIFO 平仓执行 ─────────────────────────────────────────────────
 def execute_sell(
     portfolio_id: int,
-    symbol:       str,
-    shares:       int,
-    sell_price:   float,
-    order_id:    Optional[str] = None,
-    conn:        Optional[sqlite3.Connection] = None,  # 外部传入连接（原子事务）
+    symbol: str,
+    shares: int,
+    sell_price: float,
+    order_id: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,  # 外部传入连接（原子事务）
 ) -> SellResult:
     """
     FIFO 平仓算法（并发安全版本）
@@ -76,7 +79,7 @@ def execute_sell(
       3. 批次完全平仓（shares→0）时标记 status='closed'
       4. 部分平仓时：avg_cost 不变，仅 shares 减少
       5. realized_pnl 在每笔 lot 平仓时立即计算
-    
+
     并发安全：
       - 使用 BEGIN IMMEDIATE TRANSACTION 在读取前获取写锁
       - 支持外部传入连接，确保与现金更新在同一事务内
@@ -119,7 +122,9 @@ def execute_sell(
         ).fetchall()
 
         if not open_lots:
-            raise ValueError(f"账户 {portfolio_id} 标的 {symbol} 无持仓批次（无法做空）")
+            raise ValueError(
+                f"账户 {portfolio_id} 标的 {symbol} 无持仓批次（无法做空）"
+            )
 
         total_available = sum(r[1] for r in open_lots)
         if total_available < shares:
@@ -137,7 +142,7 @@ def execute_sell(
             pnl_this = precise_pnl(closed, sell_price, lot_avg_cost)
 
             new_shares = lot_shares - closed
-            new_status = 'closed' if new_shares == 0 else 'open'
+            new_status = "closed" if new_shares == 0 else "open"
 
             conn.execute(
                 """
@@ -148,24 +153,33 @@ def execute_sell(
                        realized_pnl=realized_pnl + ?
                  WHERE id=?
                 """,
-                (new_shares, new_status, now_str if new_status == 'closed' else None,
-                 pnl_this, lot_id),
+                (
+                    new_shares,
+                    new_status,
+                    now_str if new_status == "closed" else None,
+                    pnl_this,
+                    lot_id,
+                ),
             )
 
-            lots_closed.append(CloseLotResult(
-                lot_id=lot_id,
-                shares_closed=closed,
-                avg_cost=lot_avg_cost,
-                sell_price=sell_price,
-                realized_pnl=round(pnl_this, 2),
-            ))
+            lots_closed.append(
+                CloseLotResult(
+                    lot_id=lot_id,
+                    shares_closed=closed,
+                    avg_cost=lot_avg_cost,
+                    sell_price=sell_price,
+                    realized_pnl=round(pnl_this, 2),
+                )
+            )
             total_realized_pnl += pnl_this
             remaining -= closed
 
     except Exception as e:
         if manage_transaction:
             conn.rollback()
-        logger.error(f"[Trading] execute_sell rollback due to error: {e}", exc_info=True)
+        logger.error(
+            f"[Trading] execute_sell rollback due to error: {e}", exc_info=True
+        )
         raise
     else:
         if manage_transaction:
@@ -184,7 +198,9 @@ def execute_sell(
                     order_id=order_id,
                 )
             except Exception as audit_err:
-                logger.warning(f"[Trading] Audit log failed for sell: {audit_err}", exc_info=True)
+                logger.warning(
+                    f"[Trading] Audit log failed for sell: {audit_err}", exc_info=True
+                )
     finally:
         # 仅关闭本函数创建的连接
         if not external_conn:
@@ -193,7 +209,7 @@ def execute_sell(
     return SellResult(
         total_realized_pnl=round(total_realized_pnl, 2),
         lots_closed=lots_closed,
-        shares_remaining=remaining,   # 0 表示全部成交
+        shares_remaining=remaining,  # 0 表示全部成交
         sell_price=sell_price,
         timestamp=now_str,
     )
@@ -202,16 +218,16 @@ def execute_sell(
 # ── 买入：新增批次 ─────────────────────────────────────────────────────
 def execute_buy(
     portfolio_id: int,
-    symbol:       str,
-    shares:       int,
-    buy_price:    float,
-    buy_date:     Optional[str] = None,
-    order_id:    Optional[str] = None,
-    conn:        Optional[sqlite3.Connection] = None,  # 外部传入连接（原子事务）
+    symbol: str,
+    shares: int,
+    buy_price: float,
+    buy_date: Optional[str] = None,
+    order_id: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,  # 外部传入连接（原子事务）
 ) -> LotRecord:
     """
     买入时新增一个批次（lot）。
-    
+
     并发安全：
       - 使用 BEGIN IMMEDIATE TRANSACTION 在写入前获取写锁
       - 支持外部传入连接，确保与现金更新在同一事务内
@@ -263,7 +279,9 @@ def execute_buy(
                     order_id=order_id,
                 )
             except Exception as audit_err:
-                logger.warning(f"[Trading] Audit log failed for buy: {audit_err}", exc_info=True)
+                logger.warning(
+                    f"[Trading] Audit log failed for buy: {audit_err}", exc_info=True
+                )
     except Exception as e:
         if manage_transaction:
             conn.rollback()
@@ -282,7 +300,7 @@ def execute_buy(
         avg_cost=buy_price,
         buy_date=buy_date_str,
         buy_order_id=order_id,
-        status='open',
+        status="open",
         closed_at=None,
         realized_pnl=0.0,
         created_at=now_str,
@@ -314,10 +332,13 @@ def get_open_lots(
                 )
             """
             base = f"{descendants_cte} SELECT id FROM subtree WHERE id != ?"
-            desc_ids = [r[0] for r in conn.execute(base, (portfolio_id, portfolio_id)).fetchall()]
+            desc_ids = [
+                r[0]
+                for r in conn.execute(base, (portfolio_id, portfolio_id)).fetchall()
+            ]
             if not desc_ids:
                 return []
-            placeholders = ','.join(['?' for _ in desc_ids])
+            placeholders = ",".join(["?" for _ in desc_ids])
             if symbol:
                 sql = f"""
                     SELECT id, portfolio_id, symbol, shares, avg_cost,
@@ -394,10 +415,13 @@ def count_open_lots(
                 )
             """
             base = f"{descendants_cte} SELECT id FROM subtree WHERE id != ?"
-            desc_ids = [r[0] for r in conn.execute(base, (portfolio_id, portfolio_id)).fetchall()]
+            desc_ids = [
+                r[0]
+                for r in conn.execute(base, (portfolio_id, portfolio_id)).fetchall()
+            ]
             if not desc_ids:
                 return 0
-            placeholders = ','.join(['?' for _ in desc_ids])
+            placeholders = ",".join(["?" for _ in desc_ids])
             if symbol:
                 row = conn.execute(
                     f"""SELECT COUNT(*) FROM position_lots
@@ -439,26 +463,30 @@ def calc_unrealized_pnl(portfolio_id: int, symbol: str, current_price: float) ->
 
     total_shares = sum(l.shares for l in lots)
     # 加权均价
-    total_cost   = sum(l.shares * l.avg_cost for l in lots)
-    avg_cost     = safe_divide(total_cost, total_shares, 0.0)
+    total_cost = sum(l.shares * l.avg_cost for l in lots)
+    avg_cost = safe_divide(total_cost, total_shares, 0.0)
     market_value = total_shares * current_price
-    unrealized  = market_value - total_cost
+    unrealized = market_value - total_cost
 
     return {
-        "symbol":          symbol,
-        "total_shares":    total_shares,
-        "avg_cost":        round(avg_cost, 3),
-        "current_price":   current_price,
-        "market_value":   round(market_value, 2),
-        "total_cost":      round(total_cost, 2),
-        "unrealized_pnl":  round(unrealized, 2),
+        "symbol": symbol,
+        "total_shares": total_shares,
+        "avg_cost": round(avg_cost, 3),
+        "current_price": current_price,
+        "market_value": round(market_value, 2),
+        "total_cost": round(total_cost, 2),
+        "unrealized_pnl": round(unrealized, 2),
         "unrealized_pnl_pct": safe_round(safe_percent(unrealized, total_cost, 0.0), 2),
-        "open_lots":       len(lots),
+        "open_lots": len(lots),
     }
+
 
 # ── Phase 3: 持仓聚合表（position_summary）读写 ────────────────────────
 
-def upsert_position_summary(portfolio_id: int, symbol: str, conn: Optional[sqlite3.Connection] = None) -> None:
+
+def upsert_position_summary(
+    portfolio_id: int, symbol: str, conn: Optional[sqlite3.Connection] = None
+) -> None:
     """
     当持仓批次发生变动（buy/sell）后，重新计算并 UPSERT position_summary。
     计算逻辑：
@@ -488,9 +516,9 @@ def upsert_position_summary(portfolio_id: int, symbol: str, conn: Optional[sqlit
             )
         else:
             total_shares = sum(r[0] for r in rows)
-            total_cost   = sum(r[0] * r[1] for r in rows)
-            avg_cost     = safe_divide(total_cost, total_shares, 0.0)
-            now_str      = datetime.now().isoformat()
+            total_cost = sum(r[0] * r[1] for r in rows)
+            avg_cost = safe_divide(total_cost, total_shares, 0.0)
+            now_str = datetime.now().isoformat()
 
             conn.execute(
                 """
@@ -524,14 +552,19 @@ def update_market_value(portfolio_id: int, symbol: str, current_price: float) ->
         ).fetchone()
 
         if not row or row[0] == 0:
-            return {"portfolio_id": portfolio_id, "symbol": symbol,
-                    "total_shares": 0, "market_value": 0.0, "unrealized_pnl": 0.0}
+            return {
+                "portfolio_id": portfolio_id,
+                "symbol": symbol,
+                "total_shares": 0,
+                "market_value": 0.0,
+                "unrealized_pnl": 0.0,
+            }
 
         total_shares, avg_cost = row
-        market_value   = total_shares * current_price
-        total_cost     = total_shares * avg_cost
+        market_value = total_shares * current_price
+        total_cost = total_shares * avg_cost
         unrealized_pnl = market_value - total_cost
-        now_str        = datetime.now().isoformat()
+        now_str = datetime.now().isoformat()
 
         conn.execute(
             """
@@ -543,12 +576,22 @@ def update_market_value(portfolio_id: int, symbol: str, current_price: float) ->
                 unrealized_pnl=excluded.unrealized_pnl,
                 updated_at=excluded.updated_at
             """,
-            (portfolio_id, symbol, total_shares, avg_cost, market_value, unrealized_pnl, now_str),
+            (
+                portfolio_id,
+                symbol,
+                total_shares,
+                avg_cost,
+                market_value,
+                unrealized_pnl,
+                now_str,
+            ),
         )
         conn.commit()
         return {
-            "portfolio_id": portfolio_id, "symbol": symbol,
-            "total_shares": total_shares, "avg_cost": round(avg_cost, 3),
+            "portfolio_id": portfolio_id,
+            "symbol": symbol,
+            "total_shares": total_shares,
+            "avg_cost": round(avg_cost, 3),
             "current_price": current_price,
             "market_value": round(market_value, 2),
             "total_cost": round(total_cost, 2),
@@ -579,10 +622,13 @@ def get_position_summary(
                 )
             """
             base = f"{cte} SELECT id FROM subtree WHERE id != ?"
-            desc_ids = [r[0] for r in conn.execute(base, (portfolio_id, portfolio_id)).fetchall()]
+            desc_ids = [
+                r[0]
+                for r in conn.execute(base, (portfolio_id, portfolio_id)).fetchall()
+            ]
             if not desc_ids:
                 return []
-            placeholders = ','.join(['?' for _ in desc_ids])
+            placeholders = ",".join(["?" for _ in desc_ids])
             if symbol:
                 rows = conn.execute(
                     f"SELECT * FROM position_summary WHERE portfolio_id IN ({placeholders}) AND symbol=?",
@@ -605,8 +651,15 @@ def get_position_summary(
                     (portfolio_id,),
                 ).fetchall()
 
-        cols = ["portfolio_id", "symbol", "total_shares", "avg_cost",
-                "market_value", "unrealized_pnl", "updated_at"]
+        cols = [
+            "portfolio_id",
+            "symbol",
+            "total_shares",
+            "avg_cost",
+            "market_value",
+            "unrealized_pnl",
+            "updated_at",
+        ]
         return [dict(zip(cols, r)) for r in rows]
     finally:
         conn.close()
@@ -640,7 +693,9 @@ async def async_execute_buy(
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _trading_executor,
-        lambda: execute_buy(portfolio_id, symbol, shares, buy_price, buy_date, order_id, conn),
+        lambda: execute_buy(
+            portfolio_id, symbol, shares, buy_price, buy_date, order_id, conn
+        ),
     )
 
 

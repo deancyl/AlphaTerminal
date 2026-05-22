@@ -19,10 +19,10 @@ from .sina_streamer import SinaStreamer, MockSinaStreamer
 from .streaming_manager import StreamingManager, get_streaming_manager
 
 __all__ = [
-    'BaseStreamer',
-    'StreamerState',
-    'SinaStreamer',
-    'MockSinaStreamer',
-    'StreamingManager',
-    'get_streaming_manager',
+    "BaseStreamer",
+    "StreamerState",
+    "SinaStreamer",
+    "MockSinaStreamer",
+    "StreamingManager",
+    "get_streaming_manager",
 ]

@@ -1,6 +1,7 @@
 """
 Tests for ContextAssembler service
 """
+
 import pytest
 from unittest.mock import AsyncMock, patch
 from app.services.copilot.context_assembler import (
@@ -105,9 +106,7 @@ class TestContextAssembler:
     def test_format_financial_section_with_data(self, assembler):
         """Test financial section with data"""
         data = {
-            'indicators': [
-                {'indicator_name': 'ROE', 'value': '25%', 'change': '+2%'}
-            ]
+            "indicators": [{"indicator_name": "ROE", "value": "25%", "change": "+2%"}]
         }
         result = assembler._format_financial_section(data)
         assert "ROE" in result
@@ -120,18 +119,14 @@ class TestContextAssembler:
 
     def test_format_news_section_with_items(self, assembler):
         """Test news section with items"""
-        items = [
-            {'title': '茅台发布业绩预告', 'time': '2024-01-15', 'type': 'bullish'}
-        ]
+        items = [{"title": "茅台发布业绩预告", "time": "2024-01-15", "type": "bullish"}]
         result = assembler._format_news_section(items)
         assert "茅台发布业绩预告" in result
         assert "📈" in result  # Bullish emoji
 
     def test_format_news_section_bearish(self, assembler):
         """Test news section with bearish news"""
-        items = [
-            {'title': '白酒板块下跌', 'type': 'bearish'}
-        ]
+        items = [{"title": "白酒板块下跌", "type": "bearish"}]
         result = assembler._format_news_section(items)
         assert "📉" in result  # Bearish emoji
 
@@ -146,7 +141,9 @@ class TestContextAssembler:
     async def test_assemble_with_symbol(self, assembler):
         """Test assembly with explicit symbol"""
         # Mock the fetchers to avoid actual API calls
-        with patch.object(assembler._f9_fetcher, 'fetch', new_callable=AsyncMock) as mock_f9:
+        with patch.object(
+            assembler._f9_fetcher, "fetch", new_callable=AsyncMock
+        ) as mock_f9:
             mock_f9.return_value = None
 
             result = await assembler.assemble("分析", symbol="600519")
@@ -157,13 +154,15 @@ class TestContextAssembler:
     @pytest.mark.asyncio
     async def test_assemble_timeout(self, assembler):
         """Test assembly timeout handling"""
+
         # Mock a slow fetch
         async def slow_fetch(*args, **kwargs):
             import asyncio
+
             await asyncio.sleep(10)
             return {}
 
-        with patch.object(assembler._f9_fetcher, 'fetch', side_effect=slow_fetch):
+        with patch.object(assembler._f9_fetcher, "fetch", side_effect=slow_fetch):
             result = await assembler.assemble("分析茅台", timeout=0.1)
 
             assert result.error is not None
@@ -173,9 +172,13 @@ class TestContextAssembler:
     async def test_assemble_company_deep_dive(self, assembler):
         """Test assembly for company deep dive query"""
         # Mock all fetchers
-        with patch.object(assembler._f9_fetcher, 'fetch', new_callable=AsyncMock) as mock_f9, \
-             patch.object(assembler._macro_fetcher, 'fetch', new_callable=AsyncMock) as mock_macro, \
-             patch.object(assembler._news_fetcher, 'fetch', new_callable=AsyncMock) as mock_news:
+        with patch.object(
+            assembler._f9_fetcher, "fetch", new_callable=AsyncMock
+        ) as mock_f9, patch.object(
+            assembler._macro_fetcher, "fetch", new_callable=AsyncMock
+        ) as mock_macro, patch.object(
+            assembler._news_fetcher, "fetch", new_callable=AsyncMock
+        ) as mock_news:
 
             mock_f9.return_value = None
             mock_macro.return_value = None
@@ -190,9 +193,13 @@ class TestContextAssembler:
     @pytest.mark.asyncio
     async def test_assemble_portfolio_risk(self, assembler):
         """Test assembly for portfolio risk query"""
-        with patch.object(assembler._f9_fetcher, 'fetch', new_callable=AsyncMock) as mock_f9, \
-             patch.object(assembler._macro_fetcher, 'fetch', new_callable=AsyncMock) as mock_macro, \
-             patch.object(assembler._news_fetcher, 'fetch', new_callable=AsyncMock) as mock_news:
+        with patch.object(
+            assembler._f9_fetcher, "fetch", new_callable=AsyncMock
+        ) as mock_f9, patch.object(
+            assembler._macro_fetcher, "fetch", new_callable=AsyncMock
+        ) as mock_macro, patch.object(
+            assembler._news_fetcher, "fetch", new_callable=AsyncMock
+        ) as mock_news:
 
             mock_f9.return_value = None
             mock_macro.return_value = None
@@ -205,7 +212,9 @@ class TestContextAssembler:
     @pytest.mark.asyncio
     async def test_assemble_sector_comparison(self, assembler):
         """Test assembly for sector comparison query"""
-        with patch.object(assembler._f9_fetcher, 'fetch', new_callable=AsyncMock) as mock_f9:
+        with patch.object(
+            assembler._f9_fetcher, "fetch", new_callable=AsyncMock
+        ) as mock_f9:
             mock_f9.return_value = None
 
             result = await assembler.assemble("茅台 vs 五粮液")
@@ -216,7 +225,9 @@ class TestContextAssembler:
     @pytest.mark.asyncio
     async def test_assemble_macro_impact(self, assembler):
         """Test assembly for macro impact query"""
-        with patch.object(assembler._macro_fetcher, 'fetch', new_callable=AsyncMock) as mock_macro:
+        with patch.object(
+            assembler._macro_fetcher, "fetch", new_callable=AsyncMock
+        ) as mock_macro:
             mock_macro.return_value = None
 
             result = await assembler.assemble("CPI对消费板块影响")
@@ -239,8 +250,8 @@ class TestAssemblyResult:
                 query_type=QueryType.QUICK_QA,
                 symbols=[],
                 confidence=0.0,
-                original_query=""
-            )
+                original_query="",
+            ),
         )
 
         assert result.f9_data is None
@@ -260,10 +271,10 @@ class TestAssemblyResult:
                 query_type=QueryType.COMPANY_DEEP_DIVE,
                 symbols=["600519"],
                 confidence=0.8,
-                original_query="分析茅台"
+                original_query="分析茅台",
             ),
             f9_data={"financial": {}},
-            error=None
+            error=None,
         )
 
         assert result.query_type == QueryType.COMPANY_DEEP_DIVE

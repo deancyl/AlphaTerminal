@@ -6,6 +6,7 @@ Tests:
 2. Triangular arbitrage precision
 3. Spread calculation accuracy
 """
+
 import pytest
 from decimal import Decimal
 from app.services.fetchers.forex_fetcher import forex_fetcher
@@ -48,14 +49,8 @@ class TestForexBidAskPrecision:
 
     def test_calculate_cross_rate_triangular_arbitrage(self):
         """Test triangular arbitrage: EUR/JPY = EUR/USD × USD/JPY."""
-        bid_rates = {
-            "EUR/USD": Decimal("1.0795"),
-            "USD/JPY": Decimal("149.95")
-        }
-        ask_rates = {
-            "EUR/USD": Decimal("1.0805"),
-            "USD/JPY": Decimal("150.05")
-        }
+        bid_rates = {"EUR/USD": Decimal("1.0795"), "USD/JPY": Decimal("149.95")}
+        ask_rates = {"EUR/USD": Decimal("1.0805"), "USD/JPY": Decimal("150.05")}
 
         result = forex_fetcher.calculate_cross_rate_with_spread(
             "EUR", "JPY", bid_rates, ask_rates
@@ -67,8 +62,12 @@ class TestForexBidAskPrecision:
         expected_bid = Decimal("1.0795") * Decimal("149.95")
         expected_ask = Decimal("1.0805") * Decimal("150.05")
 
-        assert abs(result["bid"] - expected_bid.quantize(Decimal("0.000001"))) < Decimal("0.01")
-        assert abs(result["ask"] - expected_ask.quantize(Decimal("0.000001"))) < Decimal("0.01")
+        assert abs(
+            result["bid"] - expected_bid.quantize(Decimal("0.000001"))
+        ) < Decimal("0.01")
+        assert abs(
+            result["ask"] - expected_ask.quantize(Decimal("0.000001"))
+        ) < Decimal("0.01")
 
     def test_calculate_cross_rate_same_currency(self):
         """Test same currency returns 1.0."""

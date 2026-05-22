@@ -15,6 +15,7 @@ Caching:
     Historical data: 30 minutes
     Cross-rate matrix: 5 minutes
 """
+
 import logging
 import random
 import asyncio
@@ -26,7 +27,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.config.settings import get_settings
-from app.services.fetchers.forex_fetcher import forex_fetcher, get_circuit_breaker_status
+from app.services.fetchers.forex_fetcher import (
+    forex_fetcher,
+    get_circuit_breaker_status,
+)
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
 from app.routers.forex_schemas import (
@@ -37,20 +41,23 @@ from app.routers.forex_schemas import (
 
 logger = logging.getLogger(__name__)
 
-def _generate_bounded_random_walk(base_rate: float, days: int, volatility: float = 0.003) -> list:
+
+def _generate_bounded_random_walk(
+    base_rate: float, days: int, volatility: float = 0.003
+) -> list:
     """
     Generate a bounded random walk for forex mock history.
-    
+
     Uses a mean-reverting random walk with:
     - Bounded volatility (prevents unrealistic extremes)
     - Mean reversion (tends back toward base rate)
     - Realistic OHLC constraints
-    
+
     Args:
         base_rate: Starting exchange rate
         days: Number of days to generate
         volatility: Daily volatility (default 0.3% for major pairs)
-    
+
     Returns:
         List of OHLC dictionaries
     """
@@ -97,7 +104,9 @@ def _generate_bounded_random_walk(base_rate: float, days: int, volatility: float
         open_rate = current_rate + trend
 
         # Bound open_rate to max deviation from base
-        open_rate = max(base_rate - max_deviation, min(base_rate + max_deviation, open_rate))
+        open_rate = max(
+            base_rate - max_deviation, min(base_rate + max_deviation, open_rate)
+        )
 
         # Generate realistic high/low with intraday volatility
         intraday_vol = daily_vol * current_rate * 0.5
@@ -108,25 +117,34 @@ def _generate_bounded_random_walk(base_rate: float, days: int, volatility: float
         low_rate = open_rate - low_offset
 
         # Close rate with slight mean reversion
-        close_trend = (base_rate - open_rate) * 0.1 + random.gauss(0, intraday_vol * 0.6)
+        close_trend = (base_rate - open_rate) * 0.1 + random.gauss(
+            0, intraday_vol * 0.6
+        )
         close_rate = open_rate + close_trend
 
         # Ensure OHLC constraints
         high_rate = max(open_rate, high_rate, close_rate)
         low_rate = min(open_rate, low_rate, close_rate)
 
-        mock_history.append({
-            "date": date.strftime("%Y-%m-%d"),
-            "open": round(open_rate, decimals),
-            "close": round(close_rate, decimals),
-            "high": round(high_rate, decimals),
-            "low": round(low_rate, decimals),
-            "amplitude": round((high_rate - low_rate) / open_rate * 100, 2) if open_rate > 0 else 0,
-        })
+        mock_history.append(
+            {
+                "date": date.strftime("%Y-%m-%d"),
+                "open": round(open_rate, decimals),
+                "close": round(close_rate, decimals),
+                "high": round(high_rate, decimals),
+                "low": round(low_rate, decimals),
+                "amplitude": (
+                    round((high_rate - low_rate) / open_rate * 100, 2)
+                    if open_rate > 0
+                    else 0
+                ),
+            }
+        )
 
         current_rate = close_rate
 
     return mock_history
+
 
 router = APIRouter(prefix="/forex", tags=["forex"])
 
@@ -135,16 +153,21 @@ router = APIRouter(prefix="/forex", tags=["forex"])
 _spot_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forex_spot_")
 
 # Slow operations (history, detailed quotes) - can block, longer running
-_history_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forex_history_")
+_history_executor = ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="forex_history_"
+)
 
 _akshare_module = None
+
 
 def _get_ak():
     global _akshare_module
     if _akshare_module is None:
         import akshare as ak
+
         _akshare_module = ak
     return _akshare_module
+
 
 CURRENCY_PAIRS = {
     "USD/CNY": {"name": "美元/人民币", "ak_code": "美元"},
@@ -156,12 +179,60 @@ CURRENCY_PAIRS = {
 }
 
 FALLBACK_FOREX_QUOTES = [
-    {"symbol": "USD/CNY", "name": "美元/人民币", "buy_rate": 7.2456, "sell_rate": 7.2892, "middle_rate": 7.2674, "change_pct": 0.12, "date": "2024-01-15"},
-    {"symbol": "EUR/CNY", "name": "欧元/人民币", "buy_rate": 7.8923, "sell_rate": 7.9456, "middle_rate": 7.9189, "change_pct": -0.08, "date": "2024-01-15"},
-    {"symbol": "GBP/CNY", "name": "英镑/人民币", "buy_rate": 9.1234, "sell_rate": 9.1876, "middle_rate": 9.1555, "change_pct": 0.23, "date": "2024-01-15"},
-    {"symbol": "JPY/CNY", "name": "日元/人民币", "buy_rate": 0.0486, "sell_rate": 0.0490, "middle_rate": 0.0488, "change_pct": -0.15, "date": "2024-01-15"},
-    {"symbol": "HKD/CNY", "name": "港币/人民币", "buy_rate": 0.9287, "sell_rate": 0.9345, "middle_rate": 0.9316, "change_pct": 0.05, "date": "2024-01-15"},
-    {"symbol": "AUD/CNY", "name": "澳元/人民币", "buy_rate": 4.7234, "sell_rate": 4.7567, "middle_rate": 4.7400, "change_pct": 0.18, "date": "2024-01-15"},
+    {
+        "symbol": "USD/CNY",
+        "name": "美元/人民币",
+        "buy_rate": 7.2456,
+        "sell_rate": 7.2892,
+        "middle_rate": 7.2674,
+        "change_pct": 0.12,
+        "date": "2024-01-15",
+    },
+    {
+        "symbol": "EUR/CNY",
+        "name": "欧元/人民币",
+        "buy_rate": 7.8923,
+        "sell_rate": 7.9456,
+        "middle_rate": 7.9189,
+        "change_pct": -0.08,
+        "date": "2024-01-15",
+    },
+    {
+        "symbol": "GBP/CNY",
+        "name": "英镑/人民币",
+        "buy_rate": 9.1234,
+        "sell_rate": 9.1876,
+        "middle_rate": 9.1555,
+        "change_pct": 0.23,
+        "date": "2024-01-15",
+    },
+    {
+        "symbol": "JPY/CNY",
+        "name": "日元/人民币",
+        "buy_rate": 0.0486,
+        "sell_rate": 0.0490,
+        "middle_rate": 0.0488,
+        "change_pct": -0.15,
+        "date": "2024-01-15",
+    },
+    {
+        "symbol": "HKD/CNY",
+        "name": "港币/人民币",
+        "buy_rate": 0.9287,
+        "sell_rate": 0.9345,
+        "middle_rate": 0.9316,
+        "change_pct": 0.05,
+        "date": "2024-01-15",
+    },
+    {
+        "symbol": "AUD/CNY",
+        "name": "澳元/人民币",
+        "buy_rate": 4.7234,
+        "sell_rate": 4.7567,
+        "middle_rate": 4.7400,
+        "change_pct": 0.18,
+        "date": "2024-01-15",
+    },
 ]
 
 SUPPORTED_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "HKD", "AUD", "CNY"]
@@ -180,28 +251,31 @@ MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF"]
 
 # ==================== 新增端点 ====================
 
+
 @router.get("/spot")
 @handle_errors(module="forex")
 async def get_spot_quotes():
     """
     获取所有实时外汇报价 (EastMoney + CFETS fallback)
-    
-    数据源: 
+
+    数据源:
     1. AKShare forex_spot_em() - 东方财富实时报价 (190+ 货币对)
     2. CFETS fx_spot_quote() - 银行间人民币报价 (fallback)
-    
+
     缓存策略: Stale-While-Revalidate
     - 新鲜数据: 60秒内，立即返回
     - 过期数据: 60秒-10分钟，返回旧数据 + 后台刷新
     - 完全过期: 10分钟后，等待新数据（最多5秒）
-    
+
     Returns:
         List[ForexSpotQuote]: 所有货币对的实时报价
     """
     cache = get_cache()
 
     # Stale-While-Revalidate: fresh 60s, stale 600s (10min)
-    data, is_stale = cache.get_with_stale("forex:spot_quotes", fresh_ttl=60, stale_ttl=600)
+    data, is_stale = cache.get_with_stale(
+        "forex:spot_quotes", fresh_ttl=60, stale_ttl=600
+    )
 
     if data:
         response = success_response(data)
@@ -209,26 +283,32 @@ async def get_spot_quotes():
         # If stale, trigger background refresh (non-blocking)
         if is_stale:
             asyncio.create_task(_fetch_forex_spot_background())
-            response['data']['is_stale'] = True
-            response['data']['stale_age_seconds'] = int(
-                (datetime.now() - datetime.fromisoformat(data.get('last_update_time', datetime.now().isoformat()))).total_seconds()
+            response["data"]["is_stale"] = True
+            response["data"]["stale_age_seconds"] = int(
+                (
+                    datetime.now()
+                    - datetime.fromisoformat(
+                        data.get("last_update_time", datetime.now().isoformat())
+                    )
+                ).total_seconds()
             )
 
         return response
 
     # No data at all - wait for first fetch (with timeout)
     try:
-        data = await asyncio.wait_for(
-            _fetch_forex_spot_foreground(),
-            timeout=5.0
-        )
+        data = await asyncio.wait_for(_fetch_forex_spot_foreground(), timeout=5.0)
         return success_response(data)
     except asyncio.TimeoutError:
         logger.warning("[Forex] 首次获取超时，返回服务不可用错误", exc_info=True)
-        return error_response("外汇数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
+        return error_response(
+            "外汇数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE
+        )
     except Exception as e:
         logger.error(f"[Forex] 首次获取失败: {e}", exc_info=True)
-        return error_response("外汇数据获取失败，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
+        return error_response(
+            "外汇数据获取失败，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE
+        )
 
 
 async def _fetch_forex_spot_background():
@@ -241,8 +321,7 @@ async def _fetch_forex_spot_background():
         if not quotes:
             logger.info("[Forex] forex_spot_em 返回空数据，使用 CFETS fallback")
             cfets_quotes, cfets_crosses = await asyncio.gather(
-                forex_fetcher.get_cfets_spot(),
-                forex_fetcher.get_cfets_crosses()
+                forex_fetcher.get_cfets_spot(), forex_fetcher.get_cfets_crosses()
             )
 
             for q in cfets_quotes:
@@ -251,22 +330,24 @@ async def _fetch_forex_spot_background():
                     symbol = pair.replace("/", "")
                 else:
                     symbol = pair
-                quotes.append({
-                    "symbol": symbol,
-                    "name": pair,
-                    "latest": q.get("mid"),
-                    "bid": q.get("bid"),
-                    "ask": q.get("ask"),
-                    "spread": q.get("spread"),
-                    "change": None,
-                    "change_pct": None,
-                    "open": None,
-                    "high": None,
-                    "low": None,
-                    "prev_close": None,
-                    "source": "cfets",
-                    "timestamp": q.get("timestamp"),
-                })
+                quotes.append(
+                    {
+                        "symbol": symbol,
+                        "name": pair,
+                        "latest": q.get("mid"),
+                        "bid": q.get("bid"),
+                        "ask": q.get("ask"),
+                        "spread": q.get("spread"),
+                        "change": None,
+                        "change_pct": None,
+                        "open": None,
+                        "high": None,
+                        "low": None,
+                        "prev_close": None,
+                        "source": "cfets",
+                        "timestamp": q.get("timestamp"),
+                    }
+                )
 
             for q in cfets_crosses:
                 pair = q.get("pair", "")
@@ -274,37 +355,43 @@ async def _fetch_forex_spot_background():
                     symbol = pair.replace("/", "")
                 else:
                     symbol = pair
-                quotes.append({
-                    "symbol": symbol,
-                    "name": pair,
-                    "latest": q.get("mid"),
-                    "bid": q.get("bid"),
-                    "ask": q.get("ask"),
-                    "spread": q.get("spread"),
-                    "change": None,
-                    "change_pct": None,
-                    "open": None,
-                    "high": None,
-                    "low": None,
-                    "prev_close": None,
-                    "source": "cfets",
-                    "timestamp": q.get("timestamp"),
-                })
+                quotes.append(
+                    {
+                        "symbol": symbol,
+                        "name": pair,
+                        "latest": q.get("mid"),
+                        "bid": q.get("bid"),
+                        "ask": q.get("ask"),
+                        "spread": q.get("spread"),
+                        "change": None,
+                        "change_pct": None,
+                        "open": None,
+                        "high": None,
+                        "low": None,
+                        "prev_close": None,
+                        "source": "cfets",
+                        "timestamp": q.get("timestamp"),
+                    }
+                )
 
             source = "cfets"
 
         # Cache the result
         cache = get_cache()
-        cache.set("forex:spot_quotes", {
-            "quotes": quotes,
-            "total": len(quotes),
-            "source": source,
-            "data_source": "live" if source == "akshare" else "fallback",
-            "status": "ready",
-            "last_update_time": datetime.now().isoformat(),
-            "update_time": datetime.now().isoformat(),
-            "circuit_breaker": get_circuit_breaker_status()
-        }, ttl=600)  # 10 minutes (stale_ttl)
+        cache.set(
+            "forex:spot_quotes",
+            {
+                "quotes": quotes,
+                "total": len(quotes),
+                "source": source,
+                "data_source": "live" if source == "akshare" else "fallback",
+                "status": "ready",
+                "last_update_time": datetime.now().isoformat(),
+                "update_time": datetime.now().isoformat(),
+                "circuit_breaker": get_circuit_breaker_status(),
+            },
+            ttl=600,
+        )  # 10 minutes (stale_ttl)
 
         logger.info(f"[Forex] Background fetch completed: {len(quotes)} quotes")
 
@@ -321,8 +408,7 @@ async def _fetch_forex_spot_foreground():
     if not quotes:
         logger.info("[Forex] forex_spot_em 返回空数据，使用 CFETS fallback")
         cfets_quotes, cfets_crosses = await asyncio.gather(
-            forex_fetcher.get_cfets_spot(),
-            forex_fetcher.get_cfets_crosses()
+            forex_fetcher.get_cfets_spot(), forex_fetcher.get_cfets_crosses()
         )
 
         for q in cfets_quotes:
@@ -331,22 +417,24 @@ async def _fetch_forex_spot_foreground():
                 symbol = pair.replace("/", "")
             else:
                 symbol = pair
-            quotes.append({
-                "symbol": symbol,
-                "name": pair,
-                "latest": q.get("mid"),
-                "bid": q.get("bid"),
-                "ask": q.get("ask"),
-                "spread": q.get("spread"),
-                "change": None,
-                "change_pct": None,
-                "open": None,
-                "high": None,
-                "low": None,
-                "prev_close": None,
-                "source": "cfets",
-                "timestamp": q.get("timestamp"),
-            })
+            quotes.append(
+                {
+                    "symbol": symbol,
+                    "name": pair,
+                    "latest": q.get("mid"),
+                    "bid": q.get("bid"),
+                    "ask": q.get("ask"),
+                    "spread": q.get("spread"),
+                    "change": None,
+                    "change_pct": None,
+                    "open": None,
+                    "high": None,
+                    "low": None,
+                    "prev_close": None,
+                    "source": "cfets",
+                    "timestamp": q.get("timestamp"),
+                }
+            )
 
         for q in cfets_crosses:
             pair = q.get("pair", "")
@@ -354,22 +442,24 @@ async def _fetch_forex_spot_foreground():
                 symbol = pair.replace("/", "")
             else:
                 symbol = pair
-            quotes.append({
-                "symbol": symbol,
-                "name": pair,
-                "latest": q.get("mid"),
-                "bid": q.get("bid"),
-                "ask": q.get("ask"),
-                "spread": q.get("spread"),
-                "change": None,
-                "change_pct": None,
-                "open": None,
-                "high": None,
-                "low": None,
-                "prev_close": None,
-                "source": "cfets",
-                "timestamp": q.get("timestamp"),
-            })
+            quotes.append(
+                {
+                    "symbol": symbol,
+                    "name": pair,
+                    "latest": q.get("mid"),
+                    "bid": q.get("bid"),
+                    "ask": q.get("ask"),
+                    "spread": q.get("spread"),
+                    "change": None,
+                    "change_pct": None,
+                    "open": None,
+                    "high": None,
+                    "low": None,
+                    "prev_close": None,
+                    "source": "cfets",
+                    "timestamp": q.get("timestamp"),
+                }
+            )
 
         source = "cfets"
 
@@ -383,7 +473,7 @@ async def _fetch_forex_spot_foreground():
         "status": "ready",
         "last_update_time": datetime.now().isoformat(),
         "update_time": datetime.now().isoformat(),
-        "circuit_breaker": get_circuit_breaker_status()
+        "circuit_breaker": get_circuit_breaker_status(),
     }
     cache.set("forex:spot_quotes", result, ttl=600)  # 10 minutes (stale_ttl)
 
@@ -397,9 +487,9 @@ async def _fetch_forex_spot_foreground():
 async def reset_circuit_breaker():
     """
     手动重置熔断器
-    
+
     当网络恢复后，用户可以手动重置熔断器以重新尝试获取实时数据。
-    
+
     Returns:
         dict: {"success": true, "state": "closed"}
     """
@@ -416,23 +506,25 @@ async def reset_circuit_breaker():
 async def get_cfets_spot():
     """
     获取CFETS银行间人民币报价
-    
+
     数据源: AKShare fx_spot_quote() (CFETS)
     覆盖: 24 人民币货币对
     特点: 买入/卖出价点差，机构级数据
-    
+
     Returns:
         List[ForexCFETSQuote]: 银行间报价列表
     """
     try:
         quotes = await forex_fetcher.get_cfets_spot()
 
-        return success_response({
-            "rmb_pairs": quotes,
-            "cross_pairs": [],
-            "last_update": datetime.now().isoformat(),
-            "source": "cfets"
-        })
+        return success_response(
+            {
+                "rmb_pairs": quotes,
+                "cross_pairs": [],
+                "last_update": datetime.now().isoformat(),
+                "source": "cfets",
+            }
+        )
 
     except Exception as e:
         logger.error(f"[Forex] 获取CFETS报价失败: {e}", exc_info=True)
@@ -444,26 +536,30 @@ async def get_cfets_spot():
 async def get_cfets_crosses():
     """
     获取CFETS非人民币交叉汇率
-    
+
     数据源: AKShare fx_pair_quote()
     覆盖: 11 非人民币货币对 (EUR/USD, GBP/USD, USD/JPY等)
-    
+
     Returns:
         List[ForexCFETSQuote]: 交叉汇率列表
     """
     try:
         quotes = await forex_fetcher.get_cfets_crosses()
 
-        return success_response({
-            "rmb_pairs": [],
-            "cross_pairs": quotes,
-            "last_update": datetime.now().isoformat(),
-            "source": "cfets"
-        })
+        return success_response(
+            {
+                "rmb_pairs": [],
+                "cross_pairs": quotes,
+                "last_update": datetime.now().isoformat(),
+                "source": "cfets",
+            }
+        )
 
     except Exception as e:
         logger.error(f"[Forex] 获取CFETS交叉汇率失败: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取CFETS交叉汇率失败: {str(e)}")
+        return error_response(
+            ErrorCode.INTERNAL_ERROR, f"获取CFETS交叉汇率失败: {str(e)}"
+        )
 
 
 @router.get("/official")
@@ -473,24 +569,20 @@ async def get_official_rates(
 ):
     """
     获取国家外汇管理局官方中间价
-    
+
     数据源: AKShare currency_boc_safe() (SAFE)
     权威性: 国家外汇管理局每日发布的人民币中间价
-    
+
     Args:
         days: 返回最近N天数据 (1-365)
-        
+
     Returns:
         List[ForexOfficialRate]: 官方中间价列表
     """
     try:
         rates = await forex_fetcher.get_official_rates(days)
 
-        return success_response({
-            "rates": rates,
-            "total": len(rates),
-            "source": "safe"
-        })
+        return success_response({"rates": rates, "total": len(rates), "source": "safe"})
 
     except Exception as e:
         logger.error(f"[Forex] 获取官方中间价失败: {e}", exc_info=True)
@@ -501,22 +593,26 @@ async def get_official_rates(
 @handle_errors(module="forex")
 async def get_forex_history_new(
     symbol: str,
-    start_date: Optional[str] = Query(None, pattern=r"^\\d{4}-\\d{2}-\\d{2}$", description="开始日期 YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, pattern=r"^\\d{4}-\\d{2}-\\d{2}$", description="结束日期 YYYY-MM-DD"),
-    limit: int = Query(100, ge=1, le=1000, description="返回条数限制")
+    start_date: Optional[str] = Query(
+        None, pattern=r"^\\d{4}-\\d{2}-\\d{2}$", description="开始日期 YYYY-MM-DD"
+    ),
+    end_date: Optional[str] = Query(
+        None, pattern=r"^\\d{4}-\\d{2}-\\d{2}$", description="结束日期 YYYY-MM-DD"
+    ),
+    limit: int = Query(100, ge=1, le=1000, description="返回条数限制"),
 ):
     """
     获取历史K线数据
-    
+
     数据源: AKShare forex_hist_em()
     缓存: 5分钟 (使用全局 DataCache)
-    
+
     Args:
         symbol: 货币对代码，如 USDCNH, EURUSD, USDCNY (自动转换为USDCNH)
         start_date: 开始日期 YYYY-MM-DD
         end_date: 结束日期 YYYY-MM-DD
         limit: 返回条数限制
-        
+
     Returns:
         ForexHistoryResponse: K线数据列表
     """
@@ -533,7 +629,7 @@ async def get_forex_history_new(
 
         history = await asyncio.wait_for(
             forex_fetcher.get_history(ak_symbol, start_date, end_date, limit),
-            timeout=10.0
+            timeout=10.0,
         )
 
         if history:
@@ -545,7 +641,7 @@ async def get_forex_history_new(
                 "total": len(history),
                 "source": "akshare",
                 "status": "ready",
-                "last_update_time": datetime.now().isoformat()
+                "last_update_time": datetime.now().isoformat(),
             }
             cache.set(cache_key, result, ttl=300)
             return success_response(result)
@@ -560,8 +656,7 @@ async def get_forex_history_new(
     if not settings.FOREX_ALLOW_MOCK_DATA:
         logger.warning(f"[Forex] Mock data disabled, returning error for {symbol}")
         return error_response(
-            "外汇历史数据暂不可用，请稍后重试",
-            code=ErrorCode.SERVICE_UNAVAILABLE
+            "外汇历史数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE
         )
 
     # Fallback: Generate mock data (only when explicitly allowed)
@@ -595,36 +690,48 @@ async def get_forex_history_new(
         "is_demo": True,
         "source": "mock",
         "status": "ready",
-        "last_update_time": datetime.now().isoformat()
+        "last_update_time": datetime.now().isoformat(),
     }
     cache.set(cache_key, result, ttl=300)
 
     return success_response(result)
 
 
-async def _fetch_forex_history_background(symbol: str, start_date: Optional[str], end_date: Optional[str], limit: int):
+async def _fetch_forex_history_background(
+    symbol: str, start_date: Optional[str], end_date: Optional[str], limit: int
+):
     """Background fetch for forex history"""
     try:
         ak_symbol = symbol.upper().replace("CNY", "CNH")
 
-        history = await forex_fetcher.get_history(ak_symbol, start_date, end_date, limit)
+        history = await forex_fetcher.get_history(
+            ak_symbol, start_date, end_date, limit
+        )
 
         if history:
             cache = get_cache()
-            cache.set(f"forex:history:{symbol}:{start_date}:{end_date}:{limit}", {
-                "symbol": symbol,
-                "name": symbol,
-                "period": "daily",
-                "data": history,
-                "total": len(history),
-                "source": "akshare",
-                "status": "ready",
-                "last_update_time": datetime.now().isoformat()
-            }, ttl=300)
-            logger.info(f"[Forex] History background fetch completed: {symbol}, {len(history)} bars")
+            cache.set(
+                f"forex:history:{symbol}:{start_date}:{end_date}:{limit}",
+                {
+                    "symbol": symbol,
+                    "name": symbol,
+                    "period": "daily",
+                    "data": history,
+                    "total": len(history),
+                    "source": "akshare",
+                    "status": "ready",
+                    "last_update_time": datetime.now().isoformat(),
+                },
+                ttl=300,
+            )
+            logger.info(
+                f"[Forex] History background fetch completed: {symbol}, {len(history)} bars"
+            )
             return
 
-        logger.info(f"[Forex] forex_hist_em 返回空数据，使用模拟数据 fallback: {symbol}")
+        logger.info(
+            f"[Forex] forex_hist_em 返回空数据，使用模拟数据 fallback: {symbol}"
+        )
 
         cfets_quotes = await forex_fetcher.get_cfets_spot()
         base_rate = None
@@ -637,7 +744,9 @@ async def _fetch_forex_history_background(symbol: str, start_date: Optional[str]
                 break
 
         if base_rate is None:
-            base_rate = 7.25 if "CNY" in symbol.upper() or "CNH" in symbol.upper() else 1.0
+            base_rate = (
+                7.25 if "CNY" in symbol.upper() or "CNH" in symbol.upper() else 1.0
+            )
 
         # Use bounded random walk for more realistic mock data
         volatility = 0.003 if base_rate > 1 else 0.01
@@ -645,18 +754,24 @@ async def _fetch_forex_history_background(symbol: str, start_date: Optional[str]
         mock_history = _generate_bounded_random_walk(base_rate, days, volatility)
 
         cache = get_cache()
-        cache.set(f"forex:history:{symbol}:{start_date}:{end_date}:{limit}", {
-            "symbol": symbol,
-            "name": symbol,
-            "period": "daily",
-            "data": mock_history,
-            "total": len(mock_history),
-            "source": "mock",
-            "status": "ready",
-            "last_update_time": datetime.now().isoformat()
-        }, ttl=300)
+        cache.set(
+            f"forex:history:{symbol}:{start_date}:{end_date}:{limit}",
+            {
+                "symbol": symbol,
+                "name": symbol,
+                "period": "daily",
+                "data": mock_history,
+                "total": len(mock_history),
+                "source": "mock",
+                "status": "ready",
+                "last_update_time": datetime.now().isoformat(),
+            },
+            ttl=300,
+        )
 
-        logger.info(f"[Forex] History background fetch completed (mock): {symbol}, {len(mock_history)} bars")
+        logger.info(
+            f"[Forex] History background fetch completed (mock): {symbol}, {len(mock_history)} bars"
+        )
 
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] failed: {symbol} - {e}", exc_info=True)
@@ -666,23 +781,22 @@ async def _fetch_forex_history_background(symbol: str, start_date: Optional[str]
 @handle_errors(module="forex")
 async def get_cross_rate_matrix(
     currencies: str = Query(
-        "USD,EUR,GBP,JPY,CNY,AUD,CAD,CHF",
-        description="货币列表，逗号分隔"
+        "USD,EUR,GBP,JPY,CNY,AUD,CAD,CHF", description="货币列表，逗号分隔"
     )
 ):
     """
     获取交叉汇率矩阵
-    
+
     类似 Bloomberg/Wind 的交叉汇率速览表
     支持悬浮高亮当前行与列
-    
+
     算法:
     - 直接报价优先
     - 缺失对通过USD三角套利计算
-    
+
     Args:
         currencies: 货币列表，默认主流8种货币
-        
+
     Returns:
         CrossRateMatrix: N×N 交叉汇率矩阵
     """
@@ -698,7 +812,9 @@ async def get_cross_rate_matrix(
 
     asyncio.create_task(_fetch_forex_matrix_background(currencies))
 
-    return error_response("交叉汇率矩阵暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
+    return error_response(
+        "交叉汇率矩阵暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE
+    )
 
 
 async def _fetch_forex_matrix_background(currencies: str):
@@ -713,7 +829,7 @@ async def _fetch_forex_matrix_background(currencies: str):
         spot_quotes, cfets_rmb, cfets_cross = await asyncio.gather(
             forex_fetcher.get_spot_quotes(),
             forex_fetcher.get_cfets_spot(),
-            forex_fetcher.get_cfets_crosses()
+            forex_fetcher.get_cfets_crosses(),
         )
 
         # Step 2: Build separate bid/ask dictionaries for precision
@@ -760,7 +876,7 @@ async def _fetch_forex_matrix_background(currencies: str):
 
         for curr in currency_list:
             if curr == "USD":
-                usd_rates[curr] = Decimal('1.0')
+                usd_rates[curr] = Decimal("1.0")
             else:
                 # Try direct USD rate
                 usd_curr = f"USD/{curr}"
@@ -769,11 +885,13 @@ async def _fetch_forex_matrix_background(currencies: str):
                 if usd_curr in rates_dict:
                     usd_rates[curr] = rates_dict[usd_curr]
                 elif curr_usd in rates_dict:
-                    usd_rates[curr] = Decimal('1') / rates_dict[curr_usd]
+                    usd_rates[curr] = Decimal("1") / rates_dict[curr_usd]
                 else:
                     # Try via CNY as fallback
                     usd_cny = rates_dict.get("USD/CNY")
-                    curr_cny = rates_dict.get(f"{curr}/CNY") or rates_dict.get(f"{curr}CNY")
+                    curr_cny = rates_dict.get(f"{curr}/CNY") or rates_dict.get(
+                        f"{curr}CNY"
+                    )
                     cny_curr = rates_dict.get(f"CNY/{curr}")
 
                     if usd_cny and curr_cny:
@@ -789,31 +907,34 @@ async def _fetch_forex_matrix_background(currencies: str):
 
             for quote_curr in currency_list:
                 if base_curr == quote_curr:
-                    row_rates.append(CrossRateCell(
-                        rate=1.0,
-                        change_pct=0.0,
-                        is_base=True,
-                        is_calculated=False
-                    ))
+                    row_rates.append(
+                        CrossRateCell(
+                            rate=1.0, change_pct=0.0, is_base=True, is_calculated=False
+                        )
+                    )
                 else:
                     # Try direct rate first
                     direct_key = f"{base_curr}/{quote_curr}"
                     inverse_key = f"{quote_curr}/{base_curr}"
 
                     if direct_key in rates_dict:
-                        row_rates.append(CrossRateCell(
-                            rate=float(rates_dict[direct_key]),
-                            change_pct=None,
-                            is_base=False,
-                            is_calculated=False
-                        ))
+                        row_rates.append(
+                            CrossRateCell(
+                                rate=float(rates_dict[direct_key]),
+                                change_pct=None,
+                                is_base=False,
+                                is_calculated=False,
+                            )
+                        )
                     elif inverse_key in rates_dict:
-                        row_rates.append(CrossRateCell(
-                            rate=float(Decimal('1') / rates_dict[inverse_key]),
-                            change_pct=None,
-                            is_base=False,
-                            is_calculated=False
-                        ))
+                        row_rates.append(
+                            CrossRateCell(
+                                rate=float(Decimal("1") / rates_dict[inverse_key]),
+                                change_pct=None,
+                                is_base=False,
+                                is_calculated=False,
+                            )
+                        )
                     else:
                         # Calculate via USD (triangular arbitrage) with bid/ask precision
                         cross_result = forex_fetcher.calculate_cross_rate_with_spread(
@@ -821,49 +942,58 @@ async def _fetch_forex_matrix_background(currencies: str):
                         )
 
                         if cross_result:
-                            row_rates.append(CrossRateCell(
-                                rate=float(cross_result["mid"]),
-                                bid=float(cross_result["bid"]),
-                                ask=float(cross_result["ask"]),
-                                spread=float(cross_result["spread"]),
-                                change_pct=None,
-                                is_base=False,
-                                is_calculated=True
-                            ))
+                            row_rates.append(
+                                CrossRateCell(
+                                    rate=float(cross_result["mid"]),
+                                    bid=float(cross_result["bid"]),
+                                    ask=float(cross_result["ask"]),
+                                    spread=float(cross_result["spread"]),
+                                    change_pct=None,
+                                    is_base=False,
+                                    is_calculated=True,
+                                )
+                            )
                         else:
                             # Fallback to mid-price calculation
                             quote_usd = usd_rates.get(quote_curr)
                             if base_usd and quote_usd:
                                 cross_rate = base_usd / quote_usd
-                                row_rates.append(CrossRateCell(
-                                    rate=float(cross_rate),
-                                    change_pct=None,
-                                    is_base=False,
-                                    is_calculated=True
-                                ))
+                                row_rates.append(
+                                    CrossRateCell(
+                                        rate=float(cross_rate),
+                                        change_pct=None,
+                                        is_base=False,
+                                        is_calculated=True,
+                                    )
+                                )
                             else:
-                                row_rates.append(CrossRateCell(
-                                    rate=None,
-                                    change_pct=None,
-                                    is_base=False,
-                                    is_calculated=False
-                                ))
+                                row_rates.append(
+                                    CrossRateCell(
+                                        rate=None,
+                                        change_pct=None,
+                                        is_base=False,
+                                        is_calculated=False,
+                                    )
+                                )
 
-            matrix.append(CrossRateRow(
-                base_currency=base_curr,
-                rates=row_rates
-            ))
+            matrix.append(CrossRateRow(base_currency=base_curr, rates=row_rates))
 
         cache = get_cache()
-        cache.set(f"forex:matrix:{currencies}", {
-            "currencies": currency_list,
-            "matrix": [row.model_dump() for row in matrix],
-            "last_update": datetime.now().isoformat(),
-            "source": "akshare",
-            "status": "ready"
-        }, ttl=120)
+        cache.set(
+            f"forex:matrix:{currencies}",
+            {
+                "currencies": currency_list,
+                "matrix": [row.model_dump() for row in matrix],
+                "last_update": datetime.now().isoformat(),
+                "source": "akshare",
+                "status": "ready",
+            },
+            ttl=120,
+        )
 
-        logger.info(f"[Forex] Matrix background fetch completed: {len(currency_list)} currencies")
+        logger.info(
+            f"[Forex] Matrix background fetch completed: {len(currency_list)} currencies"
+        )
 
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] failed: {e}", exc_info=True)
@@ -874,13 +1004,13 @@ async def _fetch_forex_matrix_background(currencies: str):
 async def calculate_cross_rate_endpoint(request: CrossRateRequest):
     """
     计算交叉汇率
-    
+
     实时汇率转换，支持任意货币对
     通过USD三角套利计算缺失的直接汇率
-    
+
     Args:
         request: 转换请求
-        
+
     Returns:
         CrossRateResponse: 转换结果
     """
@@ -890,21 +1020,23 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
         amount = request.amount
 
         if from_curr == to_curr:
-            return success_response({
-                "from_currency": from_curr,
-                "to_currency": to_curr,
-                "amount": amount,
-                "rate": 1.0,
-                "result": amount,
-                "path": [from_curr],
-                "rate_source": "same",
-                "timestamp": datetime.now().isoformat()
-            })
+            return success_response(
+                {
+                    "from_currency": from_curr,
+                    "to_currency": to_curr,
+                    "amount": amount,
+                    "rate": 1.0,
+                    "result": amount,
+                    "path": [from_curr],
+                    "rate_source": "same",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
         spot_quotes, cfets_rmb, cfets_cross = await asyncio.gather(
             forex_fetcher.get_spot_quotes(),
             forex_fetcher.get_cfets_spot(),
-            forex_fetcher.get_cfets_crosses()
+            forex_fetcher.get_cfets_crosses(),
         )
 
         rates_dict: Dict[str, Decimal] = {}
@@ -939,7 +1071,7 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
         if direct_key in rates_dict:
             rate = rates_dict[direct_key]
         elif inverse_key in rates_dict:
-            rate = Decimal('1') / rates_dict[inverse_key]
+            rate = Decimal("1") / rates_dict[inverse_key]
             rate_source = "inverse"
         else:
             rate = forex_fetcher.calculate_cross_rate(from_curr, to_curr, rates_dict)
@@ -948,20 +1080,24 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
                 rate_source = "triangular"
 
         if rate is None:
-            return error_response(ErrorCode.NOT_FOUND, f"无法获取汇率: {from_curr}/{to_curr}")
+            return error_response(
+                ErrorCode.NOT_FOUND, f"无法获取汇率: {from_curr}/{to_curr}"
+            )
 
         result = float(Decimal(str(amount)) * rate)
 
-        return success_response({
-            "from_currency": from_curr,
-            "to_currency": to_curr,
-            "amount": amount,
-            "rate": float(rate),
-            "result": round(result, 2),
-            "path": path,
-            "rate_source": rate_source,
-            "timestamp": datetime.now().isoformat()
-        })
+        return success_response(
+            {
+                "from_currency": from_curr,
+                "to_currency": to_curr,
+                "amount": amount,
+                "rate": float(rate),
+                "result": round(result, 2),
+                "path": path,
+                "rate_source": rate_source,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"[Forex] 计算交叉汇率失败: {e}", exc_info=True)
@@ -970,12 +1106,13 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
 
 # ==================== 保留旧版端点 (兼容) ====================
 
+
 @router.get("/quotes")
 @handle_errors(module="forex")
 async def get_forex_quotes():
     """
     获取主要货币对报价 (兼容旧版)
-    
+
     数据来源: 中国银行外汇牌价 (AkShare currency_boc_safe)
     """
     cache = get_cache()
@@ -988,27 +1125,33 @@ async def get_forex_quotes():
     async def background_fetch():
         try:
             import concurrent.futures
+
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 df = await asyncio.wait_for(
-                    loop.run_in_executor(executor, _fetch_forex_sync),
-                    timeout=30
+                    loop.run_in_executor(executor, _fetch_forex_sync), timeout=30
                 )
                 if df is not None:
                     cache = get_cache()
-                    cache.set(cache_key, {"quotes": df, "total": len(df), "is_fallback": False}, ttl=3600)
+                    cache.set(
+                        cache_key,
+                        {"quotes": df, "total": len(df), "is_fallback": False},
+                        ttl=3600,
+                    )
                     logger.info(f"[Forex] 后台获取成功，{len(df)} 条数据")
         except Exception as e:
             logger.warning(f"[Forex] 后台获取失败: {e}", exc_info=True)
 
     asyncio.create_task(background_fetch())
 
-    return success_response({
-        "quotes": FALLBACK_FOREX_QUOTES,
-        "total": len(FALLBACK_FOREX_QUOTES),
-        "is_fallback": True,
-        "message": "数据源响应缓慢，显示示例数据（后台正在获取真实数据）"
-    })
+    return success_response(
+        {
+            "quotes": FALLBACK_FOREX_QUOTES,
+            "total": len(FALLBACK_FOREX_QUOTES),
+            "is_fallback": True,
+            "message": "数据源响应缓慢，显示示例数据（后台正在获取真实数据）",
+        }
+    )
 
 
 def _fetch_forex_sync():
@@ -1020,37 +1163,41 @@ def _fetch_forex_sync():
             quotes = []
             for symbol, info in CURRENCY_PAIRS.items():
                 currency_name = info["ak_code"]
-                matching_rows = df[df['货币名称'].str.contains(currency_name, na=False)]
+                matching_rows = df[df["货币名称"].str.contains(currency_name, na=False)]
 
                 if not matching_rows.empty:
                     row = matching_rows.iloc[0]
-                    buy_rate = _safe_float(row.get('中行汇买价'))
-                    sell_rate = _safe_float(row.get('中行汇卖价'))
-                    middle_rate = _safe_float(row.get('中行折算价'))
-                    prev_buy = _safe_float(row.get('中行钞买价'))
+                    buy_rate = _safe_float(row.get("中行汇买价"))
+                    sell_rate = _safe_float(row.get("中行汇卖价"))
+                    middle_rate = _safe_float(row.get("中行折算价"))
+                    prev_buy = _safe_float(row.get("中行钞买价"))
                     change_pct = None
                     if buy_rate and prev_buy and prev_buy > 0:
                         change_pct = round((buy_rate - prev_buy) / prev_buy * 100, 4)
 
-                    quotes.append({
-                        "symbol": symbol,
-                        "name": info["name"],
-                        "buy_rate": buy_rate,
-                        "sell_rate": sell_rate,
-                        "middle_rate": middle_rate,
-                        "change_pct": change_pct,
-                        "date": str(row.get('发布日期', '') or row.get('日期', '')),
-                    })
+                    quotes.append(
+                        {
+                            "symbol": symbol,
+                            "name": info["name"],
+                            "buy_rate": buy_rate,
+                            "sell_rate": sell_rate,
+                            "middle_rate": middle_rate,
+                            "change_pct": change_pct,
+                            "date": str(row.get("发布日期", "") or row.get("日期", "")),
+                        }
+                    )
                 else:
-                    quotes.append({
-                        "symbol": symbol,
-                        "name": info["name"],
-                        "buy_rate": None,
-                        "sell_rate": None,
-                        "middle_rate": None,
-                        "change_pct": None,
-                        "date": None,
-                    })
+                    quotes.append(
+                        {
+                            "symbol": symbol,
+                            "name": info["name"],
+                            "buy_rate": None,
+                            "sell_rate": None,
+                            "middle_rate": None,
+                            "change_pct": None,
+                            "date": None,
+                        }
+                    )
             return quotes
     except Exception as e:
         logger.warning(f"[Forex] 同步获取失败: {e}", exc_info=True)
@@ -1061,15 +1208,15 @@ def _fetch_forex_sync():
 @handle_errors(module="forex")
 async def get_forex_history(
     pair: str,
-    days: int = Query(30, ge=1, le=365, description="返回天数，支持 7/30/90/365")
+    days: int = Query(30, ge=1, le=365, description="返回天数，支持 7/30/90/365"),
 ):
     """
     获取货币对历史数据 (兼容旧版)
-    
+
     参数:
     - pair: 货币对，如 USDCNY, EUR/CNY, USD-CNY
     - days: 历史天数，支持 7, 30, 90, 365
-    
+
     返回:
     - OHLC 数据（开高低收）
     - 数据为模拟生成，包含逼真的趋势和波动
@@ -1113,14 +1260,16 @@ async def get_forex_history(
             "total": len(history),
             "days": days,
             "base_rate": base_rate,
-            "note": "历史数据为模拟生成，包含逼真的趋势和波动模式。实际项目应接入真实数据源。"
+            "note": "历史数据为模拟生成，包含逼真的趋势和波动模式。实际项目应接入真实数据源。",
         }
         cache.set(cache_key, result, ttl=3600)
         return success_response(result)
 
     except Exception as e:
         logger.error(f"获取外汇历史数据失败: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取外汇历史数据失败: {str(e)}")
+        return error_response(
+            ErrorCode.INTERNAL_ERROR, f"获取外汇历史数据失败: {str(e)}"
+        )
 
 
 @router.get("/health")
@@ -1129,34 +1278,40 @@ async def health_check():
     """健康检查"""
     cache = get_cache()
     stats = cache.get_stats()
-    return success_response({
-        "status": "ok",
-        "service": "forex",
-        "cache_size": stats["entry_count"],
-        "cache_hit_rate": stats["hit_rate"],
-        "cache_memory_mb": stats["memory_usage_mb"],
-        "supported_pairs": list(CURRENCY_PAIRS.keys()),
-        "supported_currencies": SUPPORTED_CURRENCIES,
-        "circuit_breaker": {
-            "is_available": forex_fetcher.cb.is_available(),
-            "state": forex_fetcher.cb.state.value,
-            "consecutive_failures": forex_fetcher.cb._stats.consecutive_failures,
+    return success_response(
+        {
+            "status": "ok",
+            "service": "forex",
+            "cache_size": stats["entry_count"],
+            "cache_hit_rate": stats["hit_rate"],
+            "cache_memory_mb": stats["memory_usage_mb"],
+            "supported_pairs": list(CURRENCY_PAIRS.keys()),
+            "supported_currencies": SUPPORTED_CURRENCIES,
+            "circuit_breaker": {
+                "is_available": forex_fetcher.cb.is_available(),
+                "state": forex_fetcher.cb.state.value,
+                "consecutive_failures": forex_fetcher.cb._stats.consecutive_failures,
+            },
         }
-    })
+    )
 
 
 @router.get("/convert")
 @handle_errors(module="forex")
 async def convert_currency(
     amount: float = Query(..., gt=0, le=1000000000, description="转换金额"),
-    from_currency: str = Query(..., description="源货币代码 (USD/EUR/GBP/JPY/HKD/AUD/CNY)"),
-    to_currency: str = Query(..., description="目标货币代码 (USD/EUR/GBP/JPY/HKD/AUD/CNY)")
+    from_currency: str = Query(
+        ..., description="源货币代码 (USD/EUR/GBP/JPY/HKD/AUD/CNY)"
+    ),
+    to_currency: str = Query(
+        ..., description="目标货币代码 (USD/EUR/GBP/JPY/HKD/AUD/CNY)"
+    ),
 ):
     """
     货币转换 (兼容旧版)
-    
+
     支持: USD, EUR, GBP, JPY, HKD, AUD, CNY 之间的任意转换
-    
+
     示例:
     - /convert?amount=100&from_currency=USD&to_currency=CNY
     - /convert?amount=1000&from_currency=EUR&to_currency=USD (交叉汇率)
@@ -1165,25 +1320,35 @@ async def convert_currency(
     to_currency = to_currency.upper()
 
     if from_currency not in SUPPORTED_CURRENCIES:
-        return error_response(ErrorCode.BAD_REQUEST, f"不支持的货币: {from_currency}，支持: {SUPPORTED_CURRENCIES}")
+        return error_response(
+            ErrorCode.BAD_REQUEST,
+            f"不支持的货币: {from_currency}，支持: {SUPPORTED_CURRENCIES}",
+        )
     if to_currency not in SUPPORTED_CURRENCIES:
-        return error_response(ErrorCode.BAD_REQUEST, f"不支持的货币: {to_currency}，支持: {SUPPORTED_CURRENCIES}")
+        return error_response(
+            ErrorCode.BAD_REQUEST,
+            f"不支持的货币: {to_currency}，支持: {SUPPORTED_CURRENCIES}",
+        )
 
     if from_currency == to_currency:
-        return success_response({
-            "from_currency": from_currency,
-            "to_currency": to_currency,
-            "amount": amount,
-            "rate": 1.0,
-            "result": amount,
-            "rate_source": "same_currency",
-            "timestamp": datetime.now().isoformat()
-        })
+        return success_response(
+            {
+                "from_currency": from_currency,
+                "to_currency": to_currency,
+                "amount": amount,
+                "rate": 1.0,
+                "result": amount,
+                "rate_source": "same_currency",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
     rate = _calculate_cross_rate(from_currency, to_currency)
 
     if rate is None:
-        return error_response(ErrorCode.INTERNAL_ERROR, f"无法获取汇率: {from_currency}/{to_currency}")
+        return error_response(
+            ErrorCode.INTERNAL_ERROR, f"无法获取汇率: {from_currency}/{to_currency}"
+        )
 
     result = round(amount * rate, 2)
 
@@ -1193,15 +1358,17 @@ async def convert_currency(
     if cached_quotes and cached_quotes.get("is_fallback", True):
         rate_source = "fallback"
 
-    return success_response({
-        "from_currency": from_currency,
-        "to_currency": to_currency,
-        "amount": amount,
-        "rate": rate,
-        "result": result,
-        "rate_source": rate_source,
-        "timestamp": datetime.now().isoformat()
-    })
+    return success_response(
+        {
+            "from_currency": from_currency,
+            "to_currency": to_currency,
+            "amount": amount,
+            "rate": rate,
+            "result": result,
+            "rate_source": rate_source,
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
 
 def _safe_float(val):
@@ -1268,13 +1435,15 @@ def _generate_realistic_ohlc(base_rate: float, days: int, pair: str) -> List[Dic
         low_rate = round(min(open_rate, high_rate, low_rate, close_rate), decimals)
         close_rate = round(close_rate, decimals)
 
-        history.append({
-            "date": date.strftime("%Y-%m-%d"),
-            "open": open_rate,
-            "high": high_rate,
-            "low": low_rate,
-            "close": close_rate,
-        })
+        history.append(
+            {
+                "date": date.strftime("%Y-%m-%d"),
+                "open": open_rate,
+                "high": high_rate,
+                "low": low_rate,
+                "close": close_rate,
+            }
+        )
 
         current_rate = close_rate
 
