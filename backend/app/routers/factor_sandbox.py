@@ -710,7 +710,14 @@ async def stream_screening_progress(task_id: str):
             
             await asyncio.sleep(0.3)
     
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(
+        event_generator(),
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache, must-revalidate",
+            "Connection": "keep-alive",
+        }
+    )
 
 
 @router.post("/screen/{task_id}/cancel")

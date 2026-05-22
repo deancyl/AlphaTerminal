@@ -271,9 +271,9 @@ export function useFactorSandbox() {
       }
       
       await new Promise((resolve, reject) => {
-        const eventSource = new EventSource(
-          `/api/v1/factor_sandbox/screen/${taskId}/stream`
-        )
+        const authToken = localStorage.getItem('auth_token') || localStorage.getItem('api_key') || ''
+        const eventSourceUrl = `/api/v1/factor_sandbox/screen/${taskId}/stream${authToken ? `?token=${encodeURIComponent(authToken)}` : ''}`
+        const eventSource = new EventSource(eventSourceUrl)
         
         eventSource.onmessage = (event) => {
           try {

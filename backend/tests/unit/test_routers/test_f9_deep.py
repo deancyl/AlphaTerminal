@@ -258,6 +258,7 @@ class TestF9ShareholderEndpoint:
             mock_breaker.__exit__ = MagicMock(return_value=False)
             mock_breaker.is_available.return_value = True
 
+            # Patch akshare module - the import happens inside the function
             with patch('akshare.stock_circulate_stock_holder', return_value=mock_shareholder_df):
                 with patch('akshare.stock_share_change_cninfo', side_effect=Exception("No data")):
                     with patch('akshare.stock_shareholder_change_ths', side_effect=Exception("No data")):

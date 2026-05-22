@@ -16,6 +16,24 @@ os.environ["RATE_LIMIT_ENABLED"] = "false"
 # Add app directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# Proxy availability check
+PROXY_AVAILABLE = bool(os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY"))
+
+
+@pytest.fixture(scope="session")
+def proxy_available():
+    """Check if proxy is available for external API tests."""
+    return PROXY_AVAILABLE
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip proxy-dependent tests when proxy unavailable."""
+    skip_proxy = pytest.mark.skip(reason="Proxy required but not available (set HTTP_PROXY or HTTPS_PROXY)")
+    
+    for item in items:
+        if "proxy" in item.keywords and not PROXY_AVAILABLE:
+            item.add_marker(skip_proxy)
+
 
 @pytest.fixture(scope="session")
 def event_loop():

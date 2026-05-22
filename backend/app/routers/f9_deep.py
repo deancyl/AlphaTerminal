@@ -10,6 +10,7 @@ Timeout Behavior:
 import logging
 import asyncio
 import time
+import httpx
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
@@ -181,6 +182,9 @@ async def get_shareholder_data(symbol: str):
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                     logger.warning(f"[HTTP] share changes: {e}", exc_info=True)
                     return []
+                except Exception as e:
+                    logger.warning(f"[shareholder] Unexpected error in share changes: {e}", exc_info=True)
+                    return []
             return await loop.run_in_executor(_executor, _fetch)
         
         # 3. 获取股东变动记录
@@ -210,6 +214,9 @@ async def get_shareholder_data(symbol: str):
                     return []
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                     logger.warning(f"[HTTP] holder changes: {e}", exc_info=True)
+                    return []
+                except Exception as e:
+                    logger.warning(f"[shareholder] Unexpected error in holder changes: {e}", exc_info=True)
                     return []
             return await loop.run_in_executor(_executor, _fetch)
         

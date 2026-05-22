@@ -243,24 +243,26 @@ export async function apiFetch(url, options = {}) {
       clearTimeout(timer)
       lastError = e
       const isAbortError = e.name === 'AbortError'
+      const isUserAbort = isAbortError && externalSignal?.aborted
       const isNetworkError = e.name === 'TypeError' || e.message?.includes('fetch') || e.message?.includes('Failed to fetch')
       const isClientError = e.message?.match(/^HTTP 4\d{2}$/) || e.message?.includes('参数校验失败')
       const isServerError = e.message?.startsWith('HTTP 5')
       
-      // AbortError（超时）不重试，直接抛出
       if (isAbortError) {
+        if (isUserAbort) {
+          throw e
+        }
         throw new Error(`请求超时（${timeoutMs / 1000}s）`)
       }
       
-      // 仅对服务器错误和网络错误重试
       if (attempt < retries && (isServerError || isNetworkError)) {
         const backoffMs = calculateRetryDelay(attempt)
         logger.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}): ${e.message}, retrying in ${backoffMs}ms...`)
         await sleep(backoffMs)
         continue
       }
-      // 仅对服务器错误(5xx)和网络错误触发熔断计数，4xx客户端错误不触发
-      if (!isClientError) {
+      const shouldTriggerFailure = !isClientError && !isUserAbort
+      if (shouldTriggerFailure) {
         _onFailure(url, e.message)
       }
     } finally {

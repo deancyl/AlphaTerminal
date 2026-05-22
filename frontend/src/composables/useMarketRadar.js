@@ -56,6 +56,38 @@ function saveRefreshInterval(interval) {
   }
 }
 
+// localStorage cache for treemap data (5 minute TTL)
+const CACHE_KEY_TREEMAP = 'alphaterminal_market_radar_treemap'
+const CACHE_TTL = 5 * 60 * 1000
+
+function loadTreemapFromCache() {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY_TREEMAP)
+    if (cached) {
+      const { data, timestamp, last_update, source_detail } = JSON.parse(cached)
+      if (Date.now() - timestamp < CACHE_TTL && data && data.length > 0) {
+        return { data, last_update, source_detail }
+      }
+    }
+  } catch (e) {
+    logger.warn('[MarketRadar] Cache load error:', e.message)
+  }
+  return null
+}
+
+function saveTreemapToCache(data, last_update, source_detail) {
+  try {
+    localStorage.setItem(CACHE_KEY_TREEMAP, JSON.stringify({
+      data,
+      timestamp: Date.now(),
+      last_update,
+      source_detail
+    }))
+  } catch (e) {
+    logger.warn('[MarketRadar] Cache save error:', e.message)
+  }
+}
+
 /**
  * Market Radar composable for treemap and anomaly data
  * @returns {Object} Market Radar API methods and state
@@ -83,43 +115,55 @@ export function useMarketRadar() {
   // P2-8: Refresh interval state
   const refreshInterval = ref(getStoredRefreshInterval())
   let refreshTimer = null
+  let abortController = null
   
   /**
    * Fetch treemap data for market visualization
    * @param {string} level - 'sector' or 'stock' aggregation level
    * @returns {Promise<void>}
    */
-  async function fetchTreemap(level = 'sector') {
+  async function fetchTreemap(signal) {
+    const cached = loadTreemapFromCache()
+    if (cached) {
+      treemapData.value = cached.data
+      lastUpdate.value = cached.last_update
+      dataSource.value = cached.source_detail || null
+      logger.info('[MarketRadar] Loaded treemap from cache:', cached.data.length, 'items')
+      return
+    }
+    
     try {
       const response = await apiFetchDeduped(
-        `market_radar:treemap:${level}`,
-        `/api/v1/market_radar/treemap?level=${level}`,
-        { timeoutMs: 15000 }
+        'market_radar:treemap:sector',
+        '/api/v1/market_radar/treemap?level=sector',
+        { timeoutMs: 15000, signal }
       )
       
-      treemapData.value = response?.data || []
-      lastUpdate.value = response?.last_update || new Date().toISOString()
+      const data = response?.data || []
+      const last_update = response?.last_update || new Date().toISOString()
       
-      // P1-5: Extract data source information
+      treemapData.value = data
+      lastUpdate.value = last_update
+      
       if (response?.source_detail) {
         dataSource.value = {
           name: response.source_detail.name || '未知',
           type: response.source_detail.type || '缓存',
           api: response.source_detail.api || '',
-          timestamp: response.last_update
+          timestamp: last_update
         }
       } else if (response?.data_source) {
-        // Fallback for simpler data_source field
         dataSource.value = {
           name: response.data_source === 'akshare' ? '东方财富' : '缓存',
           type: response.data_source === 'akshare' ? '实时' : '缓存',
-          timestamp: response.last_update
+          timestamp: last_update
         }
       }
       
+      saveTreemapToCache(data, last_update, dataSource.value)
       error.value = null
       
-      logger.info('[MarketRadar] Treemap data loaded:', treemapData.value.length, 'items')
+      logger.info('[MarketRadar] Treemap data loaded:', data.length, 'items')
     } catch (e) {
       logger.error('[MarketRadar] Failed to fetch treemap:', e)
       error.value = e.message || '加载失败'
@@ -132,12 +176,12 @@ export function useMarketRadar() {
    * Fetch anomaly alerts
    * @returns {Promise<void>}
    */
-  async function fetchAnomalies() {
+  async function fetchAnomalies(signal) {
     try {
       const response = await apiFetchDeduped(
         'market_radar:anomalies',
         '/api/v1/market_radar/anomalies',
-        { timeoutMs: 15000 }
+        { timeoutMs: 15000, signal }
       )
       
       anomalies.value = response?.anomalies || []
@@ -155,12 +199,12 @@ export function useMarketRadar() {
    * Fetch market temperature data
    * @returns {Promise<void>}
    */
-  async function fetchTemperature() {
+  async function fetchTemperature(signal) {
     try {
       const response = await apiFetchDeduped(
         'market_radar:temperature',
         '/api/v1/market_radar/temperature',
-        { timeoutMs: 10000 }
+        { timeoutMs: 10000, signal }
       )
       
       if (response) {
@@ -186,20 +230,43 @@ export function useMarketRadar() {
   
   /**
    * Refresh all data
+   * Each fetch runs independently - one slow/hanging request won't block others
    * @returns {Promise<void>}
    */
   async function refresh() {
+    if (abortController) {
+      abortController.abort()
+    }
+    abortController = new AbortController()
+    
     loading.value = true
     error.value = null
-    
-    try {
-      await Promise.all([fetchTreemap(), fetchAnomalies(), fetchTemperature()])
-    } catch (e) {
-      // Error already set in individual fetch methods
-      logger.error('[MarketRadar] Refresh failed:', e)
-    } finally {
-      loading.value = false
+
+    const signal = abortController.signal
+
+    const results = await Promise.allSettled([
+      fetchTreemap(signal),
+      fetchAnomalies(signal),
+      fetchTemperature(signal)
+    ])
+
+    const errors = results.filter(r => r.status === 'rejected')
+    if (errors.length > 0) {
+      if (results[0].status === 'rejected') {
+        error.value = results[0].reason?.message || '热力图加载失败'
+      }
+      logger.error('[MarketRadar] Some fetches failed:', errors.map(e => e.reason?.message))
     }
+
+    loading.value = false
+  }
+  
+  function cancelRefresh() {
+    if (abortController) {
+      abortController.abort()
+      abortController = null
+    }
+    stopAutoRefresh()
   }
   
   /**
@@ -268,6 +335,11 @@ export function useMarketRadar() {
     saveRefreshInterval(newInterval)
   })
   
+  // Cleanup on unmount
+  onBeforeUnmount(() => {
+    cancelRefresh()
+  })
+  
   return {
     // State
     treemapData,
@@ -284,6 +356,7 @@ export function useMarketRadar() {
     fetchAnomalies,
     fetchTemperature,
     refresh,
+    cancelRefresh,
     formatTime,
     setRefreshInterval, // P2-8: Set refresh interval
     startAutoRefresh, // P2-8: Start timer

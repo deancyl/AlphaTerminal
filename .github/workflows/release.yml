@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Build frontend
+      working-directory: ./frontend
+      run: npm run build
+
+    - name: Run backend tests
+      working-directory: ./backend
+      run: pytest tests/ -v --tb=short
+
+    - name: Create release archive
+      run: |
+        tar -czvf alpha-terminal-${{ github.ref_name }}.tar.gz \
+          --exclude='node_modules' \
+          --exclude='.git' \
+          --exclude='__pycache__' \
+          --exclude='.pytest_cache' \
+          --exclude='htmlcov' \
+          --exclude='.coverage' \
+          backend frontend scripts docs README.md LICENSE start-services.sh
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: alpha-terminal-${{ github.ref_name }}.tar.gz
+        generate_release_notes: true
+        body: |
+          ## AlphaTerminal Release ${/github.ref_name/}
+
+          ### Quick Start
+          ```bash
+          tar -xzvf alpha-terminal-${{ github.ref_name }}.tar.gz
+          cd AlphaTerminal
+          ./start-services.sh all
+          ```
+
+          ### What's Changed
+          See [CHANGELOG.md](./CHANGELOG.md) for detailed changes.

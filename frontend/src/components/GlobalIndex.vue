@@ -206,6 +206,8 @@ function getSparkline(data) {
 async function selectIndex(index) {
   selectedIndex.value = index
   await nextTick()
+  await new Promise(resolve => requestAnimationFrame(resolve))
+  await new Promise(resolve => requestAnimationFrame(resolve))
   await renderDetailChart()
 }
 
@@ -267,6 +269,7 @@ async function renderDetailChart() {
         }
       }]
     })
+    chart.resize()
   } catch (e) {
     logger.error(`[GlobalIndex] Failed to render chart: ${e.message}`)
   }

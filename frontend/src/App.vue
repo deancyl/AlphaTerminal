@@ -174,7 +174,7 @@
           </div>
 
         <!-- 股票行情（默认） -->
-        <KeepAlive :max="10" :include="['DashboardGrid', 'MacroDashboard', 'FuturesDashboard', 'PortfolioDashboard', 'BondDashboard', 'ForexDashboard']">
+        <KeepAlive :max="10" :include="['DashboardGrid', 'MacroDashboard', 'FuturesDashboard', 'PortfolioDashboard', 'BondDashboard', 'ForexDashboard', 'MarketRadar']">
           <DashboardGrid
             v-if="currentView === 'stock'"
             ref="dashboardGridRef"
