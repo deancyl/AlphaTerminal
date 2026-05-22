@@ -388,7 +388,7 @@ class TestForexFetcherFallback:
             result = await fetcher.get_spot_quotes()
 
         assert result is not None
-        assert len(result) == 6
+        assert len(result) == 10
         assert all(q.get("source") == "static" for q in result)
         assert all(q.get("is_demo") is True for q in result)
 

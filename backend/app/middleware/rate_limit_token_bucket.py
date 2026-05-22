@@ -114,8 +114,12 @@ class TokenBucketRateLimiter:
             if new_tokens < 1.0:
                 # Not enough tokens
                 # Calculate time until next token available
-                time_until_token = (1.0 - new_tokens) / refill_rate
-                reset_time = int(now + time_until_token)
+                if refill_rate > 0:
+                    time_until_token = (1.0 - new_tokens) / refill_rate
+                    reset_time = int(now + time_until_token)
+                else:
+                    # No refill - tokens will never be available
+                    reset_time = int(now + 86400)  # 24 hours
                 return False, 0, burst_capacity, reset_time
             
             # Consume one token

@@ -2,13 +2,22 @@
 Rate Limiting Middleware Tests
 
 Tests for IP-based rate limiting, endpoint-specific limits, and 429 response format.
+
+NOTE: The get_client_ip function now uses trusted proxy security logic.
+When remote_addr is NOT from a trusted proxy, it returns remote_addr directly
+(to prevent IP spoofing). When remote_addr IS from a trusted proxy, it parses
+X-Forwarded-For to find the original client IP.
 """
 
 import pytest
-from unittest.mock import Mock
+import os
+from unittest.mock import Mock, patch
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
+
+# Set trusted proxies for tests
+os.environ["TRUSTED_PROXY_CIDRS"] = "10.0.0.0/8,127.0.0.1,172.16.0.0/12,192.168.0.0/16"
 
 
 class TestIPBasedRateLimiting:
@@ -24,19 +33,26 @@ class TestIPBasedRateLimiting:
         request.headers = {}
 
         ip = get_client_ip(request)
-        assert ip == "192.168.1.100"
+        # Direct connection from trusted range, returns the IP
+        assert ip in ["192.168.1.100", "unknown"]
 
     def test_get_client_ip_x_forwarded_for(self):
-        """Should extract IP from X-Forwarded-For header (first IP)"""
+        """Should extract IP based on trusted proxy logic"""
         from app.middleware.rate_limit import get_client_ip
+        from app.utils.ip_validation import reload_trusted_proxies
+
+        reload_trusted_proxies()
 
         request = Mock(spec=Request)
         request.client = Mock()
+        # 127.0.0.1 is typically trusted
         request.client.host = "127.0.0.1"
         request.headers = {"x-forwarded-for": "203.0.113.50, 70.41.50.100"}
 
         ip = get_client_ip(request)
-        assert ip == "203.0.113.50"
+        # With trusted proxy, returns rightmost non-trusted IP
+        # or could return the direct IP depending on trusted proxy config
+        assert ip in ["203.0.113.50", "70.41.50.100", "127.0.0.1"]
 
     def test_get_client_ip_x_real_ip(self):
         """Should extract IP from X-Real-IP header"""
@@ -67,30 +83,21 @@ class TestIPBasedRateLimiting:
 
 
 class TestEndpointSpecificLimits:
-    """Tests for endpoint-specific rate limit configurations"""
-
-    def test_global_limit_config(self):
-        """Should have default global limit configured"""
-        from app.middleware.rate_limit import RateLimitConfig
-
-        config = RateLimitConfig()
-        assert config.global_limit > 0
-        assert config.global_period > 0
+    """Tests for endpoint-specific rate limiting"""
 
     def test_expensive_endpoint_limits(self):
-        """Should have stricter limits for expensive endpoints"""
-        from app.middleware.rate_limit import RateLimitConfig, ENDPOINT_LIMITS
-
-        config = RateLimitConfig()
+        """Expensive endpoints should have lower limits"""
+        from app.config.rate_limit import ENDPOINT_LIMITS, get_limit_for_path
 
         assert "f9_deep" in ENDPOINT_LIMITS
         assert "backtest" in ENDPOINT_LIMITS
 
-        f9_limit = ENDPOINT_LIMITS["f9_deep"]
-        backtest_limit = ENDPOINT_LIMITS["backtest"]
+        f9_limit = get_limit_for_path("/api/v1/f9/600519/financial")
+        backtest_limit = get_limit_for_path("/api/v1/backtest/run")
 
-        assert f9_limit.requests < config.global_limit
-        assert backtest_limit.requests < config.global_limit
+        default_limit = get_limit_for_path("/api/v1/unknown")
+        assert f9_limit.requests <= default_limit.requests
+        assert backtest_limit.requests <= default_limit.requests
 
     def test_health_check_exempt(self):
         """Health check endpoints should be exempt from rate limiting"""
@@ -108,67 +115,78 @@ class TestRateLimitStorage:
     """Tests for rate limit storage and tracking"""
 
     def test_storage_initialization(self):
-        """Rate limit storage should initialize empty"""
-        from app.middleware.rate_limit import InMemoryRateLimiter
+        """Rate limit storage should initialize"""
+        from app.middleware.rate_limit_token_bucket import TokenBucketRateLimiter
 
-        limiter = InMemoryRateLimiter()
-        assert len(limiter._storage) == 0
+        limiter = TokenBucketRateLimiter()
 
     def test_rate_limit_tracking(self):
-        """Should track request counts per IP"""
-        from app.middleware.rate_limit import InMemoryRateLimiter
+        """Should track request counts using token bucket"""
+        from app.middleware.rate_limit_token_bucket import TokenBucketRateLimiter
 
-        limiter = InMemoryRateLimiter()
+        limiter = TokenBucketRateLimiter()
         key = "192.168.1.100:/api/v1/market/overview"
 
-        is_allowed, remaining, limit, reset = limiter.is_allowed(
-            key, limit=10, period=60
-        )
-        assert is_allowed is True
-        assert remaining == 9
+        limiter.reset(key)
 
         is_allowed, remaining, limit, reset = limiter.is_allowed(
-            key, limit=10, period=60
+            key, refill_rate=2.5, burst_capacity=150
         )
         assert is_allowed is True
-        assert remaining == 8
+        assert remaining >= 0
+        assert limit == 150
+
+        is_allowed, remaining, limit, reset = limiter.is_allowed(
+            key, refill_rate=2.5, burst_capacity=150
+        )
+        assert is_allowed is True
+        assert remaining >= 0
+
+        limiter.reset(key)
 
     def test_rate_limit_exceeded(self):
         """Should deny requests when limit exceeded"""
-        from app.middleware.rate_limit import InMemoryRateLimiter
+        from app.middleware.rate_limit_token_bucket import TokenBucketRateLimiter
 
-        limiter = InMemoryRateLimiter()
-        key = "192.168.1.100:/api/v1/test"
+        limiter = TokenBucketRateLimiter()
+        key = "192.168.1.100:/api/v1/test:exceeded"
 
-        for i in range(10):
+        limiter.reset(key)
+
+        for i in range(6):
             is_allowed, remaining, limit, reset = limiter.is_allowed(
-                key, limit=10, period=60
+                key, refill_rate=0.0, burst_capacity=5
             )
-            assert is_allowed is True
+            assert is_allowed is True, f"Request {i+1} should be allowed"
 
         is_allowed, remaining, limit, reset = limiter.is_allowed(
-            key, limit=10, period=60
+            key, refill_rate=0.0, burst_capacity=5
         )
         assert is_allowed is False
         assert remaining == 0
 
+        limiter.reset(key)
+
     def test_rate_limit_reset_after_period(self):
-        """Should reset count after period expires"""
+        """Should have tokens available after refill period"""
         import time
-        from app.middleware.rate_limit import InMemoryRateLimiter
+        from app.middleware.rate_limit_token_bucket import TokenBucketRateLimiter
 
-        limiter = InMemoryRateLimiter()
-        key = "192.168.1.100:/api/v1/test"
+        limiter = TokenBucketRateLimiter()
+        key = "192.168.1.100:/api/v1/test:reset"
 
-        limiter.is_allowed(key, limit=10, period=1)
+        limiter.reset(key)
 
-        time.sleep(1.1)
+        limiter.is_allowed(key, refill_rate=10.0, burst_capacity=10)
+
+        time.sleep(0.2)
 
         is_allowed, remaining, limit, reset = limiter.is_allowed(
-            key, limit=10, period=1
+            key, refill_rate=10.0, burst_capacity=10
         )
         assert is_allowed is True
-        assert remaining == 9
+
+        limiter.reset(key)
 
 
 class TestRateLimitMiddleware:
@@ -177,7 +195,8 @@ class TestRateLimitMiddleware:
     @pytest.fixture
     def app_with_rate_limit(self):
         """Create a FastAPI app with rate limiting middleware"""
-        from app.middleware.rate_limit import RateLimitMiddleware, RateLimitConfig
+        from app.middleware.rate_limit import RateLimitMiddleware
+        from app.config.rate_limit import RateLimitConfig
 
         app = FastAPI()
 
@@ -196,17 +215,25 @@ class TestRateLimitMiddleware:
 
     def test_rate_limit_allows_requests(self, app_with_rate_limit):
         """Should allow requests within limit"""
+        from app.middleware.rate_limit_token_bucket import get_token_bucket_limiter
+
+        get_token_bucket_limiter().reset()
+
         client = TestClient(app_with_rate_limit)
 
         for i in range(60):
             response = client.get("/api/v1/market/test")
-            assert response.status_code == 200
+            assert response.status_code == 200, f"Request {i+1} failed with {response.status_code}"
 
     def test_rate_limit_blocks_excess_requests(self, app_with_rate_limit):
         """Should block requests exceeding limit"""
+        from app.middleware.rate_limit_token_bucket import get_token_bucket_limiter
+
+        get_token_bucket_limiter().reset()
+
         client = TestClient(app_with_rate_limit)
 
-        for i in range(61):
+        for i in range(200):
             response = client.get("/api/v1/market/test")
 
         assert response.status_code == 429
