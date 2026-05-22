@@ -1,9 +1,10 @@
 <template>
   <div class="options-dashboard h-full flex flex-col bg-base overflow-hidden" role="region" aria-label="期权分析面板">
     <div class="header flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-theme-secondary">
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
         <span class="text-lg font-bold text-primary">📊 期权分析</span>
-        <span class="text-xs text-secondary hidden sm:inline">IV Smile · PCR · Greeks</span>
+        <EducationalTooltip term="call" />
+        <span class="text-xs text-secondary hidden sm:inline">波动率 · 市场情绪 · 风险指标</span>
       </div>
       
       <div class="flex items-center gap-2">
@@ -53,7 +54,10 @@
       <div v-else-if="chainData" class="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div class="charts-row flex-shrink-0 grid grid-cols-1 md:grid-cols-3 gap-3 p-4 border-b border-theme-secondary">
           <div class="chart-panel bg-surface rounded-sm p-3">
-            <div class="text-xs text-secondary mb-2">IV Smile 曲线</div>
+            <div class="flex items-center gap-1 text-xs text-secondary mb-2">
+              <span>波动率曲线</span>
+              <EducationalTooltip term="iv" />
+            </div>
             <IVSmileChart :ivSmileData="ivSmileData" :atmStrike="atmStrike" />
           </div>
           
@@ -62,7 +66,10 @@
           </div>
           
           <div class="chart-panel bg-surface rounded-sm p-3">
-            <div class="text-xs text-secondary mb-2">Greeks 分布</div>
+            <div class="flex items-center gap-1 text-xs text-secondary mb-2">
+              <span>风险指标</span>
+              <EducationalTooltip term="delta" />
+            </div>
             <GreeksChart :greeksData="greeksData" :atmStrike="atmStrike" />
           </div>
         </div>
@@ -76,59 +83,73 @@
           
           <div class="table-body flex-1 overflow-x-auto overflow-y-auto">
             <table class="w-full text-xs border-collapse">
-              <thead class="sticky top-0 bg-surface z-10">
-                <tr class="text-secondary">
-                  <th class="px-2 py-1.5 text-right">最新价</th>
-                  <th class="px-2 py-1.5 text-right">涨跌</th>
-                  <th class="px-2 py-1.5 text-right">IV</th>
-                  <th class="px-2 py-1.5 text-right">Delta</th>
-                  <th class="px-2 py-1.5 text-center bg-primary/10 sticky left-0 z-20">Strike</th>
-                  <th class="px-2 py-1.5 text-right">Delta</th>
-                  <th class="px-2 py-1.5 text-right">IV</th>
-                  <th class="px-2 py-1.5 text-right">涨跌</th>
-                  <th class="px-2 py-1.5 text-right">最新价</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="row in chainRows"
-                  :key="row.strike"
-                  class="hover:bg-primary/5 transition"
-                  :class="{ 'bg-primary/10 font-bold': row.strike === atmStrike }"
-                  tabindex="0"
-                >
-                  <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getPriceClass(row.call?.change)">
-                    {{ formatPrice(row.call?.latest) }}
-                  </td>
-                  <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getChangeClass(row.call?.change)">
-                    {{ formatChange(row.call?.change) }}
-                  </td>
-                  <td class="px-2 py-1.5 text-right font-mono tabular-nums">
-                    {{ formatPercent(row.call?.iv) }}
-                  </td>
-                  <td class="px-2 py-1.5 text-right font-mono tabular-nums">
-                    {{ formatGreek(row.call?.delta) }}
-                  </td>
-                  
-                  <td class="px-2 py-1.5 text-center font-mono tabular-nums bg-primary/10 sticky left-0 z-10 text-primary">
-                    {{ row.strike }}
-                    <span v-if="row.strike === atmStrike" class="text-warning ml-1">◀</span>
-                  </td>
-                  
-                  <td class="px-2 py-1.5 text-right font-mono tabular-nums">
-                    {{ formatGreek(row.put?.delta) }}
-                  </td>
-                  <td class="px-2 py-1.5 text-right font-mono tabular-nums">
-                    {{ formatPercent(row.put?.iv) }}
-                  </td>
-                  <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getChangeClass(row.put?.change)">
-                    {{ formatChange(row.put?.change) }}
-                  </td>
-                  <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getPriceClass(row.put?.change)">
-                    {{ formatPrice(row.put?.latest) }}
-                  </td>
-                </tr>
-              </tbody>
+               <thead class="sticky top-0 bg-surface z-10">
+                 <tr class="text-secondary">
+                   <th class="px-2 py-1.5 text-right">最新价</th>
+                   <th class="px-2 py-1.5 text-right">涨跌</th>
+                   <th class="px-2 py-1.5 text-right">IV</th>
+                   <th class="px-2 py-1.5 text-right">Delta</th>
+                   <th class="px-2 py-1.5 text-right">持仓量</th>
+                   <th class="px-2 py-1.5 text-center bg-primary/10 sticky left-0 z-20">Strike</th>
+                   <th class="px-2 py-1.5 text-right">持仓量</th>
+                   <th class="px-2 py-1.5 text-right">Delta</th>
+                   <th class="px-2 py-1.5 text-right">IV</th>
+                   <th class="px-2 py-1.5 text-right">涨跌</th>
+                   <th class="px-2 py-1.5 text-right">最新价</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 <tr
+                   v-for="row in chainRows"
+                   :key="row.strike"
+                   class="hover:bg-primary/5 transition"
+                   :class="{ 'bg-primary/10 font-bold': row.strike === atmStrike }"
+                   tabindex="0"
+                 >
+                   <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getPriceClass(row.call?.change)">
+                     {{ formatPrice(row.call?.latest) }}
+                   </td>
+                   <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getChangeClass(row.call?.change)">
+                     {{ formatChange(row.call?.change) }}
+                   </td>
+                   <td class="px-2 py-1.5 text-right font-mono tabular-nums">
+                     {{ formatPercent(row.call?.iv) }}
+                   </td>
+                   <td class="px-2 py-1.5 text-right font-mono tabular-nums">
+                     {{ formatGreek(row.call?.delta) }}
+                   </td>
+                   <td class="px-2 py-1.5 text-right">
+                     <div class="flex items-center justify-end gap-1">
+                       <div class="oi-bar h-2 rounded" :style="{ width: getOIBarWidth(row.call?.open_interest, 'call') }"></div>
+                       <span class="font-mono tabular-nums text-xs">{{ formatOI(row.call?.open_interest) }}</span>
+                     </div>
+                   </td>
+                   
+                   <td class="px-2 py-1.5 text-center font-mono tabular-nums bg-primary/10 sticky left-0 z-10 text-primary">
+                     {{ row.strike }}
+                     <span v-if="row.strike === atmStrike" class="text-warning ml-1">◀</span>
+                   </td>
+                   
+                   <td class="px-2 py-1.5 text-right">
+                     <div class="flex items-center justify-end gap-1">
+                       <div class="oi-bar put h-2 rounded" :style="{ width: getOIBarWidth(row.put?.open_interest, 'put') }"></div>
+                       <span class="font-mono tabular-nums text-xs">{{ formatOI(row.put?.open_interest) }}</span>
+                     </div>
+                   </td>
+                   <td class="px-2 py-1.5 text-right font-mono tabular-nums">
+                     {{ formatGreek(row.put?.delta) }}
+                   </td>
+                   <td class="px-2 py-1.5 text-right font-mono tabular-nums">
+                     {{ formatPercent(row.put?.iv) }}
+                   </td>
+                   <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getChangeClass(row.put?.change)">
+                     {{ formatChange(row.put?.change) }}
+                   </td>
+                   <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getPriceClass(row.put?.change)">
+                     {{ formatPrice(row.put?.latest) }}
+                   </td>
+                 </tr>
+               </tbody>
             </table>
           </div>
         </div>
@@ -150,6 +171,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useOptions } from '../../composables/useOptions.js'
+import EducationalTooltip from './EducationalTooltip.vue'
 import IVSmileChart from './IVSmileChart.vue'
 import PCRIndicator from './PCRIndicator.vue'
 import GreeksChart from './GreeksChart.vue'
@@ -163,6 +185,40 @@ const {
 const localSymbol = ref(symbol.value)
 
 const pcrDisplay = computed(() => pcr.value === null ? '--' : pcr.value.toFixed(2))
+
+/**
+ * Maximum OI across all visible rows for bar scaling
+ */
+const maxOI = computed(() => {
+  const allOI = chainRows.value.flatMap(r => [
+    r.call?.open_interest || 0,
+    r.put?.open_interest || 0
+  ])
+  return Math.max(...allOI, 1)
+})
+
+/**
+ * Calculate OI bar width percentage
+ * @param {number} oi - Open interest value
+ * @param {string} type - 'call' or 'put'
+ * @returns {string} CSS width percentage (max 50%)
+ */
+function getOIBarWidth(oi, type) {
+  if (!oi || oi <= 0) return '0%'
+  const percentage = (oi / maxOI.value) * 50
+  return `${Math.min(percentage, 50)}%`
+}
+
+/**
+ * Format OI number for display
+ * @param {number} oi - Open interest value
+ * @returns {string} Formatted number or dash
+ */
+function formatOI(oi) {
+  if (oi == null) return '-'
+  if (oi >= 10000) return `${(oi / 1000).toFixed(1)}K`
+  return oi.toString()
+}
 
 function formatPrice(val) {
   if (val == null) return '-'
@@ -242,5 +298,20 @@ table {
 
 th, td {
   border-bottom: 1px solid var(--border-base, #30363d);
+}
+
+/* OI Bar Visualization */
+.oi-bar {
+  background: var(--color-bull, #22c55e);
+  transition: width var(--duration-normal, 250ms) var(--easing-default, cubic-bezier(0.2, 0, 0, 1));
+  min-width: 2px;
+}
+
+.oi-bar.put {
+  background: var(--color-bear, #ef4444);
+}
+
+.oi-bar:hover {
+  opacity: 0.8;
 }
 </style>

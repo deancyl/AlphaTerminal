@@ -193,7 +193,11 @@ class OptionsFetcher(BaseMarketFetcher):
 
     async def get_cffex_chain(self, symbol: str = "io2506") -> Dict[str, Any]:
         """
-        获取CFFEX股指期权链 (option_cffex_hs300_spot_sina)
+        获取CFFEX股指期权链
+        
+        根据品种前缀选择正确的 akshare API:
+        - io: 沪深300股指期权 → option_cffex_hs300_spot_sina
+        - mo: 中证1000股指期权 → option_cffex_zz1000_spot_sina
         
         Args:
             symbol: 期权品种代码，如 io2506 (沪深300股指期权2025年6月合约)
@@ -216,11 +220,23 @@ class OptionsFetcher(BaseMarketFetcher):
             logger.warning("[Options] 熔断器打开，返回空数据")
             return self._get_empty_chain(symbol)
         
+        # 根据品种前缀选择正确的 akshare API
+        prefix = symbol[:2].lower()
+        akshare_api_map = {
+            "io": self.ak.option_cffex_hs300_spot_sina,   # 沪深300
+            "mo": self.ak.option_cffex_zz1000_spot_sina,  # 中证1000
+        }
+        
+        akshare_api = akshare_api_map.get(prefix)
+        if not akshare_api:
+            logger.warning(f"[Options] 不支持的期权品种: {symbol}")
+            return self._get_empty_chain(symbol)
+        
         try:
             loop = asyncio.get_running_loop()
             
             df = await asyncio.wait_for(
-                loop.run_in_executor(_executor, lambda: self.ak.option_cffex_hs300_spot_sina(symbol=symbol)),
+                loop.run_in_executor(_executor, lambda: akshare_api(symbol=symbol)),
                 timeout=30.0
             )
             

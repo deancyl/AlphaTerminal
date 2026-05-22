@@ -1,6 +1,9 @@
 <template>
   <div class="pcr-indicator flex flex-col items-center p-4 bg-surface rounded-sm">
-    <div class="text-xs text-secondary mb-2">Put-Call Ratio</div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="text-xs text-secondary">市场情绪指标</span>
+      <EducationalTooltip term="pcr" />
+    </div>
     
     <div class="gauge-container w-[120px] h-[80px] relative">
       <svg viewBox="0 0 120 80" class="w-full h-full">
@@ -34,7 +37,7 @@
       {{ sentimentText }}
     </div>
     
-    <div class="text-[10px] text-secondary mt-2">
+    <div class="text-[10px] text-secondary mt-2 px-2 py-1 rounded bg-primary/10">
       {{ interpretation }}
     </div>
   </div>
@@ -42,6 +45,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import EducationalTooltip from './EducationalTooltip.vue'
 
 const props = defineProps({
   pcr: { type: Number, default: null },
@@ -113,6 +117,7 @@ const segmentClass = computed(() => {
 .text-primary { color: var(--text-primary, #f0f6fc); }
 .text-secondary { color: var(--text-secondary, #9ca3af); }
 .bg-surface { background: var(--bg-surface, #1e1e1e); }
+.bg-primary\/10 { background: rgba(15, 82, 186, 0.1); }
 
 .gauge-bullish { stroke: #ef4444; }
 .gauge-bearish { stroke: #22c55e; }

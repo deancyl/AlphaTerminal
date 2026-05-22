@@ -380,7 +380,7 @@ const {
   screeningProgress,
   universe,
   isFactorSelected,
-  fetchFactors,
+  fetchScreeningFactors,
   addFactor,
   removeFactor,
   toggleFactor,
@@ -542,7 +542,7 @@ function applyFactorParams({ factorId, params }) {
 }
 
 onMounted(() => {
-  fetchFactors()
+  fetchScreeningFactors()
 })
 
 onBeforeUnmount(() => {

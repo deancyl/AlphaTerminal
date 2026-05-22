@@ -11,15 +11,28 @@ Detects 5 types of anomalies:
 
 import logging
 import asyncio
+import httpx
+import requests
+from requests.exceptions import ConnectionError as RequestsConnectionError, ProxyError
+from urllib3.exceptions import MaxRetryError
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from enum import Enum
 from dataclasses import dataclass
+from http.client import RemoteDisconnected
+
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState
 
 logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="anomaly_")
+
+# Module-level CircuitBreaker for Eastmoney API
+_EASTMONEY_CB = CircuitBreaker(
+    "eastmoney_anomaly",
+    CircuitBreakerConfig(failure_threshold=5, timeout=60.0)
+)
 
 
 class AnomalyType(str, Enum):
@@ -47,6 +60,12 @@ class AnomalyResult:
 
 def _fetch_all_stocks_sync() -> List[Dict]:
     """Fetch all A-share stocks with market data."""
+    # Check if CB is OPEN - use Sina fallback directly
+    if _EASTMONEY_CB.state == CircuitState.OPEN:
+        logger.info("[Anomaly] CB OPEN, using Sina fallback")
+        from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
+        return fetch_all_stocks_sina_sync()
+    
     try:
         import akshare as ak
         df = ak.stock_zh_a_spot_em()
@@ -66,17 +85,28 @@ def _fetch_all_stocks_sync() -> List[Dict]:
                 })
             except (ValueError, TypeError):
                 continue
+        _EASTMONEY_CB.record_success()
         return stocks
-    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] all stocks: {e}", exc_info=True)
-        return []
+    except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected, MaxRetryError) as e:
+        logger.error(f"[HTTP] all stocks: {type(e).__name__}: {e}", exc_info=True)
+        _EASTMONEY_CB.record_failure()
+        # Try Sina fallback
+        from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
+        return fetch_all_stocks_sina_sync()
 
 
 def _fetch_capital_flow_sync() -> List[Dict]:
     """Fetch individual stock capital flow data."""
+    # Check if CB is OPEN - return empty list
+    if _EASTMONEY_CB.state == CircuitState.OPEN:
+        logger.info("[Anomaly] CB OPEN, skipping capital flow")
+        return []
+    
     try:
         import akshare as ak
         df = ak.stock_individual_fund_flow(stock="即时", market="sh")
+        if df is None or df.empty:
+            return []
         flows = []
         for _, row in df.iterrows():
             try:
@@ -88,17 +118,26 @@ def _fetch_capital_flow_sync() -> List[Dict]:
                 })
             except (ValueError, TypeError):
                 continue
+        _EASTMONEY_CB.record_success()
         return flows
-    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] capital flow: {e}", exc_info=True)
+    except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected, MaxRetryError, TypeError, KeyError) as e:
+        logger.warning(f"[HTTP] capital flow: {type(e).__name__}: {e}", exc_info=True)
+        _EASTMONEY_CB.record_failure()
         return []
 
 
 def _fetch_institution_research_sync() -> List[Dict]:
     """Fetch institution research statistics."""
+    # Check if CB is OPEN - return empty list
+    if _EASTMONEY_CB.state == CircuitState.OPEN:
+        logger.info("[Anomaly] CB OPEN, skipping institution research")
+        return []
+    
     try:
         import akshare as ak
         df = ak.stock_jgdy_tj_em()
+        if df is None or df.empty:
+            return []
         research = []
         for _, row in df.iterrows():
             try:
@@ -109,19 +148,21 @@ def _fetch_institution_research_sync() -> List[Dict]:
                 })
             except (ValueError, TypeError):
                 continue
+        _EASTMONEY_CB.record_success()
         return research
-    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] institution research: {e}", exc_info=True)
+    except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected, MaxRetryError, TypeError, KeyError) as e:
+        logger.warning(f"[HTTP] institution research: {type(e).__name__}: {e}", exc_info=True)
+        _EASTMONEY_CB.record_failure()
         return []
 
 
-def _fetch_kline_sync(symbol: str, period: str = "daily", days: int = 60) -> List[Dict]:
-    """Fetch K-line data for a symbol."""
+def _fetch_kline_sync(symbol: str, days: int = 60) -> tuple:
+    """Fetch K-line data for a single symbol. Returns (symbol, klines) tuple."""
     try:
         import akshare as ak
-        df = ak.stock_zh_a_hist(symbol=symbol, period=period, adjust="qfq")
-        if df.empty:
-            return []
+        df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+        if df is None or df.empty:
+            return (symbol, [])
         
         df = df.tail(days)
         klines = []
@@ -133,42 +174,55 @@ def _fetch_kline_sync(symbol: str, period: str = "daily", days: int = 60) -> Lis
                 "low": float(row.get("最低", 0) or 0),
                 "volume": float(row.get("成交量", 0) or 0),
             })
-        return klines
+        return (symbol, klines)
     except Exception as e:
         logger.debug(f"[Anomaly] Failed to fetch kline for {symbol}: {e}")
-        return []
+        return (symbol, [])
 
 
 def _fetch_kline_batch_sync(symbols: List[str], days: int = 60) -> Dict[str, List[Dict]]:
     """
-    Batch fetch K-line data for multiple symbols.
+    Batch fetch K-line data for multiple symbols (sequential fallback).
     
-    P1-4: Used for detecting true 60-day highs.
-    Note: This is still sequential due to akshare limitations,
-    but called from async context with timeout protection.
+    P0: Reduced from 50 to 20 symbols to avoid 504 Gateway Timeout.
     """
     results = {}
-    for symbol in symbols[:50]:  # Limit to 50 symbols to avoid timeout
-        try:
-            import akshare as ak
-            df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
-            if df.empty:
+    for symbol in symbols[:20]:
+        sym, klines = _fetch_kline_sync(symbol, days)
+        if klines:
+            results[sym] = klines
+    return results
+
+
+async def _fetch_kline_batch(symbols: List[str], days: int = 60) -> Dict[str, List[Dict]]:
+    """
+    Batch fetch K-line data for multiple symbols in parallel.
+    
+    P0: Uses asyncio.gather() for parallel fetching instead of sequential loop.
+    P0: Reduced from 50 to 20 symbols to avoid 504 Gateway Timeout.
+    """
+    loop = asyncio.get_running_loop()
+    limited_symbols = symbols[:20]
+    
+    tasks = [
+        loop.run_in_executor(_executor, _fetch_kline_sync, symbol, days)
+        for symbol in limited_symbols
+    ]
+    
+    results = {}
+    try:
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results_list:
+            if isinstance(result, Exception):
+                logger.debug(f"[Anomaly] Parallel kline fetch error: {result}")
                 continue
-            
-            df = df.tail(days)
-            klines = []
-            for _, row in df.iterrows():
-                klines.append({
-                    "date": row.get("日期", ""),
-                    "close": float(row.get("收盘", 0) or 0),
-                    "high": float(row.get("最高", 0) or 0),
-                    "low": float(row.get("最低", 0) or 0),
-                    "volume": float(row.get("成交量", 0) or 0),
-                })
-            results[symbol] = klines
-        except Exception as e:
-            logger.debug(f"[Anomaly] Failed to fetch kline for {symbol}: {e}")
-            continue
+            if isinstance(result, tuple) and len(result) == 2:
+                symbol, klines = result
+                if klines:
+                    results[symbol] = klines
+    except Exception as e:
+        logger.error(f"[Anomaly] Parallel kline batch failed: {e}", exc_info=True)
+    
     return results
 
 
@@ -450,7 +504,7 @@ def _detect_volume_surge(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
 async def detect_anomalies(
     anomaly_type: Optional[AnomalyType] = None,
     top_n: int = 10,
-    timeout: float = 15.0
+    timeout: float = 60.0  # P0: Increased from 15s to 60s (same as treemap)
 ) -> Dict[str, Any]:
     """
     Detect market anomalies.
@@ -483,9 +537,14 @@ async def _detect_anomalies_internal(
 ) -> Dict[str, Any]:
     """Internal anomaly detection logic."""
     results = []
+    using_fallback = False
     
     if anomaly_type in (None, AnomalyType.VOLATILITY, AnomalyType.NEW_HIGH, AnomalyType.VOLUME_SURGE):
         stocks = await _fetch_all_stocks()
+        
+        # Check if we're using fallback data
+        if _EASTMONEY_CB.state == CircuitState.OPEN:
+            using_fallback = True
         
         if stocks:
             if anomaly_type in (None, AnomalyType.VOLATILITY):
@@ -499,7 +558,7 @@ async def _detect_anomalies_internal(
                         [s for s in stocks if s.get("change_pct", 0) > 0],
                         key=lambda x: x.get("change_pct", 0),
                         reverse=True
-                    )[:50]  # Limit to top 50 gainers
+                    )[:20]  # P0: Reduced from 50 to 20 to match kline batch limit
                     
                     if gainers:
                         symbols = [s.get("symbol", "") for s in gainers if s.get("symbol")]
@@ -512,7 +571,7 @@ async def _detect_anomalies_internal(
                             results.append(_detect_new_high_simple(stocks, top_n))
                     else:
                         results.append(_detect_new_high_simple(stocks, top_n))
-                except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+                except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected, MaxRetryError) as e:
                     logger.warning(f"[HTTP] failed, using fallback: {e}", exc_info=True)
                     results.append(_detect_new_high_simple(stocks, top_n))
             
@@ -547,4 +606,10 @@ async def _detect_anomalies_internal(
             for r in results
         ],
         "last_update": datetime.now().isoformat(),
+        "data_source": "sina" if using_fallback else "akshare"
     }
+
+
+# Export for router
+def get_circuit_breaker():
+    return _EASTMONEY_CB

@@ -13,7 +13,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 import httpx
 import pandas as pd
 from app.utils.errors import success_response, error_response, ErrorCode
@@ -183,43 +183,43 @@ _STOCK_CACHE_LOADED = False
 
 
 def _load_stock_cache():
-    """加载股票缓存"""
+    """Load stock cache using Sina API for full market coverage."""
     global _STOCK_CACHE, _STOCK_CACHE_LOADED
     if _STOCK_CACHE_LOADED:
         return
     
     try:
-        import akshare as ak
-        try:
-            df_sh = ak.stock_info_sh_name_code()
-            if df_sh is not None and len(df_sh) > 0:
-                df_work = df_sh.head(1000)[['证券代码', '证券简称']].copy()
-                df_work = df_work.dropna(subset=['证券代码', '证券简称'])
-                df_work['code'] = df_work['证券代码'].astype(str).str.strip()
-                df_work['name'] = df_work['证券简称'].astype(str).str.strip()
-                for r in df_work[['code', 'name']].to_dict('records'):
-                    if r['code'] and r['name']:
-                        _STOCK_CACHE.append({'code': r['code'], 'name': r['name'], 'market': 'SH'})
-        except Exception as e:
-            logger.warning(f"[Stocks] SH load error: {e}", exc_info=True)
+        from app.utils.sina_stock_fetcher import fetch_all_stocks_sina
         
-        try:
-            df_sz = ak.stock_info_sz_name_code()
-            if df_sz is not None and len(df_sz) > 0:
-                df_work = df_sz.head(1000)[['A股代码', 'A股简称']].copy()
-                df_work = df_work.dropna(subset=['A股代码', 'A股简称'])
-                df_work['code'] = df_work['A股代码'].astype(str).str.strip()
-                df_work['name'] = df_work['A股简称'].astype(str).str.strip()
-                for r in df_work[['code', 'name']].to_dict('records'):
-                    if r['code'] and r['name']:
-                        _STOCK_CACHE.append({'code': r['code'], 'name': r['name'], 'market': 'SZ'})
-        except Exception as e:
-            logger.warning(f"[Stocks] SZ load error: {e}", exc_info=True)
+        stocks = fetch_all_stocks_sina(
+            page_size=500,
+            max_pages=20,
+            timeout=15,
+            exclude_bj=True,
+            delay=0.3
+        )
         
-        _STOCK_CACHE_LOADED = True
-        logger.info(f"[Stocks] Stock cache loaded: {len(_STOCK_CACHE)} stocks")
+        if stocks and len(stocks) > 100:
+            for stock in stocks:
+                symbol = stock['symbol']
+                market = 'SH' if symbol.startswith('sh') else 'SZ'
+                _STOCK_CACHE.append({
+                    'code': stock['code'],
+                    'name': stock['name'],
+                    'market': market
+                })
+            logger.info(f"[Stocks] Stock cache loaded from Sina: {len(_STOCK_CACHE)} stocks")
+        else:
+            logger.warning(f"[Stocks] Sina fetch returned {len(stocks) if stocks else 0} stocks, using fallback")
+            _STOCK_CACHE = _COMMON_STOCKS.copy()
+            logger.info(f"[Stocks] Stock cache loaded from fallback: {len(_STOCK_CACHE)} stocks")
+        
     except Exception as e:
-        logger.warning(f"[Stocks] Cache load error: {e}", exc_info=True)
+        logger.error(f"[Stocks] Cache load error: {e}", exc_info=True)
+        _STOCK_CACHE = _COMMON_STOCKS.copy()
+        logger.info(f"[Stocks] Stock cache loaded from fallback: {len(_STOCK_CACHE)} stocks")
+    
+    _STOCK_CACHE_LOADED = True
 
 
 # 预加载常用股票（后备）
@@ -309,6 +309,40 @@ async def search_stocks(q: str = ""):
         results = []
     
     return success_response({'stocks': results, 'count': len(results)})
+
+
+@router.get("/all")
+@handle_errors(module="stocks")
+async def get_all_stocks(
+    limit: int = Query(default=5000, ge=1, le=10000, description="返回数量限制"),
+    offset: int = Query(default=0, ge=0, description="偏移量"),
+    q: str = Query(default="", description="搜索关键词（可选）")
+):
+    """
+    Get all A-share stocks from database.
+    
+    Args:
+        limit: Maximum number of stocks to return (default 5000, max 10000)
+        offset: Offset for pagination (default 0)
+        q: Search keyword to filter by code or name (optional)
+    
+    Returns:
+        List of stocks with symbol, code, name, price, change_pct, etc.
+    """
+    try:
+        from app.db.database import get_all_stocks
+        
+        # Use database-level search for better performance
+        total, stocks = get_all_stocks(limit=limit, offset=offset, search=q if q else None)
+        
+        return success_response({
+            'stocks': stocks,
+            'count': len(stocks),
+            'total': total,
+        })
+    except Exception as e:
+        logger.error(f"[Stocks] get_all_stocks error: {e}", exc_info=True)
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取股票列表失败: {str(e)}")
 
 
 @router.get("/quote")

@@ -1,7 +1,7 @@
 <template>
   <div class="iv-smile-chart h-[200px] w-full" ref="chartContainer">
     <div v-if="isEmpty" class="empty-state flex items-center justify-center h-full text-secondary">
-      暂无IV数据
+      暂无波动率数据
     </div>
   </div>
 </template>

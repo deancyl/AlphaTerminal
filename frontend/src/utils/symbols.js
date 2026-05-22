@@ -186,3 +186,47 @@ export function exportCSV(hist, indicators = {}, filename = 'kline.csv') {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+/**
+ * Detect asset type from symbol
+ * Used for routing to correct API endpoints in MultiAssetMatrix
+ * 
+ * @param {string} symbol - Raw symbol (e.g., 'sh000001', 'bond10y', 'IF', 'USDCNY')
+ * @returns {'stock'|'bond'|'futures'|'forex'|'unknown'}
+ */
+export function getSymbolType(symbol) {
+  if (!symbol) return 'unknown'
+  
+  const s = String(symbol).trim()
+  const upper = s.toUpperCase()
+  
+  // Bond: matches bond10y, bond5y, bond1y, bond30y patterns
+  // Also handles Chinese format: 10年, 5年, etc.
+  if (/^bond\d+y$/i.test(s) || /^\d+年$/.test(s)) {
+    return 'bond'
+  }
+  
+  // Futures: IF (沪深300), IC (中证500), IM (中证1000), IH (上证50)
+  // Also handles main contract codes: IF0, IF2506, etc.
+  if (/^(IF|IC|IM|IH|TS|TF|T)(\d+)?$/i.test(upper)) {
+    return 'futures'
+  }
+  
+  // Forex: Currency pairs (6 characters, two 3-letter currency codes)
+  // Examples: USDCNY, USDCNH, EURUSD, GBPUSD, USDJPY, AUDUSD
+  if (/^(USD|EUR|GBP|JPY|AUD|CAD|CHF|CNY|CNH|NZD|SGD|HKD)(USD|EUR|GBP|JPY|AUD|CAD|CHF|CNY|CNH|NZD|SGD|HKD)$/i.test(upper)) {
+    return 'forex'
+  }
+  
+  // Stock: sh/sz prefix (A-share) or 6-digit code
+  if (s.startsWith('sh') || s.startsWith('sz') || /^sh\d{6}$/i.test(s) || /^sz\d{6}$/i.test(s)) {
+    return 'stock'
+  }
+  
+  // 6-digit numeric code (A-share stock code without prefix)
+  if (/^\d{6}$/.test(s)) {
+    return 'stock'
+  }
+  
+  return 'unknown'
+}

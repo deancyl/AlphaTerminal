@@ -152,3 +152,24 @@ async def options_health():
         })
     except Exception as e:
         return error_response(ErrorCode.INTERNAL_ERROR, f"健康检查失败: {str(e)}")
+
+
+@router.post("/options/circuit_breaker/reset")
+@handle_errors(module="options")
+async def reset_options_circuit_breaker():
+    """重置期权数据源熔断器"""
+    try:
+        options_fetcher.cb.reset()
+        is_healthy = options_fetcher.is_healthy()
+        return success_response({
+            "success": True,
+            "healthy": is_healthy,
+            "circuit_breaker": {
+                "is_open": not is_healthy,
+                "is_available": is_healthy,
+            },
+            "message": "熔断器已重置",
+        })
+    except Exception as e:
+        logger.error(f"[Options] Circuit breaker reset error: {e}", exc_info=True)
+        return error_response(ErrorCode.INTERNAL_ERROR, f"重置熔断器失败: {str(e)}")

@@ -5749,3 +5749,124 @@ curl http://localhost:60100/api/v1/market/quote/sh600519
 3. 添加数据源健康检查和自动切换
 4. 实现数据源优先级配置
 
+---
+
+## Market Radar Proxy Compatibility Fix (v0.6.73)
+
+### Overview
+
+Fixed critical issue where Market Radar module returned 500 errors when proxy server blocks Eastmoney API endpoints.
+
+### Problem
+
+The proxy server blocks specific Eastmoney API endpoints:
+- `17.push2.eastmoney.com` - Sector list
+- `82.push2.eastmoney.com` - All stocks list
+- `29.push2.eastmoney.com` - Sector stocks
+
+This caused `requests.exceptions.ConnectionError` exceptions that were not properly caught.
+
+### Root Cause Analysis
+
+1. **Exception Type Mismatch**: The code was catching Python's built-in `ConnectionError`, but `requests.exceptions.ConnectionError` is a different class and NOT a subclass of the built-in `ConnectionError`.
+
+2. **Missing Exception Types**: `RemoteDisconnected` was not in the exception handling list.
+
+3. **Cache Format Issue**: The router was caching raw `data` dict before wrapping in `success_response()`, causing cached responses to miss `code` and `message` fields.
+
+### Solution
+
+#### 1. Exception Handling Fix
+
+**File**: `backend/app/services/market_radar/treemap_builder.py`
+
+```python
+from requests.exceptions import ConnectionError as RequestsConnectionError, ProxyError
+from http.client import RemoteDisconnected
+
+# Updated exception handling
+except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected) as e:
+    logger.error(f"[HTTP] sectors: {type(e).__name__}: {e}", exc_info=True)
+    _EASTMONEY_CB.record_failure()
+    return fetch_sectors_sina_sync()
+```
+
+#### 2. Cache Format Fix
+
+**File**: `backend/app/routers/market_radar.py`
+
+```python
+# Before: Cache raw data
+cache.set(cache_key, data, ttl=TREEMAP_CACHE_TTL)
+return success_response(data)
+
+# After: Cache wrapped response
+result = success_response(data)
+cache.set(cache_key, result, ttl=TREEMAP_CACHE_TTL)
+return result
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `treemap_builder.py` | Added `RequestsConnectionError`, `ProxyError`, `RemoteDisconnected` imports and exception handling |
+| `anomaly_detector.py` | Same exception handling updates |
+| `market_radar.py` (router) | Fixed cache to store `success_response()` result |
+
+### Fallback Behavior
+
+When Eastmoney API is blocked:
+1. CircuitBreaker tracks failures (threshold: 5)
+2. After 5 failures, CB opens and uses Sina fallback
+3. Treemap returns "热门股票" (top 100 by market cap) as fallback data
+4. Response includes `data_source: "fallback"` and `source_detail` fields
+
+### API Response Example
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "data": [{"name": "热门股票", "value": 20272.97, "children": [...]}],
+    "last_update": "2026-05-22T10:08:10.544541",
+    "data_source": "fallback",
+    "source_detail": {
+      "name": "热门股票 (市值排名)",
+      "type": "实时",
+      "api": "top_stocks_by_market_cap"
+    },
+    "circuit_breaker": {
+      "state": "closed",
+      "failure_count": 2
+    }
+  }
+}
+```
+
+### Test Coverage
+
+| Test Category | Tests | Status |
+|---------------|-------|--------|
+| Unit Tests | 14 | ✅ Pass |
+| Integration Tests | 7 | ✅ Pass |
+
+### Verification Commands
+
+```bash
+# Test treemap endpoint
+curl http://localhost:60100/api/v1/market_radar/treemap?level=sector | jq '.code, .data.data_source'
+# Expected: 0, "fallback" (when Eastmoney blocked)
+
+# Test health endpoint
+curl http://localhost:60100/api/v1/market_radar/health | jq '.circuit_breakers.treemap.state'
+# Expected: "closed"
+
+# Run unit tests
+cd backend && python3 -m pytest tests/unit/test_routers/test_market_radar_router.py -v --no-cov
+
+# Run integration tests
+cd backend && python3 -m pytest tests/integration/test_market_radar_integration.py -v --no-cov
+```
+

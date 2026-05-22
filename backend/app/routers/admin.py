@@ -2148,3 +2148,31 @@ async def cleanup_errors(
         "message": f"已清理 {deleted} 条过期错误记录",
         "data": {"deleted": deleted, "days": days}
     }
+
+
+@router.get("/sina_fetcher/status")
+@handle_errors(module="admin")
+async def get_sina_fetcher_status():
+    """Get Sina stock fetcher circuit breaker status."""
+    from app.utils.sina_stock_fetcher import _SINA_STOCK_CB
+    
+    stats = _SINA_STOCK_CB._stats
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "name": _SINA_STOCK_CB.name,
+            "state": _SINA_STOCK_CB.state.value,
+            "total_calls": stats.total_calls,
+            "successful_calls": stats.successful_calls,
+            "failed_calls": stats.failed_calls,
+            "consecutive_failures": stats.consecutive_failures,
+            "last_failure_time": stats.last_failure_time,
+            "last_success_time": stats.last_success_time,
+            "config": {
+                "failure_threshold": _SINA_STOCK_CB.config.failure_threshold,
+                "timeout": _SINA_STOCK_CB.config.timeout
+            }
+        }
+    }

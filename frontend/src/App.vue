@@ -412,7 +412,7 @@ const isSidebarOpen = ref(false)   // 侧边栏默认收起（桌面端+移动�
 function getInitialView() {
   if (typeof window !== 'undefined') {
     const hash = window.location.hash
-    const match = hash.match(/#view=(\w+)/)
+    const match = hash.match(/#view=([\w-]+)/)
     if (match && match[1]) {
       return match[1]
     }
@@ -801,7 +801,7 @@ onMounted(() => {
     window.addEventListener('hashchange', (e) => {
       if (!isHistoryNavigation.value && !isProcessingPopstate.value) {
         const hash = window.location.hash
-        const viewMatch = hash.match(/#view=(\w+)/)
+        const viewMatch = hash.match(/#view=([\w-]+)/)
         if (viewMatch) {
           const view = viewMatch[1]
           if (view !== currentView.value) {

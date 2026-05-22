@@ -1490,64 +1490,55 @@ def fetch_all_and_buffer():
 
 def fetch_all_china_stocks(max_pages=60):
     """
-    从 Sina 分页抓取全市场 A 股基础信息（含 P/E、P/B、市值、换手率等）
-    返回: [{symbol, code, name, trade, changepercent, per, pb, mktcap, turnoverratio, ...}]
+    Fetch all A-share stocks using Sina API.
+    
+    Uses shared Sina fetcher utility with CircuitBreaker protection.
+    Fetches from both Shanghai (sh_a) and Shenzhen (sz_a) markets.
+    
+    Args:
+        max_pages: Maximum pages to fetch per market (default 60)
+    
+    Returns:
+        List of dicts compatible with upsert_all_stocks():
+        - symbol, code, name, trade, changepercent, per, pb, mktcap, etc.
     """
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Referer': 'https://finance.sina.com.cn',
-    }
-    all_rows = []
-    page_size = 100
-
-    for page in range(1, max_pages + 1):
-        try:
-            url = (
-                f"https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
-                f"Market_Center.getHQNodeData"
-                f"?page={page}&num={page_size}&sort=symbol&asc=1&node=hs_a&_s_r_a=page"
-            )
-            resp = _run_async_or_sync(async_fetch(url, headers=headers, timeout=10))
-            resp.encoding = 'gbk'
-            items = resp.json()
-
-            if not items or not isinstance(items, list):
-                logger.debug(f"[DataFetcher] 全量股票第{page}页为空，停止")
-                break
-
-            for item in items:
-                all_rows.append({
-                    'symbol': str(item.get('symbol', '')),
-                    'code':   str(item.get('code', '')),
-                    'name':   str(item.get('name', '')),
-                    'trade':  float(item.get('trade') or 0),
-                    'changepercent': float(item.get('changepercent') or 0),
-                    'per':    float(item['per']) if item.get('per') not in ('', None, '-') else None,
-                    'pb':     float(item['pb']) if item.get('pb') not in ('', None, '-') else None,
-                    'mktcap': float(item.get('mktcap') or 0),
-                    'nmc':     float(item.get('nmc') or 0),
-                    'volume':  float(item.get('volume') or 0),
-                    'amount':  float(item.get('amount') or 0),
-                    'turnoverratio': float(item.get('turnoverratio') or 0),
-                    'high':    float(item.get('high') or 0),
-                    'low':     float(item.get('low') or 0),
-                    'open':    float(item.get('open') or 0),
-                })
-
-            logger.debug(f"[DataFetcher] 全量股票第{page}页: +{len(items)} = {len(all_rows)} 总数")
-
-            if len(items) < page_size:
-                break  # 最后一页
-
-            time.sleep(0.3)  # 避免请求过快
-
-        except Exception as e:
-            logger.warning(f"[DataFetcher] 全量股票第{page}页失败: {e}", exc_info=True)
-            time.sleep(1)
-            continue
-
-    logger.info(f"[DataFetcher] 全量股票抓取完成: {len(all_rows)} 只")
-    return all_rows
+    try:
+        from app.utils.sina_stock_fetcher import fetch_all_stocks_sina
+        
+        stocks = fetch_all_stocks_sina(
+            page_size=100,
+            max_pages=max_pages,
+            timeout=15,
+            exclude_bj=True,
+            delay=0.3
+        )
+        
+        rows = []
+        for s in stocks:
+            rows.append({
+                'symbol': s['symbol'],
+                'code': s['code'],
+                'name': s['name'],
+                'trade': s['price'],
+                'changepercent': s['change_pct'],
+                'per': s.get('pe'),
+                'pb': s.get('pb'),
+                'mktcap': s['market_cap'] / 10000,
+                'nmc': s['market_cap'] / 10000,
+                'volume': s['volume'],
+                'amount': s['amount'],
+                'turnoverratio': s.get('turnover', 0),
+                'high': s['high'],
+                'low': s['low'],
+                'open': s['pre_close'],
+            })
+        
+        logger.info(f"[DataFetcher] Fetched {len(rows)} stocks")
+        return rows
+        
+    except Exception as e:
+        logger.error(f"[DataFetcher] Fetch failed: {e}", exc_info=True)
+        return []
 
 
 # ── 实时日K线刷新（使用 Sina HQ） ─────────────────────────────────

@@ -130,7 +130,8 @@ class TestMarketRadarAnomaliesEndpoint:
                 
                 assert response.status_code == 200
                 data = response.json()
-                assert "anomalies" in data
+                assert data["code"] == 0
+                assert "anomalies" in data["data"]
     
     def test_anomaly_by_type_valid(self, client):
         """Test anomaly by type with valid type."""
@@ -184,3 +185,137 @@ class TestMarketRadarErrorMessages:
                 # P2-10: Error message should be sanitized
                 assert "mysql://" not in data["detail"]
                 assert "pass@" not in data["detail"]
+
+
+class TestMarketRadarCircuitBreaker:
+    """Test Circuit Breaker integration."""
+    
+    def test_circuit_breaker_reset_endpoint(self, client):
+        """Test that circuit breaker reset endpoint works."""
+        response = client.post("/api/v1/market_radar/circuit_breaker/reset")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["code"] == 0
+        assert "treemap" in data["data"]
+        assert "anomaly" in data["data"]
+    
+    def test_health_includes_circuit_breaker_status(self, client):
+        """Test that health endpoint includes circuit breaker status."""
+        response = client.get("/api/v1/market_radar/health")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "circuit_breakers" in data
+        assert "treemap" in data["circuit_breakers"]
+        assert "anomaly" in data["circuit_breakers"]
+        assert "state" in data["circuit_breakers"]["treemap"]
+        assert "failure_count" in data["circuit_breakers"]["treemap"]
+
+
+class TestMarketRadarFallback:
+    """Test fallback data source functionality."""
+    
+    def test_treemap_returns_fallback_data(self, client):
+        """Test that treemap returns fallback data when primary source fails."""
+        mock_response = {
+            "data": [{"name": "热门股票", "value": 100, "children": []}],
+            "last_update": "2024-01-01T00:00:00",
+            "data_source": "fallback",
+            "source_detail": {
+                "name": "热门股票 (市值排名)",
+                "type": "实时",
+                "api": "top_stocks_by_market_cap"
+            }
+        }
+        
+        with patch('app.routers.market_radar.get_cache') as mock_cache:
+            mock_cache_instance = MagicMock()
+            mock_cache_instance.get.return_value = None
+            mock_cache.return_value = mock_cache_instance
+            
+            with patch('app.routers.market_radar.build_treemap_data', new_callable=AsyncMock) as mock_build:
+                mock_build.return_value = mock_response
+                
+                response = client.get("/api/v1/market_radar/treemap")
+                
+                assert response.status_code == 200
+                data = response.json()
+                assert data["code"] == 0
+                assert data["data"]["data_source"] == "fallback"
+    
+    def test_treemap_includes_circuit_breaker_info(self, client):
+        """Test that treemap response includes circuit breaker info."""
+        mock_response = {
+            "data": [{"name": "热门股票", "value": 100}],
+            "last_update": "2024-01-01T00:00:00",
+            "data_source": "fallback"
+        }
+        
+        with patch('app.routers.market_radar.get_cache') as mock_cache:
+            mock_cache_instance = MagicMock()
+            mock_cache_instance.get.return_value = None
+            mock_cache.return_value = mock_cache_instance
+            
+            with patch('app.routers.market_radar.build_treemap_data', new_callable=AsyncMock) as mock_build:
+                mock_build.return_value = mock_response
+                
+                response = client.get("/api/v1/market_radar/treemap")
+                
+                assert response.status_code == 200
+                data = response.json()
+                assert "circuit_breaker" in data["data"]
+                assert "state" in data["data"]["circuit_breaker"]
+
+
+class TestMarketRadarCacheFormat:
+    """Test that cached responses have correct format."""
+    
+    def test_cached_response_has_code_and_message(self, client):
+        """Test that cached response includes code and message fields."""
+        cached_response = {
+            "code": 0,
+            "message": "success",
+            "data": {
+                "data": [{"name": "白酒", "value": 100}],
+                "last_update": "2024-01-01T00:00:00",
+                "data_source": "akshare"
+            }
+        }
+        
+        with patch('app.routers.market_radar.get_cache') as mock_cache:
+            mock_cache_instance = MagicMock()
+            mock_cache_instance.get.return_value = cached_response
+            mock_cache.return_value = mock_cache_instance
+            
+            response = client.get("/api/v1/market_radar/treemap")
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["code"] == 0
+            assert data["message"] == "success"
+
+
+class TestMarketRadarTemperature:
+    """Test market temperature endpoint."""
+    
+    def test_temperature_returns_score(self, client):
+        """Test that temperature endpoint returns a score."""
+        with patch('app.services.sentiment_engine.get_histogram') as mock_histogram:
+            mock_histogram.return_value = {
+                "advance": 100,
+                "decline": 50,
+                "limit_up": 10,
+                "limit_down": 5,
+                "unchanged": 20,
+                "timestamp": "2024-01-01T00:00:00"
+            }
+            
+            response = client.get("/api/v1/market_radar/temperature")
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert "score" in data
+            assert "label" in data
+            assert "color" in data
+            assert 0 <= data["score"] <= 100

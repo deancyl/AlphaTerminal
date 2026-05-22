@@ -56,8 +56,7 @@
         <!-- Treemap chart - always in DOM for ref availability -->
         <div 
           ref="treemapContainer" 
-          class="w-full h-full"
-          style="min-height: 400px;"
+          class="absolute inset-0"
           tabindex="0"
           role="img"
           aria-label="市场温度图，显示各板块市值和涨跌幅分布"
@@ -107,7 +106,7 @@
         <!-- Treemap chart - always in DOM for ref availability -->
         <div 
           ref="treemapContainer" 
-          class="w-full h-full"
+          class="absolute inset-0"
           tabindex="0"
           role="img"
           aria-label="市场温度图，显示各板块市值和涨跌幅分布"

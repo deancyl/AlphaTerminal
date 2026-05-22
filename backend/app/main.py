@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics, attribution, agentic, cost_attribution, audit_playback, data_gaps, market_radar, factor_sandbox, timemachine
 from app.routers.macro import warmup_macro_cache
+from app.routers.market_radar import warmup_market_radar_cache
 from app.services.scheduler import start_scheduler, stop_scheduler, run_initial_data_fetch
 from app.services.logging_queue import init_logging_queue
 from app.db.db_writer import start_writer, stop_writer
@@ -54,6 +55,10 @@ async def lifespan(app: FastAPI):
     # Warmup macro cache in background
     asyncio.create_task(warmup_macro_cache())
     logger.info("[Lifespan] Macro cache warmup started in background")
+    
+    # Warmup market_radar cache in background
+    asyncio.create_task(warmup_market_radar_cache())
+    logger.info("[Lifespan] Market Radar cache warmup started in background")
     
     start_scheduler()
     
@@ -115,7 +120,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AlphaTerminal API",
-    version="0.6.40",
+    version="0.6.101",
     lifespan=lifespan,
     default_response_class=ORJSONResponse,
 )

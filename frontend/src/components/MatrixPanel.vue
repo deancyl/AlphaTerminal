@@ -24,6 +24,7 @@
         :line-color="panel.color"
         @crosshair-move="$emit('crosshair-move', $event)"
         @chart-ready="$emit('chart-ready', $event)"
+        @chart-error="$emit('chart-error', $event)"
       />
     </div>
   </div>
@@ -42,5 +43,5 @@ defineProps({
   isActive: { type: Boolean, default: false }
 })
 
-defineEmits(['crosshair-move', 'chart-ready'])
+defineEmits(['crosshair-move', 'chart-ready', 'chart-error'])
 </script>

@@ -53,6 +53,72 @@ export function useECharts(containerRef, options = {}) {
   let resizeTimer = null
 
   /**
+   * Wait for container to have valid dimensions
+   * @param {number} timeout - Maximum time to wait in ms
+   * @returns {Promise<boolean>} True if dimensions are valid
+   */
+  function waitForDimensions(timeout = 5000) {
+    return new Promise((resolve) => {
+      if (!containerRef?.value) {
+        resolve(false)
+        return
+      }
+
+      const check = () => {
+        const el = containerRef.value
+        if (!el) {
+          resolve(false)
+          return
+        }
+        const width = el.offsetWidth || el.clientWidth
+        const height = el.offsetHeight || el.clientHeight
+        if (width > 0 && height > 0) {
+          resolve(true)
+        }
+      }
+
+      // Check immediately
+      check()
+      
+      // If already valid, return
+      if (containerRef.value) {
+        const width = containerRef.value.offsetWidth || containerRef.value.clientWidth
+        const height = containerRef.value.offsetHeight || containerRef.value.clientHeight
+        if (width > 0 && height > 0) {
+          resolve(true)
+          return
+        }
+      }
+
+      // Use ResizeObserver to detect when dimensions become available
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect
+          if (width > 0 && height > 0) {
+            observer.disconnect()
+            resolve(true)
+          }
+        }
+      })
+
+      observer.observe(containerRef.value)
+
+      // Timeout fallback
+      setTimeout(() => {
+        observer.disconnect()
+        // Final check
+        if (containerRef.value) {
+          const width = containerRef.value.offsetWidth || containerRef.value.clientWidth
+          const height = containerRef.value.offsetHeight || containerRef.value.clientHeight
+          resolve(width > 0 && height > 0)
+        } else {
+          resolve(false)
+        }
+      }, timeout)
+    })
+  }
+
+  /**
    * Initialize the ECharts instance
    * @param {Object} [initOptions] - Options to pass to echarts.init
    * @returns {Promise<echarts.ECharts|null>} The chart instance or null if failed
@@ -60,6 +126,13 @@ export function useECharts(containerRef, options = {}) {
   async function initChart(initOptions = {}) {
     if (!containerRef?.value) {
       console.warn('[useECharts] Container element not found')
+      return null
+    }
+
+    // Wait for valid dimensions
+    const hasDimensions = await waitForDimensions()
+    if (!hasDimensions) {
+      console.warn('[useECharts] Container has no valid dimensions')
       return null
     }
 

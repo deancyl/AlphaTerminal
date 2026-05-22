@@ -354,14 +354,13 @@ async def screen_stocks(req: ScreenRequest):
                 params=fp.params,
             ))
         
-        # Execute screening with 30s timeout
         result = await asyncio.wait_for(
             screener.screen_stocks(
                 factors=screening_factors,
                 universe=Universe(req.universe),
                 limit=req.limit,
             ),
-            timeout=30.0,
+            timeout=120.0,
         )
         
         execution_time_ms = int((time.time() - start_time) * 1000)
@@ -629,17 +628,25 @@ async def stream_screening_progress(task_id: str):
     """
     async def event_generator() -> AsyncGenerator[Dict[str, Any], None]:
         last_screened = 0
+        retry_count = 0
+        max_retries = 10  # Wait up to 3 seconds for task to appear
         
         while True:
             progress = _get_progress(task_id)
             
             if progress is None:
-                yield {
-                    "event": "error",
-                    "data": json.dumps({"error": "Task not found"}),
-                }
-                break
+                retry_count += 1
+                if retry_count > max_retries:
+                    yield {
+                        "event": "error",
+                        "data": json.dumps({"error": "Task not found"}),
+                    }
+                    break
+                # Wait for task to be created (race condition protection)
+                await asyncio.sleep(0.3)
+                continue
             
+            retry_count = 0  # Reset retry counter once task is found
             status = progress.get("status")
             
             if status == "pending":

@@ -1,18 +1,24 @@
 <template>
-  <div class="greeks-chart grid grid-cols-2 gap-2 h-[300px]">
-    <div v-if="isEmpty" class="col-span-2 empty-state flex items-center justify-center text-secondary">
+  <div class="greeks-chart grid grid-cols-2 gap-2 overflow-hidden">
+    <div v-if="isEmpty" class="col-span-2 empty-state flex items-center justify-center h-[280px] text-secondary">
       暂无Greeks数据
     </div>
     
-    <div v-else v-for="greek in greekTypes" :key="greek.name" class="greek-chart">
-      <div class="text-xs text-secondary mb-1">{{ greek.label }}</div>
-      <div class="chart-container h-[120px]" :ref="el => setChartRef(greek.name, el)"></div>
-    </div>
+    <template v-else>
+      <div v-for="greek in greekTypes" :key="greek.name" class="greek-chart">
+        <div class="flex items-center gap-1 mb-1">
+          <span class="text-xs text-secondary">{{ greek.label }}</span>
+          <EducationalTooltip :term="greek.name" />
+        </div>
+        <div class="chart-container h-[120px]" :ref="el => setChartRef(greek.name, el)"></div>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, markRaw } from 'vue'
+import EducationalTooltip from './EducationalTooltip.vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({

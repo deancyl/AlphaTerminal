@@ -16,8 +16,11 @@ from app.services.market_radar import (
     detect_anomalies,
     AnomalyType,
 )
+from app.services.market_radar.treemap_builder import get_circuit_breaker as get_treemap_cb
+from app.services.market_radar.anomaly_detector import get_circuit_breaker as get_anomaly_cb
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
+from app.utils.response import success_response
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +63,30 @@ def sanitize_error_message(error: Exception) -> str:
 @router.get("/health")
 @handle_errors(module="market_radar")
 async def health_check():
-    """Health check endpoint."""
+    treemap_cb = get_treemap_cb()
+    anomaly_cb = get_anomaly_cb()
+    
+    treemap_stats = treemap_cb.get_stats()
+    anomaly_stats = anomaly_cb.get_stats()
+    
     return {
         "status": "ok",
         "service": "market_radar",
         "timestamp": datetime.now().isoformat(),
+        "circuit_breakers": {
+            "treemap": {
+                "name": treemap_stats["name"],
+                "state": treemap_stats["state"],
+                "failure_count": treemap_stats["consecutive_failures"],
+                "last_failure_time": treemap_stats["last_failure_time"]
+            },
+            "anomaly": {
+                "name": anomaly_stats["name"],
+                "state": anomaly_stats["state"],
+                "failure_count": anomaly_stats["consecutive_failures"],
+                "last_failure_time": anomaly_stats["last_failure_time"]
+            }
+        }
     }
 
 
@@ -76,15 +98,6 @@ async def get_treemap(
         description="Treemap level: 'sector' for sector aggregation, 'stock' for individual stocks"
     )
 ):
-    """
-    Get treemap data for market heat visualization.
-    
-    Returns ECharts treemap format data with:
-    - Sector level: Aggregated by industry with children stocks
-    - Stock level: Individual stocks sorted by market cap
-    
-    P1-5: Includes data_source field with source name and type
-    """
     cache = get_cache()
     cache_key = f"market_radar:treemap:{level}"
     
@@ -101,15 +114,22 @@ async def get_treemap(
                 detail=ERROR_MESSAGES.get(data["error"], ERROR_MESSAGES["timeout"])
             )
         
-        cache.set(cache_key, data, ttl=TREEMAP_CACHE_TTL)
+        treemap_cb = get_treemap_cb()
+        treemap_stats = treemap_cb.get_stats()
+        data["circuit_breaker"] = {
+            "state": treemap_stats["state"],
+            "failure_count": treemap_stats["consecutive_failures"]
+        }
         
-        return data
+        result = success_response(data)
+        cache.set(cache_key, result, ttl=TREEMAP_CACHE_TTL)
+        
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[MarketRadar] Failed to get treemap: {e}", exc_info=True)
-        # P2-10: Sanitize error message
         raise HTTPException(
             status_code=500,
             detail=sanitize_error_message(e)
@@ -119,16 +139,6 @@ async def get_treemap(
 @router.get("/anomalies")
 @handle_errors(module="market_radar")
 async def get_anomalies():
-    """
-    Get all detected market anomalies.
-    
-    Returns 5 types of anomalies:
-    - volatility: Stocks with highest amplitude
-    - capital_outflow: Stocks with strongest capital outflow
-    - institution_research: Most researched by institutions
-    - new_high: Stocks hitting 60-day high (P1-4: Fixed with real K-line data)
-    - volume_surge: Stocks with largest trading volume
-    """
     cache = get_cache()
     cache_key = "market_radar:anomalies:all"
     
@@ -137,24 +147,30 @@ async def get_anomalies():
         return cached
     
     try:
-        data = await detect_anomalies(anomaly_type=None, top_n=10, timeout=15.0)
+        data = await detect_anomalies(anomaly_type=None, top_n=10, timeout=60.0)  # P0: Increased from 15s to 60s
         
         if "error" in data:
-            # P2-10: Return user-friendly timeout message
             raise HTTPException(
                 status_code=504,
                 detail=ERROR_MESSAGES.get(data["error"], ERROR_MESSAGES["timeout"])
             )
         
-        cache.set(cache_key, data, ttl=ANOMALY_CACHE_TTL)
+        anomaly_cb = get_anomaly_cb()
+        anomaly_stats = anomaly_cb.get_stats()
+        data["circuit_breaker"] = {
+            "state": anomaly_stats["state"],
+            "failure_count": anomaly_stats["consecutive_failures"]
+        }
         
-        return data
+        result = success_response(data)
+        cache.set(cache_key, result, ttl=ANOMALY_CACHE_TTL)
+        
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[MarketRadar] Failed to get anomalies: {e}", exc_info=True)
-        # P2-10: Sanitize error message
         raise HTTPException(
             status_code=500,
             detail=sanitize_error_message(e)
@@ -169,20 +185,9 @@ async def get_anomaly_by_type(
         description="Anomaly type: volatility, capital_outflow, institution_research, new_high, volume_surge"
     )
 ):
-    """
-    Get specific type of market anomaly.
-    
-    Supported types:
-    - volatility: Highest amplitude stocks
-    - capital_outflow: Strongest capital outflow
-    - institution_research: Most researched by institutions
-    - new_high: Stocks hitting 60-day high (P1-4: Fixed)
-    - volume_surge: Largest trading volume
-    """
     try:
         at = AnomalyType(anomaly_type)
     except ValueError:
-        # P2-10: User-friendly invalid type message
         valid_types = [t.value for t in AnomalyType]
         raise HTTPException(
             status_code=400,
@@ -200,21 +205,27 @@ async def get_anomaly_by_type(
         data = await detect_anomalies(anomaly_type=at, top_n=10, timeout=15.0)
         
         if "error" in data:
-            # P2-10: Return user-friendly timeout message
             raise HTTPException(
                 status_code=504,
                 detail=ERROR_MESSAGES.get(data["error"], ERROR_MESSAGES["timeout"])
             )
         
-        cache.set(cache_key, data, ttl=ANOMALY_CACHE_TTL)
+        anomaly_cb = get_anomaly_cb()
+        anomaly_stats = anomaly_cb.get_stats()
+        data["circuit_breaker"] = {
+            "state": anomaly_stats["state"],
+            "failure_count": anomaly_stats["consecutive_failures"]
+        }
         
-        return data
+        result = success_response(data)
+        cache.set(cache_key, result, ttl=ANOMALY_CACHE_TTL)
+        
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[MarketRadar] Failed to get anomaly {anomaly_type}: {e}", exc_info=True)
-        # P2-10: Sanitize error message
         raise HTTPException(
             status_code=500,
             detail=sanitize_error_message(e)
@@ -293,8 +304,99 @@ async def get_market_temperature():
         
     except Exception as e:
         logger.error(f"[MarketRadar] Failed to get temperature: {e}", exc_info=True)
-        # P2-10: Sanitize error message
         raise HTTPException(
             status_code=500,
             detail=sanitize_error_message(e)
         )
+
+
+@router.post("/circuit_breaker/reset")
+async def reset_circuit_breaker():
+    treemap_cb = get_treemap_cb()
+    anomaly_cb = get_anomaly_cb()
+    
+    treemap_cb.reset()
+    anomaly_cb.reset()
+    
+    treemap_stats = treemap_cb.get_stats()
+    anomaly_stats = anomaly_cb.get_stats()
+    
+    return success_response({
+        "message": "CircuitBreakers reset successfully",
+        "treemap": {"state": treemap_stats["state"]},
+        "anomaly": {"state": anomaly_stats["state"]}
+    })
+
+
+async def warmup_market_radar_cache():
+    """Pre-populate market_radar cache on server startup."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    
+    logger.info("[MarketRadar] Starting cache warmup...")
+    
+    warmup_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="market_radar_warmup_")
+    loop = asyncio.get_running_loop()
+    
+    async def warmup_treemap():
+        try:
+            logger.info("[MarketRadar] Warming up treemap cache...")
+            data = await build_treemap_data(level="sector", timeout=60.0)
+            
+            if "error" not in data:
+                treemap_cb = get_treemap_cb()
+                treemap_stats = treemap_cb.get_stats()
+                data["circuit_breaker"] = {
+                    "state": treemap_stats["state"],
+                    "failure_count": treemap_stats["consecutive_failures"]
+                }
+                result = success_response(data)
+                cache = get_cache()
+                cache.set("market_radar:treemap:sector", result, ttl=TREEMAP_CACHE_TTL)
+                logger.info("[MarketRadar] Treemap cache warmed up")
+            else:
+                logger.warning(f"[MarketRadar] Treemap warmup returned error: {data.get('error')}")
+        except Exception as e:
+            logger.warning(f"[MarketRadar] Failed to warmup treemap: {e}", exc_info=True)
+    
+    async def warmup_anomalies():
+        try:
+            logger.info("[MarketRadar] Warming up anomalies cache...")
+            data = await detect_anomalies(anomaly_type=None, top_n=10, timeout=60.0)
+            
+            if "error" not in data:
+                anomaly_cb = get_anomaly_cb()
+                anomaly_stats = anomaly_cb.get_stats()
+                data["circuit_breaker"] = {
+                    "state": anomaly_stats["state"],
+                    "failure_count": anomaly_stats["consecutive_failures"]
+                }
+                result = success_response(data)
+                cache = get_cache()
+                cache.set("market_radar:anomalies:all", result, ttl=ANOMALY_CACHE_TTL)
+                logger.info("[MarketRadar] Anomalies cache warmed up")
+            else:
+                logger.warning(f"[MarketRadar] Anomalies warmup returned error: {data.get('error')}")
+        except Exception as e:
+            logger.warning(f"[MarketRadar] Failed to warmup anomalies: {e}", exc_info=True)
+    
+    async def warmup_temperature():
+        try:
+            logger.info("[MarketRadar] Warming up temperature cache...")
+            from app.services.market_radar.treemap_builder import _calculate_temperature_sync
+            temp_data = await loop.run_in_executor(warmup_executor, _calculate_temperature_sync)
+            cache = get_cache()
+            cache.set("market_radar:temperature", temp_data, ttl=TREEMAP_CACHE_TTL)
+            logger.info("[MarketRadar] Temperature cache warmed up")
+        except Exception as e:
+            logger.warning(f"[MarketRadar] Failed to warmup temperature: {e}")
+    
+    await asyncio.gather(
+        warmup_treemap(),
+        warmup_anomalies(),
+        warmup_temperature(),
+        return_exceptions=True
+    )
+    
+    warmup_executor.shutdown(wait=False)
+    logger.info("[MarketRadar] Cache warmup complete")

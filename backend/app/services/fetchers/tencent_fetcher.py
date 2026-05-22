@@ -389,6 +389,68 @@ class TencentFinanceFetcher(BaseMarketFetcher):
             self.cb.record_failure()
             return None
     
+    def get_kline_sync(self, symbol: str, period: str = "day", days: int = 60) -> Optional[List[Dict]]:
+        """
+        Synchronous K-line fetch for use in thread pool executors.
+        
+        This method is designed to be called from synchronous contexts
+        (e.g., inside ThreadPoolExecutor) where async/await is not available.
+        
+        Args:
+            symbol: Stock symbol with prefix (e.g., "sh600519")
+            period: "day", "week", "month" (minute not supported)
+            days: Number of days of data to return (default 60)
+            
+        Returns:
+            List of dicts with keys: date, open, high, low, close, volume
+            or None if fetch failed
+        """
+        if not self.cb.is_available():
+            logger.warning(f"[Tencent] Circuit breaker open, skipping kline fetch for {symbol}")
+            return None
+        
+        period_map = {"day": 240, "week": 1200, "month": 5200}
+        scale = period_map.get(period, 240)
+        
+        # Request more data than needed, then truncate
+        url = f"{self.KLINE_API}?symbol={symbol}&scale={scale}&ma=no&datalen=320"
+        
+        try:
+            response = self._make_request(url, timeout=15)
+            
+            if response.status_code != 200:
+                logger.warning(f"[Tencent] K-line API returned {response.status_code}")
+                self.cb.record_failure()
+                return None
+            
+            import json
+            data = json.loads(response.text)
+            
+            kline_data = []
+            for item in data:
+                kline_data.append({
+                    "date": item.get("day"),
+                    "open": float(item.get("open", 0)),
+                    "close": float(item.get("close", 0)),
+                    "high": float(item.get("high", 0)),
+                    "low": float(item.get("low", 0)),
+                    "volume": int(float(item.get("volume", 0))),
+                })
+            
+            if kline_data:
+                self.cb.record_success()
+                # Return last N days
+                return kline_data[-days:] if len(kline_data) > days else kline_data
+            else:
+                logger.warning(f"[Tencent] No K-line data found for {symbol}")
+                self.cb.record_failure()
+                return None
+                
+        except Exception as e:
+            logger.error(f"[Tencent] Error fetching K-line sync: {e}", exc_info=True)
+            self.cb.record_failure()
+            return None
+
     async def reset_circuit_breaker(self) -> dict:
         """Reset circuit breaker manually."""
         from app.services.circuit_breaker import CircuitState

@@ -342,9 +342,22 @@ def start_scheduler():
         import time as _time
         _time.sleep(3)
         _fetch_all_stocks_job()
+        
+        _time.sleep(5)
+        try:
+            from app.db.database import get_all_stocks_count
+            count = get_all_stocks_count()
+            if count < 100:
+                logger.error(f"[Scheduler] CRITICAL: Only {count} stocks loaded, expected 5000+")
+                logger.error("[Scheduler] Check Sina API connectivity and circuit breaker status")
+            else:
+                logger.info(f"[Scheduler] Health check passed: {count} stocks loaded")
+        except Exception as e:
+            logger.error(f"[Scheduler] Health check failed: {e}", exc_info=True)
+    
     import threading
     threading.Thread(target=_initial_all_stocks, daemon=True).start()
-    logger.info("[Scheduler] 全市场A股初始抓取已触发（后台，3秒后开始）")
+    logger.info("[Scheduler] 全市场A股初始抓取已触发（后台，3秒后开始，8秒后健康检查）")
 
     # 每 60 秒刷新全市场个股缓存（Sina HQ）
     from app.services.sentiment_engine import trigger_spot_fetch

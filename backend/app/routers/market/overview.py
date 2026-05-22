@@ -484,7 +484,7 @@ async def get_global_kline(
     全球指数K线历史数据
     
     Args:
-        symbol: 指数代码 (HSI, SPX, IXIC, DJI, N225 等)
+        symbol: 指数代码 (HSI, SPX, IXIC, DJI, N225 等，支持 ^DJI 格式)
         period: daily 或 weekly
         limit: 返回条数 (1-500)
     
@@ -492,14 +492,17 @@ async def get_global_kline(
         K线数据列表 [{date, open, high, low, close, volume, change_pct}, ...]
     """
     try:
+        # Normalize symbol: remove ^ prefix if present
+        normalized_symbol = symbol.lstrip('^')
+        
         fetcher = get_global_index_fetcher()
-        klines = await fetcher.fetch_kline_history(symbol, period, limit)
+        klines = await fetcher.fetch_kline_history(normalized_symbol, period, limit)
         
         if not klines:
-            return error_response(ErrorCode.NOT_FOUND, f"未找到 {symbol} 的K线数据")
+            return error_response(ErrorCode.NOT_FOUND, f"未找到 {normalized_symbol} 的K线数据")
         
         return success_response({
-            "symbol": symbol,
+            "symbol": normalized_symbol,
             "period": period,
             "data": klines,
             "total": len(klines),
@@ -521,18 +524,21 @@ async def get_global_sparkline(
     全球指数迷你走势图数据（最近N天收盘价）
     
     Args:
-        symbol: 指数代码
+        symbol: 指数代码 (支持 ^DJI 或 DJI 格式)
         days: 天数 (5-60)
     
     Returns:
         收盘价列表 [price1, price2, ...]
     """
     try:
+        # Normalize symbol: remove ^ prefix if present (兼容 Yahoo Finance 格式)
+        normalized_symbol = symbol.lstrip('^')
+        
         fetcher = get_global_index_fetcher()
-        sparkline = await fetcher.fetch_sparkline(symbol, days)
+        sparkline = await fetcher.fetch_sparkline(normalized_symbol, days)
         
         return success_response({
-            "symbol": symbol,
+            "symbol": normalized_symbol,
             "data": sparkline,
             "days": len(sparkline),
         })

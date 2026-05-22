@@ -153,7 +153,9 @@ let chart = null
 let abortController = null // AbortController for request cancellation
 
 // localStorage cache key and TTL (5 minutes)
+// CACHE_VERSION: Increment when data format changes to invalidate old cache
 const CACHE_KEY = 'alphaterminal_global_indexes'
+const CACHE_VERSION = 3  // v3: include sparklines in cache
 const CACHE_TTL = 5 * 60 * 1000
 
 const regions = [
@@ -275,7 +277,13 @@ function loadFromCache() {
   try {
     const cached = localStorage.getItem(CACHE_KEY)
     if (cached) {
-      const { data, timestamp, regions: cachedRegions } = JSON.parse(cached)
+      const { data, timestamp, regions: cachedRegions, version } = JSON.parse(cached)
+      // Invalidate cache if version mismatch or data is empty
+      if (version !== CACHE_VERSION) {
+        logger.info('[GlobalIndex] Cache version mismatch, invalidating')
+        localStorage.removeItem(CACHE_KEY)
+        return false
+      }
       if (Date.now() - timestamp < CACHE_TTL && data && data.length > 0) {
         allIndexes.value = data
         regionData.value = cachedRegions || {}
@@ -295,7 +303,8 @@ function saveToCache(data, regions) {
     localStorage.setItem(CACHE_KEY, JSON.stringify({
       data,
       regions,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      version: CACHE_VERSION
     }))
   } catch (e) {
     logger.warn('[GlobalIndex] Cache save error:', e.message)
@@ -317,20 +326,19 @@ async function refreshAll() {
       signal: abortController.signal 
     })
     if (data?.global) {
-      allIndexes.value = data.global
+      // Create a copy of the data to modify
+      const indexes = [...data.global]
       regionData.value = data.regions || {}
       
-      // Save to cache for offline fallback
-      saveToCache(data.global, data.regions || {})
-      
-      const sparklinePromises = allIndexes.value.map(async (idx) => {
+      // Fetch sparklines for each index
+      const sparklinePromises = indexes.map(async (idx) => {
         if (!idx.is_mock) {
           try {
             const sparkResp = await apiFetch(`/api/v1/market/global/sparkline?symbol=${idx.symbol}&days=20`, {
               timeoutMs: 5000,
               signal: abortController.signal
             })
-            idx.sparkline = sparkResp?.data || []
+            idx.sparkline = sparkResp?.data?.data || []
           } catch (e) {
             if (e.name !== 'AbortError') {
               idx.sparkline = []
@@ -342,6 +350,12 @@ async function refreshAll() {
       })
       
       await Promise.all(sparklinePromises)
+      
+      // Assign the modified array to trigger reactivity
+      allIndexes.value = indexes
+      
+      // Save to cache WITH sparklines for offline fallback
+      saveToCache(indexes, data.regions || {})
     }
   } catch (e) {
     if (e.name === 'AbortError') {

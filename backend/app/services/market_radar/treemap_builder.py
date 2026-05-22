@@ -11,41 +11,41 @@ FALLBACK: Uses Sina API when Eastmoney is blocked by proxy.
 import logging
 import asyncio
 import httpx
-import json
+import requests
+from requests.exceptions import ConnectionError as RequestsConnectionError, ProxyError
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+from http.client import RemoteDisconnected
+
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState
+from app.services.market_radar.sina_fallback import fetch_all_stocks_sina, fetch_sectors_sina
 
 logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="treemap_")
+
+# Module-level CircuitBreaker for Eastmoney API
+_EASTMONEY_CB = CircuitBreaker(
+    "eastmoney_treemap",
+    CircuitBreakerConfig(failure_threshold=5, timeout=60.0)
+)
 
 DATA_SOURCE_AKSHARE = "akshare"
 DATA_SOURCE_SINA = "sina"
 DATA_SOURCE_CACHE = "cache"
 DATA_SOURCE_FALLBACK = "fallback"
 
-try:
-    from curl_cffi import requests as curl_requests
-    HAS_CURL_CFFI = True
-except ImportError:
-    import requests as curl_requests
-    HAS_CURL_CFFI = False
-
 from app.config.settings import get_settings
-
-def _get_proxies():
-    settings = get_settings()
-    proxy = settings.get_proxy_url()
-    if proxy:
-        return {"http": proxy, "https": proxy}
-    return None
-
-_PROXIES = _get_proxies()
 
 
 def _fetch_sectors_sync() -> List[Dict]:
     """Fetch all sector names from akshare."""
+    if _EASTMONEY_CB.state == CircuitState.OPEN:
+        logger.info("[Treemap] CB OPEN, using static sector fallback")
+        from app.services.market_radar.sina_fallback import fetch_sectors_sina_sync
+        return fetch_sectors_sina_sync()
+    
     try:
         import akshare as ak
         df = ak.stock_board_industry_name_em()
@@ -55,10 +55,13 @@ def _fetch_sectors_sync() -> List[Dict]:
                 "name": row["板块名称"],
                 "code": row["板块代码"],
             })
+        _EASTMONEY_CB.record_success()
         return sectors
-    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] sectors: {e}", exc_info=True)
-        return []
+    except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected) as e:
+        logger.error(f"[HTTP] sectors: {type(e).__name__}: {e}", exc_info=True)
+        _EASTMONEY_CB.record_failure()
+        from app.services.market_radar.sina_fallback import fetch_sectors_sina_sync
+        return fetch_sectors_sina_sync()
 
 
 def _fetch_sector_stocks_sync(sector_name: str) -> tuple:
@@ -78,13 +81,18 @@ def _fetch_sector_stocks_sync(sector_name: str) -> tuple:
                 "market_cap": float(row.get("总市值", 0) or 0),
             })
         return (sector_name, stocks)
-    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] stocks for {sector_name}: {e}", exc_info=True)
+    except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected) as e:
+        logger.warning(f"[HTTP] stocks for {sector_name}: {type(e).__name__}: {e}", exc_info=True)
         return (sector_name, [])
 
 
 def _fetch_all_stocks_sync() -> List[Dict]:
     """Fetch all A-share stocks with market data."""
+    if _EASTMONEY_CB.state == CircuitState.OPEN:
+        logger.info("[Treemap] CB OPEN, using Sina fallback")
+        from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
+        return fetch_all_stocks_sina_sync()
+    
     try:
         import akshare as ak
         df = ak.stock_zh_a_spot_em()
@@ -105,71 +113,13 @@ def _fetch_all_stocks_sync() -> List[Dict]:
                 })
             except (ValueError, TypeError):
                 continue
+        _EASTMONEY_CB.record_success()
         return stocks
-    except Exception as e:
-        logger.error(f"[HTTP] all stocks: {e}", exc_info=True)
-        return []
-
-
-def _fetch_all_stocks_sina_sync(page_size: int = 500) -> List[Dict]:
-    """Fetch all A-share stocks from Sina API (works through proxy)."""
-    try:
-        all_stocks = []
-        page = 1
-        
-        while True:
-            url = f"http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page={page}&num={page_size}&sort=changepercent&asc=0&node=hs_a"
-            
-            if HAS_CURL_CFFI:
-                response = curl_requests.get(
-                    url,
-                    timeout=15,
-                    impersonate="chrome120",
-                    proxies=_PROXIES
-                )
-            else:
-                response = curl_requests.get(url, timeout=15, proxies=_PROXIES)
-            
-            if response.status_code != 200:
-                break
-            
-            data = json.loads(response.text)
-            if not data:
-                break
-            
-            for item in data:
-                try:
-                    symbol = item.get("symbol", "")
-                    code = item.get("code", "")
-                    
-                    if symbol.startswith("bj"):
-                        continue
-                    
-                    all_stocks.append({
-                        "symbol": symbol,
-                        "name": item.get("name", ""),
-                        "price": float(item.get("trade", 0) or 0),
-                        "change_pct": float(item.get("changepercent", 0) or 0),
-                        "volume": float(item.get("volume", 0) or 0),
-                        "amount": float(item.get("amount", 0) or 0),
-                        "market_cap": float(item.get("mktcap", 0) or 0) * 10000,
-                        "high": float(item.get("high", 0) or 0),
-                        "low": float(item.get("low", 0) or 0),
-                        "pre_close": float(item.get("settlement", 0) or 0),
-                    })
-                except (ValueError, TypeError):
-                    continue
-            
-            if len(data) < page_size:
-                break
-            page += 1
-        
-        logger.info(f"[Sina] Fetched {len(all_stocks)} stocks")
-        return all_stocks
-        
-    except Exception as e:
-        logger.error(f"[Sina] Error fetching stocks: {e}", exc_info=True)
-        return []
+    except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected) as e:
+        logger.error(f"[HTTP] all stocks: {type(e).__name__}: {e}", exc_info=True)
+        _EASTMONEY_CB.record_failure()
+        from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
+        return fetch_all_stocks_sina_sync()
 
 
 async def _fetch_sectors() -> List[Dict]:
@@ -220,12 +170,6 @@ async def _fetch_all_stocks() -> List[Dict]:
     """Async wrapper for all stocks fetching."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, _fetch_all_stocks_sync)
-
-
-async def _fetch_all_stocks_sina() -> List[Dict]:
-    """Async wrapper for Sina stocks fetching."""
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_executor, _fetch_all_stocks_sina_sync)
 
 
 async def get_sector_stocks(sector_name: str, timeout: float = 15.0) -> List[Dict]:
@@ -296,7 +240,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
     
     if not all_stocks:
         logger.warning("[Treemap] Akshare failed for stocks, trying Sina fallback")
-        all_stocks = await _fetch_all_stocks_sina()
+        all_stocks = await fetch_all_stocks_sina()
         data_source = DATA_SOURCE_SINA
         source_detail = {
             "name": "新浪财经",
@@ -306,38 +250,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
     
     if not sectors:
         logger.warning("[Treemap] No sectors fetched, using fallback sector list")
-        sectors = [
-            {"name": "银行", "code": "BK0477"},
-            {"name": "证券", "code": "BK0478"},
-            {"name": "保险", "code": "BK0479"},
-            {"name": "白酒", "code": "BK0480"},
-            {"name": "医药", "code": "BK0481"},
-            {"name": "半导体", "code": "BK0482"},
-            {"name": "新能源", "code": "BK0483"},
-            {"name": "汽车", "code": "BK0484"},
-            {"name": "房地产", "code": "BK0485"},
-            {"name": "电力", "code": "BK0486"},
-            {"name": "煤炭", "code": "BK0487"},
-            {"name": "石油", "code": "BK0488"},
-            {"name": "钢铁", "code": "BK0489"},
-            {"name": "有色金属", "code": "BK0490"},
-            {"name": "化工", "code": "BK0491"},
-            {"name": "建材", "code": "BK0492"},
-            {"name": "机械", "code": "BK0493"},
-            {"name": "电子", "code": "BK0494"},
-            {"name": "通信", "code": "BK0495"},
-            {"name": "计算机", "code": "BK0496"},
-            {"name": "传媒", "code": "BK0497"},
-            {"name": "零售", "code": "BK0498"},
-            {"name": "食品饮料", "code": "BK0499"},
-            {"name": "家电", "code": "BK0500"},
-            {"name": "纺织服装", "code": "BK0501"},
-            {"name": "轻工制造", "code": "BK0502"},
-            {"name": "农林牧渔", "code": "BK0503"},
-            {"name": "公用事业", "code": "BK0504"},
-            {"name": "交通运输", "code": "BK0505"},
-            {"name": "建筑装饰", "code": "BK0506"},
-        ]
+        sectors = await fetch_sectors_sina()
         if data_source == DATA_SOURCE_SINA:
             data_source = DATA_SOURCE_FALLBACK
             source_detail = {
@@ -357,7 +270,32 @@ async def _build_sector_treemap() -> Dict[str, Any]:
     stock_by_symbol = {s["symbol"]: s for s in all_stocks}
     
     sector_names = [s["name"] for s in sectors[:30]]
+    
+    # Try to fetch sector stocks, but use fallback if all fail
     sector_stocks_map = await _fetch_sector_stocks_batch(sector_names)
+    
+    # Check if we got any sector data
+    total_sector_stocks = sum(len(stocks) for stocks in sector_stocks_map.values())
+    
+    # If sector stocks fetch failed completely, use top stocks by market cap as fallback
+    if total_sector_stocks == 0 and all_stocks:
+        logger.warning("[Treemap] All sector stocks fetch failed, using top stocks by market cap")
+        # Sort all stocks by market cap and take top 100
+        sorted_stocks = sorted(
+            [s for s in all_stocks if s.get("market_cap", 0) > 0],
+            key=lambda x: x.get("market_cap", 0),
+            reverse=True
+        )[:100]
+        
+        # Create a single "热门股票" sector
+        sector_stocks_map = {"热门股票": sorted_stocks}
+        sector_names = ["热门股票"]
+        data_source = DATA_SOURCE_FALLBACK
+        source_detail = {
+            "name": "热门股票 (市值排名)",
+            "type": "实时",
+            "api": "top_stocks_by_market_cap"
+        }
     
     treemap_data = []
     
@@ -425,7 +363,7 @@ async def _build_stock_treemap() -> Dict[str, Any]:
     
     if not all_stocks:
         logger.warning("[Treemap] Akshare failed, trying Sina fallback")
-        all_stocks = await _fetch_all_stocks_sina()
+        all_stocks = await fetch_all_stocks_sina()
         data_source = DATA_SOURCE_SINA
         source_detail = {
             "name": "新浪财经",
@@ -472,3 +410,8 @@ async def _build_stock_treemap() -> Dict[str, Any]:
         "data_source": data_source,
         "source_detail": source_detail
     }
+
+
+def get_circuit_breaker():
+    """Export CircuitBreaker for router access."""
+    return _EASTMONEY_CB

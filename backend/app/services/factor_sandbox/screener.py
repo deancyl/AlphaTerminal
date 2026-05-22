@@ -438,31 +438,49 @@ class StockScreener:
             logger.debug(f"[Screener] Factor calculation error for {symbol}/{factor_id}: {e}")
             return None
     
-    def _get_kline_data(self, symbol: str, days: int = 60) -> Optional[pd.DataFrame]:
-        """Get K-line data for a stock"""
+    def _get_kline_data(self, symbol: str, days: int = 60) -> Tuple[Optional[pd.DataFrame], str]:
+        db_symbol = symbol.replace("sh", "").replace("sz", "")
+        prefixed_symbol = symbol if symbol.startswith(('sh', 'sz')) else f"sh{symbol}" if symbol.startswith('6') else f"sz{symbol}"
+        
         try:
-            db_symbol = symbol.replace("sh", "").replace("sz", "")
             df = self.ak.stock_zh_a_hist(
                 symbol=db_symbol,
                 period="daily",
                 adjust="qfq",
             )
             
-            if df is None or len(df) == 0:
-                return None
-            
-            df = df.tail(days)
-            df.columns = ['date', 'open', 'close', 'high', 'low', 'volume', 'turnover', 'amplitude', 'pct_change', 'change', 'turnover_rate']
-            
-            return df
-            
+            if df is not None and len(df) > 0:
+                df = df.tail(days)
+                df.columns = ['date', 'open', 'close', 'high', 'low', 'volume', 'turnover', 'amplitude', 'pct_change', 'change', 'turnover_rate']
+                logger.debug(f"[Screener] Got kline for {symbol} from Eastmoney: {len(df)} rows")
+                return df, "eastmoney"
         except Exception as e:
-            logger.debug(f"[Screener] Failed to get kline for {symbol}: {e}")
-            return None
+            logger.debug(f"[Screener] Eastmoney kline failed for {symbol}: {type(e).__name__}")
+        
+        try:
+            df = self.ak.stock_zh_a_daily(
+                symbol=prefixed_symbol,
+                adjust="qfq",
+            )
+            
+            if df is not None and len(df) > 0:
+                df = df.tail(days)
+                df = df[['date', 'open', 'high', 'low', 'close', 'volume', 'amount']]
+                df.columns = ['date', 'open', 'high', 'low', 'close', 'volume', 'turnover']
+                df['amplitude'] = 0.0
+                df['pct_change'] = 0.0
+                df['change'] = 0.0
+                df['turnover_rate'] = 0.0
+                logger.debug(f"[Screener] Got kline for {symbol} from Sina fallback: {len(df)} rows")
+                return df, "sina"
+        except Exception as e:
+            logger.warning(f"[Screener] Sina kline fallback failed for {symbol}: {type(e).__name__}", exc_info=True)
+        
+        logger.error(f"[Screener] All kline sources failed for {symbol}")
+        return None, "failed"
     
     def _check_macd_golden_cross(self, symbol: str, params: Dict) -> Optional[float]:
-        """Check for MACD golden cross signal"""
-        df = self._get_kline_data(symbol, 60)
+        df, source = self._get_kline_data(symbol, 60)
         if df is None or len(df) < 30:
             return None
         
@@ -495,7 +513,7 @@ class StockScreener:
     
     def _check_rsi_oversold(self, symbol: str, params: Dict) -> Optional[float]:
         """Check for RSI oversold signal"""
-        df = self._get_kline_data(symbol, 60)
+        df, source = self._get_kline_data(symbol, 60)
         if df is None or len(df) < 20:
             return None
         
@@ -527,7 +545,7 @@ class StockScreener:
     
     def _check_breakout_ma(self, symbol: str, params: Dict) -> Optional[float]:
         """Check for price breakout above MA"""
-        df = self._get_kline_data(symbol, 60)
+        df, source = self._get_kline_data(symbol, 60)
         if df is None or len(df) < 30:
             return None
         
@@ -569,7 +587,7 @@ class StockScreener:
     
     def _check_volume_surge(self, symbol: str, params: Dict) -> Optional[float]:
         """Check for volume surge"""
-        df = self._get_kline_data(symbol, 60)
+        df, source = self._get_kline_data(symbol, 60)
         if df is None or len(df) < 30:
             return None
         
@@ -616,7 +634,7 @@ class StockScreener:
     
     def _check_new_high(self, symbol: str, params: Dict) -> Optional[float]:
         """Check if stock made new high"""
-        df = self._get_kline_data(symbol, 120)
+        df, source = self._get_kline_data(symbol, 120)
         if df is None or len(df) < 30:
             return None
         

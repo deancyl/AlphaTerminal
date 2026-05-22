@@ -26,6 +26,12 @@ from .error_sanitizer import (
 
 from .exception_handlers import setup_exception_handlers
 
+from .sina_stock_fetcher import (
+    fetch_all_stocks_sina,
+    get_circuit_breaker_status,
+    reset_circuit_breaker,
+)
+
 __all__ = [
     # Error codes and responses
     'ErrorCode',
@@ -48,4 +54,9 @@ __all__ = [
     
     # Exception handlers
     'setup_exception_handlers',
+    
+    # Sina stock fetcher
+    'fetch_all_stocks_sina',
+    'get_circuit_breaker_status',
+    'reset_circuit_breaker',
 ]

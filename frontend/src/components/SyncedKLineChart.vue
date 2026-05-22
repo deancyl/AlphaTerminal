@@ -23,10 +23,12 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, watch, onMounted, onUnmounted, onDeactivated } from 'vue'
+import { ref, shallowRef, watch, onMounted, onUnmounted, onDeactivated, nextTick } from 'vue'
 import { useECharts } from '@/composables/useECharts.js'
 import { apiFetchDeduped } from '@/utils/api.js'
 import { getDynamicThemeColors, getDynamicMarketColors } from '@/utils/echartsTheme.js'
+import { getSymbolType } from '@/utils/symbols.js'
+import { normalizeHistoryData, buildHistoryEndpoint, getTimeoutForAssetType } from '@/utils/historyNormalizer.js'
 import Skeleton from '@/components/Skeleton.vue'
 import ErrorDisplay from '@/components/f9/ErrorDisplay.vue'
 
@@ -34,12 +36,10 @@ const props = defineProps({
   symbol: { type: String, required: true },
   syncedDate: { type: String, default: null },
   panelIndex: { type: Number, default: 0 },
-  lineColor: { type: String, default: null },
-  loading: { type: Boolean, default: false },
-  error: { type: String, default: null }
+  lineColor: { type: String, default: null }
 })
 
-const emit = defineEmits(['crosshair-move', 'chart-ready', 'retry'])
+const emit = defineEmits(['crosshair-move', 'chart-ready', 'chart-error'])
 
 const chartContainer = ref(null)
 const { chartInstance, initChart, setOption, dispose, isReady } = useECharts(chartContainer, {
@@ -50,23 +50,38 @@ const { chartInstance, initChart, setOption, dispose, isReady } = useECharts(cha
 const klineData = shallowRef([])
 const loading = ref(true)
 const error = ref(null)
+const pendingEmit = ref(null)
 
 async function fetchKline() {
   loading.value = true
   error.value = null
 
   try {
+    const assetType = getSymbolType(props.symbol)
+    const endpoint = buildHistoryEndpoint(props.symbol, assetType, { limit: 100 })
+    const timeout = getTimeoutForAssetType(assetType)
+    
     const response = await apiFetchDeduped(
-      `matrix:kline:${props.symbol}`,
-      `/api/v1/market/history/${props.symbol}`,
-      { timeoutMs: 10000, debounce: 100 }
+      `matrix:kline:${props.symbol}:${assetType}`,
+      endpoint,
+      { timeoutMs: timeout, debounce: 100 }
     )
 
-    klineData.value = response?.data?.history || response?.history || []
+    klineData.value = normalizeHistoryData(response, assetType)
+    
+    if (!klineData.value.length) {
+      error.value = '暂无数据'
+      loading.value = false
+      emit('chart-error', { index: props.panelIndex })
+      return
+    }
+    
     loading.value = false
   } catch (e) {
-    error.value = '加载失败'
+    console.error(`[SyncedKLineChart] Failed to fetch ${props.symbol}:`, e)
+    error.value = '暂无数据'
     loading.value = false
+    emit('chart-error', { index: props.panelIndex })
   }
 }
 
@@ -74,7 +89,6 @@ function buildOption() {
   if (!klineData.value.length) return {}
 
   const themeColors = getDynamicThemeColors()
-  const marketColors = getDynamicMarketColors()
   const lineColor = props.lineColor || themeColors.primary || '#3b82f6'
 
   const dates = klineData.value.map(d => d.date)
@@ -145,7 +159,6 @@ function buildOption() {
         const item = klineData.value[idx]
         if (!item) return ''
 
-        // Throttle emit to 60fps using rAF
         if (!pendingEmit.value) {
           pendingEmit.value = item.date
           requestAnimationFrame(() => {
@@ -194,10 +207,19 @@ watch(() => props.syncedDate, (date) => {
 
 onMounted(async () => {
   await fetchKline()
+  
+  if (error.value || !klineData.value.length) {
+    return
+  }
+  
+  await nextTick()
+  
   const chart = await initChart()
-  if (chart && klineData.value.length) {
+  if (chart) {
     setOption(buildOption())
     emit('chart-ready', { index: props.panelIndex, chart })
+  } else {
+    emit('chart-error', { index: props.panelIndex })
   }
 })
 

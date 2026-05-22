@@ -690,6 +690,171 @@ class TestRequestModels:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# K-line Fallback Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestKlineFallback:
+    """Tests for K-line data fallback mechanism"""
+    
+    def test_kline_primary_source_success(self, mock_akshare, mock_kline_data):
+        """Test that primary source (Eastmoney) is used when available"""
+        screener = StockScreener()
+        screener._akshare = mock_akshare
+        
+        # Mock successful primary source
+        mock_akshare.stock_zh_a_hist.return_value = mock_kline_data
+        
+        df, source = screener._get_kline_data("sh600519", 30)
+        
+        assert df is not None
+        assert len(df) == 30
+        assert source == "eastmoney"
+        mock_akshare.stock_zh_a_hist.assert_called_once()
+    
+    def test_kline_fallback_to_sina(self, mock_akshare, mock_kline_data):
+        """Test that fallback to Sina works when primary fails"""
+        screener = StockScreener()
+        screener._akshare = mock_akshare
+        
+        # Mock primary source failure
+        mock_akshare.stock_zh_a_hist.side_effect = Exception("Connection refused")
+        
+        # Mock successful fallback
+        sina_df = pd.DataFrame({
+            "date": pd.date_range(start="2024-01-01", periods=30, freq="D"),
+            "open": np.random.uniform(100, 110, 30),
+            "high": np.random.uniform(105, 115, 30),
+            "low": np.random.uniform(95, 105, 30),
+            "close": np.random.uniform(100, 110, 30),
+            "volume": np.random.uniform(1000000, 5000000, 30),
+            "amount": np.random.uniform(100000000, 500000000, 30),
+        })
+        mock_akshare.stock_zh_a_daily.return_value = sina_df
+        
+        df, source = screener._get_kline_data("sh600519", 30)
+        
+        assert df is not None
+        assert len(df) == 30
+        assert source == "sina"
+        mock_akshare.stock_zh_a_hist.assert_called_once()
+        mock_akshare.stock_zh_a_daily.assert_called_once()
+    
+    def test_kline_all_sources_fail(self, mock_akshare):
+        """Test that None is returned when all sources fail"""
+        screener = StockScreener()
+        screener._akshare = mock_akshare
+        
+        # Mock both sources failing
+        mock_akshare.stock_zh_a_hist.side_effect = Exception("Primary failed")
+        mock_akshare.stock_zh_a_daily.side_effect = Exception("Fallback failed")
+        
+        df, source = screener._get_kline_data("sh600519", 30)
+        
+        assert df is None
+        assert source == "failed"
+    
+    def test_kline_sina_column_mapping(self, mock_akshare):
+        """Test that Sina columns are correctly mapped to expected format"""
+        screener = StockScreener()
+        screener._akshare = mock_akshare
+        
+        # Mock primary failure
+        mock_akshare.stock_zh_a_hist.side_effect = Exception("Primary failed")
+        
+        # Mock Sina data with original column names
+        sina_df = pd.DataFrame({
+            "date": pd.date_range(start="2024-01-01", periods=30, freq="D"),
+            "open": [100.0] * 30,
+            "high": [105.0] * 30,
+            "low": [95.0] * 30,
+            "close": [102.0] * 30,
+            "volume": [1000000] * 30,
+            "amount": [100000000] * 30,
+        })
+        mock_akshare.stock_zh_a_daily.return_value = sina_df
+        
+        df, source = screener._get_kline_data("sh600519", 30)
+        
+        assert df is not None
+        # Check that expected columns exist
+        expected_cols = ['date', 'open', 'high', 'low', 'close', 'volume', 'turnover']
+        for col in expected_cols:
+            assert col in df.columns, f"Missing column: {col}"
+    
+    def test_kline_symbol_prefix_handling(self, mock_akshare, mock_kline_data):
+        """Test that symbol prefixes are correctly handled for both sources"""
+        screener = StockScreener()
+        screener._akshare = mock_akshare
+        
+        # Test with sh prefix
+        mock_akshare.stock_zh_a_hist.return_value = mock_kline_data
+        df1, source1 = screener._get_kline_data("sh600519", 30)
+        assert df1 is not None
+        
+        # Test with sz prefix
+        df2, source2 = screener._get_kline_data("sz000001", 30)
+        assert df2 is not None
+        
+        # Test without prefix (should be handled)
+        df3, source3 = screener._get_kline_data("600519", 30)
+        assert df3 is not None
+    
+    def test_check_methods_handle_tuple_return(self, mock_akshare, mock_kline_data):
+        """Test that all _check_* methods correctly handle tuple return from _get_kline_data"""
+        screener = StockScreener()
+        screener._akshare = mock_akshare
+        
+        # Mock successful K-line fetch
+        mock_akshare.stock_zh_a_hist.return_value = mock_kline_data
+        
+        # Test all factor check methods
+        methods = [
+            ('_check_macd_golden_cross', {}),
+            ('_check_rsi_oversold', {"threshold": 30}),
+            ('_check_breakout_ma', {"period": 20}),
+            ('_check_volume_surge', {"multiplier": 2.0}),
+            ('_check_new_high', {"period": 60}),
+        ]
+        
+        for method_name, params in methods:
+            method = getattr(screener, method_name)
+            result = method("sh600519", params)
+            # Should return a float or None, not a tuple
+            assert result is None or isinstance(result, float), \
+                f"{method_name} should return float or None, got {type(result)}"
+    
+    def test_check_methods_with_fallback_data(self, mock_akshare):
+        """Test that _check_* methods work with Sina fallback data"""
+        screener = StockScreener()
+        screener._akshare = mock_akshare
+        
+        # Mock primary failure, Sina success
+        mock_akshare.stock_zh_a_hist.side_effect = Exception("Primary failed")
+        
+        # Create Sina-style data
+        sina_df = pd.DataFrame({
+            "date": pd.date_range(start="2024-01-01", periods=60, freq="D"),
+            "open": np.linspace(100, 110, 60),
+            "high": np.linspace(105, 115, 60),
+            "low": np.linspace(95, 105, 60),
+            "close": np.linspace(100, 110, 60),
+            "volume": np.random.uniform(1000000, 5000000, 60),
+            "amount": np.random.uniform(100000000, 500000000, 60),
+        })
+        mock_akshare.stock_zh_a_daily.return_value = sina_df
+        
+        # Test MACD golden cross
+        result = screener._check_macd_golden_cross("sh600519", {})
+        assert result is not None
+        assert isinstance(result, float)
+        
+        # Test RSI oversold
+        result = screener._check_rsi_oversold("sh600519", {"threshold": 30})
+        assert result is not None
+        assert isinstance(result, float)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Integration Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
