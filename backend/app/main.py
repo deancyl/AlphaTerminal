@@ -84,41 +84,46 @@ except ImportError as e:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理：启动和关闭时执行"""
-    start_writer()
-    init_watchdog()
+    import os
 
-    logger.info("[Lifespan] Starting blocking data pre-warming...")
-    await run_initial_data_fetch()
-    logger.info("[Lifespan] Data pre-warming complete, starting HTTP server")
+    is_testing = os.environ.get("PYTEST_RUNNING") == "true"
 
-    # Warmup macro cache in background
-    asyncio.create_task(warmup_macro_cache())
-    logger.info("[Lifespan] Macro cache warmup started in background")
+    if not is_testing:
+        start_writer()
+        init_watchdog()
 
-    # Warmup market_radar cache in background
-    asyncio.create_task(warmup_market_radar_cache())
-    logger.info("[Lifespan] Market Radar cache warmup started in background")
+        logger.info("[Lifespan] Starting blocking data pre-warming...")
+        await run_initial_data_fetch()
+        logger.info("[Lifespan] Data pre-warming complete, starting HTTP server")
 
-    start_scheduler()
+        # Warmup macro cache in background
+        asyncio.create_task(warmup_macro_cache())
+        logger.info("[Lifespan] Macro cache warmup started in background")
 
-    # 注册核心服务到 ExecutorManager
-    executor_manager.register(
-        "scheduler",
-        type("SchedulerProxy", (), {"shutdown": lambda: stop_scheduler()})(),
-        shutdown_method="shutdown",
-    )
+        # Warmup market_radar cache in background
+        asyncio.create_task(warmup_market_radar_cache())
+        logger.info("[Lifespan] Market Radar cache warmup started in background")
 
-    executor_manager.register(
-        "db_writer",
-        type("DBWriterProxy", (), {"shutdown": lambda: stop_writer()})(),
-        shutdown_method="shutdown",
-    )
+        start_scheduler()
 
-    executor_manager.register(
-        "watchdog",
-        type("WatchdogProxy", (), {"shutdown": lambda: stop_watchdog()})(),
-        shutdown_method="shutdown",
-    )
+        # 注册核心服务到 ExecutorManager
+        executor_manager.register(
+            "scheduler",
+            type("SchedulerProxy", (), {"shutdown": lambda: stop_scheduler()})(),
+            shutdown_method="shutdown",
+        )
+
+        executor_manager.register(
+            "db_writer",
+            type("DBWriterProxy", (), {"shutdown": lambda: stop_writer()})(),
+            shutdown_method="shutdown",
+        )
+
+        executor_manager.register(
+            "watchdog",
+            type("WatchdogProxy", (), {"shutdown": lambda: stop_watchdog()})(),
+            shutdown_method="shutdown",
+        )
 
     # ── 初始化优化服务 ─────────────────────────────────────────────────────────────
     # 这些服务是可选增强，初始化失败不影响核心功能

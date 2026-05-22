@@ -12,6 +12,9 @@ import tempfile
 # Disable rate limiting for all tests
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 
+# Mark that we're running tests to disable scheduler
+os.environ["PYTEST_RUNNING"] = "true"
+
 # Add app directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
