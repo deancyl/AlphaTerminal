@@ -55,9 +55,10 @@ class TestOptionsPricingEngine:
 
         price = black_scholes_merton("c", S, K, T, engine.r, sigma, engine.q)
 
-        iv = engine.calculate_iv(price, S, K, T, is_call=True)
+        iv, method = engine.calculate_iv(price, S, K, T, is_call=True)
 
         assert iv is not None
+        assert method is not None
         assert abs(iv - sigma) < 0.01
 
     def test_calculate_iv_otm(self, engine):
@@ -70,9 +71,10 @@ class TestOptionsPricingEngine:
 
         price = black_scholes_merton("c", S, K, T, engine.r, sigma, engine.q)
 
-        iv = engine.calculate_iv(price, S, K, T, is_call=True)
+        iv, method = engine.calculate_iv(price, S, K, T, is_call=True)
 
         assert iv is not None
+        assert method is not None
         assert abs(iv - sigma) < 0.02
 
     def test_calculate_iv_put(self, engine):
@@ -85,16 +87,28 @@ class TestOptionsPricingEngine:
 
         price = black_scholes_merton("p", S, K, T, engine.r, sigma, engine.q)
 
-        iv = engine.calculate_iv(price, S, K, T, is_call=False)
+        iv, method = engine.calculate_iv(price, S, K, T, is_call=False)
 
         assert iv is not None
+        assert method is not None
         assert abs(iv - sigma) < 0.02
 
     def test_calculate_iv_edge_cases(self, engine):
-        assert engine.calculate_iv(0, 4000, 4000, 0.25, True) is None
-        assert engine.calculate_iv(100, 0, 4000, 0.25, True) is None
-        assert engine.calculate_iv(100, 4000, 0, 0.25, True) is None
-        assert engine.calculate_iv(100, 4000, 4000, 0, True) is None
+        iv, method = engine.calculate_iv(0, 4000, 4000, 0.25, True)
+        assert iv is None
+        assert method is None
+
+        iv, method = engine.calculate_iv(100, 0, 4000, 0.25, True)
+        assert iv is None
+        assert method is None
+
+        iv, method = engine.calculate_iv(100, 4000, 0, 0.25, True)
+        assert iv is None
+        assert method is None
+
+        iv, method = engine.calculate_iv(100, 4000, 4000, 0, True)
+        assert iv is None
+        assert method is None
 
     def test_calculate_greeks_atm_call(self, engine):
         S = 4000.0
@@ -261,7 +275,7 @@ class TestPricingEngineIntegration:
 
         price = black_scholes_merton("c", S, K, T, engine.r, sigma, engine.q)
 
-        iv = engine.calculate_iv(price, S, K, T, is_call=True)
+        iv, method = engine.calculate_iv(price, S, K, T, is_call=True)
         assert iv is not None
 
         greeks = engine.calculate_greeks(S, K, T, iv, is_call=True)
