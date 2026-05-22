@@ -24,7 +24,7 @@ from app.services.market_radar.anomaly_detector import (
 )
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
-from app.utils.response import success_response
+from app.utils.errors import success_response
 
 logger = logging.getLogger(__name__)
 
