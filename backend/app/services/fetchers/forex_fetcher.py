@@ -1129,13 +1129,16 @@ class ForexFetcher(BaseMarketFetcher):
                 return None
 
             # Get to_curr to USD rates
+            # Case 1: to_curr/USD exists (e.g., JPY/USD)
             if to_usd_key in bid_rates and to_usd_key in ask_rates:
                 to_bid = bid_rates[to_usd_key]
                 to_ask = ask_rates[to_usd_key]
+            # Case 2: USD/to_curr exists (e.g., USD/JPY) - use directly for USD->to_curr conversion
             elif usd_to_key in bid_rates and usd_to_key in ask_rates:
-                # USD/JPY inverse: JPY/USD
-                to_bid = Decimal("1") / ask_rates[usd_to_key]
-                to_ask = Decimal("1") / bid_rates[usd_to_key]
+                # USD/JPY: when converting USD to JPY, use USD/JPY rate directly
+                # EUR/JPY = EUR/USD × USD/JPY (not inverted)
+                to_bid = bid_rates[usd_to_key]
+                to_ask = ask_rates[usd_to_key]
             elif to_curr == "USD":
                 to_bid = Decimal("1.0")
                 to_ask = Decimal("1.0")

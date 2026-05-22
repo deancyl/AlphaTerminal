@@ -62,11 +62,12 @@ jobs:
     
     - name: Run Quick Health Check
       run: |
-        ./scripts/debug.sh quick --json > quick_check_report.json || true
+        chmod +x ./scripts/debug/debug.sh
+        ./scripts/debug/debug.sh quick --json > quick_check_report.json || true
     
     - name: Run Security Audit
       run: |
-        ./scripts/debug.sh security --json > security_report.json || true
+        ./scripts/debug/debug.sh security --json > security_report.json || true
     
     - name: Upload Debug Reports
       uses: actions/upload-artifact@v4
