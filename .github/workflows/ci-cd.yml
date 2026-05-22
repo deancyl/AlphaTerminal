@@ -70,7 +70,7 @@ jobs:
         ./scripts/debug/debug.sh security --json > security_report.json || true
     
     - name: Upload Debug Reports
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: debug-reports

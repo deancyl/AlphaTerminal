@@ -96,7 +96,7 @@ jobs:
 
     # ── 上传测试报告 ──────────────────────────────────────────────────────
     - name: Upload Playwright report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: playwright-report-e2e
@@ -105,7 +105,7 @@ jobs:
 
     # ── 上传日志 ──────────────────────────────────────────────────────────
     - name: Upload server logs
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: failure()
       with:
         name: server-logs
