@@ -40,7 +40,7 @@ async def generate_tearsheet(req: TearsheetRequest):
     """Generate comprehensive performance tear sheet from returns"""
     if not req.returns:
         raise HTTPException(400, "returns list cannot be empty")
-    
+
     # CPU 密集计算移入线程池，避免阻塞事件循环
     result = await asyncio.to_thread(
         analyzer.calculate_tearsheet_metrics,
@@ -48,10 +48,10 @@ async def generate_tearsheet(req: TearsheetRequest):
         dates=req.dates,
         benchmark_returns=req.benchmark_returns
     )
-    
+
     if result["code"] != 0:
         raise HTTPException(400, result.get("message", "Failed to calculate metrics"))
-    
+
     return result
 
 
@@ -61,20 +61,20 @@ async def generate_tearsheet_from_equity(req: EquityCurveRequest):
     """Generate tear sheet from equity curve"""
     if not req.equity_curve:
         raise HTTPException(400, "equity_curve cannot be empty")
-    
+
     if req.initial_capital <= 0:
         raise HTTPException(400, "initial_capital must be positive")
-    
+
     # CPU 密集计算移入线程池
     result = await asyncio.to_thread(
         analyzer.calculate_from_equity_curve,
         equity_curve=req.equity_curve,
         initial_capital=req.initial_capital
     )
-    
+
     if result["code"] != 0:
         raise HTTPException(400, result.get("message", "Failed to calculate metrics"))
-    
+
     return result
 
 
@@ -84,10 +84,10 @@ async def generate_tearsheet_from_trades(req: TradesRequest):
     """Generate tear sheet from trade list"""
     if not req.trades:
         raise HTTPException(400, "trades cannot be empty")
-    
+
     if req.initial_capital <= 0:
         raise HTTPException(400, "initial_capital must be positive")
-    
+
     # CPU 密集计算移入线程池
     result = await asyncio.to_thread(
         analyzer.calculate_from_trades,
@@ -96,10 +96,10 @@ async def generate_tearsheet_from_trades(req: TradesRequest):
         start_date=req.start_date,
         end_date=req.end_date
     )
-    
+
     if result["code"] != 0:
         raise HTTPException(400, result.get("message", "Failed to calculate metrics"))
-    
+
     return result
 
 

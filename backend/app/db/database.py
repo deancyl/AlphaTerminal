@@ -22,11 +22,11 @@ _USE_WAL = True
 def _get_thread_conn():
     """获取当前线程的连接（复用，不频繁创建/关闭）"""
     global _WAL_MODE_CHECKED, _USE_WAL
-    
+
     if not hasattr(_thread_local, 'conn') or _thread_local.conn is None:
         conn = sqlite3.connect(_db_path, timeout=45.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        
+
         # WAL模式检测（仅首次）
         if not _WAL_MODE_CHECKED:
             # 强制启用 WAL 模式（优先级最高）
@@ -38,22 +38,22 @@ def _get_thread_conn():
                 _USE_WAL = True
                 logger.info(f"[DB] WAL mode enabled (default) for: {_db_path}")
             _WAL_MODE_CHECKED = True
-        
+
         if _USE_WAL:
             conn.execute("PRAGMA journal_mode=WAL")
         else:
             conn.execute("PRAGMA journal_mode=DELETE")
-        
+
         # v0.6.67: 增加锁等待超时至 45 秒（审计报告要求）
         conn.execute("PRAGMA busy_timeout=45000")
-        
+
         # v0.6.62: SQLite 性能优化 PRAGMA
         conn.execute("PRAGMA synchronous=NORMAL")    # 平衡性能与安全（减少 fsync）
         conn.execute("PRAGMA cache_size=-64000")     # 64MB 页缓存
         conn.execute("PRAGMA temp_store=MEMORY")     # 临时表内存存储
         _thread_local.conn = conn
         logger.debug(f"[DB] Created new connection for thread {threading.current_thread().name}")
-    
+
     return _thread_local.conn
 
 def _close_thread_conn():
@@ -97,12 +97,12 @@ def _get_conn():
     else:
         conn.execute("PRAGMA journal_mode=DELETE")
     conn.execute("PRAGMA busy_timeout=45000")
-    
+
     # v0.6.62: SQLite 性能优化 PRAGMA
     conn.execute("PRAGMA synchronous=NORMAL")    # 平衡性能与安全（减少 fsync）
     conn.execute("PRAGMA cache_size=-64000")     # 64MB 页缓存
     conn.execute("PRAGMA temp_store=MEMORY")     # 临时表内存存储
-    
+
     return conn
 
 # 延迟导入，避免循环依赖
@@ -462,7 +462,7 @@ def init_persistence_tables():
     from app.db.strategy_db import init_strategy_table
     from app.db.token_db import init_token_table
     from app.db.audit_db import init_audit_table
-    
+
     init_strategy_table()
     init_token_table()
     init_audit_table()

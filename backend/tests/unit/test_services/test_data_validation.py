@@ -22,13 +22,10 @@ from pydantic import ValidationError
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.data_validator import (
-    QuoteData, KlineData, IndexQuoteData,
-    validate_quote, validate_kline,
-    CRITICAL_INDICES, CRITICAL_INDICES,
+    QuoteData, KlineData, validate_quote,
 )
 from app.services.http_client import (
-    ValidatedHTTPClient, RetryableError, CircuitOpenError,
-    RETRYABLE_STATUS_CODES,
+    ValidatedHTTPClient,
 )
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState
 from app.services.fetchers.alphavantage import AlphavantageFetcher
@@ -128,7 +125,7 @@ def test_ohlc_price_outside_high_low():
         # 但 price=3.94 是异常低的指数价格，应被 validate_critical_symbol 拦截
         ok = q.validate_critical_symbol()
         if not ok:
-            pass_(f"price=3.94 不在合理范围 [2000,6000]，validate_critical_symbol 拒绝")
+            pass_("price=3.94 不在合理范围 [2000,6000]，validate_critical_symbol 拒绝")
         else:
             fail_("price=3.94 应被 validate_critical_symbol 拒绝", "未拒绝")
     except ValidationError as e:
@@ -221,7 +218,7 @@ def test_critical_index_out_of_range():
         )
         ok = q.validate_critical_symbol()
         if not ok:
-            pass_(f"sh000001 price=3.94 不在合理范围 [2000,6000]，拒绝写入")
+            pass_("sh000001 price=3.94 不在合理范围 [2000,6000]，拒绝写入")
         else:
             fail_("sh000001 price=3.94 应被 validate_critical_symbol 拒绝", "未拒绝")
     except ValidationError as e:
@@ -298,7 +295,7 @@ def test_kline_ohlc():
 def test_http_retry_on_503():
     """HTTP 503 → 重试 3 次（指数退避）"""
     print("\n[9] HTTP 503 触发指数退避重试")
-    from unittest.mock import AsyncMock, patch, MagicMock
+    from unittest.mock import AsyncMock, patch
     import httpx
 
     client = ValidatedHTTPClient(max_retries=3, base_delay=0.5)
@@ -401,13 +398,12 @@ def test_alphavantage_fetcher_init():
     # 先保存原始值
     original_key = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
     os.environ["ALPHA_VANTAGE_API_KEY"] = "4M3YTMFEMBOPM1W2"
-    
+
     # 重新导入以获取新环境变量值
     from importlib import reload
     import app.services.fetchers.alphavantage as av_module
     reload(av_module)
-    from app.services.fetchers.alphavantage import AlphavantageFetcher
-    
+
     try:
         fetcher = AlphavantageFetcher(proxy="http://192.168.1.50:7897")
         assert fetcher.name == "alphavantage"

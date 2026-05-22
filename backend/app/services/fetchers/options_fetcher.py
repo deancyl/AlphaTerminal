@@ -15,7 +15,7 @@ import asyncio
 import logging
 import pandas as pd
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 from .base import BaseMarketFetcher
@@ -79,30 +79,30 @@ class OptionsFetcher(BaseMarketFetcher):
         # 获取合约列表
         contracts = await fetcher.get_contract_list("CFFEX")
     """
-    
+
     name = "options"
     display_name = "Options 数据源 (AKShare)"
-    
+
     supports_quote = True
     supports_kline = False
     supports_order_book = False
     supports_futures = False
     supports_hk = False
     supports_us = False
-    
+
     # CFFEX支持的品种
     CFFEX_SYMBOLS = {
         "io": "沪深300股指期权",
         "mo": "中证1000股指期权",
     }
-    
+
     # 上交所期权品种
     SSE_ETF_OPTIONS = [
         "510050",  # 上证50ETF期权
         "510300",  # 沪深300ETF期权
         "510500",  # 中证500ETF期权
     ]
-    
+
     def __init__(
         self,
         proxy: Optional[str] = None,
@@ -117,14 +117,14 @@ class OptionsFetcher(BaseMarketFetcher):
             )
         )
         self._ak = None
-        
+
         self._data_cache = get_cache()  # Use unified DataCache
         self._cache_lock = asyncio.Lock()
-        
+
         # v0.6.70: Fix - Initialize cache dictionaries for _get_cached/_set_cached
         self._cache: Dict[str, Any] = {}
         self._cache_ttl: Dict[str, datetime] = {}
-    
+
     def _get_underlying_symbol(self, option_symbol: str) -> str:
         """
         Get underlying index symbol from option symbol.
@@ -136,14 +136,14 @@ class OptionsFetcher(BaseMarketFetcher):
             Index symbol: "sh000300" for io, "sh000852" for mo
         """
         prefix = option_symbol[:2].lower()
-        
+
         UNDERLYING_MAP = {
             "io": "sh000300",  # 沪深300
             "mo": "sh000852",  # 中证1000
         }
-        
+
         return UNDERLYING_MAP.get(prefix, "sh000300")
-    
+
     async def _fetch_underlying_spot(self, symbol: str) -> Optional[float]:
         """
         Fetch underlying index spot price.
@@ -159,26 +159,26 @@ class OptionsFetcher(BaseMarketFetcher):
             quote = await get_quote_with_fallback_async(symbol)
             if quote and (quote.get('price') or quote.get('close')):
                 return float(quote.get('price') or quote.get('close'))
-            
+
             return None
-            
+
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.warning(f"[HTTP] underlying spot: {symbol} - {e}", exc_info=True)
             return None
-    
+
     @property
     def ak(self):
         if self._ak is None:
             self._ak = _get_akshare()
         return self._ak
-    
+
     def _get_cached(self, key: str) -> Optional[Any]:
         if key in self._cache and key in self._cache_ttl:
             if datetime.now() < self._cache_ttl[key]:
                 logger.debug(f"[Options] Cache HIT: {key}")
                 return self._cache[key]
         return None
-    
+
     def _set_cached(self, key: str, value: Any, ttl_seconds: int = 300):
         MAX_CACHE_SIZE = 50
         if len(self._cache) >= MAX_CACHE_SIZE and key not in self._cache:
@@ -186,7 +186,7 @@ class OptionsFetcher(BaseMarketFetcher):
             self._cache.pop(oldest_key, None)
             self._cache_ttl.pop(oldest_key, None)
             logger.debug(f"[Options] Cache EVICT: {oldest_key}")
-        
+
         self._cache[key] = value
         self._cache_ttl[key] = datetime.now() + timedelta(seconds=ttl_seconds)
         logger.debug(f"[Options] Cache SET: {key} (TTL={ttl_seconds}s)")
@@ -215,44 +215,44 @@ class OptionsFetcher(BaseMarketFetcher):
         cached = self._get_cached(cache_key)
         if cached:
             return cached
-        
+
         if not self.cb.is_available():
             logger.warning("[Options] 熔断器打开，返回空数据")
             return self._get_empty_chain(symbol)
-        
+
         # 根据品种前缀选择正确的 akshare API
         prefix = symbol[:2].lower()
         akshare_api_map = {
             "io": self.ak.option_cffex_hs300_spot_sina,   # 沪深300
             "mo": self.ak.option_cffex_zz1000_spot_sina,  # 中证1000
         }
-        
+
         akshare_api = akshare_api_map.get(prefix)
         if not akshare_api:
             logger.warning(f"[Options] 不支持的期权品种: {symbol}")
             return self._get_empty_chain(symbol)
-        
+
         try:
             loop = asyncio.get_running_loop()
-            
+
             df = await asyncio.wait_for(
                 loop.run_in_executor(_executor, lambda: akshare_api(symbol=symbol)),
                 timeout=30.0
             )
-            
+
             if df is None or df.empty:
                 self.cb.record_failure()
                 logger.warning(f"[Options] option_cffex_hs300_spot_sina 返回空数据: {symbol}")
                 return self._get_empty_chain(symbol)
-            
+
             underlying_symbol = self._get_underlying_symbol(symbol)
             spot = await self._fetch_underlying_spot(underlying_symbol)
-            
+
             expiry_date = pricing_engine.parse_expiry_from_code(symbol)
-            
+
             calls = []
             puts = []
-            
+
             for _, row in df.iterrows():
                 call_data = {
                     "code": str(row.get('看涨合约-标识', '')),
@@ -265,7 +265,7 @@ class OptionsFetcher(BaseMarketFetcher):
                     "open_interest": clean_value(row.get('看涨合约-持仓量')),
                     "is_call": True,
                 }
-                
+
                 put_data = {
                     "code": str(row.get('看跌合约-标识', '')),
                     "name": str(row.get('看跌合约-标识', '')),
@@ -277,12 +277,12 @@ class OptionsFetcher(BaseMarketFetcher):
                     "open_interest": clean_value(row.get('看跌合约-持仓量')),
                     "is_call": False,
                 }
-                
+
                 if call_data.get('code') and call_data.get('strike'):
                     calls.append(call_data)
                 if put_data.get('code') and put_data.get('strike'):
                     puts.append(put_data)
-            
+
             if spot and spot > 0:
                 calls = pricing_engine.price_option_chain(
                     calls, spot, expiry_date, default_volatility=0.20
@@ -297,10 +297,10 @@ class OptionsFetcher(BaseMarketFetcher):
                     opt['theta'] = None
                     opt['vega'] = None
                     opt['iv'] = None
-            
+
             calls.sort(key=lambda x: x.get('strike', 0) or 0)
             puts.sort(key=lambda x: x.get('strike', 0) or 0)
-            
+
             result = {
                 "symbol": symbol,
                 "name": self.CFFEX_SYMBOLS.get(symbol[:2], "未知品种"),
@@ -311,12 +311,12 @@ class OptionsFetcher(BaseMarketFetcher):
                 "update_time": datetime.now().strftime("%H:%M:%S"),
                 "source": "akshare",
             }
-            
+
             self._set_cached(cache_key, result, ttl_seconds=300)
             self.cb.record_success()
             logger.info(f"[Options] 获取CFFEX期权链成功: {symbol} calls={len(calls)} puts={len(puts)} spot={spot}")
             return result
-            
+
         except asyncio.TimeoutError:
             self.cb.record_failure()
             logger.warning(f"[Options] 获取CFFEX期权链超时: {symbol}", exc_info=True)
@@ -350,26 +350,26 @@ class OptionsFetcher(BaseMarketFetcher):
         cached = self._get_cached(cache_key)
         if cached:
             return cached
-        
+
         if not self.cb.is_available():
             return self._get_empty_greeks(contract_code)
-        
+
         try:
             loop = asyncio.get_running_loop()
-            
+
             df = await asyncio.wait_for(
                 loop.run_in_executor(_executor, lambda: self.ak.option_sse_greeks_sina(symbol=contract_code)),
                 timeout=30.0
             )
-            
+
             if df is None or df.empty:
                 self.cb.record_failure()
                 logger.warning(f"[Options] option_sse_greeks_sina 返回空数据: {contract_code}")
                 return self._get_empty_greeks(contract_code)
-            
+
             # 解析Greeks数据
             row = df.iloc[0] if len(df) > 0 else {}
-            
+
             result = {
                 "code": contract_code,
                 "name": str(row.get('名称', '')),
@@ -384,12 +384,12 @@ class OptionsFetcher(BaseMarketFetcher):
                 "update_time": datetime.now().strftime("%H:%M:%S"),
                 "source": "akshare",
             }
-            
+
             self._set_cached(cache_key, result, ttl_seconds=300)
             self.cb.record_success()
             logger.info(f"[Options] 获取SSE Greeks成功: {contract_code}")
             return result
-            
+
         except asyncio.TimeoutError:
             self.cb.record_failure()
             logger.warning(f"[Options] 获取SSE Greeks超时: {contract_code}", exc_info=True)
@@ -419,15 +419,15 @@ class OptionsFetcher(BaseMarketFetcher):
         cached = self._get_cached(cache_key)
         if cached:
             return cached
-        
+
         # 返回静态合约列表（可扩展为动态获取）
         contracts = []
-        
+
         if exchange.upper() == "CFFEX":
             # CFFEX股指期权
             current_year = datetime.now().year
             months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
-            
+
             for month in months:
                 contracts.append({
                     "code": f"io{str(current_year)[2:]}{month}",
@@ -441,7 +441,7 @@ class OptionsFetcher(BaseMarketFetcher):
                     "type": "index",
                     "underlying": "中证1000指数",
                 })
-        
+
         elif exchange.upper() == "SSE":
             # 上交所ETF期权
             for etf in self.SSE_ETF_OPTIONS:
@@ -451,13 +451,13 @@ class OptionsFetcher(BaseMarketFetcher):
                     "type": "etf",
                     "underlying": f"{etf}ETF",
                 })
-        
+
         result = {
             "exchange": exchange.upper(),
             "contracts": contracts,
             "update_time": datetime.now().strftime("%H:%M:%S"),
         }
-        
+
         self._set_cached(cache_key, result, ttl_seconds=3600)
         return result
 

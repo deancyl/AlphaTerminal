@@ -11,46 +11,46 @@ class EastmoneyFetcher(BaseMarketFetcher):
     Supports: A-shares, indices, futures, HK stocks, US stocks.
     Uses shared HTTP client for connection pooling.
     """
-    
+
     name = "eastmoney"
     display_name = "东方财富"
-    
+
     supports_quote = True
     supports_kline = True
     supports_order_book = False
     supports_futures = True
     supports_hk = True
     supports_us = True
-    
+
     BASE_URL = "https://push2.eastmoney.com"
     KLINE_URL = "https://push2his.eastmoney.com"
-    
+
     def __init__(self, proxy: Optional[str] = None):
         pass
-    
+
     async def _get_client(self) -> httpx.AsyncClient:
         return await get_shared_client()
-    
+
     def _normalize_symbol(self, symbol: str) -> str:
         """Convert symbol to Eastmoney format."""
         symbol = symbol.lower().strip()
-        
+
         # Already normalized
         if symbol.startswith(("sh", "sz", "hk", "us")):
             return symbol
-        
+
         # Numeric code - assume A-share
         if symbol.startswith("6"):
             return f"sh{symbol}"
         else:
             return f"sz{symbol}"
-    
+
     async def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get real-time quote from Eastmoney."""
         try:
             client = await self._get_client()
             em_code = self._normalize_symbol(symbol)
-            
+
             # Eastmoney quote API
             url = f"{self.BASE_URL}/api/qt/stock/get"
             params = {
@@ -58,18 +58,18 @@ class EastmoneyFetcher(BaseMarketFetcher):
                 "fields": "f43,f44,f45,f46,f47,f48,f57,f58,f60,f169,f170",
                 "ut": "fa5fd1943c7b386f172d6893dbfba10b",
             }
-            
+
             resp = await client.get(url, params=params)
-            
+
             if resp.status_code != 200:
                 return None
-            
+
             data = resp.json()
             if not data or "data" not in data:
                 return None
-            
+
             d = data["data"]
-            
+
             return {
                 "symbol": symbol,
                 "name": d.get("f58", symbol),
@@ -82,17 +82,17 @@ class EastmoneyFetcher(BaseMarketFetcher):
                 "change_pct": float(d.get("f170", 0)) / 100 if d.get("f170") else 0,
                 "source": "eastmoney"
             }
-            
+
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError) as e:
             logger.debug(f"[Eastmoney] get_quote error for {symbol}: {type(e).__name__}: {e}")
             return None
-    
+
     async def get_kline(self, symbol: str, period: str = "day") -> Optional[List[Dict]]:
         """Get K-line data from Eastmoney."""
         try:
             client = await self._get_client()
             em_code = self._normalize_symbol(symbol)
-            
+
             # Map period to Eastmoney format
             period_map = {
                 "minute": "101",
@@ -101,7 +101,7 @@ class EastmoneyFetcher(BaseMarketFetcher):
                 "month": "103"
             }
             em_period = period_map.get(period, "101")
-            
+
             url = f"{self.KLINE_URL}/api/qt/stock/kline/get"
             params = {
                 "secid": self._to_em_secid(em_code),
@@ -113,16 +113,16 @@ class EastmoneyFetcher(BaseMarketFetcher):
                 "end": "20500101",
                 "lmt": "200",
             }
-            
+
             resp = await client.get(url, params=params)
-            
+
             if resp.status_code != 200:
                 return None
-            
+
             data = resp.json()
             if not data or "data" not in data or not data["data"].get("klines"):
                 return None
-            
+
             klines = []
             for item in data["data"]["klines"]:
                 fields = item.split(",")
@@ -135,13 +135,13 @@ class EastmoneyFetcher(BaseMarketFetcher):
                         "close": float(fields[4]),
                         "volume": int(fields[5]) if len(fields) > 5 else 0
                     })
-            
+
             return klines
-            
+
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError, IndexError) as e:
             logger.debug(f"[Eastmoney] get_kline error for {symbol}: {type(e).__name__}: {e}")
             return None
-    
+
     def _to_em_secid(self, symbol: str) -> str:
         """Convert symbol to Eastmoney secid format."""
         if symbol.startswith("sh"):

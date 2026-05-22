@@ -44,7 +44,7 @@ class SQLiteConnectionPool:
         finally:
             pool.put(conn)
     """
-    
+
     def __init__(self, db_path: str, max_connections: int = 20):
         """Initialize the connection pool.
         
@@ -58,12 +58,12 @@ class SQLiteConnectionPool:
         self._lock = threading.Lock()
         self._created = 0
         self._closed = False
-        
+
         # Ensure database directory exists
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)
-    
+
     def _create_connection(self) -> sqlite3.Connection:
         """Create a new database connection with optimized settings.
         
@@ -80,23 +80,23 @@ class SQLiteConnectionPool:
             isolation_level=None  # Autocommit mode for better control
         )
         conn.row_factory = sqlite3.Row
-        
+
         # Enable WAL mode for better concurrent access
         conn.execute("PRAGMA journal_mode=WAL")
-        
+
         # Set busy timeout to 30 seconds for handling concurrent writes
         conn.execute("PRAGMA busy_timeout=30000")
-        
+
         # Enable foreign key constraints
         conn.execute("PRAGMA foreign_keys=ON")
-        
+
         # Optimize for performance
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
         conn.execute("PRAGMA temp_store=MEMORY")
-        
+
         return conn
-    
+
     def get(self, timeout: float = 5.0) -> sqlite3.Connection:
         """Get a connection from the pool.
         
@@ -116,7 +116,7 @@ class SQLiteConnectionPool:
         """
         if self._closed:
             raise RuntimeError("Connection pool is closed")
-        
+
         # Try to get an existing connection
         try:
             conn = self._pool.get_nowait()
@@ -131,13 +131,13 @@ class SQLiteConnectionPool:
                 return self._create_connection()
         except queue.Empty:
             pass
-        
+
         # No available connection, try to create a new one
         with self._lock:
             if self._created < self.max_connections:
                 self._created += 1
                 return self._create_connection()
-        
+
         # Wait for a connection to become available
         try:
             conn = self._pool.get(timeout=timeout)
@@ -155,7 +155,7 @@ class SQLiteConnectionPool:
                 f"No connection available within {timeout}s. "
                 f"Pool size: {self._created}/{self.max_connections}"
             )
-    
+
     def put(self, conn: sqlite3.Connection) -> None:
         """Return a connection to the pool.
         
@@ -168,11 +168,11 @@ class SQLiteConnectionPool:
             except sqlite3.Error:
                 pass
             return
-        
+
         try:
             # Reset connection state
             conn.rollback()
-            
+
             # Try to return to pool
             try:
                 self._pool.put_nowait(conn)
@@ -189,7 +189,7 @@ class SQLiteConnectionPool:
                 conn.close()
             except sqlite3.Error:
                 pass
-    
+
     @contextmanager
     def connection(self, timeout: float = 5.0):
         """Context manager for automatic connection management.
@@ -210,7 +210,7 @@ class SQLiteConnectionPool:
             yield conn
         finally:
             self.put(conn)
-    
+
     @contextmanager
     def transaction(self, timeout: float = 5.0):
         """Context manager for transaction with automatic commit/rollback.
@@ -242,35 +242,35 @@ class SQLiteConnectionPool:
             raise
         finally:
             self.put(conn)
-    
+
     def close(self) -> None:
         """Close all connections in the pool."""
         self._closed = True
-        
+
         while not self._pool.empty():
             try:
                 conn = self._pool.get_nowait()
                 conn.close()
             except (queue.Empty, sqlite3.Error):
                 pass
-        
+
         with self._lock:
             self._created = 0
-    
+
     def __enter__(self):
         """Support for context manager."""
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Close pool on context exit."""
         self.close()
         return False
-    
+
     @property
     def size(self) -> int:
         """Current number of connections in the pool."""
         return self._created
-    
+
     @property
     def available(self) -> int:
         """Number of available connections in the pool."""
@@ -293,17 +293,17 @@ def get_connection_pool(db_path: Optional[str] = None, max_connections: int = 20
         SQLiteConnectionPool: The global connection pool instance
     """
     global _global_pool
-    
+
     if _global_pool is not None:
         return _global_pool
-    
+
     with _global_pool_lock:
         if _global_pool is not None:
             return _global_pool
-        
+
         if db_path is None:
             db_path = os.path.abspath(DEFAULT_DB_PATH)
-        
+
         _global_pool = SQLiteConnectionPool(db_path, max_connections=max_connections)
         return _global_pool
 
@@ -311,7 +311,7 @@ def get_connection_pool(db_path: Optional[str] = None, max_connections: int = 20
 def close_connection_pool() -> None:
     """Close the global connection pool."""
     global _global_pool
-    
+
     if _global_pool is not None:
         with _global_pool_lock:
             if _global_pool is not None:

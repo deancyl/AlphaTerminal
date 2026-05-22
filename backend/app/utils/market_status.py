@@ -2,7 +2,7 @@
 市场状态工具 — Phase 6
 判断 A 股、港股、美股当前是否处于交易时段
 """
-from datetime import datetime, time, timezone
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
 

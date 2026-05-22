@@ -21,10 +21,9 @@ import logging
 from datetime import datetime, date
 from typing import Optional
 
-from fastapi import HTTPException, Header, Depends
+from fastapi import HTTPException, Header
 
 from app.db.database import _get_conn, _lock
-from app.middleware import require_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +112,7 @@ def _transfer_between_accounts(
             # 验证两个账户都存在
             if len(rows) != 2:
                 raise ValueError("账户不存在")
-            
+
             balance_map = {r[0]: r[1] for r in rows}
             bal_from = balance_map[from_pid]
             bal_to   = balance_map[to_pid]
@@ -229,7 +228,7 @@ def _save_snapshot_impl(portfolio_id: int):
     Phase 4 Fix: 优先从 position_summary 读取（lot-based 系统），fallback 到 positions
     """
     from app.utils.errors import success_response
-    
+
     today = date.today().isoformat()
     with _lock:
         conn = _get_conn()
@@ -237,7 +236,7 @@ def _save_snapshot_impl(portfolio_id: int):
             "SELECT symbol, total_shares as shares, avg_cost FROM position_summary WHERE portfolio_id=? AND total_shares > 0",
             (portfolio_id,)
         ).fetchall()
-        
+
         if not rows:
             rows = conn.execute(
                 "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",

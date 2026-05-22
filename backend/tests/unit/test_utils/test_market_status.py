@@ -3,7 +3,7 @@ Tests for market status utility functions.
 """
 import pytest
 from datetime import datetime, time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from app.utils.market_status import is_market_open
 
 
@@ -15,7 +15,7 @@ class TestMarketStatus:
         with patch('app.utils.market_status.datetime') as mock_datetime:
             mock_datetime.now.return_value = datetime(2024, 1, 15, 10, 0, 0)  # Monday 10:00
             mock_datetime.time = time
-            
+
             is_open, status = is_market_open("A_SHARE")
             assert is_open is True
             assert status == "交易中"
@@ -25,7 +25,7 @@ class TestMarketStatus:
         with patch('app.utils.market_status.datetime') as mock_datetime:
             mock_datetime.now.return_value = datetime(2024, 1, 15, 14, 0, 0)  # Monday 14:00
             mock_datetime.time = time
-            
+
             is_open, status = is_market_open("A_SHARE")
             assert is_open is True
             assert status == "交易中"
@@ -35,7 +35,7 @@ class TestMarketStatus:
         with patch('app.utils.market_status.datetime') as mock_datetime:
             mock_datetime.now.return_value = datetime(2024, 1, 15, 9, 0, 0)  # Monday 09:00
             mock_datetime.time = time
-            
+
             is_open, status = is_market_open("A_SHARE")
             assert is_open is False
             assert status == "盘前"
@@ -45,7 +45,7 @@ class TestMarketStatus:
         with patch('app.utils.market_status.datetime') as mock_datetime:
             mock_datetime.now.return_value = datetime(2024, 1, 15, 12, 0, 0)  # Monday 12:00
             mock_datetime.time = time
-            
+
             is_open, status = is_market_open("A_SHARE")
             assert is_open is False
             assert status == "已休市"
@@ -55,7 +55,7 @@ class TestMarketStatus:
         with patch('app.utils.market_status.datetime') as mock_datetime:
             mock_datetime.now.return_value = datetime(2024, 1, 13, 10, 0, 0)  # Saturday 10:00
             mock_datetime.time = time
-            
+
             is_open, status = is_market_open("A_SHARE")
             assert is_open is False
             assert status == "已休市"
@@ -65,7 +65,7 @@ class TestMarketStatus:
         with patch('app.utils.market_status.datetime') as mock_datetime:
             mock_datetime.now.return_value = datetime(2024, 1, 15, 10, 0, 0)  # Monday 10:00
             mock_datetime.time = time
-            
+
             is_open, status = is_market_open("HK")
             assert is_open is True
             assert status == "交易中"
@@ -75,7 +75,7 @@ class TestMarketStatus:
         with patch('app.utils.market_status.datetime') as mock_datetime:
             mock_datetime.now.return_value = datetime(2024, 1, 13, 10, 0, 0)  # Saturday 10:00
             mock_datetime.time = time
-            
+
             is_open, status = is_market_open("HK")
             assert is_open is False
             assert status == "已休市"
@@ -106,7 +106,7 @@ class TestMarketStatus:
         with patch('app.utils.market_status.datetime') as mock_datetime:
             mock_datetime.now.return_value = datetime(2024, 1, 15, 10, 0, 0)
             mock_datetime.time = time
-            
+
             # Call without market_type parameter
             is_open, status = is_market_open()
             assert is_open is True

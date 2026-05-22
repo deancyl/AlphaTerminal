@@ -4,8 +4,7 @@ Mock Akshare fixtures for testing.
 Provides mock functions and data for testing Akshare-related functionality
 without requiring actual network calls to data providers.
 """
-from typing import Dict, Any, List, Optional, Callable
-from unittest.mock import MagicMock, AsyncMock
+from typing import Dict, Any, List, Optional
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -25,7 +24,7 @@ class MockAkshareData:
         df = mock_data.get_stock_zh_a_spot_em()
         assert len(df) > 0
     """
-    
+
     @staticmethod
     def get_stock_zh_a_spot_em() -> pd.DataFrame:
         """Mock real-time A-share stock data."""
@@ -45,7 +44,7 @@ class MockAkshareData:
             '市净率': [8.2, 5.6, 1.2, 0.8, 1.1],
             '总市值': [2250000000000, 565000000000, 875000000000, 228000000000, 185000000000],
         })
-    
+
     @staticmethod
     def get_stock_financial_analysis_indicator(symbol: str) -> pd.DataFrame:
         """Mock financial analysis indicators for a stock."""
@@ -63,7 +62,7 @@ class MockAkshareData:
             '营业收入同比增长率': [12.5, 11.8, 10.5, 13.2, 12.0, 11.5, 10.8, 14.0],
             '净利润同比增长率': [15.2, 14.5, 13.8, 16.5, 15.0, 14.2, 13.5, 17.0],
         })
-    
+
     @staticmethod
     def get_stock_institute_hold_detail(symbol: str) -> pd.DataFrame:
         """Mock institutional holding data."""
@@ -75,7 +74,7 @@ class MockAkshareData:
             '持股比例': [67.5, 65.2, 63.5, 62.0, 59.5, 57.2, 55.5, 54.0],
             '持股市值': [1525000000000, 1450000000000, 1400000000000, 1350000000000, 1280000000000, 1200000000000, 1150000000000, 1100000000000],
         })
-    
+
     @staticmethod
     def get_stock_margin_detail(symbol: str) -> pd.DataFrame:
         """Mock margin trading data."""
@@ -87,7 +86,7 @@ class MockAkshareData:
             '融资买入额': [500000000 + (i % 5) * 10000000 for i in range(30)],
             '融券卖出额': [5000000 + (i % 3) * 500000 for i in range(30)],
         })
-    
+
     @staticmethod
     def get_index_zh_a_hist(symbol: str) -> pd.DataFrame:
         """Mock historical index data."""
@@ -101,7 +100,7 @@ class MockAkshareData:
             '成交量': [100000000 + i * 1000000 for i in range(100)],
             '成交额': [500000000000 + i * 500000000 for i in range(100)],
         })
-    
+
     @staticmethod
     def get_macro_china() -> pd.DataFrame:
         """Mock macro economic indicators."""
@@ -126,7 +125,7 @@ class MockAkshareClient:
         result = await client.get_quote("600519")
         assert result is None
     """
-    
+
     def __init__(self):
         self._error_mode = False
         self._error_message = "Network error"
@@ -134,31 +133,31 @@ class MockAkshareClient:
         self._call_count = 0
         self._call_history: List[Dict[str, Any]] = []
         self._data_provider = MockAkshareData()
-    
+
     def set_error_mode(self, enabled: bool, message: str = "Network error") -> None:
         """Configure client to return errors."""
         self._error_mode = enabled
         self._error_message = message
-    
+
     def set_latency(self, latency_ms: int) -> None:
         """Simulate network latency."""
         self._latency_ms = latency_ms
-    
+
     def get_call_count(self) -> int:
         """Get total number of API calls made."""
         return self._call_count
-    
+
     def get_call_history(self) -> List[Dict[str, Any]]:
         """Get history of all API calls."""
         return self._call_history
-    
+
     def reset(self) -> None:
         """Reset client state."""
         self._error_mode = False
         self._latency_ms = 0
         self._call_count = 0
         self._call_history.clear()
-    
+
     def _record_call(self, function_name: str, args: tuple, kwargs: dict) -> None:
         """Record an API call."""
         self._call_count += 1
@@ -168,42 +167,42 @@ class MockAkshareClient:
             'kwargs': kwargs,
             'timestamp': datetime.now().isoformat(),
         })
-    
+
     def get_stock_zh_a_spot_em(self) -> Optional[pd.DataFrame]:
         """Get mock real-time stock data."""
         self._record_call('get_stock_zh_a_spot_em', (), {})
         if self._error_mode:
             return None
         return self._data_provider.get_stock_zh_a_spot_em()
-    
+
     def get_stock_financial_analysis_indicator(self, symbol: str) -> Optional[pd.DataFrame]:
         """Get mock financial indicators."""
         self._record_call('get_stock_financial_analysis_indicator', (symbol,), {})
         if self._error_mode:
             return None
         return self._data_provider.get_stock_financial_analysis_indicator(symbol)
-    
+
     def get_stock_institute_hold_detail(self, symbol: str) -> Optional[pd.DataFrame]:
         """Get mock institutional holdings."""
         self._record_call('get_stock_institute_hold_detail', (symbol,), {})
         if self._error_mode:
             return None
         return self._data_provider.get_stock_institute_hold_detail(symbol)
-    
+
     def get_stock_margin_detail(self, symbol: str) -> Optional[pd.DataFrame]:
         """Get mock margin data."""
         self._record_call('get_stock_margin_detail', (symbol,), {})
         if self._error_mode:
             return None
         return self._data_provider.get_stock_margin_detail(symbol)
-    
+
     def get_index_zh_a_hist(self, symbol: str) -> Optional[pd.DataFrame]:
         """Get mock historical index data."""
         self._record_call('get_index_zh_a_hist', (symbol,), {})
         if self._error_mode:
             return None
         return self._data_provider.get_index_zh_a_hist(symbol)
-    
+
     def get_macro_china(self) -> Optional[pd.DataFrame]:
         """Get mock macro indicators."""
         self._record_call('get_macro_china', (), {})

@@ -16,7 +16,6 @@
 v0.6.68: 审计报告任务 4 - error_response 自动调用 error_history_db.py 入库
 """
 import uuid
-import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any
 from fastapi import HTTPException
@@ -35,10 +34,10 @@ class ErrorCode:
     - 3xx: 第三方服务错误 (API、数据源等)
     - 4xx: 业务逻辑错误
     """
-    
+
     # 成功
     SUCCESS = 0
-    
+
     # 客户端错误 (1xx)
     BAD_REQUEST = 100           # 请求参数错误
     UNAUTHORIZED = 101            # 未授权
@@ -47,20 +46,20 @@ class ErrorCode:
     METHOD_NOT_ALLOWED = 105      # 方法不允许
     VALIDATION_ERROR = 110        # 数据验证错误
     RATE_LIMITED = 120            # 请求频率限制
-    
+
     # 服务端错误 (2xx)
     INTERNAL_ERROR = 200          # 内部服务器错误
     DATABASE_ERROR = 210          # 数据库错误
     CACHE_ERROR = 220             # 缓存错误
     CONFIG_ERROR = 230            # 配置错误
-    
+
     # 第三方服务错误 (3xx)
     THIRD_PARTY_ERROR = 302       # 第三方服务通用错误
     TIMEOUT_ERROR = 310           # 请求超时
     API_ERROR = 320               # API调用错误
     DATA_SOURCE_ERROR = 330       # 数据源错误
     SERVICE_UNAVAILABLE = 340     # 服务暂不可用
-    
+
     # 业务逻辑错误 (4xx)
     BUSINESS_ERROR = 400          # 业务通用错误
     INSUFFICIENT_DATA = 410       # 数据不足
@@ -93,7 +92,7 @@ class ErrorCodeMessage:
         ErrorCode.CALCULATION_ERROR: "计算错误",
         ErrorCode.STRATEGY_ERROR: "策略执行错误",
     }
-    
+
     @classmethod
     def get_message(cls, code: int) -> str:
         """获取错误码对应的消息"""
@@ -111,7 +110,7 @@ class APIException(Exception):
         details: 附加错误详情
         trace_id: 追踪ID
     """
-    
+
     def __init__(
         self,
         code: int = ErrorCode.INTERNAL_ERROR,
@@ -124,7 +123,7 @@ class APIException(Exception):
         self.details = details or {}
         self.trace_id = trace_id or str(uuid.uuid4())[:8]
         super().__init__(self.message)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         return {
@@ -178,9 +177,9 @@ def error_response(
     else:
         actual_code = code if code is not None else ErrorCode.INTERNAL_ERROR
         actual_message = str(code_or_message)
-    
+
     trace_id = str(uuid.uuid4())[:8]
-    
+
     # v0.6.68: 审计报告任务 4 - 自动入库到 error_history
     try:
         log_error_to_db(
@@ -196,7 +195,7 @@ def error_response(
         )
     except Exception:
         pass
-    
+
     return {
         "code": actual_code,
         "message": actual_message,
@@ -228,7 +227,7 @@ def http_exception_handler(exc: HTTPException) -> Dict[str, Any]:
         429: ErrorCode.RATE_LIMITED,
         500: ErrorCode.INTERNAL_ERROR,
     }
-    
+
     code = code_map.get(exc.status_code, ErrorCode.INTERNAL_ERROR)
     return error_response(code, exc.detail)
 

@@ -11,10 +11,9 @@ FALLBACK: Uses Sina API when Eastmoney is blocked by proxy.
 import logging
 import asyncio
 import httpx
-import requests
 from requests.exceptions import ConnectionError as RequestsConnectionError, ProxyError
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from datetime import datetime
 from http.client import RemoteDisconnected
 
@@ -36,7 +35,6 @@ DATA_SOURCE_SINA = "sina"
 DATA_SOURCE_CACHE = "cache"
 DATA_SOURCE_FALLBACK = "fallback"
 
-from app.config.settings import get_settings
 
 
 def _fetch_sectors_sync() -> List[Dict]:
@@ -45,7 +43,7 @@ def _fetch_sectors_sync() -> List[Dict]:
         logger.info("[Treemap] CB OPEN, using static sector fallback")
         from app.services.market_radar.sina_fallback import fetch_sectors_sina_sync
         return fetch_sectors_sina_sync()
-    
+
     try:
         import akshare as ak
         df = ak.stock_board_industry_name_em()
@@ -92,7 +90,7 @@ def _fetch_all_stocks_sync() -> List[Dict]:
         logger.info("[Treemap] CB OPEN, using Sina fallback")
         from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
         return fetch_all_stocks_sina_sync()
-    
+
     try:
         import akshare as ak
         df = ak.stock_zh_a_spot_em()
@@ -142,16 +140,16 @@ async def _fetch_sector_stocks_batch(sector_names: List[str]) -> Dict[str, List[
         Dictionary mapping sector_name to list of stocks
     """
     loop = asyncio.get_running_loop()
-    
+
     # Create parallel tasks for all sectors
     tasks = [
         loop.run_in_executor(_executor, _fetch_sector_stocks_sync, name)
         for name in sector_names
     ]
-    
+
     # Execute all tasks in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     # Build result dictionary
     sector_stocks_map = {}
     for result in results:
@@ -162,7 +160,7 @@ async def _fetch_sector_stocks_batch(sector_names: List[str]) -> Dict[str, List[
             sector_name, stocks = result
             if stocks:
                 sector_stocks_map[sector_name] = stocks
-    
+
     return sector_stocks_map
 
 
@@ -230,14 +228,14 @@ async def _build_sector_treemap() -> Dict[str, Any]:
         _fetch_sectors(),
         _fetch_all_stocks()
     )
-    
+
     data_source = DATA_SOURCE_AKSHARE
     source_detail = {
         "name": "东方财富",
         "type": "实时",
         "api": "akshare.stock_board_industry_name_em"
     }
-    
+
     if not all_stocks:
         logger.warning("[Treemap] Akshare failed for stocks, trying Sina fallback")
         all_stocks = await fetch_all_stocks_sina()
@@ -247,7 +245,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
             "type": "实时",
             "api": "sina.Market_Center.getHQNodeData"
         }
-    
+
     if not sectors:
         logger.warning("[Treemap] No sectors fetched, using fallback sector list")
         sectors = await fetch_sectors_sina()
@@ -258,7 +256,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
                 "type": "实时",
                 "api": "sina.Market_Center.getHQNodeData + static_sectors"
             }
-    
+
     if not all_stocks:
         logger.warning("[Treemap] No stocks fetched")
         return {
@@ -266,17 +264,17 @@ async def _build_sector_treemap() -> Dict[str, Any]:
             "last_update": datetime.now().isoformat(),
             "data_source": DATA_SOURCE_FALLBACK
         }
-    
+
     stock_by_symbol = {s["symbol"]: s for s in all_stocks}
-    
+
     sector_names = [s["name"] for s in sectors[:30]]
-    
+
     # Try to fetch sector stocks, but use fallback if all fail
     sector_stocks_map = await _fetch_sector_stocks_batch(sector_names)
-    
+
     # Check if we got any sector data
     total_sector_stocks = sum(len(stocks) for stocks in sector_stocks_map.values())
-    
+
     # If sector stocks fetch failed completely, use top stocks by market cap as fallback
     if total_sector_stocks == 0 and all_stocks:
         logger.warning("[Treemap] All sector stocks fetch failed, using top stocks by market cap")
@@ -286,7 +284,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
             key=lambda x: x.get("market_cap", 0),
             reverse=True
         )[:100]
-        
+
         # Create a single "热门股票" sector
         sector_stocks_map = {"热门股票": sorted_stocks}
         sector_names = ["热门股票"]
@@ -296,31 +294,31 @@ async def _build_sector_treemap() -> Dict[str, Any]:
             "type": "实时",
             "api": "top_stocks_by_market_cap"
         }
-    
+
     treemap_data = []
-    
+
     for sector_name in sector_names:
         sector_stocks = sector_stocks_map.get(sector_name, [])
-        
+
         if not sector_stocks:
             continue
-        
+
         children = []
         sector_market_cap = 0
         sector_change_sum = 0
         valid_stocks = 0
-        
+
         for stock in sector_stocks[:20]:
             symbol = stock.get("symbol", "")
             if not symbol:
                 continue
-            
+
             full_symbol = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
             market_stock = stock_by_symbol.get(symbol, stock)
-            
+
             market_cap = market_stock.get("market_cap", 0) or stock.get("market_cap", 0)
             change_pct = market_stock.get("change_pct", 0) or stock.get("change_pct", 0)
-            
+
             if market_cap > 0:
                 children.append({
                     "name": stock.get("name", symbol),
@@ -331,7 +329,7 @@ async def _build_sector_treemap() -> Dict[str, Any]:
                 sector_market_cap += market_cap
                 sector_change_sum += change_pct
                 valid_stocks += 1
-        
+
         if valid_stocks > 0 and sector_market_cap > 0:
             avg_change = sector_change_sum / valid_stocks
             treemap_data.append({
@@ -340,9 +338,9 @@ async def _build_sector_treemap() -> Dict[str, Any]:
                 "change_pct": round(avg_change, 2),
                 "children": children,
             })
-    
+
     treemap_data.sort(key=lambda x: x["value"], reverse=True)
-    
+
     return {
         "data": treemap_data,
         "last_update": datetime.now().isoformat(),
@@ -360,7 +358,7 @@ async def _build_stock_treemap() -> Dict[str, Any]:
         "type": "实时",
         "api": "akshare.stock_zh_a_spot_em"
     }
-    
+
     if not all_stocks:
         logger.warning("[Treemap] Akshare failed, trying Sina fallback")
         all_stocks = await fetch_all_stocks_sina()
@@ -370,7 +368,7 @@ async def _build_stock_treemap() -> Dict[str, Any]:
             "type": "实时",
             "api": "sina.Market_Center.getHQNodeData"
         }
-    
+
     if not all_stocks:
         logger.warning("[Treemap] No stocks fetched for stock-level treemap")
         return {
@@ -378,32 +376,32 @@ async def _build_stock_treemap() -> Dict[str, Any]:
             "last_update": datetime.now().isoformat(),
             "data_source": DATA_SOURCE_FALLBACK
         }
-    
+
     treemap_data = []
-    
+
     for stock in all_stocks[:500]:
         symbol = stock.get("symbol", "")
         if not symbol:
             continue
-        
+
         market_cap = stock.get("market_cap", 0)
         if market_cap <= 0:
             continue
-        
+
         if symbol.startswith(("sh", "sz")):
             full_symbol = symbol
         else:
             full_symbol = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
-        
+
         treemap_data.append({
             "name": stock.get("name", symbol),
             "value": round(market_cap / 1e8, 2),
             "change_pct": round(stock.get("change_pct", 0) or 0, 2),
             "symbol": full_symbol,
         })
-    
+
     treemap_data.sort(key=lambda x: x["value"], reverse=True)
-    
+
     return {
         "data": treemap_data,
         "last_update": datetime.now().isoformat(),

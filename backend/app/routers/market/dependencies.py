@@ -20,8 +20,6 @@ import re
 import threading
 import time
 from datetime import datetime
-from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -82,7 +80,7 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                         results[sym] = fields
                 except (ValueError, IndexError, AttributeError):
                     continue
-        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError):
             pass
         logger.warning(f"[HTTP] failed: {e}")
 
@@ -109,7 +107,7 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                     results[sym] = [f.strip() for f in fields]
                 except (ValueError, IndexError, AttributeError):
                     continue
-        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError):
             pass
         logger.warning(f"[HTTP] failed: {e}")
 

@@ -10,7 +10,6 @@ import logging
 import time
 import asyncio
 from fastapi import APIRouter, Query, HTTPException
-from typing import Optional, List
 
 from app.services.fund_fetcher import get_fetcher
 from app.utils.error_decorator import handle_errors
@@ -37,14 +36,14 @@ async def etf_info(code: str = Query(..., description="ETF 代码（6 位数字�
     """
     logger.info(f"[ETF Info] 请求 {code}")
     start = time.time()
-    
+
     data = await fetcher.get_etf_info(code)
     if not data:
         raise HTTPException(400, f"无法获取 ETF {code} 数据")
-    
+
     elapsed = time.time() - start
     logger.info(f"[ETF Info] {code} 完成 elapsed={elapsed:.3f}s source={data.get('source', 'unknown')}")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -64,12 +63,12 @@ async def etf_history(
     """获取 ETF 历史 K 线"""
     logger.info(f"[ETF History] 请求 {code} {period}")
     start = time.time()
-    
+
     data = await fetcher.get_etf_history(code, period)
-    
+
     elapsed = time.time() - start
     logger.info(f"[ETF History] {code} 完成 elapsed={elapsed:.3f}s records={len(data)}")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -89,14 +88,14 @@ async def open_fund_info(code: str = Query(..., description="基金代码（6 �
     """获取场外公募基金详细信息"""
     logger.info(f"[Open Fund Info] 请求 {code}")
     start = time.time()
-    
+
     data = await fetcher.get_fund_info(code)
     if not data:
         raise HTTPException(400, f"无法获取基金 {code} 数据")
-    
+
     elapsed = time.time() - start
     logger.info(f"[Open Fund Info] {code} 完成 elapsed={elapsed:.3f}s source={data.get('source', 'unknown')}")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -115,13 +114,13 @@ async def open_fund_rank(
     """场外基金排行"""
     logger.info(f"[Open Fund Rank] 请求 type={type}")
     start = time.time()
-    
+
     data = await fetcher.get_fund_rank(type)
     result = data[:limit] if data else []
-    
+
     elapsed = time.time() - start
     logger.info(f"[Open Fund Rank] {type} 完成 elapsed={elapsed:.3f}s count={len(result)}")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -137,11 +136,11 @@ async def fund_portfolio(code: str):
     """获取基金投资组合（重仓股 + 资产配置）"""
     logger.info(f"[Fund Portfolio] 请求 {code}")
     start = time.time()
-    
+
     data = await fetcher.get_fund_portfolio(code)
-    
+
     elapsed = time.time() - start
-    
+
     if not data:
         logger.warning(f"[Fund Portfolio] {code} 返回空数据 elapsed={elapsed:.3f}s")
         return {
@@ -151,9 +150,9 @@ async def fund_portfolio(code: str):
             "timestamp": int(time.time() * 1000),
             "_perf": {"elapsed_s": round(elapsed, 3)}
         }
-    
+
     logger.info(f"[Fund Portfolio] {code} 完成 elapsed={elapsed:.3f}s stocks={len(data.get('stocks', []))}")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -177,12 +176,12 @@ async def fund_nav_history(
     """获取场外基金净值历史"""
     logger.info(f"[Fund NAV History] 请求 {code} {period}")
     start = time.time()
-    
+
     data = await fetcher.get_fund_nav_history(code, period)
-    
+
     elapsed = time.time() - start
     logger.info(f"[Fund NAV History] {code} {period} 完成 elapsed={elapsed:.3f}s records={len(data)}")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -202,12 +201,12 @@ async def fund_returns(code: str):
     """
     logger.info(f"[Fund Returns] 请求 {code}")
     start = time.time()
-    
+
     data = await fetcher.get_fund_returns(code)
-    
+
     elapsed = time.time() - start
     logger.info(f"[Fund Returns] {code} 完成 elapsed={elapsed:.3f}s source={data.get('source', 'unknown')}")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -227,12 +226,12 @@ async def fund_risk_metrics(code: str):
     """
     logger.info(f"[Fund Risk Metrics] 请求 {code}")
     start = time.time()
-    
+
     data = await fetcher.get_fund_risk_metrics(code)
-    
+
     elapsed = time.time() - start
     logger.info(f"[Fund Risk Metrics] {code} 完成 elapsed={elapsed:.3f}s source={data.get('source', 'unknown')}")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -260,12 +259,12 @@ async def fund_full_data(
     """
     logger.info(f"[Fund Full] 请求 {code}")
     start = time.time()
-    
+
     results = await fetcher.get_fund_full_data(code, is_etf=False)
-    
+
     elapsed = time.time() - start
     logger.info(f"[Fund Full] {code} 完成 elapsed={elapsed:.3f}s")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -285,11 +284,11 @@ async def money_fund_rank(limit: int = Query(50, description="返回数量")):
     """货币基金行情排行"""
     logger.info(f"[Money Fund Rank] 请求 limit={limit}")
     start = time.time()
-    
+
     try:
         import akshare as ak
         df = await asyncio.to_thread(ak.fund_money_fund_daily_em)
-        
+
         if df is None or df.empty:
             return {
                 "code": 0,
@@ -297,7 +296,7 @@ async def money_fund_rank(limit: int = Query(50, description="返回数量")):
                 "data": [],
                 "timestamp": int(time.time() * 1000)
             }
-        
+
         result = []
         for _, row in df.head(limit).iterrows():
             result.append({
@@ -307,10 +306,10 @@ async def money_fund_rank(limit: int = Query(50, description="返回数量")):
                 "return_1d": float(row.get("万份收益", 0) or 0),
                 "manager": row.get("基金经理", ""),
             })
-        
+
         elapsed = time.time() - start
         logger.info(f"[Money Fund Rank] 完成 elapsed={elapsed:.3f}s count={len(result)}")
-        
+
         return {
             "code": 0,
             "message": "success",
@@ -318,7 +317,7 @@ async def money_fund_rank(limit: int = Query(50, description="返回数量")):
             "timestamp": int(time.time() * 1000),
             "_perf": {"elapsed_s": round(elapsed, 3)}
         }
-    
+
     except Exception as e:
         logger.error(f"[Money Fund Rank] 获取失败：{e}", exc_info=True)
         return {

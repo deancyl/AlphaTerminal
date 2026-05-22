@@ -7,7 +7,6 @@ Wave 5-38: Pre-warm cache on server startup for faster initial response.
 import logging
 import asyncio
 from datetime import datetime
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +30,14 @@ async def warmup_market_radar_cache(
     """
     from app.services.market_radar import build_treemap_data, detect_anomalies
     from app.services.data_cache import get_cache
-    
+
     start_time = datetime.now()
     results = {
         "started_at": start_time.isoformat(),
         "tasks": {},
         "success": True,
     }
-    
+
     try:
         # Run warmup tasks in parallel
         tasks = [
@@ -46,18 +45,18 @@ async def warmup_market_radar_cache(
             ("treemap_stock", build_treemap_data(level="stock", timeout=timeout / 2)),
             ("anomalies", detect_anomalies(anomaly_type=None, top_n=10, timeout=timeout / 2)),
         ]
-        
+
         task_results = await asyncio.gather(
             *[t[1] for t in tasks],
             return_exceptions=True
         )
-        
+
         # Process results and cache them
         cache = get_cache()
-        
+
         for i, (task_name, _) in enumerate(tasks):
             result = task_results[i]
-            
+
             if isinstance(result, Exception):
                 results["tasks"][task_name] = {
                     "status": "error",
@@ -72,23 +71,23 @@ async def warmup_market_radar_cache(
                     cache.set("market_radar:treemap:stock", result, ttl=60)
                 elif task_name == "anomalies":
                     cache.set("market_radar:anomalies:all", result, ttl=30)
-                
+
                 results["tasks"][task_name] = {
                     "status": "success",
                     "data_count": len(result.get("data", result.get("anomalies", []))),
                 }
-    
+
     except Exception as e:
         logger.error(f"[MarketRadar] Cache warmup failed: {e}", exc_info=True)
         results["success"] = False
         results["error"] = str(e)
-    
+
     end_time = datetime.now()
     results["completed_at"] = end_time.isoformat()
     results["duration_ms"] = int((end_time - start_time).total_seconds() * 1000)
-    
+
     logger.info(f"[MarketRadar] Cache warmup completed in {results['duration_ms']}ms")
-    
+
     return results
 
 
@@ -114,7 +113,7 @@ def start_background_warmup():
             await warmup_market_radar_cache(timeout=30.0, background=True)
         except Exception as e:
             logger.error(f"[MarketRadar] Background warmup failed: {e}", exc_info=True)
-    
+
     # Create background task
     try:
         loop = asyncio.get_running_loop()

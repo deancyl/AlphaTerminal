@@ -235,7 +235,6 @@ class MCPServer:
 
     def _get_klines(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """获取 K 线数据"""
-        from app.routers.market import get_periodic_history
         from app.db import get_periodic_history as db_get_history
 
         market = arguments["market"]
@@ -436,7 +435,6 @@ class MCPServer:
         try:
             from app.services.agent.paper_trading import (
                 PaperTradingService,
-                OrderSide,
             )
 
             service = PaperTradingService.get_instance()

@@ -1,8 +1,5 @@
 """Tests for bond router."""
-import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock, AsyncMock
-import pandas as pd
 
 from app.main import app
 
@@ -17,7 +14,7 @@ class TestBondCurve:
         """Test GET /bond/curve endpoint returns valid structure."""
         response = client.get("/api/v1/bond/curve")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert "code" in data
         assert data.get("code") == 0
@@ -26,7 +23,7 @@ class TestBondCurve:
     def test_bond_curve_response_structure(self):
         """Test that curve response has correct structure."""
         response = client.get("/api/v1/bond/curve")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -38,7 +35,7 @@ class TestBondCurve:
     def test_bond_curve_has_tenors(self):
         """Test that curve includes standard tenors."""
         response = client.get("/api/v1/bond/curve")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -53,7 +50,7 @@ class TestBondYieldCurve:
         """Test GET /bond/yield_curve endpoint."""
         response = client.get("/api/v1/bond/yield_curve")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert "code" in data
         assert data.get("code") == 0
@@ -66,7 +63,7 @@ class TestBondActive:
         """Test GET /bond/active endpoint."""
         response = client.get("/api/v1/bond/active")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert "code" in data
         assert data.get("code") == 0
@@ -74,7 +71,7 @@ class TestBondActive:
     def test_bond_active_response_structure(self):
         """Test that active bonds response has correct structure."""
         response = client.get("/api/v1/bond/active")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -85,7 +82,7 @@ class TestBondActive:
     def test_bond_active_bond_structure(self):
         """Test that each bond has required fields."""
         response = client.get("/api/v1/bond/active")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -104,7 +101,7 @@ class TestBondHistory:
         """Test GET /bond/history endpoint with default params."""
         response = client.get("/api/v1/bond/history")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert "code" in data
 
@@ -112,7 +109,7 @@ class TestBondHistory:
         """Test GET /bond/history with specific tenor."""
         response = client.get("/api/v1/bond/history?tenor=10年")
         assert response.status_code == 200
-        
+
         data = response.json()
         if data.get("code") == 0:
             result = data["data"]
@@ -122,7 +119,7 @@ class TestBondHistory:
         """Test GET /bond/history with specific period."""
         response = client.get("/api/v1/bond/history?tenor=10年&period=1Y")
         assert response.status_code == 200
-        
+
         data = response.json()
         if data.get("code") == 0:
             result = data["data"]
@@ -133,7 +130,7 @@ class TestBondHistory:
         """Test GET /bond/history with invalid tenor returns gracefully."""
         response = client.get("/api/v1/bond/history?tenor=invalid")
         assert response.status_code == 200
-        
+
         data = response.json()
         if data.get("code") == 0:
             result = data["data"]
@@ -142,7 +139,7 @@ class TestBondHistory:
     def test_bond_history_response_structure(self):
         """Test that history response has correct structure."""
         response = client.get("/api/v1/bond/history?tenor=10年&period=1Y")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -158,7 +155,7 @@ class TestBondHealth:
         """Test GET /bond/health endpoint returns valid structure."""
         response = client.get("/api/v1/bond/health")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert "code" in data
         assert data.get("code") == 0
@@ -166,7 +163,7 @@ class TestBondHealth:
     def test_bond_health_response_structure(self):
         """Test that health response has correct structure."""
         response = client.get("/api/v1/bond/health")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -178,7 +175,7 @@ class TestBondHealth:
     def test_bond_health_circuit_breaker_state(self):
         """Test that circuit breaker state is returned."""
         response = client.get("/api/v1/bond/health")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -193,7 +190,7 @@ class TestBondActiveDemoFlag:
     def test_bond_active_has_is_demo_flag(self):
         """Test that active bonds response includes is_demo flag."""
         response = client.get("/api/v1/bond/active")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -204,7 +201,7 @@ class TestBondActiveDemoFlag:
     def test_bond_active_has_warning(self):
         """Test that active bonds response includes warning."""
         response = client.get("/api/v1/bond/active")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -218,7 +215,7 @@ class TestBondCurveWarning:
     def test_bond_curve_has_warning_level(self):
         """Test that curve response includes warning_level."""
         response = client.get("/api/v1/bond/curve")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -228,7 +225,7 @@ class TestBondCurveWarning:
     def test_bond_curve_has_is_stale_flag(self):
         """Test that curve response includes is_stale flag."""
         response = client.get("/api/v1/bond/curve")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:

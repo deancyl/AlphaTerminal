@@ -39,7 +39,7 @@ __all__ = [
     'success_response',
     'error_response',
     'generate_trace_id',
-    
+
     # Exception classes
     'APIException',
     'ValidationError',
@@ -47,14 +47,14 @@ __all__ = [
     'DatabaseError',
     'ThirdPartyError',
     'TimeoutError',
-    
+
     # Error sanitization
     'sanitize_error',
     'sanitize_error_message',
-    
+
     # Exception handlers
     'setup_exception_handlers',
-    
+
     # Sina stock fetcher
     'fetch_all_stocks_sina',
     'get_circuit_breaker_status',

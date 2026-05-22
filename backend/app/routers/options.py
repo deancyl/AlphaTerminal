@@ -41,7 +41,7 @@ async def get_cffex_chain(
             options_fetcher.get_cffex_chain(symbol),
             timeout=30.0
         )
-        
+
         return success_response({
             "symbol": result.get("symbol", symbol),
             "name": result.get("name", ""),
@@ -52,7 +52,7 @@ async def get_cffex_chain(
             "update_time": result.get("update_time", ""),
             "source": result.get("source", "unknown"),
         })
-        
+
     except asyncio.TimeoutError:
         logger.warning(f"[Options] CFFEX chain timeout: {symbol}", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
@@ -86,7 +86,7 @@ async def get_greeks(
             options_fetcher.get_sse_greeks(code),
             timeout=30.0
         )
-        
+
         return success_response({
             "code": result.get("code", code),
             "name": result.get("name", ""),
@@ -101,7 +101,7 @@ async def get_greeks(
             "update_time": result.get("update_time", ""),
             "source": result.get("source", "unknown"),
         })
-        
+
     except asyncio.TimeoutError:
         logger.warning(f"[Options] Greeks timeout: {code}", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
@@ -124,13 +124,13 @@ async def get_contracts(
     """
     try:
         result = await options_fetcher.get_contract_list(exchange)
-        
+
         return success_response({
             "exchange": result.get("exchange", exchange),
             "contracts": result.get("contracts", []),
             "update_time": result.get("update_time", ""),
         })
-        
+
     except Exception as e:
         logger.error(f"[Options] Contracts error: {exchange} - {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取合约列表失败: {str(e)}")

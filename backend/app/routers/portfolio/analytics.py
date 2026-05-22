@@ -15,12 +15,11 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query
 from statistics import mean, stdev, NormalDist
 
 from app.db.database import _get_conn
 from app.utils.errors import success_response
-from app.middleware import require_api_key
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
@@ -313,12 +312,12 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
         except Exception as e:
             logger.error(f"[Attribution] 计算异常: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="归因计算时发生错误，请检查是否有异常交易数据")
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -351,51 +350,51 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
                    WHERE portfolio_id=? ORDER BY date ASC LIMIT 252""",
                 (portfolio_id,)
             ).fetchall()
-            
+
             if not rows or len(rows) < 30:
                 return {
                     "metrics": None,
                     "message": "历史数据不足（需要至少30个交易日）",
                     "days": len(rows) if rows else 0
                 }
-            
+
             portfolio_dates = [r[0] for r in rows]
             portfolio_assets = [float(r[1]) for r in rows]
-            
+
             portfolio_returns = []
             for i in range(1, len(portfolio_assets)):
                 if portfolio_assets[i-1] > 0:
                     portfolio_returns.append((portfolio_assets[i] - portfolio_assets[i-1]) / portfolio_assets[i-1])
-            
+
             benchmark_symbol = f"sh{benchmark}" if benchmark.startswith('000') else f"sz{benchmark}"
             bench_rows = conn.execute(
                 """SELECT date, close FROM market_data_daily 
                    WHERE symbol=? AND date >= ? AND date <= ? ORDER BY date ASC""",
                 (benchmark_symbol, portfolio_dates[0], portfolio_dates[-1])
             ).fetchall()
-            
+
             benchmark_returns = []
             if bench_rows and len(bench_rows) >= 30:
                 bench_prices = [float(r[1]) for r in bench_rows]
                 for i in range(1, len(bench_prices)):
                     if bench_prices[i-1] > 0:
                         benchmark_returns.append((bench_prices[i] - bench_prices[i-1]) / bench_prices[i-1])
-            
+
             n = len(portfolio_returns)
             if n < 5:
                 return {"metrics": None, "message": "收益率数据不足", "days": n}
-            
+
             avg_return = mean(portfolio_returns)
             std_return = stdev(portfolio_returns) if n > 1 else 0
-            
+
             ann_return = avg_return * 252
             ann_volatility = std_return * math.sqrt(252)
-            
+
             risk_free = 0.03 / 252
             risk_free_ann = 0.03
-            
+
             sharpe = (ann_return - risk_free_ann) / ann_volatility if ann_volatility > 0 else 0
-            
+
             peak = portfolio_assets[0]
             max_dd = 0
             for asset in portfolio_assets:
@@ -404,15 +403,15 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
                 dd = (peak - asset) / peak if peak > 0 else 0
                 if dd > max_dd:
                     max_dd = dd
-            
+
             downside_returns = [r for r in portfolio_returns if r < 0]
             downside_std = stdev(downside_returns) * math.sqrt(252) if len(downside_returns) > 1 else 0.0001
             sortino = (ann_return - risk_free_ann) / downside_std if downside_std > 0 else 0
-            
+
             calmar = ann_return / max_dd if max_dd > 0 else 0
-            
+
             win_rate = len([r for r in portfolio_returns if r > 0]) / n if n > 0 else 0
-            
+
             metrics = {
                 "sharpe_ratio": round(sharpe, 2),
                 "sortino_ratio": round(sortino, 2),
@@ -423,29 +422,29 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
                 "win_rate": round(win_rate * 100, 2),
                 "total_days": n,
             }
-            
+
             if len(benchmark_returns) >= 5:
                 min_len = min(len(portfolio_returns), len(benchmark_returns))
                 p_rets = portfolio_returns[-min_len:]
                 b_rets = benchmark_returns[-min_len:]
-                
+
                 b_mean = mean(b_rets)
                 p_mean = mean(p_rets)
-                
+
                 cov_pb = sum((p - p_mean) * (b - b_mean) for p, b in zip(p_rets, b_rets)) / min_len
                 var_b = sum((b - b_mean) ** 2 for b in b_rets) / min_len
-                
+
                 beta = cov_pb / var_b if var_b > 0 else 1.0
-                
+
                 b_ann_return = b_mean * 252
                 alpha = ann_return - (risk_free_ann + beta * (b_ann_return - risk_free_ann))
-                
+
                 treynor = (ann_return - risk_free_ann) / beta if beta != 0 else 0
-                
+
                 tracking_errors = [p - b for p, b in zip(p_rets, b_rets)]
                 te_std = stdev(tracking_errors) * math.sqrt(252) if len(tracking_errors) > 1 else 0.0001
                 info_ratio = (ann_return - b_ann_return) / te_std if te_std > 0 else 0
-                
+
                 metrics.update({
                     "beta": round(beta, 2),
                     "alpha": round(alpha * 100, 2),
@@ -461,22 +460,22 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
                     "information_ratio": None,
                     "benchmark_return": None,
                 })
-            
+
             return {
                 "metrics": metrics,
                 "portfolio_id": portfolio_id,
                 "benchmark": benchmark,
                 "period": f"{portfolio_dates[0]} ~ {portfolio_dates[-1]}",
             }
-            
+
         finally:
             conn.close()
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -522,98 +521,98 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
                    WHERE portfolio_id=? ORDER BY date ASC LIMIT 252""",
                 (portfolio_id,)
             ).fetchall()
-            
+
             if not rows or len(rows) < 30:
                 return {
                     "risk": None,
                     "message": "历史数据不足（需要至少30个交易日）",
                     "days": len(rows) if rows else 0
                 }
-            
+
             assets = [float(r[1]) for r in rows]
-            
+
             returns = []
             for i in range(1, len(assets)):
                 if assets[i-1] > 0:
                     returns.append((assets[i] - assets[i-1]) / assets[i-1])
-            
+
             if len(returns) < 5:
                 return {"risk": None, "message": "收益率数据不足", "days": len(returns)}
-            
+
             n = len(returns)
             current_asset = assets[-1]
-            
+
             sorted_returns = sorted(returns)
             var_idx = int(n * (1 - confidence))
             var_historical = sorted_returns[var_idx] if var_idx < n else sorted_returns[0]
-            
+
             avg_ret = mean(returns)
             std_ret = stdev(returns) if n > 1 else 0
-            
+
             try:
                 z_score = NormalDist().inv_cdf(confidence)
             except (ValueError, AttributeError) as e:
                 logger.debug(f"[Portfolio VaR] NormalDist error for confidence={confidence}: {e}")
                 z_map = {0.90: 1.282, 0.95: 1.645, 0.99: 2.326}
                 z_score = z_map.get(confidence, 1.645)
-            
+
             var_parametric = -(avg_ret - z_score * std_ret)
-            
+
             cvar_returns = [r for r in returns if r <= var_historical]
             cvar_historical = mean(cvar_returns) if cvar_returns else var_historical
-            
+
             from math import exp, sqrt, pi
             pdf_z = (1 / sqrt(2 * pi)) * exp(-0.5 * z_score ** 2)
             cvar_parametric = -(avg_ret - std_ret * (pdf_z / (1 - confidence)))
-            
+
             horizon_factor = math.sqrt(horizon)
             var_multi_period = var_parametric * horizon_factor
             cvar_multi_period = cvar_parametric * horizon_factor
-            
+
             risk = {
                 "current_asset": round(current_asset, 2),
                 "confidence_level": confidence,
                 "horizon_days": horizon,
                 "total_days": n,
-                
+
                 "var_historical_pct": round(-var_historical * 100, 2),
                 "var_historical_amount": round(-var_historical * current_asset, 2),
                 "var_parametric_pct": round(var_parametric * 100, 2),
                 "var_parametric_amount": round(var_parametric * current_asset, 2),
-                
+
                 "var_horizon_pct": round(var_multi_period * 100, 2),
                 "var_horizon_amount": round(var_multi_period * current_asset, 2),
-                
+
                 "cvar_historical_pct": round(-cvar_historical * 100, 2),
                 "cvar_historical_amount": round(-cvar_historical * current_asset, 2),
                 "cvar_parametric_pct": round(cvar_parametric * 100, 2),
                 "cvar_parametric_amount": round(cvar_parametric * current_asset, 2),
-                
+
                 "cvar_horizon_pct": round(cvar_multi_period * 100, 2),
                 "cvar_horizon_amount": round(cvar_multi_period * current_asset, 2),
-                
+
                 "daily_volatility_pct": round(std_ret * 100, 2),
                 "daily_return_avg_pct": round(avg_ret * 100, 2),
                 "annual_volatility_pct": round(std_ret * math.sqrt(252) * 100, 2),
-                
+
                 "worst_day_pct": round(min(returns) * 100, 2),
                 "best_day_pct": round(max(returns) * 100, 2),
             }
-            
+
             return {
                 "risk": risk,
                 "portfolio_id": portfolio_id,
                 "period": f"{rows[0][0]} ~ {rows[-1][0]}",
             }
-            
+
         finally:
             conn.close()
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -659,33 +658,33 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
                    WHERE portfolio_id=? ORDER BY date ASC LIMIT 252""",
                 (portfolio_id,)
             ).fetchall()
-            
+
             if not rows or len(rows) < 30:
                 return {
                     "comparison": None,
                     "message": "历史数据不足（需要至少30个交易日）",
                     "days": len(rows) if rows else 0
                 }
-            
+
             portfolio_dates = [r[0] for r in rows]
             portfolio_assets = [float(r[1]) for r in rows]
-            
+
             benchmark_symbol = f"sh{benchmark}" if benchmark.startswith('000') else f"sz{benchmark}"
             bench_rows = conn.execute(
                 """SELECT date, close FROM market_data_daily 
                    WHERE symbol=? AND date >= ? AND date <= ? ORDER BY date ASC""",
                 (benchmark_symbol, portfolio_dates[0], portfolio_dates[-1])
             ).fetchall()
-            
+
             if not bench_rows or len(bench_rows) < 30:
                 return {
                     "comparison": None,
                     "message": "基准数据不足",
                     "days": 0
                 }
-            
+
             bench_dict = {r[0]: float(r[1]) for r in bench_rows}
-            
+
             aligned_data = []
             for i, date in enumerate(portfolio_dates):
                 if date in bench_dict:
@@ -694,49 +693,49 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
                         "portfolio_asset": portfolio_assets[i],
                         "benchmark_price": bench_dict[date]
                     })
-            
+
             if len(aligned_data) < 30:
                 return {
                     "comparison": None,
                     "message": "对齐后数据不足",
                     "days": len(aligned_data)
                 }
-            
+
             first_portfolio = aligned_data[0]["portfolio_asset"]
             first_benchmark = aligned_data[0]["benchmark_price"]
-            
+
             for item in aligned_data:
                 item["portfolio_cum_return"] = (item["portfolio_asset"] - first_portfolio) / first_portfolio
                 item["benchmark_cum_return"] = (item["benchmark_price"] - first_benchmark) / first_benchmark
                 item["excess_return"] = item["portfolio_cum_return"] - item["benchmark_cum_return"]
-            
+
             portfolio_returns = []
             benchmark_returns = []
             excess_returns = []
-            
+
             for i in range(1, len(aligned_data)):
                 p_ret = (aligned_data[i]["portfolio_asset"] - aligned_data[i-1]["portfolio_asset"]) / aligned_data[i-1]["portfolio_asset"]
                 b_ret = (aligned_data[i]["benchmark_price"] - aligned_data[i-1]["benchmark_price"]) / aligned_data[i-1]["benchmark_price"]
-                
+
                 portfolio_returns.append(p_ret)
                 benchmark_returns.append(b_ret)
                 excess_returns.append(p_ret - b_ret)
-            
+
             n = len(portfolio_returns)
-            
+
             te = stdev(excess_returns) * math.sqrt(252) if n > 1 else 0
-            
+
             avg_excess = mean(excess_returns) if n > 0 else 0
             info_ratio = (avg_excess * 252) / te if te > 0 else 0
-            
+
             final_portfolio_return = aligned_data[-1]["portfolio_cum_return"]
             final_benchmark_return = aligned_data[-1]["benchmark_cum_return"]
-            
+
             monthly_returns = []
             current_month = None
             month_start_portfolio = None
             month_start_benchmark = None
-            
+
             for item in aligned_data:
                 month = item["date"][:7]
                 if month != current_month:
@@ -750,7 +749,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
                     current_month = month
                     month_start_portfolio = item["portfolio_asset"]
                     month_start_benchmark = item["benchmark_price"]
-            
+
             return {
                 "comparison": {
                     "portfolio_return_pct": round(final_portfolio_return * 100, 2),
@@ -759,7 +758,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
                     "tracking_error_pct": round(te * 100, 2),
                     "information_ratio": round(info_ratio, 2),
                     "correlation": round(
-                        sum((p - mean(portfolio_returns)) * (b - mean(benchmark_returns)) for p, b in zip(portfolio_returns, benchmark_returns)) / 
+                        sum((p - mean(portfolio_returns)) * (b - mean(benchmark_returns)) for p, b in zip(portfolio_returns, benchmark_returns)) /
                         (math.sqrt(sum((p - mean(portfolio_returns))**2 for p in portfolio_returns)) * math.sqrt(sum((b - mean(benchmark_returns))**2 for b in benchmark_returns)))
                         if len(portfolio_returns) > 1 else 0, 2
                     ),
@@ -771,15 +770,15 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
                 "benchmark": benchmark,
                 "period": f"{aligned_data[0]['date']} ~ {aligned_data[-1]['date']}"
             }
-            
+
         finally:
             conn.close()
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -820,11 +819,11 @@ async def get_brinson_attribution(
     - 交互效应 (Interaction Effect): 配置与选择的交互影响
     """
     from app.services.attribution import calculate_brinson_attribution, aggregate_to_sectors
-    
+
     try:
         conn = _get_conn()
         cursor = conn.cursor()
-        
+
         # 获取组合持仓
         cursor.execute("""
             SELECT symbol, name, quantity, cost_price
@@ -832,10 +831,10 @@ async def get_brinson_attribution(
             WHERE portfolio_id = ? AND quantity > 0
         """, (portfolio_id,))
         positions = cursor.fetchall()
-        
+
         if not positions:
             raise HTTPException(status_code=404, detail="组合无持仓")
-        
+
         # 计算组合权重（按市值）
         total_value = 0.0
         position_list = []
@@ -851,20 +850,20 @@ async def get_brinson_attribution(
                 "cost_price": cost_price,
                 "market_value": market_value
             })
-        
+
         # 计算权重
         for pos in position_list:
             pos["weight"] = pos["market_value"] / total_value if total_value > 0 else 0
-        
+
         # 模拟收益率（实际应从历史数据计算）
         # 这里使用简化示例
         portfolio_returns = {pos["symbol"]: 0.05 + (hash(pos["symbol"]) % 100) / 1000 for pos in position_list}
-        
+
         # 聚合到行业层面
         portfolio_sector_weights, portfolio_sector_returns = aggregate_to_sectors(
             position_list, portfolio_returns
         )
-        
+
         # 基准数据（简化：使用固定权重）
         # 实际应从指数成分数据获取
         benchmark_weights = {
@@ -876,7 +875,7 @@ async def get_brinson_attribution(
             "汽车": 0.05,
             "其他": 0.45
         }
-        
+
         # 基准收益率（简化）
         benchmark_returns = {
             "银行": 0.03,
@@ -887,7 +886,7 @@ async def get_brinson_attribution(
             "汽车": 0.06,
             "其他": 0.04
         }
-        
+
         # 计算Brinson归因
         result = calculate_brinson_attribution(
             portfolio_weights=portfolio_sector_weights,
@@ -897,9 +896,9 @@ async def get_brinson_attribution(
             period_start=period_start or "2025-01-01",
             period_end=period_end or "2025-12-31"
         )
-        
+
         conn.close()
-        
+
         return success_response({
             "allocation_effect": round(result.allocation_effect * 100, 4),
             "selection_effect": round(result.selection_effect * 100, 4),
@@ -923,7 +922,7 @@ async def get_brinson_attribution(
             "benchmark": benchmark,
             "note": "注：当前使用简化数据，实际应从历史行情计算收益率"
         })
-        
+
     except HTTPException:
         raise
     except Exception as e:

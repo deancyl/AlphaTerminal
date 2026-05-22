@@ -50,12 +50,12 @@ class FieldSource:
     primary: DataSource          # 主数据源
     fallback: Optional[DataSource] = None  # 备用数据源
     priority: int = 100          # 优先级（用于并行模式）
-    
+
 
 # ── 数据源优先级配置 ────────────────────────────────────────────────
 
 DATA_SOURCE_PRIORITY: Dict[str, Dict[str, FieldSource]] = {
-    
+
     # ── 行情数据（Quote）────────────────────────────────────────────
     "quote": {
         # 价格相关（mootdx优先，TCP协议不封IP）
@@ -66,7 +66,7 @@ DATA_SOURCE_PRIORITY: Dict[str, Dict[str, FieldSource]] = {
         "close":      FieldSource(DataSource.MOOTDX, DataSource.SINA),
         "volume":     FieldSource(DataSource.MOOTDX, DataSource.SINA),
         "amount":     FieldSource(DataSource.SINA, DataSource.MOOTDX),
-        
+
         # 盘口数据（mootdx独有）
         "bid1":       FieldSource(DataSource.MOOTDX),
         "bid1_vol":   FieldSource(DataSource.MOOTDX),
@@ -88,22 +88,22 @@ DATA_SOURCE_PRIORITY: Dict[str, Dict[str, FieldSource]] = {
         "ask4_vol":   FieldSource(DataSource.MOOTDX),
         "ask5":       FieldSource(DataSource.MOOTDX),
         "ask5_vol":   FieldSource(DataSource.MOOTDX),
-        
+
         # 估值指标（腾讯优先，数据更全）
         "pe_ttm":     FieldSource(DataSource.TENCENT, DataSource.SINA),
         "pb":         FieldSource(DataSource.TENCENT, DataSource.SINA),
         "mcap":       FieldSource(DataSource.TENCENT),
         "turnover":   FieldSource(DataSource.TENCENT, DataSource.SINA),
-        
+
         # 基本信息（新浪优先，响应快）
         "name":       FieldSource(DataSource.SINA, DataSource.TENCENT),
         "market":     FieldSource(DataSource.SINA),
         "change_pct": FieldSource(DataSource.SINA, DataSource.MOOTDX),
-        
+
         # 分笔成交（mootdx独有）
         "ticks":      FieldSource(DataSource.MOOTDX),
     },
-    
+
     # ── K线数据（History）────────────────────────────────────────────
     "kline": {
         "date":       FieldSource(DataSource.MOOTDX, DataSource.SINA),
@@ -114,7 +114,7 @@ DATA_SOURCE_PRIORITY: Dict[str, Dict[str, FieldSource]] = {
         "volume":     FieldSource(DataSource.MOOTDX, DataSource.SINA),
         "amount":     FieldSource(DataSource.SINA, DataSource.MOOTDX),
     },
-    
+
     # ── 财务数据（Financials）────────────────────────────────────────
     "financials": {
         "revenue":    FieldSource(DataSource.MOOTDX, DataSource.AKSHARE),
@@ -124,7 +124,7 @@ DATA_SOURCE_PRIORITY: Dict[str, Dict[str, FieldSource]] = {
         "dividend":   FieldSource(DataSource.AKSHARE, DataSource.MOOTDX),
         "split":      FieldSource(DataSource.AKSHARE, DataSource.MOOTDX),
     },
-    
+
     # ── 板块数据（Sector）────────────────────────────────────────────
     "sector": {
         "industry":   FieldSource(DataSource.TENCENT, DataSource.SINA),
@@ -178,7 +178,7 @@ def get_primary_source(data_type: str, field: str) -> Optional[DataSource]:
     """
     if data_type not in DATA_SOURCE_PRIORITY:
         return None
-    
+
     field_config = DATA_SOURCE_PRIORITY[data_type].get(field)
     return field_config.primary if field_config else None
 
@@ -196,7 +196,7 @@ def get_fallback_source(data_type: str, field: str) -> Optional[DataSource]:
     """
     if data_type not in DATA_SOURCE_PRIORITY:
         return None
-    
+
     field_config = DATA_SOURCE_PRIORITY[data_type].get(field)
     return field_config.fallback if field_config else None
 
@@ -214,12 +214,12 @@ def get_fields_by_source(data_type: str, source: DataSource) -> List[str]:
     """
     if data_type not in DATA_SOURCE_PRIORITY:
         return []
-    
+
     fields = []
     for field, config in DATA_SOURCE_PRIORITY[data_type].items():
         if config.primary == source or config.fallback == source:
             fields.append(field)
-    
+
     return fields
 
 
@@ -246,16 +246,16 @@ if __name__ == "__main__":
     # 示例1：获取 price 字段的主数据源
     primary = get_primary_source("quote", "price")
     print(f"price 主数据源: {primary}")  # 输出: mootdx
-    
+
     # 示例2：获取 pe_ttm 字段的备用数据源
     fallback = get_fallback_source("quote", "pe_ttm")
     print(f"pe_ttm 备用数据源: {fallback}")  # 输出: sina
-    
+
     # 示例3：获取 mootdx 提供的所有字段
     fields = get_fields_by_source("quote", DataSource.MOOTDX)
     print(f"mootdx 提供的字段: {fields}")
     # 输出: ['price', 'open', 'high', 'low', 'close', 'volume', 'bid1', ...]
-    
+
     # 示例4：判断是否使用互补模式
     mode = should_use_complementary_mode("quote")
     print(f"quote 使用互补模式: {mode}")  # 输出: True

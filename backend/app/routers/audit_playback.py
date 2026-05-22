@@ -12,17 +12,13 @@ import json
 import logging
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends, Request
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services.audit_chain import verify_chain, get_chain_stats, GENESIS_HASH
-from app.db.database import _get_conn, _db_path
-from app.config.settings import get_settings
-from app.utils.ip_validation import get_client_ip_safe
+from app.db.database import _get_conn
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
@@ -56,14 +52,14 @@ def _get_audit_records_by_timestamp(
         WHERE timestamp >= ? AND timestamp <= ?
         ORDER BY timestamp ASC
     """, (from_ts, to_ts))
-    
+
     records = []
     for row in cursor.fetchall():
         try:
             details = json.loads(row[4]) if row[4] else {}
         except json.JSONDecodeError:
             details = {}
-        
+
         records.append({
             "id": row[0],
             "timestamp": row[1],
@@ -75,30 +71,30 @@ def _get_audit_records_by_timestamp(
             "record_hash": row[6],
             "chain_index": row[7]
         })
-    
+
     return records
 
 
 def _extract_config_changes(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     changes = []
-    
+
     for record in records:
         details = record.get("details", {})
         before_state = details.get("before_state")
         after_state = details.get("after_state")
-        
+
         if before_state is None and after_state is None:
             continue
-        
+
         if before_state is None:
             change_type = "created"
         elif after_state is None:
             change_type = "deleted"
         else:
             change_type = "modified"
-        
+
         field_changes = []
-        
+
         if before_state and after_state:
             all_keys = set(before_state.keys()) | set(after_state.keys())
             for key in all_keys:
@@ -124,7 +120,7 @@ def _extract_config_changes(records: List[Dict[str, Any]]) -> List[Dict[str, Any
                     "old_value": val,
                     "new_value": None
                 })
-        
+
         if field_changes:
             changes.append({
                 "timestamp": record["timestamp"],
@@ -135,7 +131,7 @@ def _extract_config_changes(records: List[Dict[str, Any]]) -> List[Dict[str, Any
                 "fields": field_changes,
                 "record_id": record["id"]
             })
-    
+
     return changes
 
 
@@ -154,7 +150,7 @@ async def get_config_diff(
     - new_value: value after change
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_get_diff():
         conn = _get_conn()
         try:
@@ -164,9 +160,9 @@ async def get_config_diff(
             return changes
         finally:
             conn.close()
-    
+
     changes = await loop.run_in_executor(_executor, _sync_get_diff)
-    
+
     return {
         "code": 0,
         "data": {
@@ -190,7 +186,7 @@ async def get_audit_timeline(
     Returns list of timestamps with action summaries.
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_get_timeline():
         conn = _get_conn()
         try:
@@ -209,7 +205,7 @@ async def get_audit_timeline(
                     ORDER BY timestamp DESC
                     LIMIT ?
                 """, (limit,))
-            
+
             timeline = []
             for row in cursor.fetchall():
                 timeline.append({
@@ -219,14 +215,14 @@ async def get_audit_timeline(
                     "action": row[3],
                     "resource": row[4]
                 })
-            
+
             conn.close()
             return timeline
         finally:
             conn.close()
-    
+
     timeline = await loop.run_in_executor(_executor, _sync_get_timeline)
-    
+
     return {
         "code": 0,
         "data": {
@@ -252,14 +248,14 @@ async def rollback_config(body: RollbackRequest):
             status_code=400,
             detail="Rollback requires confirm=true. This is a destructive operation."
         )
-    
+
     loop = asyncio.get_event_loop()
-    
+
     def _sync_verify_and_rollback():
         conn = _get_conn()
         try:
             verification = verify_chain()
-            
+
             if not verification.get("valid"):
                 conn.close()
                 return {
@@ -267,7 +263,7 @@ async def rollback_config(body: RollbackRequest):
                     "error": f"Hash chain verification failed: {verification.get('error_type')}",
                     "verification": verification
                 }
-            
+
             cursor = conn.execute("""
                 SELECT id, timestamp, details, record_hash, chain_index
                 FROM audit_logs
@@ -275,28 +271,28 @@ async def rollback_config(body: RollbackRequest):
                 ORDER BY timestamp DESC
                 LIMIT 1
             """, (body.timestamp,))
-            
+
             target_record = cursor.fetchone()
-            
+
             if not target_record:
                 conn.close()
                 return {
                     "success": False,
                     "error": f"No audit record found at or before {body.timestamp}"
                 }
-            
+
             target_details = json.loads(target_record[2]) if target_record[2] else {}
             after_state = target_details.get("after_state", {})
-            
+
             if not after_state:
                 conn.close()
                 return {
                     "success": False,
                     "error": "Target record has no after_state to restore"
                 }
-            
+
             conn.close()
-            
+
             return {
                 "success": True,
                 "target_timestamp": target_record[1],
@@ -306,14 +302,14 @@ async def rollback_config(body: RollbackRequest):
             }
         finally:
             conn.close()
-    
+
     result = await loop.run_in_executor(_executor, _sync_verify_and_rollback)
-    
+
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error"))
-    
+
     logger.warning(f"[AuditPlayback] Rollback executed to {body.timestamp}")
-    
+
     return {
         "code": 0,
         "message": f"配置已回滚至 {result['target_timestamp']}",
@@ -336,9 +332,9 @@ async def verify_hash_chain(
     - first_invalid_id: Optional[int] - ID of first invalid record (if any)
     """
     result = verify_chain(from_id, to_id)
-    
+
     stats = get_chain_stats()
-    
+
     return {
         "code": 0,
         "data": {
@@ -365,7 +361,7 @@ async def get_audit_record(record_id: int):
     Get a single audit record by ID.
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_get_record():
         conn = _get_conn()
         try:
@@ -375,18 +371,18 @@ async def get_audit_record(record_id: int):
                 FROM audit_logs
                 WHERE id = ?
             """, (record_id,))
-            
+
             row = cursor.fetchone()
             conn.close()
-            
+
             if not row:
                 return None
-            
+
             try:
                 details = json.loads(row[5]) if row[5] else {}
             except json.JSONDecodeError:
                 details = {}
-            
+
             return {
                 "id": row[0],
                 "timestamp": row[1],
@@ -402,12 +398,12 @@ async def get_audit_record(record_id: int):
             }
         finally:
             conn.close()
-    
+
     record = await loop.run_in_executor(_executor, _sync_get_record)
-    
+
     if not record:
         raise HTTPException(status_code=404, detail=f"Record {record_id} not found")
-    
+
     return {
         "code": 0,
         "data": record
@@ -421,7 +417,7 @@ async def get_audit_stats():
     Get audit chain statistics.
     """
     stats = get_chain_stats()
-    
+
     return {
         "code": 0,
         "data": stats

@@ -88,37 +88,37 @@ def fetch_all_stocks_sina(
     if _SINA_STOCK_CB.state == CircuitState.OPEN:
         logger.warning("[SinaStockFetcher] Circuit breaker OPEN, skipping fetch")
         return []
-    
+
     all_stocks = []
     proxies = _get_proxies()
     nodes = ["sh_a", "sz_a"]
-    
+
     for node in nodes:
         for page in range(1, max_pages + 1):
             try:
                 url = f"{_SINA_API_URL}?page={page}&num={page_size}&sort=symbol&asc=1&node={node}&_s_r_a=page"
-                
+
                 if HAS_CURL_CFFI:
                     response = curl_requests.get(
                         url, timeout=timeout, impersonate="chrome120", proxies=proxies
                     )
                 else:
                     response = curl_requests.get(url, timeout=timeout, proxies=proxies)
-                
+
                 if response.status_code != 200:
                     logger.warning(f"[SinaStockFetcher] {node} page {page}: {response.status_code}")
                     break
-                
+
                 data = json.loads(response.text)
                 if not data or not isinstance(data, list):
                     logger.info(f"[SinaStockFetcher] {node} page {page} empty")
                     break
-                
+
                 for item in data:
                     symbol = item.get("symbol", "")
                     if exclude_bj and symbol.startswith("bj"):
                         continue
-                    
+
                     all_stocks.append({
                         "symbol": symbol,
                         "code": item.get("code", ""),
@@ -135,27 +135,27 @@ def fetch_all_stocks_sina(
                         "pb": _safe_float(item.get("pb")) if item.get("pb") not in ("", None, "-", "--") else None,
                         "turnover": _safe_float(item.get("turnoverratio")),
                     })
-                
+
                 logger.debug(f"[SinaStockFetcher] {node} page {page}: +{len(data)}, total {len(all_stocks)}")
-                
+
                 if len(data) < page_size:
                     logger.info(f"[SinaStockFetcher] {node} last page at {page}")
                     break
-                
+
                 if delay > 0 and page < max_pages:
                     time.sleep(delay)
-                    
+
             except Exception as e:
                 logger.error(f"[SinaStockFetcher] {node} page {page} failed: {e}", exc_info=True)
                 continue
-    
+
     if len(all_stocks) > 100:
         _SINA_STOCK_CB.record_success()
         logger.info(f"[SinaStockFetcher] Fetched {len(all_stocks)} stocks")
     else:
         _SINA_STOCK_CB.record_failure()
         logger.warning(f"[SinaStockFetcher] Only {len(all_stocks)} stocks, recording failure")
-    
+
     return all_stocks
 
 

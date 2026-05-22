@@ -45,14 +45,14 @@ class SessionCreateRequest(BaseModel):
     initial_capital: float = Field(1000000, ge=1000, le=1e9, description="Initial capital")
     speed: int = Field(1, ge=1, le=100, description="Bars per second during playback")
     interval: str = Field("daily", description="K-line interval: daily or minute")
-    
+
     @field_validator('symbol')
     @classmethod
     def validate_symbol(cls, v):
         if not v:
             raise ValueError('symbol is required')
         return v.lower()
-    
+
     @field_validator('start_date', 'end_date')
     @classmethod
     def validate_date(cls, v):
@@ -83,7 +83,7 @@ class TradeRequest(BaseModel):
     action: str = Field(..., description="buy or sell")
     quantity: float = Field(..., gt=0, description="Number of shares")
     price: Optional[float] = Field(None, ge=0, description="Execution price (null = market)")
-    
+
     @field_validator('action')
     @classmethod
     def validate_action(cls, v):
@@ -101,9 +101,9 @@ class TimeMachineSession:
     - Playback state
     - Paper trading portfolio
     """
-    
+
     SESSION_TTL = 1800  # 30 minutes
-    
+
     def __init__(
         self,
         session_id: str,
@@ -121,7 +121,7 @@ class TimeMachineSession:
         self.initial_capital = initial_capital
         self.speed = speed
         self.interval = interval
-        
+
         self.bars: List[Bar] = []
         self.current_bar_index = 0
         self.status = SessionStatus.CREATED
@@ -129,39 +129,39 @@ class TimeMachineSession:
         self.engine: Optional[PlaybackEngine] = None
         self.last_activity = datetime.now()
         self._playback_task: Optional[asyncio.Task] = None
-    
+
     def touch(self):
         """Update last activity timestamp."""
         self.last_activity = datetime.now()
-    
+
     def is_expired(self) -> bool:
         """Check if session has expired."""
         return (datetime.now() - self.last_activity).total_seconds() > self.SESSION_TTL
-    
+
     def current_bar(self) -> Optional[Bar]:
         """Get current bar."""
         if 0 <= self.current_bar_index < len(self.bars):
             return self.bars[self.current_bar_index]
         return None
-    
+
     def current_price(self) -> float:
         """Get current close price."""
         bar = self.current_bar()
         return bar.close if bar else 0.0
-    
+
     def current_date(self) -> str:
         """Get current date string."""
         bar = self.current_bar()
         return bar.date if bar else ""
-    
+
     def is_finished(self) -> bool:
         """Check if playback has reached the end."""
         return self.current_bar_index >= len(self.bars) - 1
-    
+
     def to_dict(self, include_bars: bool = False) -> Dict[str, Any]:
         """Serialize session state."""
         current_prices = {self.symbol: self.current_price()}
-        
+
         result = {
             "session_id": self.session_id,
             "symbol": self.symbol,
@@ -176,7 +176,7 @@ class TimeMachineSession:
             "portfolio": self.portfolio.to_dict(current_prices),
             "is_finished": self.is_finished(),
         }
-        
+
         # Include bars data for session creation response
         if include_bars:
             result["bars"] = [
@@ -192,24 +192,24 @@ class TimeMachineSession:
                 }
                 for b in self.bars
             ]
-        
+
         return result
 
 
 class SessionManager:
     """Manages time-machine sessions with TTL cleanup."""
-    
+
     _instance = None
     _lock = Lock()
     _sessions: Dict[str, TimeMachineSession] = {}
     _cleanup_task: Optional[asyncio.Task] = None
-    
+
     def __new__(cls):
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def create_session(
         self,
         symbol: str,
@@ -221,7 +221,7 @@ class SessionManager:
     ) -> TimeMachineSession:
         """Create a new session."""
         session_id = f"tm_{uuid.uuid4().hex[:8]}"
-        
+
         session = TimeMachineSession(
             session_id=session_id,
             symbol=symbol,
@@ -231,14 +231,14 @@ class SessionManager:
             speed=speed,
             interval=interval
         )
-        
+
         self._sessions[session_id] = session
         return session
-    
+
     def get_session(self, session_id: str) -> Optional[TimeMachineSession]:
         """Get session by ID."""
         return self._sessions.get(session_id)
-    
+
     def delete_session(self, session_id: str) -> bool:
         """Delete a session."""
         if session_id in self._sessions:
@@ -248,7 +248,7 @@ class SessionManager:
             del self._sessions[session_id]
             return True
         return False
-    
+
     def cleanup_expired(self):
         """Remove expired sessions."""
         expired = [sid for sid, s in self._sessions.items() if s.is_expired()]
@@ -281,18 +281,18 @@ async def get_history(
     """Get historical K-line data up to a date."""
     try:
         engine = DailyPlaybackEngine()
-        
+
         if not start_date:
             start_date = (date.today() - timedelta(days=365)).isoformat()
         if not end_date:
             end_date = date.today().isoformat()
-        
+
         bars = await engine.get_bars(
             symbol=symbol.lower(),
             start_date=date.fromisoformat(start_date),
             end_date=date.fromisoformat(end_date)
         )
-        
+
         return success_response({
             "symbol": symbol,
             "start_date": start_date,
@@ -313,7 +313,7 @@ async def get_history(
             ],
             "total": len(bars)
         })
-        
+
     except Exception as e:
         logger.error(f"[TimeMachine] Failed to get history for {symbol}: {e}", exc_info=True)
         return error_response(f"Failed to get history: {str(e)}")
@@ -325,7 +325,7 @@ async def create_session(request: SessionCreateRequest):
     """Create a new time-machine replay session."""
     try:
         _session_manager.cleanup_expired()
-        
+
         session = _session_manager.create_session(
             symbol=request.symbol,
             start_date=request.start_date,
@@ -334,29 +334,29 @@ async def create_session(request: SessionCreateRequest):
             speed=request.speed,
             interval=request.interval
         )
-        
+
         if request.interval == "daily":
             session.engine = DailyPlaybackEngine()
         else:
             raise HTTPException(400, "Minute-level playback not yet implemented")
-        
+
         session.bars = await session.engine.get_bars(
             symbol=request.symbol,
             start_date=date.fromisoformat(request.start_date),
             end_date=date.fromisoformat(request.end_date)
         )
-        
+
         if not session.bars:
             _session_manager.delete_session(session.session_id)
             return error_response("No data available for the specified date range")
-        
+
         session.status = SessionStatus.PAUSED
         session.current_bar_index = 0
-        
+
         logger.info(f"[TimeMachine] Created session {session.session_id} for {request.symbol}")
-        
+
         return success_response(session.to_dict(include_bars=True))
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -371,7 +371,7 @@ async def get_session(session_id: str):
     session = _session_manager.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found or expired")
-    
+
     session.touch()
     return success_response(session.to_dict())
 
@@ -383,24 +383,24 @@ async def play_pause(session_id: str, request: PlayRequest):
     session = _session_manager.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found or expired")
-    
+
     session.touch()
-    
+
     if request.action == "pause":
         if session._playback_task:
             session._playback_task.cancel()
             session._playback_task = None
         session.status = SessionStatus.PAUSED
         return success_response(session.to_dict())
-    
+
     if session.status == SessionStatus.PLAYING:
         return success_response(session.to_dict())
-    
+
     if session.is_finished():
         raise HTTPException(400, "Playback already finished")
-    
+
     session.status = SessionStatus.PLAYING
-    
+
     async def playback_loop():
         try:
             while session.status == SessionStatus.PLAYING and not session.is_finished():
@@ -411,9 +411,9 @@ async def play_pause(session_id: str, request: PlayRequest):
         finally:
             if session.status == SessionStatus.PLAYING:
                 session.status = SessionStatus.PAUSED
-    
+
     session._playback_task = asyncio.create_task(playback_loop())
-    
+
     return success_response(session.to_dict())
 
 
@@ -424,15 +424,15 @@ async def step_forward(session_id: str, request: StepRequest):
     session = _session_manager.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found or expired")
-    
+
     session.touch()
-    
+
     if session.status == SessionStatus.PLAYING:
         raise HTTPException(400, "Cannot step while playing. Pause first.")
-    
+
     new_index = min(session.current_bar_index + request.bars, len(session.bars) - 1)
     session.current_bar_index = new_index
-    
+
     return success_response(session.to_dict())
 
 
@@ -443,15 +443,15 @@ async def seek_to(session_id: str, request: SeekRequest):
     session = _session_manager.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found or expired")
-    
+
     session.touch()
-    
+
     if session.status == SessionStatus.PLAYING:
         raise HTTPException(400, "Cannot seek while playing. Pause first.")
-    
+
     max_bar = len(session.bars) - 1
     session.current_bar_index = max(0, min(request.target_bar, max_bar))
-    
+
     return success_response({
         "success": True,
         "current_bar": session.current_bar_index,
@@ -466,10 +466,10 @@ async def set_speed(session_id: str, request: SpeedRequest):
     session = _session_manager.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found or expired")
-    
+
     session.touch()
     session.speed = request.speed
-    
+
     return success_response({
         "success": True,
         "speed": session.speed
@@ -483,17 +483,17 @@ async def execute_trade(session_id: str, request: TradeRequest):
     session = _session_manager.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found or expired")
-    
+
     session.touch()
-    
+
     if session.status == SessionStatus.ENDED:
         raise HTTPException(400, "Session has ended")
-    
+
     price = request.price if request.price else session.current_price()
-    
+
     if price <= 0:
         raise HTTPException(400, "Cannot determine execution price")
-    
+
     try:
         trade = session.portfolio.execute_trade(
             action=request.action,
@@ -503,9 +503,9 @@ async def execute_trade(session_id: str, request: TradeRequest):
             current_date=session.current_date(),
             current_bar_index=session.current_bar_index
         )
-        
+
         logger.info(f"[TimeMachine] Trade executed: {trade.action.value} {trade.quantity} @ {trade.price}")
-        
+
         return success_response({
             "success": True,
             "trade": {
@@ -520,7 +520,7 @@ async def execute_trade(session_id: str, request: TradeRequest):
             },
             "portfolio": session.portfolio.to_dict({session.symbol: session.current_price()})
         })
-        
+
     except PaperTradingError as e:
         raise HTTPException(400, str(e))
 
@@ -532,9 +532,9 @@ async def get_portfolio(session_id: str):
     session = _session_manager.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found or expired")
-    
+
     session.touch()
-    
+
     return success_response({
         "portfolio": session.portfolio.to_dict({session.symbol: session.current_price()}),
         "trades": session.portfolio.trades_to_dict()
@@ -548,10 +548,10 @@ async def end_session(session_id: str):
     session = _session_manager.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found or expired")
-    
+
     session.status = SessionStatus.ENDED
     _session_manager.delete_session(session_id)
-    
+
     logger.info(f"[TimeMachine] Session {session_id} ended")
-    
+
     return success_response({"message": "Session ended successfully"})

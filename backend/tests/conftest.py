@@ -3,12 +3,10 @@ Pytest configuration and shared fixtures for AlphaTerminal backend tests.
 """
 import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from typing import Generator
+from unittest.mock import Mock
 import sys
 import os
 import tempfile
-import sqlite3
 
 # Disable rate limiting for all tests
 os.environ["RATE_LIMIT_ENABLED"] = "false"
@@ -29,7 +27,7 @@ def proxy_available():
 def pytest_collection_modifyitems(config, items):
     """Auto-skip proxy-dependent tests when proxy unavailable."""
     skip_proxy = pytest.mark.skip(reason="Proxy required but not available (set HTTP_PROXY or HTTPS_PROXY)")
-    
+
     for item in items:
         if "proxy" in item.keywords and not PROXY_AVAILABLE:
             item.add_marker(skip_proxy)
@@ -49,17 +47,17 @@ def test_db_path():
     # Create temp database file
     fd, path = tempfile.mkstemp(suffix='.db')
     os.close(fd)
-    
+
     # Initialize tables
     from app.db.database import init_tables
     import app.db.database as db_module
-    
+
     # Save original path
     original_path = db_module._db_path
-    
+
     # Set test database path
     db_module._db_path = path
-    
+
     try:
         init_tables()
         yield path
@@ -151,7 +149,7 @@ def sample_agent_token():
     """Create sample agent token for testing."""
     from datetime import datetime, timedelta
     from app.services.agent.token_service import AgentToken, TokenScope
-    
+
     return AgentToken(
         id="test-token-id",
         name="test-agent",
@@ -175,7 +173,7 @@ def restricted_agent_token():
     """Create token with restricted markets."""
     from datetime import datetime, timedelta
     from app.services.agent.token_service import AgentToken, TokenScope
-    
+
     return AgentToken(
         id="restricted-token-id",
         name="restricted-agent",

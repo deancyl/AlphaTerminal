@@ -13,7 +13,7 @@
 """
 
 from collections import deque
-from typing import Dict, List, Optional
+from typing import Dict, List
 import time
 import logging
 
@@ -28,7 +28,7 @@ class TickBuffer:
     - 客户端重连时发送last_seq
     - 服务端返回last_seq之后的所有tick
     """
-    
+
     def __init__(self, max_size: int = 1000):
         """
         初始化缓冲区
@@ -41,7 +41,7 @@ class TickBuffer:
         self._buffers: Dict[str, deque] = {}
         self._seq_counter = 0
         self._lock = None  # 异步锁，在需要时初始化
-    
+
     def push(self, symbol: str, tick: dict) -> int:
         """
         推送tick到缓冲区
@@ -55,18 +55,18 @@ class TickBuffer:
         """
         if symbol not in self._buffers:
             self._buffers[symbol] = deque(maxlen=self.max_size)
-        
+
         self._seq_counter += 1
         seq = self._seq_counter
-        
+
         self._buffers[symbol].append({
             'seq': seq,
             'tick': tick,
             'timestamp': time.time()
         })
-        
+
         return seq
-    
+
     def get_since(self, symbol: str, last_seq: int) -> List[dict]:
         """
         获取指定序列号之后的所有tick
@@ -80,16 +80,16 @@ class TickBuffer:
         """
         if symbol not in self._buffers:
             return []
-        
+
         buffer = self._buffers[symbol]
         result = []
-        
+
         for item in buffer:
             if item['seq'] > last_seq:
                 result.append(item)
-        
+
         return result
-    
+
     def get_latest_seq(self, symbol: str) -> int:
         """
         获取指定symbol的最新序列号
@@ -103,7 +103,7 @@ class TickBuffer:
         if symbol not in self._buffers or not self._buffers[symbol]:
             return 0
         return self._buffers[symbol][-1]['seq']
-    
+
     def get_global_latest_seq(self) -> int:
         """
         获取全局最新序列号
@@ -112,7 +112,7 @@ class TickBuffer:
             全局最新序列号
         """
         return self._seq_counter
-    
+
     def clear_symbol(self, symbol: str):
         """
         清除指定symbol的缓冲区
@@ -122,11 +122,11 @@ class TickBuffer:
         """
         if symbol in self._buffers:
             del self._buffers[symbol]
-    
+
     def clear_all(self):
         """清空所有缓冲区"""
         self._buffers.clear()
-    
+
     def get_stats(self) -> dict:
         """
         获取缓冲区统计信息
@@ -135,14 +135,14 @@ class TickBuffer:
             统计信息字典
         """
         total_ticks = sum(len(buf) for buf in self._buffers.values())
-        
+
         return {
             'symbols': len(self._buffers),
             'total_ticks': total_ticks,
             'max_size': self.max_size,
             'global_seq': self._seq_counter
         }
-    
+
     def cleanup_old_ticks(self, max_age_seconds: int = 3600):
         """
         清理过期的tick数据
@@ -155,25 +155,25 @@ class TickBuffer:
         """
         now = time.time()
         cleaned = 0
-        
+
         for symbol, buffer in list(self._buffers.items()):
             # 由于deque不支持随机删除，我们重建buffer
             new_buffer = deque(maxlen=self.max_size)
-            
+
             for item in buffer:
                 if now - item['timestamp'] <= max_age_seconds:
                     new_buffer.append(item)
                 else:
                     cleaned += 1
-            
+
             if new_buffer:
                 self._buffers[symbol] = new_buffer
             else:
                 del self._buffers[symbol]
-        
+
         if cleaned > 0:
             logger.info(f"[TickBuffer] Cleaned {cleaned} old ticks")
-        
+
         return cleaned
 
 

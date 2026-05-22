@@ -9,7 +9,7 @@ import json
 import logging
 import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.services.ws_manager import ws_manager, WSConnection, PING_INTERVAL, PONG_TIMEOUT
+from app.services.ws_manager import ws_manager, PING_INTERVAL, PONG_TIMEOUT
 from app.services.tick_buffer import tick_buffer
 from app.config.settings import get_settings
 from app.utils.error_decorator import handle_errors
@@ -22,20 +22,20 @@ def validate_origin(origin: str) -> bool:
     """Validate WebSocket connection origin against allowed origins."""
     if not origin:
         return False
-    
+
     settings = get_settings()
     allowed_origins = settings.get_allowed_origins_list()
-    
+
     if allowed_origins == ["*"]:
         return True
-    
+
     origin_lower = origin.lower()
     for allowed in allowed_origins:
         if allowed.lower() == origin_lower:
             return True
         if allowed.endswith("*") and origin_lower.startswith(allowed[:-1].lower()):
             return True
-    
+
     return False
 
 
@@ -82,7 +82,7 @@ async def ws_market(ws: WebSocket):
         logger.warning(f"WebSocket connection rejected from invalid origin: {origin}")
         await ws.close(code=1008, reason="Invalid origin")
         return
-    
+
     await ws.accept()
 
     conn = await ws_manager.connect(ws)
@@ -129,16 +129,16 @@ async def ws_market(ws: WebSocket):
             # 断连恢复：发送缺失的 tick
             recover_symbols = msg.get("symbols", [])
             total_recovered = 0
-            
+
             for item in recover_symbols:
                 symbol = item.get("symbol", "")
                 last_seq = item.get("last_seq", 0)
-                
+
                 if not symbol:
                     continue
-                
+
                 missed_ticks = tick_buffer.get_since(symbol, last_seq)
-                
+
                 for tick_item in missed_ticks:
                     recovered_tick = {
                         **tick_item['tick'],
@@ -147,10 +147,10 @@ async def ws_market(ws: WebSocket):
                     }
                     await send_json(recovered_tick)
                     total_recovered += 1
-            
+
             if total_recovered > 0:
                 logger.info(f"[WS] Recovered {total_recovered} ticks for {len(recover_symbols)} symbols")
-            
+
             # 发送恢复完成确认
             await send_json({
                 "type": "recovery_complete",

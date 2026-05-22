@@ -6,8 +6,8 @@ import logging
 import time
 from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import Optional, List, Dict
-from app.services.fetcher_factory import FetcherFactory, get_market_fetcher
+from typing import Optional, List
+from app.services.fetcher_factory import FetcherFactory
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
@@ -43,13 +43,13 @@ async def list_data_sources():
         fetchers = FetcherFactory.list_fetchers()
         current = FetcherFactory.get_current_name()
         proxy = FetcherFactory.get_proxy()
-        
+
         fetcher_list = []
         for name in fetchers:
             info = FetcherFactory.get_fetcher_info(name)
             if info:
                 fetcher_list.append(info)
-        
+
         return {
             "code": 0,
             "message": "success",
@@ -93,15 +93,15 @@ async def health_check_source(name: Optional[str] = None):
     try:
         target = name or FetcherFactory.get_current_name()
         fetcher = FetcherFactory.get_fetcher(target)
-        
+
         if not fetcher:
             return {"code": 404, "message": f"数据源 {target} 不存在"}
-        
+
         # 测试抓取上证指数
         start = time.time()
         healthy = await fetcher.ping()
         latency = (time.time() - start) * 1000 if healthy else None
-        
+
         return {
             "code": 0,
             "message": "success",
@@ -124,10 +124,10 @@ async def get_source_status():
         current = FetcherFactory.get_current_name()
         proxy = FetcherFactory.get_proxy()
         available = FetcherFactory.list_fetchers()
-        
+
         # Get circuit breaker stats for all sources
         all_stats = FetcherFactory.get_all_stats()
-        
+
         return {
             "code": 0,
             "message": "success",

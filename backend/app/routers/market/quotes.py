@@ -5,7 +5,7 @@ import logging
 import re
 import time
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, HTTPException
 import httpx
 
 from app.db import get_latest_prices, get_price_history, get_daily_history
@@ -53,18 +53,18 @@ def _validate_symbol(symbol: str) -> str:
     """
     if not symbol:
         raise HTTPException(status_code=400, detail="Symbol is required")
-    
+
     s = symbol.strip()
-    
+
     if len(s) > 20:
         raise HTTPException(status_code=400, detail=f"Symbol too long: {len(s)} chars (max 20)")
-    
+
     if not SYMBOL_PATTERN.match(s):
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Invalid symbol format: '{symbol}'. Expected format: [sh|sz|hk|us|jp][0-9A-Z]{{1,10}}"
         )
-    
+
     return _normalize_symbol(s)
 
 
@@ -94,7 +94,7 @@ def _calculate_freshness_seconds(timestamp_str: str) -> int:
     """Calculate seconds since data was captured."""
     if not timestamp_str:
         return -1  # Unknown
-    
+
     try:
         for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y-%m-%dT%H:%M:%S']:
             try:
@@ -116,7 +116,7 @@ async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
     if not akshare_breaker.is_available():
         logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fallback for {symbol}")
         return []
-    
+
     # Map symbol to AkShare format
     ak_symbol_map = {
         "000001": "sh000001", "000300": "sh000300", "399001": "sz399001",
@@ -133,15 +133,15 @@ async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
         else:
             logger.warning(f"[AkShare] No mapping for symbol: {symbol}")
             return []
-    
+
     try:
         import akshare as ak
         with akshare_breaker:
             df = ak.stock_zh_index_daily(symbol=ak_sym) if symbol in ak_symbol_map else ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
-        
+
         if df is None or df.empty:
             return []
-        
+
         # AkShare returns columns: ['date', 'open', 'high', 'low', 'close', 'volume']
         date_col = df.columns[0]
         rows = []
@@ -178,12 +178,12 @@ async def market_quote(symbol: str):
     norm = _validate_symbol(symbol)
     cache = _get_cache()
     cache_key = f"quote:{norm}"
-    
+
     cached = cache.get(cache_key)
     if cached:
         logger.debug(f"[Cache] Hit: {cache_key}")
         return success_response(cached)
-    
+
     rows = get_price_history(_unprefix(norm), limit=2)
     if not rows:
         return success_response(None, 'no data')
@@ -193,9 +193,9 @@ async def market_quote(symbol: str):
     prev_c = float(prev.get('close') or close)
     chg    = close - prev_c
     chg_pct = _safe_divide(chg, prev_c) * 100 if prev_c else 0.0
-    
+
     data_timestamp = latest.get('timestamp') or latest.get('updated_at') or latest.get('date')
-    
+
     result = {
         'symbol': norm,
         'price': close,
@@ -208,9 +208,9 @@ async def market_quote(symbol: str):
         'timestamp': data_timestamp,
         'response_time': datetime.now().isoformat(),
     }
-    
+
     cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE)
-    
+
     return success_response(result)
 
 
@@ -253,7 +253,7 @@ async def market_quote_detail(symbol: str):
     norm = _validate_symbol(symbol)
     cache = _get_cache()
     cache_key = f"quote_detail:{norm}"
-    
+
     cached = cache.get(cache_key)
     if cached:
         logger.debug(f"[Cache] Hit: {cache_key}")
@@ -275,7 +275,7 @@ async def market_quote_detail(symbol: str):
     # ── 历史 K 线（单次查询，复用于 OHLC/振幅/收益率/52周高低）──────────────────
     _HIST_LIMIT = 400
     hist_all = get_daily_history(db_sym, limit=_HIST_LIMIT, offset=0) if callable(get_daily_history) else []
-    
+
     if not hist_all:
         hist_all = await _fetch_history_fallback(db_sym, limit=_HIST_LIMIT)
 
@@ -409,9 +409,9 @@ async def market_quote_detail(symbol: str):
         "response_time": datetime.now().isoformat(),
         "data_freshness_seconds": _calculate_freshness_seconds(latest_row.get('date') or ''),
     }
-    
+
     cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE_DETAIL)
-    
+
     return success_response(result)
 
 
@@ -585,9 +585,9 @@ async def get_stock_fund_flow(symbol: str):
     """
     import asyncio
     import akshare as ak
-    
+
     norm = _validate_symbol(symbol)
-    
+
     # 检查熔断器状态
     if not akshare_breaker.is_available():
         logger.warning(f"[StockFundFlow] Circuit breaker OPEN, skipping for {norm}")
@@ -596,10 +596,10 @@ async def get_stock_fund_flow(symbol: str):
             "total": 0,
             "source": "circuit_breaker_open"
         })
-    
+
     # 转换为 akshare 格式 (去掉 sh/sz 前缀)
     ak_symbol = _unprefix(norm)
-    
+
     try:
         # 使用线程池执行 + 10秒超时保护
         with akshare_breaker:
@@ -607,7 +607,7 @@ async def get_stock_fund_flow(symbol: str):
                 asyncio.to_thread(ak.stock_individual_fund_flow, stock=ak_symbol),
                 timeout=10.0
             )
-        
+
         if df is None or df.empty:
             logger.warning(f"[StockFundFlow] Empty data for {ak_symbol}")
             return success_response({
@@ -615,38 +615,38 @@ async def get_stock_fund_flow(symbol: str):
                 "total": 0,
                 "source": "akshare"
             })
-        
+
         # 取最近30条数据
         df = df.tail(30)
-        
+
         # 向量化处理
         df_work = df.copy()
-        
+
         # 列名映射 (东方财富格式)
         df_work['date'] = df_work['日期'].astype(str)
         df_work['close'] = df_work['收盘价'].apply(lambda x: float(x) if x else 0)
         df_work['change_pct'] = df_work['涨跌幅'].apply(lambda x: float(x) if x else 0)
-        
+
         # 主力资金
         df_work['main_net_in'] = df_work['主力净流入-净额'].apply(lambda x: float(x) if x else 0)
         df_work['main_net_out'] = df_work['主力净流入-净占比'].apply(lambda x: float(x) if x else 0)
-        
+
         # 超大单
         df_work['huge_net_in'] = df_work['超大单净流入-净额'].apply(lambda x: float(x) if x else 0)
         df_work['huge_net_out'] = df_work['超大单净流入-净占比'].apply(lambda x: float(x) if x else 0)
-        
+
         # 大单
         df_work['big_net_in'] = df_work['大单净流入-净额'].apply(lambda x: float(x) if x else 0)
         df_work['big_net_out'] = df_work['大单净流入-净占比'].apply(lambda x: float(x) if x else 0)
-        
+
         # 中单
         df_work['medium_net_in'] = df_work['中单净流入-净额'].apply(lambda x: float(x) if x else 0)
         df_work['medium_net_out'] = df_work['中单净流入-净占比'].apply(lambda x: float(x) if x else 0)
-        
+
         # 小单
         df_work['small_net_in'] = df_work['小单净流入-净额'].apply(lambda x: float(x) if x else 0)
         df_work['small_net_out'] = df_work['小单净流入-净占比'].apply(lambda x: float(x) if x else 0)
-        
+
         # 选择输出列
         result = df_work[[
             'date', 'close', 'change_pct',
@@ -656,16 +656,16 @@ async def get_stock_fund_flow(symbol: str):
             'medium_net_in', 'medium_net_out',
             'small_net_in', 'small_net_out'
         ]].to_dict('records')
-        
+
         logger.info(f"[StockFundFlow] Fetched {len(result)} records for {ak_symbol}")
-        
+
         return success_response({
             "items": result,
             "total": len(result),
             "symbol": norm,
             "source": "akshare"
         })
-        
+
     except asyncio.TimeoutError:
         logger.error(f"[StockFundFlow] Timeout after 10s for {ak_symbol}", exc_info=True)
         return error_response(504, "数据获取超时，请稍后重试")

@@ -3,15 +3,12 @@
 """
 import asyncio
 import logging
-from typing import Optional, List, Dict, Any
-from datetime import datetime
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import httpx
 import akshare as ak
-from functools import lru_cache
-import json
 from app.services.data_cache import get_cache
 from app.services.model_config_service import get_model_config_service
 from app.utils.error_decorator import handle_errors
@@ -143,11 +140,11 @@ def _fetch_reports_sync(symbol: str, page: int = 1, page_size: int = 20, keyword
     try:
         # 使用 akshare 获取研报数据
         df = ak.stock_research_report_em(symbol=symbol)
-        
+
         if df is None or df.empty:
             logger.warning(f"No research data for {symbol}")
             return {"total": 0, "items": [], "is_fallback": True}
-        
+
         # 数据映射（akshare 列名为中文）
         items = []
         for _, row in df.iterrows():
@@ -159,33 +156,33 @@ def _fetch_reports_sync(symbol: str, page: int = 1, page_size: int = 20, keyword
                 "url": str(row.get("报告PDF链接", "")) if row.get("报告PDF链接") else None,
                 "category": _classify_report(str(row.get("报告名称", ""))),
             }
-            
+
             # 关键词过滤
             if keyword and keyword.lower() not in item["title"].lower():
                 continue
-            
+
             # 机构过滤
             if institution and institution != item["institution"]:
                 continue
-            
+
             # 分类过滤
             if category and category != item["category"]:
                 continue
-            
+
             items.append(item)
-        
+
         # 分页
         total = len(items)
         start = (page - 1) * page_size
         end = start + page_size
         paginated_items = items[start:end]
-        
+
         return {
             "total": total,
             "items": paginated_items,
             "is_fallback": False,
         }
-        
+
     except Exception as e:
         logger.error(f"Error fetching research data for {symbol}: {e}", exc_info=True)
         filtered_fallback = FALLBACK_RESEARCH_DATA
@@ -206,7 +203,7 @@ async def get_reports(
 ):
     """获取研报列表"""
     cache_key = f"{NAMESPACE}{symbol}_{keyword}_{institution}_{category}"
-    
+
     cached = _cache.get(cache_key)
     if cached is not None:
         data = cached
@@ -222,17 +219,17 @@ async def get_reports(
                 "is_fallback": data.get("is_fallback", False),
             }
         }
-    
+
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, _fetch_reports_sync, symbol, 1, 1000, keyword, institution, category)
-    
+
     _cache.set(cache_key, data, ttl=TTL)
-    
+
     total = data["total"]
     start = (page - 1) * page_size
     end = start + page_size
     items = data["items"][start:end] if not data.get("is_fallback") else data["items"]
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -251,7 +248,7 @@ async def get_statistics(symbol: str = Query(..., description="股票代码")):
     # 获取所有研报
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, _fetch_reports_sync, symbol, 1, 1000, "", "")
-    
+
     if data.get("is_fallback"):
         return {
             "code": 0,
@@ -262,20 +259,20 @@ async def get_statistics(symbol: str = Query(..., description="股票代码")):
                 "ratings": {"买入": 5, "增持": 3, "推荐": 2},
             }
         }
-    
+
     items = data["items"]
-    
+
     # 统计机构
     institutions: Dict[str, int] = {}
     ratings: Dict[str, int] = {}
-    
+
     for item in items:
         inst = item.get("institution", "未知")
         institutions[inst] = institutions.get(inst, 0) + 1
-        
+
         rating = item.get("rating", "未评级")
         ratings[rating] = ratings.get(rating, 0) + 1
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -316,15 +313,15 @@ async def proxy_pdf(url: str = Query(..., description="PDF URL")):
                 },
                 follow_redirects=True,
             )
-            
+
             if response.status_code != 200:
                 raise HTTPException(status_code=response.status_code, detail="Failed to fetch PDF")
-            
+
             return StreamingResponse(
                 iter([response.content]),
                 media_type="application/pdf",
                 headers={
-                    "Content-Disposition": f"inline; filename=research_report.pdf",
+                    "Content-Disposition": "inline; filename=research_report.pdf",
                     "Cache-Control": "no-cache",
                 }
             )
@@ -358,26 +355,26 @@ async def summarize_report(request: SummarizeRequest):
     """使用LLM总结研报核心观点 - 支持大文本分块处理"""
     model_svc = get_model_config_service()
     model = model_svc.get_model("openai") or model_svc.get_model("deepseek")
-    
+
     if not model or not model.api_key:
         return {
             "code": 1,
             "message": "LLM服务未配置，请检查API Key设置",
             "data": {"summary": None}
         }
-    
+
     base_url = (model.base_url or "https://api.openai.com/v1").rstrip("/")
     url = f"{base_url}/chat/completions"
-    
+
     # Text chunking for large documents (MapReduce style)
     MAX_CHUNK_SIZE = 3000  # Characters per chunk (approx 1000 tokens)
     MAX_TOTAL_SIZE = 50000  # Maximum total content size
-    
+
     content = request.content or ""
     if len(content) > MAX_TOTAL_SIZE:
         content = content[:MAX_TOTAL_SIZE]
         logger.info(f"[Research] Content truncated to {MAX_TOTAL_SIZE} chars")
-    
+
     # Split content into chunks if too large
     chunks = []
     if len(content) > MAX_CHUNK_SIZE:
@@ -396,7 +393,7 @@ async def summarize_report(request: SummarizeRequest):
         logger.info(f"[Research] Split content into {len(chunks)} chunks")
     else:
         chunks = [content] if content else []
-    
+
     async def call_llm(prompt_text: str, max_tokens: int = 500) -> str:
         """Helper function to call LLM API"""
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -416,14 +413,14 @@ async def summarize_report(request: SummarizeRequest):
                     "temperature": 0.7,
                 }
             )
-            
+
             if response.status_code != 200:
                 logger.error(f"LLM API error: {response.status_code} - {response.text}")
                 raise Exception(f"LLM API error: {response.status_code}")
-            
+
             result = response.json()
             return result.get("choices", [{}])[0].get("message", {}).get("content", "")
-    
+
     try:
         # Map phase: Summarize each chunk
         chunk_summaries = []
@@ -436,14 +433,14 @@ async def summarize_report(request: SummarizeRequest):
 {chunk}
 
 请提炼2-3个关键要点，每个要点用一句话概括。"""
-            
+
             try:
                 chunk_summary = await call_llm(chunk_prompt, max_tokens=300)
                 chunk_summaries.append(chunk_summary)
             except Exception as e:
                 logger.warning(f"[Research] Chunk {i+1} summary failed: {e}")
                 # Continue with other chunks
-        
+
         # Reduce phase: Combine chunk summaries
         if len(chunk_summaries) > 1:
             combined_prompt = f"""请整合以下研报片段的总结，生成最终的核心观点总结：
@@ -459,7 +456,7 @@ async def summarize_report(request: SummarizeRequest):
 2. 去除重复内容
 3. 突出投资逻辑和风险提示
 4. 最终输出3-5个核心要点"""
-            
+
             final_summary = await call_llm(combined_prompt, max_tokens=500)
         elif len(chunk_summaries) == 1:
             final_summary = chunk_summaries[0]
@@ -472,9 +469,9 @@ async def summarize_report(request: SummarizeRequest):
 
 研报标题：{request.title}
 发布机构：{request.institution}"""
-            
+
             final_summary = await call_llm(title_prompt, max_tokens=500)
-        
+
         return {
             "code": 0,
             "message": "success",
@@ -485,7 +482,7 @@ async def summarize_report(request: SummarizeRequest):
                 "chunks_processed": len(chunk_summaries),
             }
         }
-        
+
     except httpx.TimeoutException:
         logger.error("LLM API timeout", exc_info=True)
         return {

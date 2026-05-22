@@ -118,11 +118,11 @@ async def list_positions(
                         LIMIT ? OFFSET ?""",
                     tuple(all_ids) + (limit, offset)
                 ).fetchall()
-                
+
                 positions = [{"id": f"{r[0]}_{r[1]}", "symbol": r[1], "shares": r[2],
                         "avg_cost": r[3], "marketValue": r[4] or (r[2] * r[3] if r[2] and r[3] else 0), "unrealized_pnl": r[5] or 0,
                         "cost": r[2] * r[3] if r[2] and r[3] else 0, "updated_at": r[6], "portfolio_name": r[7], "portfolio_id": r[0]} for r in rows]
-                
+
                 return success_response({
                     "positions": positions,
                     "pagination": {
@@ -150,11 +150,11 @@ async def list_positions(
                        LIMIT ? OFFSET ?""",
                     (portfolio_id, limit, offset)
                 ).fetchall()
-                
+
                 positions = [{"id": f"{r[0]}_{r[1]}", "symbol": r[1], "shares": r[2],
                         "avg_cost": r[3], "marketValue": r[4] or (r[2] * r[3] if r[2] and r[3] else 0), "unrealized_pnl": r[5] or 0,
                         "cost": r[2] * r[3] if r[2] and r[3] else 0, "updated_at": r[6], "portfolio_id": r[0]} for r in rows]
-                
+
                 return success_response({
                     "positions": positions,
                     "pagination": {
@@ -166,11 +166,11 @@ async def list_positions(
                 })
         finally:
             conn.close()
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_portfolio_executor, _sync_work)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -215,11 +215,11 @@ async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
             conn.commit()
             conn.close()
         return success_response({"ok": True, "action": "upserted"})
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_portfolio_executor, _sync_work)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -252,11 +252,11 @@ async def delete_position(portfolio_id: int, symbol: str, _: None = Depends(requ
             conn.commit()
             conn.close()
         return success_response({"ok": True})
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_portfolio_executor, _sync_work)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -340,7 +340,7 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 price_map[code[2:]] = s
                 price_map[code.lower()] = s
                 price_map[code.upper()] = s
-        
+
         db_price_loaded = False
         if not spot or len(spot) < 10:
             logger.info("[Portfolio PnL] SpotCache 为空，从数据库兜底获取价格")
@@ -368,12 +368,12 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 logger.warning(f"[Portfolio PnL] 价格数据格式错误: {e}", exc_info=True)
             except Exception as e:
                 logger.warning(f"[Portfolio PnL] 数据库兜底失败: {e}", exc_info=True)
-        
+
         result = []
         total_cost = 0.0
         total_value = 0.0
         missing_prices = []
-        
+
         for row in rows:
             if include_children:
                 symbol, shares, avg_cost, portfolio_name, portfolio_id_from_row = row
@@ -381,7 +381,7 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 symbol, shares, avg_cost = row
                 portfolio_name = None
                 portfolio_id_from_row = None
-                
+
             info = price_map.get(symbol, {})
             if not info and len(symbol) == 6:
                 if symbol.startswith("6"):
@@ -390,7 +390,7 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                     info = price_map.get(f"sz{symbol}", {})
                 elif symbol.startswith("4") or symbol.startswith("8"):
                     info = price_map.get(f"bj{symbol}", {})
-            
+
             if not info:
                 missing_prices.append(symbol)
             current_price = info.get("price", avg_cost)
@@ -438,7 +438,7 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             result.append(pos_data)
             total_cost  += cost_total
             total_value += market_value
-            
+
         for pos in result:
             pos["weight"] = round(pos["market_value"] / total_value * 100, 2) if total_value > 0 else 0.0
 
@@ -500,11 +500,11 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
         if include_children:
             response["includes_children"] = True
             response["portfolio_count"] = len(set(r.get("portfolio_id") for r in result if r.get("portfolio_id")))
-        
+
         if missing_prices:
             response["missing_price_count"] = len(missing_prices)
             response["missing_price_symbols"] = missing_prices[:10]
-        
+
         if db_price_loaded:
             response["price_data_source"] = "DatabaseFallback"
         elif spot:
@@ -512,12 +512,12 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
         response["price_data_count"] = len(spot) if spot else 0
 
         return response
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -571,12 +571,12 @@ async def get_snapshots(
                 for r in rows
             ]
         }
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -590,11 +590,11 @@ async def save_snapshot(portfolio_id: int, _: None = Depends(require_api_key)):
     """手动保存当日快照（供路由调用）"""
     def _sync_work():
         return _save_snapshot_impl(portfolio_id)
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_portfolio_executor, _sync_work)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -615,7 +615,7 @@ def _save_snapshot_impl(portfolio_id: int):
             "SELECT symbol, total_shares as shares, avg_cost FROM position_summary WHERE portfolio_id=? AND total_shares > 0",
             (portfolio_id,)
         ).fetchall()
-        
+
         if not rows:
             rows = conn.execute(
                 "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
@@ -703,12 +703,12 @@ async def daily_pnl_only(portfolio_id: int):
             }
         finally:
             conn.close()
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:

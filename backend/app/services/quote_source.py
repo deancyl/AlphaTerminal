@@ -14,7 +14,7 @@ import logging
 import os
 import time
 import httpx
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ def _parse_tencent_quote(symbol: str) -> dict | None:
     if not breaker.is_available():
         logger.warning(f"[Tencent] Circuit breaker OPEN, skipping {symbol}")
         return None
-    
+
     url = f"https://qt.gtimg.cn/q={symbol}"
     try:
         start = time.time()
@@ -170,7 +170,7 @@ def _parse_sina_quote(symbol: str) -> dict | None:
     if not breaker.is_available():
         logger.warning(f"[Sina] Circuit breaker OPEN, skipping {symbol}")
         return None
-    
+
     url = f"https://hq.sinajs.cn/list={symbol}"
     headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.sina.com.cn'}
     try:
@@ -208,7 +208,7 @@ def _parse_sina_kline_60min(symbol: str) -> dict | None:
     if not breaker.is_available():
         logger.warning(f"[SinaKline] Circuit breaker OPEN, skipping {symbol}")
         return None
-    
+
     url = f"http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={symbol}&scale=60&ma=no&datalen=100"
     try:
         start = time.time()
@@ -244,7 +244,7 @@ def _parse_eastmoney_quote(symbol: str) -> dict | None:
     if not breaker.is_available():
         logger.warning(f"[Eastmoney] Circuit breaker OPEN, skipping {symbol}")
         return None
-    
+
     if symbol.startswith('sh'):
         secid = '1.' + symbol[2:]
     elif symbol.startswith('sz'):
@@ -285,7 +285,7 @@ def _parse_tencent_hk_quote(symbol: str) -> dict | None:
     if not breaker.is_available():
         logger.warning(f"[Tencent HK] Circuit breaker OPEN, skipping {symbol}")
         return None
-    
+
     url = f"https://qt.gtimg.cn/q={symbol}"
     try:
         start = time.time()
@@ -323,7 +323,7 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
     if not breaker.is_available():
         logger.warning(f"[AlphaVantage] Circuit breaker OPEN, skipping {symbol}")
         return None
-    
+
     api_key = DATA_SOURCES.get("alpha_vantage", {}).get("api_key", "")
     if not api_key:
         logger.warning(f"[AlphaVantage] No API key configured, skipping {symbol}")
@@ -359,7 +359,6 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
         breaker.record_failure()
         return None
 
-    import json
     data = r.json()
     quote = data.get("Global Quote", {})
 
@@ -384,20 +383,20 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
 
 def get_quote_with_fallback(symbol: str) -> dict:
     global _current_source
-    
+
     if symbol.startswith('sh') or symbol.startswith('sz'):
         sources_order = ["tencent", "eastmoney", "sina"]
     elif symbol.startswith('hk'):
         sources_order = ["tencent_hk"]
     else:
         sources_order = ["tencent"]
-    
+
     for source_name in sources_order:
         if _source_status.get(source_name, {}).get("state") == "open":
             logger.debug(f"[Quote] 跳过熔断源: {source_name}")
             continue
         logger.debug(f"[Quote] 尝试: {source_name}")
-        
+
         if source_name == "tencent":
             result = _parse_tencent_quote(symbol)
         elif source_name == "sina":
@@ -408,13 +407,13 @@ def get_quote_with_fallback(symbol: str) -> dict:
             result = _parse_tencent_hk_quote(symbol)
         else:
             continue
-        
+
         if result:
             _current_source = source_name
             _source_status[source_name] = {"status": "ok", "latency": result.get("latency_ms"), "fail_count": 0}
             logger.info(f"[Quote] {symbol} -> {source_name}, {result.get('latency_ms')}ms")
             return result
-    
+
     return {"source": "none", "error": "所有数据源均失败", "pe_static": None, "pe_ttm": None, "pb": None}
 
 
@@ -508,7 +507,7 @@ async def test_source_async(source_name: str, symbol: str = None) -> dict:
     except asyncio.TimeoutError:
         _update_history(source_name, "timeout", None)
         return {"status": "timeout", "latency": None}
-    except Exception as e:
+    except Exception:
         _update_history(source_name, "error", None)
         return {"status": "error", "latency": None}
 
@@ -612,15 +611,15 @@ async def get_quote_by_priority_async(symbol: str) -> dict:
     - 港股 hk_stocks: Tencent
     - 美股 us_stocks: AlphaVantage
     """
-    from app.services.fetchers import get_quote_by_priority, FetcherFactory
-    
+    from app.services.fetchers import get_quote_by_priority
+
     if symbol.startswith('hk'):
         data_type = "hk_stocks"
     elif symbol.startswith('sh') or symbol.startswith('sz'):
         data_type = "realtime"
     else:
         data_type = "us_stocks"
-    
+
     try:
         result = await get_quote_by_priority(symbol)
         if result:
@@ -638,7 +637,7 @@ async def get_quote_by_priority_async(symbol: str) -> dict:
             }
     except Exception as e:
         logger.warning(f"[priority] {symbol} 失败: {e}，回退到旧版 fallback", exc_info=True)
-    
+
     return await get_quote_with_fallback_async(symbol)
 
 
@@ -649,7 +648,7 @@ async def get_kline_by_priority_async(symbol: str, period: str = "day") -> dict:
     优先级顺序：AkShare → EastMoney → Sina
     """
     from app.services.fetchers import get_kline_by_priority
-    
+
     try:
         result = await get_kline_by_priority(symbol, period)
         if result:
@@ -661,8 +660,8 @@ async def get_kline_by_priority_async(symbol: str, period: str = "day") -> dict:
             }
     except Exception as e:
         logger.warning(f"[priority] {symbol} K线失败: {e}", exc_info=True)
-    
+
     if period == "60min":
         return await asyncio.to_thread(_parse_sina_kline_60min, symbol)
-    
+
     return {"source": "none", "error": "K线数据获取失败", "data": []}

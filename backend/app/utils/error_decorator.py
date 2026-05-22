@@ -48,16 +48,16 @@ def handle_errors(
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs) -> Any:
             func_name = function or func.__name__
-            
+
             request_path = None
             request_method = None
-            
+
             for arg in args:
                 if isinstance(arg, Request):
                     request_path = arg.url.path
                     request_method = arg.method
                     break
-            
+
             try:
                 return await func(*args, **kwargs)
             except HTTPException:
@@ -69,14 +69,14 @@ def handle_errors(
                 sanitized_message = sanitize_error(e, log_full_error=True)
                 trace_id = str(getattr(e, 'trace_id', None) or '')
                 tb_str = traceback.format_exc()
-                
+
                 log_error(
                     exception=e,
                     module=module,
                     function=func_name,
                     context={"path": request_path, "method": request_method},
                 )
-                
+
                 if log_to_db:
                     try:
                         log_error_to_db(
@@ -92,29 +92,29 @@ def handle_errors(
                         )
                     except Exception as db_error:
                         logger.warning(f"Failed to log error to DB: {db_error}", exc_info=True)
-                
+
                 if reraise:
                     raise
-                
+
                 return error_response(
                     ErrorCode.INTERNAL_ERROR,
                     sanitized_message,
                     {"trace_id": trace_id} if trace_id else None
                 )
-    
+
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs) -> Any:
             func_name = function or func.__name__
-            
+
             request_path = None
             request_method = None
-            
+
             for arg in args:
                 if isinstance(arg, Request):
                     request_path = arg.url.path
                     request_method = arg.method
                     break
-            
+
             try:
                 return func(*args, **kwargs)
             except HTTPException:
@@ -126,14 +126,14 @@ def handle_errors(
                 sanitized_message = sanitize_error(e, log_full_error=True)
                 trace_id = str(getattr(e, 'trace_id', None) or '')
                 tb_str = traceback.format_exc()
-                
+
                 log_error(
                     exception=e,
                     module=module,
                     function=func_name,
                     context={"path": request_path, "method": request_method},
                 )
-                
+
                 if log_to_db:
                     try:
                         log_error_to_db(
@@ -149,20 +149,20 @@ def handle_errors(
                         )
                     except Exception as db_error:
                         logger.warning(f"Failed to log error to DB: {db_error}", exc_info=True)
-                
+
                 if reraise:
                     raise
-                
+
                 return error_response(
                     code=ErrorCode.INTERNAL_ERROR,
                     message=sanitized_message,
                     details={"trace_id": trace_id} if trace_id else None
                 )
-        
+
         import asyncio
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         else:
             return sync_wrapper
-    
+
     return decorator

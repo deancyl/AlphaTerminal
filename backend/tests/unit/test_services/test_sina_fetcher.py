@@ -12,10 +12,8 @@ test_sina_fetcher.py — Sina Fetcher 重构后单元测试
 6. HTTP retry + CB 联动（mock）
 7. get_quote 端到端（mock HTTP 200，返回正确价格）
 """
-import asyncio
 import sys
 import os
-import time
 from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
@@ -27,10 +25,8 @@ from app.services.fetchers.sina import (
     normalize_symbol,
     is_index_symbol,
     parse_sina_response,
-    CRITICAL_INDICES,
 )
-from app.services.data_validator import QuoteData, IndexQuoteData, MarketType, DataType
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
 
 # ─────────────────────────────────────────────────────────────────────────────

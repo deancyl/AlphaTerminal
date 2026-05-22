@@ -24,13 +24,13 @@ def temp_audit_db():
     The client is created INSIDE the patch context so it picks up the test db path.
     """
     from app.main import app
-    
+
     fd, path = tempfile.mkstemp(suffix='.db')
     os.close(fd)
-    
+
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
-    
+
     conn.execute("""
         CREATE TABLE audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,11 +53,11 @@ def temp_audit_db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_chain_index ON audit_logs(chain_index)")
     conn.commit()
     conn.close()
-    
+
     with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(path)):
         client = TestClient(app)
         yield {'client': client, 'db_path': path}
-    
+
     os.unlink(path)
 
 
@@ -308,7 +308,7 @@ class TestAuditChainIntegrity:
         response = temp_audit_db['client'].get("/api/v1/audit/verify")
         assert response.status_code == 200
         data = response.json()
-        
+
         # All required fields should be present
         required_fields = ["valid", "checked_records", "first_invalid_id", "error_type"]
         for field in required_fields:
@@ -319,7 +319,7 @@ class TestAuditChainIntegrity:
         response = temp_audit_db['client'].get("/api/v1/audit/verify")
         assert response.status_code == 200
         data = response.json()
-        
+
         if data["valid"]:
             assert data["first_invalid_id"] is None
             assert data["error_type"] is None
@@ -336,6 +336,6 @@ class TestAuditChainIntegrity:
         response = temp_audit_db['client'].get("/api/v1/audit/logs?limit=10")
         assert response.status_code == 200
         data = response.json()
-        
+
         # Total should be >= number of logs returned
         assert data["total"] >= len(data["logs"])

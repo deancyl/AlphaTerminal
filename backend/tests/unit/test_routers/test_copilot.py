@@ -11,7 +11,6 @@ Coverage target: 30 tests
 import pytest
 import json
 from unittest.mock import patch, MagicMock, AsyncMock
-from typing import Generator
 from fastapi.testclient import TestClient
 
 # Mock database access BEFORE importing app to avoid admin_config table errors
@@ -355,7 +354,6 @@ class TestCopilotErrorHandling:
 # ═══════════════════════════════════════════════════════════════
 
 import httpx
-import asyncio
 
 @pytest.mark.asyncio
 class TestCopilotAsyncSSE:
@@ -379,7 +377,7 @@ class TestCopilotAsyncSSE:
                             side_effect=RuntimeError("Session manager unavailable")
                         )
                     )
-                    
+
                     # Current behavior: exception is raised (not caught)
                     # This documents the limitation
                     with pytest.raises(RuntimeError, match="Session manager unavailable"):
@@ -429,7 +427,7 @@ class TestCopilotAsyncSSE:
                                         "/api/v1/chat",
                                         json={"prompt": "test"}
                                     )
-                                    
+
                                     assert response.status_code == 200
 
     async def test_invalid_json_body_async(self):
@@ -482,12 +480,12 @@ class TestCopilotAsyncSSE:
                                     {"content": " World"},
                                     {"done": True}
                                 ])
-                                
+
                                 response = await async_client.post(
                                     "/api/v1/chat",
                                     json={"prompt": "test"}
                                 )
-                                
+
                                 assert response.status_code == 200
                                 # Verify we can read the full stream
                                 content = response.text
@@ -513,12 +511,12 @@ class TestCopilotAsyncSSE:
                             acquire=AsyncMock(return_value=False),
                             release=MagicMock()
                         )
-                        
+
                         response = await async_client.post(
                             "/api/v1/chat",
                             json={"prompt": "test"}
                         )
-                        
+
                         # Should return 200 with error message in SSE
                         assert response.status_code == 200
                         content = response.text
@@ -1928,7 +1926,7 @@ class TestCopilotTokenTracking:
             {"model": "gpt-3.5-turbo", "expected_cost_multiplier": 0.5},
             {"model": "deepseek-chat", "expected_cost_multiplier": 0.1},
         ]
-        
+
         for case in test_cases:
             with patch("app.routers.copilot.get_context_assembler") as mock_ca:
                 mock_ca.return_value = MagicMock(assemble=AsyncMock(
@@ -2154,7 +2152,7 @@ class TestCopilotContextLength:
             {"role": "assistant", "content": f"Answer {i}: " + "word " * 100}
             for i in range(20)
         ]
-        
+
         with patch("app.routers.copilot.get_context_assembler") as mock_ca:
             mock_ca.return_value = MagicMock(assemble=AsyncMock(
                 return_value=_create_mock_assembly_result()

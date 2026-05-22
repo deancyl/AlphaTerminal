@@ -2,7 +2,6 @@
 import time
 import psutil
 import sqlite3
-from pathlib import Path
 from fastapi import APIRouter
 from app.utils.errors import success_response
 from app.db.database import _db_path

@@ -5,8 +5,7 @@ Provides reusable MockWebSocket classes for testing WebSocket-related functional
 without requiring actual network connections.
 """
 import json
-from typing import List, Dict, Any, Optional, Callable
-from unittest.mock import AsyncMock
+from typing import List, Dict, Any, Optional
 
 
 class MockWebSocket:
@@ -25,7 +24,7 @@ class MockWebSocket:
         await mock_ws.send_text(json.dumps({"type": "ping"}))
         assert len(mock_ws.sent_messages) == 1
     """
-    
+
     def __init__(
         self,
         receive_messages: Optional[List[str]] = None,
@@ -49,12 +48,12 @@ class MockWebSocket:
         self._auto_accept = auto_accept
         self._raise_on_send = raise_on_send
         self.accepted = False
-    
+
     async def accept(self) -> None:
         """Accept WebSocket connection."""
         if self._auto_accept:
             self.accepted = True
-    
+
     async def send_text(self, data: str) -> None:
         """
         Send text message through WebSocket.
@@ -67,17 +66,17 @@ class MockWebSocket:
         """
         if self._raise_on_send:
             raise self._raise_on_send
-        
+
         if self.closed:
             raise RuntimeError("WebSocket is closed")
-        
+
         # Parse JSON if possible, store both raw and parsed
         try:
             parsed = json.loads(data) if isinstance(data, str) else data
             self.sent_messages.append(parsed)
         except json.JSONDecodeError:
             self.sent_messages.append({"raw": data})
-    
+
     async def receive_text(self) -> str:
         """
         Receive text message from WebSocket.
@@ -90,11 +89,11 @@ class MockWebSocket:
         """
         if self._receive_index >= len(self._receive_messages):
             raise RuntimeError("No more messages to receive")
-        
+
         msg = self._receive_messages[self._receive_index]
         self._receive_index += 1
         return msg
-    
+
     async def close(self, code: int = 1000, reason: str = "") -> None:
         """
         Close WebSocket connection.
@@ -106,15 +105,15 @@ class MockWebSocket:
         self.closed = True
         self.close_code = code
         self.close_reason = reason
-    
+
     def add_receive_message(self, message: str) -> None:
         """Add a message to the receive queue."""
         self._receive_messages.append(message)
-    
+
     def clear_sent_messages(self) -> None:
         """Clear sent messages history."""
         self.sent_messages.clear()
-    
+
     def get_last_sent_message(self) -> Optional[Dict[str, Any]]:
         """Get the last sent message."""
         return self.sent_messages[-1] if self.sent_messages else None
@@ -131,17 +130,17 @@ class MockWebSocketWithHeartbeat(MockWebSocket):
         await mock_ws.send_text(json.dumps({"type": "ping"}))
         # Automatically sends {"type": "pong"} back
     """
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.ping_count = 0
         self.pong_count = 0
         self._last_ping_time: Optional[float] = None
-    
+
     async def send_text(self, data: str) -> None:
         """Send text and auto-respond to ping."""
         await super().send_text(data)
-        
+
         # Check if this is a ping message
         try:
             parsed = json.loads(data) if isinstance(data, str) else data
@@ -168,7 +167,7 @@ class MockWebSocketFactory:
         for ws in connections:
             await manager.connect(ws)
     """
-    
+
     def __init__(
         self,
         default_receive_messages: Optional[List[str]] = None,
@@ -177,7 +176,7 @@ class MockWebSocketFactory:
         self._default_receive_messages = default_receive_messages
         self._default_raise_on_send = default_raise_on_send
         self._created: List[MockWebSocket] = []
-    
+
     def create(
         self,
         receive_messages: Optional[List[str]] = None,
@@ -190,21 +189,21 @@ class MockWebSocketFactory:
         )
         self._created.append(ws)
         return ws
-    
+
     def create_batch(self, count: int) -> List[MockWebSocket]:
         """Create multiple MockWebSocket instances."""
         return [self.create() for _ in range(count)]
-    
+
     def create_with_heartbeat(self, **kwargs) -> MockWebSocketWithHeartbeat:
         """Create a MockWebSocket with heartbeat support."""
         ws = MockWebSocketWithHeartbeat(**kwargs)
         self._created.append(ws)
         return ws
-    
+
     def get_all_created(self) -> List[MockWebSocket]:
         """Get all created WebSocket instances."""
         return self._created
-    
+
     def clear(self) -> None:
         """Clear all created instances."""
         self._created.clear()

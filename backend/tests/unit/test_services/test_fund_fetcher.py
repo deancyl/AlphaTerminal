@@ -8,7 +8,6 @@ Covers:
 4. Risk metrics calculation (_calculate_risk_metrics)
 """
 import pytest
-import asyncio
 import sys
 import os
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -80,7 +79,6 @@ class TestCleanValue:
 
     def test_clean_float_nan(self):
         """Test cleaning NaN float."""
-        import numpy as np
         assert clean_value(float('nan')) is None
 
     def test_clean_string_whitespace(self):

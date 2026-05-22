@@ -15,7 +15,7 @@ from app.db import get_latest_prices
 from app.utils.market_status import is_market_open
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
-from app.services.fetchers.global_index_fetcher import get_global_index_fetcher, GLOBAL_INDEX_SYMBOLS, INDEX_METADATA
+from app.services.fetchers.global_index_fetcher import get_global_index_fetcher, GLOBAL_INDEX_SYMBOLS
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
@@ -439,10 +439,10 @@ async def market_global():
     """
     try:
         from app.services.fetchers.global_index_fetcher import get_global_index_fetcher
-        
+
         fetcher = get_global_index_fetcher()
         quotes = await fetcher.fetch_all_quotes()
-        
+
         global_data = []
         for quote in quotes:
             global_data.append({
@@ -459,7 +459,7 @@ async def market_global():
                 "is_mock": quote.is_mock,
                 "source": "tencent" if not quote.is_mock else "static_fallback",
             })
-        
+
         return success_response({
             "global": global_data,
             "regions": {
@@ -494,13 +494,13 @@ async def get_global_kline(
     try:
         # Normalize symbol: remove ^ prefix if present
         normalized_symbol = symbol.lstrip('^')
-        
+
         fetcher = get_global_index_fetcher()
         klines = await fetcher.fetch_kline_history(normalized_symbol, period, limit)
-        
+
         if not klines:
             return error_response(ErrorCode.NOT_FOUND, f"未找到 {normalized_symbol} 的K线数据")
-        
+
         return success_response({
             "symbol": normalized_symbol,
             "period": period,
@@ -533,10 +533,10 @@ async def get_global_sparkline(
     try:
         # Normalize symbol: remove ^ prefix if present (兼容 Yahoo Finance 格式)
         normalized_symbol = symbol.lstrip('^')
-        
+
         fetcher = get_global_index_fetcher()
         sparkline = await fetcher.fetch_sparkline(normalized_symbol, days)
-        
+
         return success_response({
             "symbol": normalized_symbol,
             "data": sparkline,
@@ -600,7 +600,7 @@ def _get_market_status(market: str) -> str:
         "AU": "AU",
         "IN": "IN",
     }
-    
+
     market_code = market_map.get(market, "US")
     is_open, status = is_market_open(market_code)
     return status
@@ -670,9 +670,9 @@ async def get_fund_flow():
         })
 
     except asyncio.TimeoutError:
-        logger.warning(f"[FundFlow] akshare timed out after 5s, triggering fallback", exc_info=True)
+        logger.warning("[FundFlow] akshare timed out after 5s, triggering fallback", exc_info=True)
     except ValueError:
-        logger.warning(f"[FundFlow] empty result, triggering fallback", exc_info=True)
+        logger.warning("[FundFlow] empty result, triggering fallback", exc_info=True)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.warning(f"[HTTP] error, triggered fallback: {e}", exc_info=True)
 

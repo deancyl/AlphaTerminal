@@ -60,10 +60,10 @@ def _get_conn():
     global _WAL_MODE_CHECKED, _WAL_MODE_OK
     conn = sqlite3.connect(_db_path, timeout=30)
     conn.row_factory = sqlite3.Row
-    
+
     if not _WAL_MODE_CHECKED:
         _use_delete_mode = False
-        
+
         if _FORCE_WAL:
             _WAL_MODE_OK = True
             logger.info("[DBWriter] WAL mode forced via ALPHATERMINAL_FORCE_WAL=1")
@@ -71,7 +71,7 @@ def _get_conn():
             network_path_prefixes = ['/vol3/', '/nas/', '/mnt/nfs', '/mnt/smb', '/net/']
             if any(_db_path.startswith(p) for p in network_path_prefixes):
                 _use_delete_mode = True
-            
+
             if not _use_delete_mode:
                 try:
                     cur = conn.execute("PRAGMA journal_mode=WAL")
@@ -82,20 +82,20 @@ def _get_conn():
                         _use_delete_mode = True
                 except (sqlite3.OperationalError, OSError, IOError):
                     _use_delete_mode = True
-        
+
         if _use_delete_mode:
             conn.execute("PRAGMA journal_mode=DELETE")
             conn.commit()
             _WAL_MODE_OK = False
             logger.warning("[DBWriter] WAL mode unavailable, using DELETE mode")
-        
+
         _WAL_MODE_CHECKED = True
     else:
         if _WAL_MODE_OK:
             conn.execute("PRAGMA journal_mode=WAL")
         else:
             conn.execute("PRAGMA journal_mode=DELETE")
-    
+
     conn.execute("PRAGMA busy_timeout=30000")
     return conn
 

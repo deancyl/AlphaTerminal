@@ -10,7 +10,6 @@ Security: This module is critical for preventing information disclosure.
 """
 import re
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +26,12 @@ SENSITIVE_PATTERNS = [
     r'Bearer\s+[a-zA-Z0-9_-]{20,}',           # Bearer tokens
     r'token["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',        # token=xxx
     r'access_token["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}', # access_token
-    
+
     # Passwords and secrets
     r'password["\']?\s*[:=]\s*["\']?[^\s"\']{3,}',  # password=xxx
     r'secret["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',    # secret=xxx
     r'credential[s]?["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{10,}',
-    
+
     # File paths (user info disclosure)
     r'/home/[a-zA-Z0-9_-]+',                   # Linux home paths
     r'/Users/[a-zA-Z0-9_-]+',                  # macOS user paths
@@ -40,21 +39,21 @@ SENSITIVE_PATTERNS = [
     r'/var/www/[a-zA-Z0-9_-]+',                # Web server paths
     r'/etc/passwd',                            # Sensitive system files
     r'/etc/shadow',                            # Password files
-    
+
     # IP addresses (internal network disclosure)
     r'192\.168\.\d{1,3}\.\d{1,3}',             # Private IPv4
     r'10\.\d{1,3}\.\d{1,3}\.\d{1,3}',          # Private IPv4
     r'172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}',  # Private IPv4
-    
+
     # Database connection strings
     r'postgres(?:ql)?://[^\s]+',               # PostgreSQL connection
     r'mysql://[^\s]+',                         # MySQL connection
     r'sqlite://[^\s]+',                        # SQLite connection
     r'mongodb://[^\s]+',                       # MongoDB connection
-    
+
     # Email addresses
     r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-    
+
     # URLs with credentials
     r'https?://[^:]+:[^@]+@[^\s]+',            # URL with embedded credentials
 ]
@@ -75,39 +74,39 @@ ERROR_MAP = {
     "TimeoutError": "请求超时，请稍后重试",
     "ReadTimeout": "读取数据超时，请稍后重试",
     "WriteTimeout": "写入数据超时，请稍后重试",
-    
+
     # HTTP errors
     "HTTPStatusError": "服务暂时不可用，请稍后重试",
     "HTTPError": "服务暂时不可用，请稍后重试",
-    
+
     # Rate limiting
     "RateLimitError": "请求过于频繁，请稍后重试",
     "RateLimitExceededError": "请求过于频繁，请稍后重试",
     "TooManyRequestsError": "请求过于频繁，请稍后重试",
-    
+
     # Authentication errors
     "AuthenticationError": "API 认证失败，请检查配置",
     "UnauthorizedError": "API 认证失败，请检查配置",
     "PermissionError": "权限不足，无法执行此操作",
     "ForbiddenError": "访问被拒绝，请检查权限",
-    
+
     # API errors
     "InvalidRequestError": "请求参数无效，请检查输入",
     "BadRequestError": "请求格式错误，请检查输入",
     "NotFoundError": "请求的资源不存在",
     "APIError": "服务暂时不可用，请稍后重试",
-    
+
     # Server errors
     "InternalServerError": "服务器内部错误，请稍后重试",
     "ServiceUnavailableError": "服务暂时不可用，请稍后重试",
     "BadGatewayError": "网关错误，请稍后重试",
     "GatewayTimeoutError": "网关超时，请稍后重试",
-    
+
     # Data errors
     "JSONDecodeError": "数据解析失败，请稍后重试",
     "ValueError": "数据格式错误，请检查输入",
     "KeyError": "数据字段缺失，请联系管理员",
-    
+
     # Generic errors
     "Exception": "服务暂时不可用，请稍后重试",
     "RuntimeError": "运行时错误，请稍后重试",
@@ -163,13 +162,13 @@ def sanitize_error(
     error_type = type(error).__name__
     raw_message = str(error)
     lower_msg = raw_message.lower()
-    
+
     if log_full_error:
         provider_name = PROVIDER_CONTEXT.get(provider, provider.upper() if provider else "API")
         logger.error(f"[{provider_name}] {error_type}: {raw_message}")
-    
+
     user_message = None
-    
+
     if "timeout" in lower_msg or "timed out" in lower_msg:
         user_message = "请求超时，请稍后重试"
     elif "connection" in lower_msg or "connect" in lower_msg:
@@ -182,18 +181,18 @@ def sanitize_error(
         user_message = "请求的资源不存在"
     elif "invalid" in lower_msg or "400" in lower_msg:
         user_message = "请求参数无效，请检查输入"
-    
+
     if not user_message:
         user_message = ERROR_MAP.get(error_type)
-    
+
     if not user_message:
         user_message = _redact_sensitive(raw_message)
         if len(user_message) > 100:
             user_message = user_message[:100] + "..."
-    
+
     # Build final message with context
     provider_name = PROVIDER_CONTEXT.get(provider, provider.upper() if provider else "")
-    
+
     if provider_name:
         return f"{provider_name} API 调用失败: {user_message}"
     elif context:
@@ -225,7 +224,7 @@ def sanitize_error_message(
     if log_full_message:
         provider_name = PROVIDER_CONTEXT.get(provider, provider.upper() if provider else "API")
         logger.error(f"[{provider_name}] {message}")
-    
+
     return _redact_sensitive(message)
 
 

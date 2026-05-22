@@ -136,7 +136,7 @@ class TestHashComputation:
         """Verify hash is computed using HMAC-SHA256."""
         fields = {"test": "data"}
         prev_hash = GENESIS_HASH
-        
+
         # Compute expected hash manually
         canonical = json.dumps(fields, sort_keys=True, default=str, ensure_ascii=False)
         payload = prev_hash + canonical
@@ -145,7 +145,7 @@ class TestHashComputation:
             payload.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
-        
+
         result = compute_hash(prev_hash, fields)
         assert result == expected
 
@@ -187,7 +187,7 @@ class TestAuditChainRecord:
             record_hash="a" * 64,
             chain_index=0,
         )
-        
+
         assert record.id == 1
         assert record.actor_id == "user1"
         assert record.action == "buy"
@@ -211,7 +211,7 @@ class TestAuditChainRecord:
             ip_address="192.168.1.1",
             user_agent="Mozilla/5.0",
         )
-        
+
         assert record.ip_address == "192.168.1.1"
         assert record.user_agent == "Mozilla/5.0"
 
@@ -230,9 +230,9 @@ class TestGetPrevHashAndIndex:
         mock_cursor = MagicMock()
         mock_cursor.fetchone.return_value = None
         mock_connection.execute.return_value = mock_cursor
-        
+
         prev_hash, chain_index = get_prev_hash_and_index(mock_connection)
-        
+
         assert prev_hash == GENESIS_HASH
         assert chain_index == 0
 
@@ -241,9 +241,9 @@ class TestGetPrevHashAndIndex:
         mock_cursor = MagicMock()
         mock_cursor.fetchone.return_value = ("abc123", 5)
         mock_connection.execute.return_value = mock_cursor
-        
+
         prev_hash, chain_index = get_prev_hash_and_index(mock_connection)
-        
+
         assert prev_hash == "abc123"
         assert chain_index == 6
 
@@ -256,10 +256,10 @@ class TestLogAuditEvent:
         """Create a temporary database for testing."""
         fd, path = tempfile.mkstemp(suffix='.db')
         os.close(fd)
-        
+
         conn = sqlite3.connect(path)
         conn.row_factory = sqlite3.Row
-        
+
         # Create audit_logs table
         conn.execute("""
             CREATE TABLE audit_logs (
@@ -277,9 +277,9 @@ class TestLogAuditEvent:
             )
         """)
         conn.commit()
-        
+
         yield path
-        
+
         conn.close()
         os.unlink(path)
 
@@ -293,7 +293,7 @@ class TestLogAuditEvent:
                 resource_id="1:sh600519",
                 outcome="success",
             )
-            
+
             assert record_id == 1
 
     def test_log_event_creates_chain_record(self, temp_db):
@@ -306,7 +306,7 @@ class TestLogAuditEvent:
                 resource_id="1:sh600519",
                 outcome="success",
             )
-            
+
             # Verify record
             conn = sqlite3.connect(temp_db)
             conn.row_factory = sqlite3.Row
@@ -314,7 +314,7 @@ class TestLogAuditEvent:
                 "SELECT * FROM audit_logs WHERE id = ?", (record_id,)
             ).fetchone()
             conn.close()
-            
+
             assert row is not None
             assert row["prev_hash"] == GENESIS_HASH
             assert row["chain_index"] == 0
@@ -331,7 +331,7 @@ class TestLogAuditEvent:
                 resource_id="1:sh600519",
                 outcome="success",
             )
-            
+
             # Second record
             id2 = log_audit_event(
                 actor_id="user1",
@@ -340,7 +340,7 @@ class TestLogAuditEvent:
                 resource_id="1:sh600519",
                 outcome="success",
             )
-            
+
             # Get records
             conn = sqlite3.connect(temp_db)
             conn.row_factory = sqlite3.Row
@@ -348,7 +348,7 @@ class TestLogAuditEvent:
                 "SELECT * FROM audit_logs ORDER BY id"
             ).fetchall()
             conn.close()
-            
+
             assert len(rows) == 2
             assert rows[0]["chain_index"] == 0
             assert rows[1]["chain_index"] == 1
@@ -363,10 +363,10 @@ class TestVerifyChain:
         """Create a temporary database for testing."""
         fd, path = tempfile.mkstemp(suffix='.db')
         os.close(fd)
-        
+
         conn = sqlite3.connect(path)
         conn.row_factory = sqlite3.Row
-        
+
         # Create audit_logs table
         conn.execute("""
             CREATE TABLE audit_logs (
@@ -384,9 +384,9 @@ class TestVerifyChain:
             )
         """)
         conn.commit()
-        
+
         yield path
-        
+
         conn.close()
         os.unlink(path)
 
@@ -394,7 +394,7 @@ class TestVerifyChain:
         """Should return valid for empty chain."""
         with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
             result = verify_chain()
-            
+
             assert result["valid"] is True
             assert result["checked_records"] == 0
 
@@ -408,9 +408,9 @@ class TestVerifyChain:
                 resource_id="1:sh600519",
                 outcome="success",
             )
-            
+
             result = verify_chain()
-            
+
             assert result["valid"] is True
             assert result["checked_records"] == 1
 
@@ -425,9 +425,9 @@ class TestVerifyChain:
                     resource_id=f"1:stock{i}",
                     outcome="success",
                 )
-            
+
             result = verify_chain()
-            
+
             assert result["valid"] is True
             assert result["checked_records"] == 5
 
@@ -441,7 +441,7 @@ class TestVerifyChain:
                 resource_id="1:sh600519",
                 outcome="success",
             )
-            
+
             # Tamper with the hash
             conn = sqlite3.connect(temp_db)
             conn.execute(
@@ -450,9 +450,9 @@ class TestVerifyChain:
             )
             conn.commit()
             conn.close()
-            
+
             result = verify_chain()
-            
+
             assert result["valid"] is False
             assert result["error_type"] == "hash_mismatch"
 
@@ -467,7 +467,7 @@ class TestVerifyChain:
                 resource_id="1:sh600519",
                 outcome="success",
             )
-            
+
             # Second record
             log_audit_event(
                 actor_id="user1",
@@ -476,7 +476,7 @@ class TestVerifyChain:
                 resource_id="1:sh600519",
                 outcome="success",
             )
-            
+
             # Break the chain by modifying prev_hash of second record
             conn = sqlite3.connect(temp_db)
             conn.execute(
@@ -485,9 +485,9 @@ class TestVerifyChain:
             )
             conn.commit()
             conn.close()
-            
+
             result = verify_chain()
-            
+
             assert result["valid"] is False
             assert result["error_type"] == "prev_hash_mismatch"
 
@@ -502,9 +502,9 @@ class TestVerifyChain:
                     resource_id=f"1:stock{i}",
                     outcome="success",
                 )
-            
+
             result = verify_chain(from_id=1)
-            
+
             assert result["valid"] is True
             assert result["checked_records"] == 10
 
@@ -517,10 +517,10 @@ class TestGetChainStats:
         """Create a temporary database for testing."""
         fd, path = tempfile.mkstemp(suffix='.db')
         os.close(fd)
-        
+
         conn = sqlite3.connect(path)
         conn.row_factory = sqlite3.Row
-        
+
         # Create audit_logs table
         conn.execute("""
             CREATE TABLE audit_logs (
@@ -538,9 +538,9 @@ class TestGetChainStats:
             )
         """)
         conn.commit()
-        
+
         yield path
-        
+
         conn.close()
         os.unlink(path)
 
@@ -548,7 +548,7 @@ class TestGetChainStats:
         """Should return correct stats for empty chain."""
         with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
             stats = get_chain_stats()
-            
+
             assert stats["total_records"] == 0
             assert stats["chain_index_min"] is None
             assert stats["chain_index_max"] is None
@@ -566,9 +566,9 @@ class TestGetChainStats:
                     resource_id=f"1:stock{i}",
                     outcome="success",
                 )
-            
+
             stats = get_chain_stats()
-            
+
             assert stats["total_records"] == 5
             assert stats["chain_index_min"] == 0
             assert stats["chain_index_max"] == 4
@@ -579,14 +579,14 @@ class TestGetChainStats:
         """Stats should include genesis hash constant."""
         with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
             stats = get_chain_stats()
-            
+
             assert stats["genesis_hash"] == GENESIS_HASH
 
     def test_stats_includes_retention_days(self, temp_db):
         """Stats should include SEC retention days."""
         with patch('app.services.audit_chain.AUDIT_DB_PATH', Path(temp_db)):
             stats = get_chain_stats()
-            
+
             assert stats["retention_days"] == SEC_RETENTION_DAYS
 
 
@@ -598,10 +598,10 @@ class TestConvenienceFunctions:
         """Create a temporary database for testing."""
         fd, path = tempfile.mkstemp(suffix='.db')
         os.close(fd)
-        
+
         conn = sqlite3.connect(path)
         conn.row_factory = sqlite3.Row
-        
+
         # Create audit_logs table
         conn.execute("""
             CREATE TABLE audit_logs (
@@ -619,9 +619,9 @@ class TestConvenienceFunctions:
             )
         """)
         conn.commit()
-        
+
         yield path
-        
+
         conn.close()
         os.unlink(path)
 
@@ -635,14 +635,14 @@ class TestConvenienceFunctions:
                 price=1800.00,
                 actor_id="user1",
             )
-            
+
             conn = sqlite3.connect(temp_db)
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT * FROM audit_logs WHERE id = ?", (record_id,)
             ).fetchone()
             conn.close()
-            
+
             assert row["action"] == "buy"
             assert row["agent_id"] == "user1"
             details = json.loads(row["details"])
@@ -659,14 +659,14 @@ class TestConvenienceFunctions:
                 realized_pnl=5000.00,
                 actor_id="user1",
             )
-            
+
             conn = sqlite3.connect(temp_db)
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT * FROM audit_logs WHERE id = ?", (record_id,)
             ).fetchone()
             conn.close()
-            
+
             assert row["action"] == "sell"
             details = json.loads(row["details"])
             assert details["after_state"]["realized_pnl"] == 5000.00
@@ -681,14 +681,14 @@ class TestConvenienceFunctions:
                 balance_after=10000.00,
                 actor_id="user1",
             )
-            
+
             conn = sqlite3.connect(temp_db)
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT * FROM audit_logs WHERE id = ?", (record_id,)
             ).fetchone()
             conn.close()
-            
+
             assert row["action"] == "deposit"
             details = json.loads(row["details"])
             assert details["resource_type"] == "cash"
@@ -705,14 +705,14 @@ class TestConvenienceFunctions:
                 order_id="ORD123",
                 ip_address="192.168.1.1",
             )
-            
+
             conn = sqlite3.connect(temp_db)
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT * FROM audit_logs WHERE id = ?", (record_id,)
             ).fetchone()
             conn.close()
-            
+
             assert row["ip_address"] == "192.168.1.1"
             details = json.loads(row["details"])
             assert details["after_state"]["order_id"] == "ORD123"
@@ -726,10 +726,10 @@ class TestChainIntegrity:
         """Create a temporary database for testing."""
         fd, path = tempfile.mkstemp(suffix='.db')
         os.close(fd)
-        
+
         conn = sqlite3.connect(path)
         conn.row_factory = sqlite3.Row
-        
+
         # Create audit_logs table
         conn.execute("""
             CREATE TABLE audit_logs (
@@ -747,9 +747,9 @@ class TestChainIntegrity:
             )
         """)
         conn.commit()
-        
+
         yield path
-        
+
         conn.close()
         os.unlink(path)
 
@@ -778,15 +778,15 @@ class TestChainIntegrity:
                 resource_id="1:stock3",
                 outcome="success",
             )
-            
+
             # Delete middle record
             conn = sqlite3.connect(temp_db)
             conn.execute("DELETE FROM audit_logs WHERE id = ?", (id2,))
             conn.commit()
             conn.close()
-            
+
             result = verify_chain()
-            
+
             # Chain should be broken because prev_hash of record 3 won't match
             assert result["valid"] is False
 
@@ -808,7 +808,7 @@ class TestChainIntegrity:
                 resource_id="1:stock2",
                 outcome="success",
             )
-            
+
             # Insert a fake record
             conn = sqlite3.connect(temp_db)
             conn.execute("""
@@ -827,9 +827,9 @@ class TestChainIntegrity:
             ))
             conn.commit()
             conn.close()
-            
+
             result = verify_chain()
-            
+
             # Chain should be invalid due to hash mismatch
             assert result["valid"] is False
 
@@ -844,7 +844,7 @@ class TestChainIntegrity:
                 resource_id="1:stock1",
                 outcome="success",
             )
-            
+
             # Modify genesis record's prev_hash
             conn = sqlite3.connect(temp_db)
             conn.execute(
@@ -853,9 +853,9 @@ class TestChainIntegrity:
             )
             conn.commit()
             conn.close()
-            
+
             result = verify_chain()
-            
+
             assert result["valid"] is False
             assert result["error_type"] == "genesis_hash_invalid"
 
@@ -910,13 +910,13 @@ class TestEdgeCases:
             }
             for i in range(50)
         }
-        
+
         fields = {
             "timestamp": "2024-01-01T00:00:00",
             "actor_id": "user1",
             "action": "complex_operation",
             "after_state": large_state,
         }
-        
+
         result = compute_hash(GENESIS_HASH, fields)
         assert len(result) == 64

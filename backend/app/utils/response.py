@@ -75,7 +75,7 @@ def success_response(
         DeprecationWarning,
         stacklevel=2
     )
-    
+
     return {
         "code": ErrorCode.SUCCESS,
         "message": message,
@@ -115,7 +115,7 @@ def error_response(
         DeprecationWarning,
         stacklevel=2
     )
-    
+
     # Detect calling convention
     if isinstance(code_or_message, int):
         # Standard form: error_response(code, message, details)
@@ -125,7 +125,7 @@ def error_response(
         # Shorthand form: error_response(message, code=X)
         actual_code = code if code is not None else ErrorCode.INTERNAL_ERROR
         actual_message = str(code_or_message)
-    
+
     return {
         "code": actual_code,
         "message": actual_message,

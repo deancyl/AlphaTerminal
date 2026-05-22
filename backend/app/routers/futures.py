@@ -92,22 +92,22 @@ async def _fetch_index_futures_realtime():
     import akshare as ak
     import warnings
     warnings.filterwarnings("ignore")
-    
+
     # Check circuit breaker
     if not _futures_cb.is_available():
         logger.warning("[Futures] Circuit breaker open, using cached/mock data")
         return _MOCK_INDEX_FUTURES, "circuit_breaker"
-    
+
     index_futures = []
     source = "mock"
-    
+
     # Define contracts to fetch: (symbol, name, akshare_symbol_name)
     contracts = [
         ("IF", "IF 沪深300", "沪深300指数期货"),
         ("IC", "IC 中证500", "中证500指数期货"),
         ("IM", "IM 中证1000", "中证1000"),
     ]
-    
+
     for symbol, name, ak_symbol_name in contracts:
         try:
             # Use asyncio.wait_for for 15 second timeout
@@ -116,15 +116,15 @@ async def _fetch_index_futures_realtime():
                 loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_realtime(symbol=ak_symbol_name)),
                 timeout=15.0
             )
-            
+
             if df is not None and len(df) > 0:
                 # Get the main contract (first row, symbol ends with 0)
                 main_row = df[df['symbol'].str.endswith('0')].iloc[0] if len(df[df['symbol'].str.endswith('0')]) > 0 else df.iloc[0]
-                
+
                 price = main_row.get("trade", 0)
                 change_pct = main_row.get("changepercent", 0)
                 position = main_row.get("position", 0)
-                
+
                 # Format position
                 if position:
                     pos_val = float(position)
@@ -134,7 +134,7 @@ async def _fetch_index_futures_realtime():
                         pos_str = f"{int(pos_val)}手"
                 else:
                     pos_str = "N/A"
-                
+
                 index_futures.append({
                     "symbol": symbol,
                     "name": name,
@@ -152,7 +152,7 @@ async def _fetch_index_futures_realtime():
         except Exception as e:
             _futures_cb.record_failure()
             logger.warning(f"[Futures] Failed to fetch {symbol}: {e}", exc_info=True)
-    
+
     # Fallback to mock if all failed
     if not index_futures:
         logger.warning("[Futures] All index futures fetch failed, using mock data with DEMO label")
@@ -166,7 +166,7 @@ async def _fetch_index_futures_realtime():
         for mock in _MOCK_INDEX_FUTURES:
             if mock["symbol"] not in fetched_symbols:
                 index_futures.append({**mock, "is_demo": True})
-    
+
     return index_futures, source
 
 
@@ -174,7 +174,7 @@ def _fetch_commodities_sync():
     """Sync fetch of commodity futures data from Tencent."""
     spot_data = {}
     fetch_success = False
-    
+
     try:
         codes = ",".join(WATCHED_COMMODITIES.keys())
         with httpx.Client(timeout=5.0) as client:
@@ -204,7 +204,7 @@ def _fetch_commodities_sync():
             fetch_success = True
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.warning(f"[HTTP] failed: {e}", exc_info=True)
-    
+
     if not fetch_success or len(spot_data) == 0:
         logger.warning("[Futures] Using mock commodity data as fallback")
         for mock_item in _MOCK_COMMODITIES:
@@ -213,7 +213,7 @@ def _fetch_commodities_sync():
                 "change_pct": mock_item.get("change_pct", 0),
                 "tick": mock_item.get("tick", ""),
             }
-    
+
     commodities = []
     for sym, (name, unit) in WATCHED_COMMODITIES.items():
         d = spot_data.get(sym, {})
@@ -228,7 +228,7 @@ def _fetch_commodities_sync():
             "sector":     sector_key[0],
             "sector_emoji": sector_key[1],
         })
-    
+
     return commodities
 
 
@@ -246,10 +246,10 @@ async def _fetch_futures_data():
     """
     now_str = datetime.now().strftime("%H:%M")
     index_source = "mock"
-    
+
     loop = asyncio.get_running_loop()
     commodities = await loop.run_in_executor(None, _fetch_commodities_sync)
-    
+
     try:
         index_futures, index_source = await _fetch_index_futures_realtime()
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
@@ -263,7 +263,7 @@ async def _fetch_futures_data():
         "update_time":   now_str,
         "index_source":  index_source,
     }
-    
+
     logger.info(f"[Futures] Fetched {len(commodities)} commodities + {len(index_futures)} index futures (source: {index_source})")
     return cache_data
 
@@ -301,17 +301,17 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
             "history": [],
             "message": f"暂不支持品种: {symbol}，支持: {', '.join(valid_symbols)}"
         })
-    
+
     symbol = symbol.upper()
-    
+
     try:
         import akshare as ak
         import warnings
         warnings.filterwarnings("ignore")
-        
+
         # 主力合约代码（加0后缀）
         contract_symbol = f"{symbol}0"
-        
+
         # 根据周期选择API
         loop = asyncio.get_running_loop()
         if period == "daily":
@@ -326,7 +326,7 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
                 loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_minute_sina(symbol=contract_symbol)),
                 timeout=10.0
             )
-        
+
         # 处理数据
         history = []
         if df is not None and not df.empty:
@@ -342,10 +342,10 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
                 'open_interest': 'hold',
                 '持仓量': 'hold',
             })
-            
+
             # 取最后 limit 条
             df = df.tail(limit)
-            
+
             for _, row in df.iterrows():
                 try:
                     item = {
@@ -361,14 +361,14 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
                 except Exception as e:
                     logger.debug(f"[futures_index_history] Skip row: {e}")
                     continue
-        
+
         logger.info(f"[futures_index_history] {symbol}({period}): {len(history)} bars")
         return success_response({
             "symbol": symbol,
             "period": period,
             "history": history,
         })
-        
+
     except asyncio.TimeoutError:
         logger.warning(f"[futures_index_history] Timeout for {symbol}", exc_info=True)
         return success_response({
@@ -461,7 +461,8 @@ async def futures_term_structure(symbol: str = "RB"):
         return error_response(ErrorCode.BAD_REQUEST, f"暂不支持品种: {prefix}，支持的品种见 /futures/commodities", {"symbol": prefix, "name": None, "term_structure": []})
 
     try:
-        import akshare as ak, warnings
+        import akshare as ak
+        import warnings
         warnings.filterwarnings("ignore")
         # 同步 IO 放入线程池，避免阻塞 FastAPI 事件循环
         # 添加 10 秒超时保护

@@ -4,9 +4,9 @@ import itertools
 import logging
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
@@ -320,7 +320,7 @@ def quick_optimize(
     )
 
     def run_backtest(code: str, df: pd.DataFrame, params: Dict) -> Dict:
-        from .indicator_strategy import IndicatorStrategy, create_indicator_strategy
+        from .indicator_strategy import create_indicator_strategy
         strategy = create_indicator_strategy(code)
         signals = strategy.to_signal_df(df, params)
         equity = simulate_equity(df, signals)

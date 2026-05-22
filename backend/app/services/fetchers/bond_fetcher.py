@@ -11,7 +11,7 @@ Last Resort: Static mock data
 import logging
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -34,15 +34,15 @@ class BondDataFetcher:
     5. Chinabond (China Central Depository & Clearing)
     6. Static mock data
     """
-    
+
     def __init__(self, executor=None):
         self._executor = executor
         self._http_client = httpx.AsyncClient(timeout=15.0)
-    
+
     async def close(self):
         """Close HTTP client."""
         await self._http_client.aclose()
-    
+
     async def fetch_yield_curve(self) -> Dict[str, Any]:
         """
         Fetch bond yield curve with fallback sources.
@@ -63,39 +63,39 @@ class BondDataFetcher:
         if data and self._is_data_fresh(data):
             logger.info("[BondFetcher] Using bond_zh_us_rate data")
             return data
-        
+
         # Try fallback 1: bond_spot_quote (real-time dealer quotes)
         data = await self._fetch_from_bond_spot()
         if data and self._is_data_fresh(data):
             logger.info("[BondFetcher] Using bond_spot_quote data")
             return data
-        
+
         # Try fallback 2: bond_spot_deal (real-time deals)
         data = await self._fetch_from_bond_spot_deal()
         if data and self._is_data_fresh(data):
             logger.info("[BondFetcher] Using bond_spot_deal data")
             return data
-        
+
         # Try fallback 3: akshare (historical, may be stale)
         data = await self._fetch_from_akshare()
         if data:
             logger.warning("[BondFetcher] Using stale akshare data")
             return data
-        
+
         # Try fallback 4: CFETS
         data = await self._fetch_from_cfets()
         if data and self._is_data_fresh(data):
             return data
-        
+
         # Try fallback 5: Chinabond
         data = await self._fetch_from_chinabond()
         if data and self._is_data_fresh(data):
             return data
-        
+
         # Last resort: return mock data with stale flag
         logger.warning("[BondFetcher] All sources failed, using mock fallback")
         return self._get_mock_data(is_stale=True)
-    
+
     async def _fetch_from_bond_zh_us_rate(self) -> Optional[Dict[str, Any]]:
         """
         Fetch Chinese government bond yields from bond_zh_us_rate.
@@ -106,7 +106,7 @@ class BondDataFetcher:
             import akshare as ak
             import warnings
             warnings.filterwarnings('ignore')
-            
+
             if self._executor:
                 loop = asyncio.get_running_loop()
                 df = await asyncio.wait_for(
@@ -115,10 +115,10 @@ class BondDataFetcher:
                 )
             else:
                 df = await asyncio.to_thread(ak.bond_zh_us_rate)
-            
+
             if df is None or df.empty:
                 return None
-            
+
             return self._parse_bond_zh_us_rate_df(df)
         except asyncio.TimeoutError:
             logger.warning("[BondFetcher] bond_zh_us_rate timeout", exc_info=True)
@@ -126,12 +126,12 @@ class BondDataFetcher:
         except Exception as e:
             logger.warning(f"[BondFetcher] bond_zh_us_rate failed: {e}", exc_info=True)
             return None
-    
+
     def _parse_bond_zh_us_rate_df(self, df) -> Dict[str, Any]:
         """Parse bond_zh_us_rate DataFrame into yield curve format."""
         df = df.sort_values('日期').reset_index(drop=True)
         latest_row = df.iloc[-1]
-        
+
         yield_curve = {}
         tenor_map = {
             '中国国债收益率2年': '2年',
@@ -139,14 +139,14 @@ class BondDataFetcher:
             '中国国债收益率10年': '10年',
             '中国国债收益率30年': '30年',
         }
-        
+
         for col, tenor in tenor_map.items():
             if col in df.columns and latest_row[col] is not None:
                 try:
                     yield_curve[tenor] = round(float(latest_row[col]), 4)
                 except (ValueError, TypeError):
                     pass
-        
+
         # Linear interpolation for missing tenors (1Y, 3Y, 7Y)
         import numpy as np
         known_years = []
@@ -155,18 +155,18 @@ class BondDataFetcher:
             year = int(tenor.replace('年', ''))
             known_years.append(year)
             known_rates.append(rate)
-        
+
         if len(known_years) >= 2:
             for missing_year in [1, 3, 7]:
                 missing_tenor = f'{missing_year}年'
                 if missing_tenor not in yield_curve:
                     interpolated = float(np.interp(missing_year, known_years, known_rates))
                     yield_curve[missing_tenor] = round(interpolated, 4)
-        
+
         last_update = str(latest_row['日期'])
         if hasattr(latest_row['日期'], 'strftime'):
             last_update = latest_row['日期'].strftime("%Y-%m-%d")
-        
+
         return {
             "yield_curve": yield_curve,
             "yield_curve_1m": {},
@@ -178,7 +178,7 @@ class BondDataFetcher:
             "last_update": last_update,
             "is_stale": False,
         }
-    
+
     async def _fetch_from_bond_spot(self) -> Optional[Dict[str, Any]]:
         """
         Fetch real-time bond yield data from akshare bond_spot_quote.
@@ -189,7 +189,7 @@ class BondDataFetcher:
             import akshare as ak
             import warnings
             warnings.filterwarnings('ignore')
-            
+
             if self._executor:
                 loop = asyncio.get_running_loop()
                 df = await asyncio.wait_for(
@@ -198,10 +198,10 @@ class BondDataFetcher:
                 )
             else:
                 df = await asyncio.to_thread(ak.bond_spot_quote)
-            
+
             if df is None or df.empty:
                 return None
-            
+
             return self._parse_bond_spot_df(df)
         except asyncio.TimeoutError:
             logger.warning("[BondFetcher] bond_spot_quote timeout", exc_info=True)
@@ -209,7 +209,7 @@ class BondDataFetcher:
         except Exception as e:
             logger.warning(f"[BondFetcher] bond_spot_quote failed: {e}", exc_info=True)
             return None
-    
+
     async def _fetch_from_bond_spot_deal(self) -> Optional[Dict[str, Any]]:
         """
         Fetch real-time bond deal data from akshare bond_spot_deal.
@@ -220,7 +220,7 @@ class BondDataFetcher:
             import akshare as ak
             import warnings
             warnings.filterwarnings('ignore')
-            
+
             if self._executor:
                 loop = asyncio.get_running_loop()
                 df = await asyncio.wait_for(
@@ -229,10 +229,10 @@ class BondDataFetcher:
                 )
             else:
                 df = await asyncio.to_thread(ak.bond_spot_deal)
-            
+
             if df is None or df.empty:
                 return None
-            
+
             return self._parse_bond_spot_deal_df(df)
         except asyncio.TimeoutError:
             logger.warning("[BondFetcher] bond_spot_deal timeout", exc_info=True)
@@ -240,14 +240,14 @@ class BondDataFetcher:
         except Exception as e:
             logger.warning(f"[BondFetcher] bond_spot_deal failed: {e}", exc_info=True)
             return None
-    
+
     async def _fetch_from_akshare(self) -> Optional[Dict[str, Any]]:
         """Fetch from akshare bond_china_yield."""
         try:
             import akshare as ak
             import warnings
             warnings.filterwarnings("ignore")
-            
+
             if self._executor:
                 loop = asyncio.get_running_loop()
                 df = await asyncio.wait_for(
@@ -256,10 +256,10 @@ class BondDataFetcher:
                 )
             else:
                 df = await asyncio.to_thread(ak.bond_china_yield)
-            
+
             if df is None or df.empty:
                 return None
-            
+
             return self._parse_akshare_df(df)
         except asyncio.TimeoutError:
             logger.warning("[BondFetcher] akshare timeout", exc_info=True)
@@ -267,12 +267,12 @@ class BondDataFetcher:
         except Exception as e:
             logger.warning(f"[BondFetcher] akshare failed: {e}", exc_info=True)
             return None
-    
+
     def _parse_akshare_df(self, df) -> Dict[str, Any]:
         """Parse akshare DataFrame into yield curve data."""
         df = df.sort_values("日期").reset_index(drop=True)
         unique_dates = sorted(df["日期"].unique())
-        
+
         def parse_row(row):
             tenors = {}
             for col in ["3月", "6月", "1年", "3年", "5年", "7年", "10年", "30年"]:
@@ -282,31 +282,31 @@ class BondDataFetcher:
                     except (ValueError, TypeError):
                         pass
             return tenors
-        
+
         def get_gov_row(df_slice):
             for _, row in df_slice.iterrows():
                 cn = str(row.get("曲线名称", ""))
                 if "国债" in cn:
                     return parse_row(row)
             return None
-        
+
         latest_date = unique_dates[-1]
         latest_df = df[df["日期"] == latest_date]
         gov_row = get_gov_row(latest_df)
-        
+
         # Historical curves
         date_1m = unique_dates[-22] if len(unique_dates) >= 22 else None
         date_1y = unique_dates[-252] if len(unique_dates) >= 252 else None
         gov_row_1m = get_gov_row(df[df["日期"] == date_1m]) if date_1m else None
         gov_row_1y = get_gov_row(df[df["日期"] == date_1y]) if date_1y else None
-        
+
         # Commercial bank AAA curve
         comm_row = None
         for _, row in latest_df.iterrows():
             cn = str(row.get("曲线名称", ""))
             if "商业" in cn and comm_row is None:
                 comm_row = parse_row(row)
-        
+
         # Calculate spreads
         spreads = {}
         for col in ["3月", "6月", "1年", "3年", "5年", "7年", "10年", "30年"]:
@@ -314,12 +314,12 @@ class BondDataFetcher:
             o = comm_row.get(col) if comm_row else None
             if g is not None and o is not None:
                 spreads[col] = round((o - g) * 100, 2)  # bps
-        
+
         # Get the actual date from data
         last_update = str(latest_date)
         if hasattr(latest_date, 'strftime'):
             last_update = latest_date.strftime("%Y-%m-%d")
-        
+
         return {
             "yield_curve": gov_row or {},
             "yield_curve_1m": gov_row_1m or {},
@@ -331,7 +331,7 @@ class BondDataFetcher:
             "last_update": last_update,
             "is_stale": False,
         }
-    
+
     def _parse_bond_spot_df(self, df) -> Dict[str, Any]:
         """
         Parse bond_spot_quote DataFrame into yield curve format.
@@ -341,7 +341,7 @@ class BondDataFetcher:
         """
         # Filter for government bonds (国债)
         gov_bonds = df[df['债券简称'].str.contains('国债', na=False)]
-        
+
         # Build yield curve from quotes
         yield_curve = {}
         for _, row in gov_bonds.iterrows():
@@ -350,7 +350,7 @@ class BondDataFetcher:
                 # Use average of buy/sell yield
                 avg_yield = (row['买入收益率'] + row['卖出收益率']) / 2
                 yield_curve[tenor] = round(float(avg_yield), 4)
-        
+
         # Also get policy bank bonds (农发, 国开, 进出)
         policy_bonds = df[df['债券简称'].str.contains('农发|国开|进出', na=False)]
         comm_yield = {}
@@ -359,13 +359,13 @@ class BondDataFetcher:
             if tenor:
                 avg_yield = (row['买入收益率'] + row['卖出收益率']) / 2
                 comm_yield[tenor] = round(float(avg_yield), 4)
-        
+
         # Calculate spreads
         spreads = {}
         for tenor in yield_curve:
             if tenor in comm_yield:
                 spreads[tenor] = round((comm_yield[tenor] - yield_curve[tenor]) * 100, 2)
-        
+
         return {
             "yield_curve": yield_curve,
             "yield_curve_1m": {},
@@ -377,7 +377,7 @@ class BondDataFetcher:
             "last_update": datetime.now().strftime("%Y-%m-%d"),
             "is_stale": False,
         }
-    
+
     def _parse_bond_spot_deal_df(self, df) -> Dict[str, Any]:
         """
         Parse bond_spot_deal DataFrame into yield curve format.
@@ -386,7 +386,7 @@ class BondDataFetcher:
         """
         # Filter for government bonds (国债)
         gov_bonds = df[df['债券简称'].str.contains('国债', na=False)]
-        
+
         # Build yield curve from recent deals
         yield_curve = {}
         for _, row in gov_bonds.iterrows():
@@ -395,7 +395,7 @@ class BondDataFetcher:
                 # Use latest yield from deals
                 if '最新收益率' in row and row['最新收益率'] is not None:
                     yield_curve[tenor] = round(float(row['最新收益率']), 4)
-        
+
         # Also get policy bank bonds (农发, 国开, 进出)
         policy_bonds = df[df['债券简称'].str.contains('农发|国开|进出', na=False)]
         comm_yield = {}
@@ -404,13 +404,13 @@ class BondDataFetcher:
             if tenor:
                 if '最新收益率' in row and row['最新收益率'] is not None:
                     comm_yield[tenor] = round(float(row['最新收益率']), 4)
-        
+
         # Calculate spreads
         spreads = {}
         for tenor in yield_curve:
             if tenor in comm_yield:
                 spreads[tenor] = round((comm_yield[tenor] - yield_curve[tenor]) * 100, 2)
-        
+
         return {
             "yield_curve": yield_curve,
             "yield_curve_1m": {},
@@ -422,7 +422,7 @@ class BondDataFetcher:
             "last_update": datetime.now().strftime("%Y-%m-%d"),
             "is_stale": False,
         }
-    
+
     def _extract_tenor_from_bond_name(self, name: str) -> Optional[str]:
         """
         Extract tenor from bond name.
@@ -433,7 +433,7 @@ class BondDataFetcher:
         - "23附息国债05" -> "5年"
         """
         import re
-        
+
         # Try to extract year number from bond name
         match = re.search(r'(\d{2})$', name)
         if match:
@@ -451,9 +451,9 @@ class BondDataFetcher:
                 return "10年"
             else:
                 return "30年"
-        
+
         return None
-    
+
     async def _fetch_from_cfets(self) -> Optional[Dict[str, Any]]:
         """
         Fetch from CFETS (China Foreign Exchange Trade System).
@@ -464,25 +464,25 @@ class BondDataFetcher:
             response = await self._http_client.get(CFETS_BOND_API)
             if response.status_code != 200:
                 return None
-            
+
             data = response.json()
             if not data or "records" not in data:
                 return None
-            
+
             # Parse CFETS data format
             # CFETS typically provides: {records: [{bondCode, yield, ...}]}
             yield_curve = {}
             comm_yield = {}
             spreads = {}
-            
+
             for record in data.get("records", []):
                 # Map CFETS bond codes to tenors
                 bond_code = record.get("bondCode", "")
                 yield_val = record.get("yield")
-                
+
                 if yield_val is None:
                     continue
-                
+
                 # Try to extract tenor from bond code or name
                 tenor = self._map_cfets_code_to_tenor(bond_code, record.get("bondName", ""))
                 if tenor:
@@ -490,15 +490,15 @@ class BondDataFetcher:
                         yield_curve[tenor] = round(float(yield_val), 4)
                     else:
                         comm_yield[tenor] = round(float(yield_val), 4)
-            
+
             if not yield_curve:
                 return None
-            
+
             # Calculate spreads
             for tenor in yield_curve:
                 if tenor in comm_yield:
                     spreads[tenor] = round((comm_yield[tenor] - yield_curve[tenor]) * 100, 2)
-            
+
             return {
                 "yield_curve": yield_curve,
                 "yield_curve_1m": {},
@@ -513,7 +513,7 @@ class BondDataFetcher:
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.warning(f"[HTTP] failed: {e}", exc_info=True)
             return None
-    
+
     async def _fetch_from_chinabond(self) -> Optional[Dict[str, Any]]:
         """
         Fetch from Chinabond (China Central Depository & Clearing).
@@ -526,15 +526,15 @@ class BondDataFetcher:
                 CHINABOND_API,
                 params={"type": "gov"}  # Government bonds
             )
-            
+
             if response.status_code != 200:
                 return None
-            
+
             # Parse response (format varies, this is a simplified example)
             data = response.json()
             if not data:
                 return None
-            
+
             # Try to extract yield curve data
             yield_curve = {}
             if isinstance(data, list):
@@ -543,10 +543,10 @@ class BondDataFetcher:
                     rate = item.get("rate")
                     if tenor and rate:
                         yield_curve[tenor] = round(float(rate), 4)
-            
+
             if not yield_curve:
                 return None
-            
+
             return {
                 "yield_curve": yield_curve,
                 "yield_curve_1m": {},
@@ -561,12 +561,12 @@ class BondDataFetcher:
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.warning(f"[HTTP] failed: {e}", exc_info=True)
             return None
-    
+
     def _map_cfets_code_to_tenor(self, code: str, name: str) -> Optional[str]:
         """Map CFETS bond code/name to standard tenor label."""
         # Try to extract tenor from name first
         name_lower = name.lower()
-        
+
         tenor_map = {
             "3月": ["3m", "3个月", "三个月"],
             "6月": ["6m", "6个月", "六个月"],
@@ -577,40 +577,40 @@ class BondDataFetcher:
             "10年": ["10y", "10年", "十年"],
             "30年": ["30y", "30年", "三十年"],
         }
-        
+
         for tenor, keywords in tenor_map.items():
             for kw in keywords:
                 if kw in name_lower:
                     return tenor
-        
+
         return None
-    
+
     def _is_data_fresh(self, data: Dict[str, Any]) -> bool:
         """Check if data is fresh (within STALE_DATA_THRESHOLD_DAYS)."""
         if not data:
             return False
-        
+
         last_update_str = data.get("last_update", "")
         if not last_update_str:
             return False
-        
+
         try:
             # Parse date string
             if isinstance(last_update_str, str):
                 last_update = datetime.strptime(last_update_str, "%Y-%m-%d")
             else:
                 last_update = last_update_str
-            
+
             # Check if within threshold
             threshold = datetime.now() - timedelta(days=STALE_DATA_THRESHOLD_DAYS)
             return last_update >= threshold
         except (ValueError, TypeError):
             return False
-    
+
     def _get_mock_data(self, is_stale: bool = True) -> Dict[str, Any]:
         """Return static mock data for fallback."""
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        
+
         return {
             "yield_curve": {
                 "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,

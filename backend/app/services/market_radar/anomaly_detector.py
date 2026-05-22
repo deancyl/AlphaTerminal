@@ -12,12 +12,11 @@ Detects 5 types of anomalies:
 import logging
 import asyncio
 import httpx
-import requests
 from requests.exceptions import ConnectionError as RequestsConnectionError, ProxyError
 from urllib3.exceptions import MaxRetryError
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass
 from http.client import RemoteDisconnected
@@ -65,7 +64,7 @@ def _fetch_all_stocks_sync() -> List[Dict]:
         logger.info("[Anomaly] CB OPEN, using Sina fallback")
         from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
         return fetch_all_stocks_sina_sync()
-    
+
     try:
         import akshare as ak
         df = ak.stock_zh_a_spot_em()
@@ -101,7 +100,7 @@ def _fetch_capital_flow_sync() -> List[Dict]:
     if _EASTMONEY_CB.state == CircuitState.OPEN:
         logger.info("[Anomaly] CB OPEN, skipping capital flow")
         return []
-    
+
     try:
         import akshare as ak
         df = ak.stock_individual_fund_flow(stock="即时", market="sh")
@@ -132,7 +131,7 @@ def _fetch_institution_research_sync() -> List[Dict]:
     if _EASTMONEY_CB.state == CircuitState.OPEN:
         logger.info("[Anomaly] CB OPEN, skipping institution research")
         return []
-    
+
     try:
         import akshare as ak
         df = ak.stock_jgdy_tj_em()
@@ -163,7 +162,7 @@ def _fetch_kline_sync(symbol: str, days: int = 60) -> tuple:
         df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
         if df is None or df.empty:
             return (symbol, [])
-        
+
         df = df.tail(days)
         klines = []
         for _, row in df.iterrows():
@@ -203,12 +202,12 @@ async def _fetch_kline_batch(symbols: List[str], days: int = 60) -> Dict[str, Li
     """
     loop = asyncio.get_running_loop()
     limited_symbols = symbols[:20]
-    
+
     tasks = [
         loop.run_in_executor(_executor, _fetch_kline_sync, symbol, days)
         for symbol in limited_symbols
     ]
-    
+
     results = {}
     try:
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
@@ -222,7 +221,7 @@ async def _fetch_kline_batch(symbols: List[str], days: int = 60) -> Dict[str, Li
                     results[symbol] = klines
     except Exception as e:
         logger.error(f"[Anomaly] Parallel kline batch failed: {e}", exc_info=True)
-    
+
     return results
 
 
@@ -259,17 +258,17 @@ async def _fetch_kline_batch(symbols: List[str], days: int = 60) -> Dict[str, Li
 def _detect_volatility(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
     """Detect stocks with highest volatility (amplitude)."""
     volatility_stocks = []
-    
+
     for stock in stocks:
         high = stock.get("high", 0)
         low = stock.get("low", 0)
         pre_close = stock.get("pre_close", 0)
-        
+
         if pre_close <= 0:
             continue
-        
+
         amplitude = abs(high - low) / pre_close * 100
-        
+
         if amplitude > 0:
             symbol = stock.get("symbol", "")
             full_symbol = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
@@ -278,9 +277,9 @@ def _detect_volatility(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
                 "name": stock.get("name", ""),
                 "amplitude": amplitude,
             })
-    
+
     volatility_stocks.sort(key=lambda x: x["amplitude"], reverse=True)
-    
+
     return AnomalyResult(
         type=AnomalyType.VOLATILITY,
         title="振幅最大",
@@ -299,10 +298,10 @@ def _detect_volatility(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
 def _detect_capital_outflow(flows: List[Dict], top_n: int = 10) -> AnomalyResult:
     """Detect stocks with strongest capital outflow."""
     outflow_stocks = []
-    
+
     for flow in flows:
         main_net = flow.get("main_net_inflow", 0)
-        
+
         if main_net < 0:
             symbol = flow.get("symbol", "")
             full_symbol = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
@@ -311,9 +310,9 @@ def _detect_capital_outflow(flows: List[Dict], top_n: int = 10) -> AnomalyResult
                 "name": flow.get("name", ""),
                 "outflow": main_net / 1e8,
             })
-    
+
     outflow_stocks.sort(key=lambda x: x["outflow"])
-    
+
     return AnomalyResult(
         type=AnomalyType.CAPITAL_OUTFLOW,
         title="资金净流出最坚决",
@@ -332,7 +331,7 @@ def _detect_capital_outflow(flows: List[Dict], top_n: int = 10) -> AnomalyResult
 def _detect_institution_research(research: List[Dict], top_n: int = 10) -> AnomalyResult:
     """Detect most researched stocks by institutions."""
     research_stocks = []
-    
+
     for r in research:
         count = r.get("research_count", 0)
         if count > 0:
@@ -343,9 +342,9 @@ def _detect_institution_research(research: List[Dict], top_n: int = 10) -> Anoma
                 "name": r.get("name", ""),
                 "count": count,
             })
-    
+
     research_stocks.sort(key=lambda x: x["count"], reverse=True)
-    
+
     return AnomalyResult(
         type=AnomalyType.INSTITUTION_RESEARCH,
         title="机构调研最密集",
@@ -368,11 +367,11 @@ def _detect_new_high_simple(stocks: List[Dict], top_n: int = 10) -> AnomalyResul
     Used when K-line data is not available.
     """
     high_stocks = []
-    
+
     for stock in stocks:
         price = stock.get("price", 0)
         change_pct = stock.get("change_pct", 0)
-        
+
         if price > 0 and change_pct > 3:  # Lower threshold for fallback
             symbol = stock.get("symbol", "")
             full_symbol = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
@@ -381,9 +380,9 @@ def _detect_new_high_simple(stocks: List[Dict], top_n: int = 10) -> AnomalyResul
                 "name": stock.get("name", ""),
                 "change_pct": change_pct,
             })
-    
+
     high_stocks.sort(key=lambda x: x["change_pct"], reverse=True)
-    
+
     return AnomalyResult(
         type=AnomalyType.NEW_HIGH,
         title="涨幅居前",
@@ -400,8 +399,8 @@ def _detect_new_high_simple(stocks: List[Dict], top_n: int = 10) -> AnomalyResul
 
 
 def _detect_new_high_with_kline(
-    stocks: List[Dict], 
-    kline_data: Dict[str, List[Dict]], 
+    stocks: List[Dict],
+    kline_data: Dict[str, List[Dict]],
     top_n: int = 10
 ) -> AnomalyResult:
     """
@@ -412,37 +411,37 @@ def _detect_new_high_with_kline(
     2. Has positive momentum (change_pct > 0)
     """
     high_stocks = []
-    
+
     for stock in stocks:
         symbol = stock.get("symbol", "")
         if not symbol:
             continue
-        
+
         # Check if we have K-line data for this symbol
         klines = kline_data.get(symbol, [])
         if not klines or len(klines) < 10:  # Need at least 10 days of data
             continue
-        
+
         current_price = stock.get("price", 0)
         if current_price <= 0:
             continue
-        
+
         # Calculate 60-day high (excluding today)
         historical_highs = [k["high"] for k in klines[:-1] if k["high"] > 0]
         if not historical_highs:
             continue
-        
+
         period_high = max(historical_highs)
-        
+
         # Check if current price is at or above period high
         if current_price >= period_high * 0.98:  # Allow 2% tolerance
             change_pct = stock.get("change_pct", 0)
             full_symbol = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
-            
+
             # Calculate weeks since last high
             days_to_high = len(klines)
             weeks = round(days_to_high / 5, 1)  # Approximate weeks
-            
+
             high_stocks.append({
                 "symbol": full_symbol,
                 "name": stock.get("name", ""),
@@ -450,10 +449,10 @@ def _detect_new_high_with_kline(
                 "weeks_to_high": weeks,
                 "period_high": period_high,
             })
-    
+
     # Sort by change percentage
     high_stocks.sort(key=lambda x: x["change_pct"], reverse=True)
-    
+
     return AnomalyResult(
         type=AnomalyType.NEW_HIGH,
         title="创60日新高",
@@ -472,7 +471,7 @@ def _detect_new_high_with_kline(
 def _detect_volume_surge(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
     """Detect stocks with unusual volume (simplified - based on amount)."""
     volume_stocks = []
-    
+
     for stock in stocks:
         amount = stock.get("amount", 0)
         if amount > 0:
@@ -483,9 +482,9 @@ def _detect_volume_surge(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
                 "name": stock.get("name", ""),
                 "amount": amount / 1e8,
             })
-    
+
     volume_stocks.sort(key=lambda x: x["amount"], reverse=True)
-    
+
     return AnomalyResult(
         type=AnomalyType.VOLUME_SURGE,
         title="成交额最大",
@@ -538,18 +537,18 @@ async def _detect_anomalies_internal(
     """Internal anomaly detection logic."""
     results = []
     using_fallback = False
-    
+
     if anomaly_type in (None, AnomalyType.VOLATILITY, AnomalyType.NEW_HIGH, AnomalyType.VOLUME_SURGE):
         stocks = await _fetch_all_stocks()
-        
+
         # Check if we're using fallback data
         if _EASTMONEY_CB.state == CircuitState.OPEN:
             using_fallback = True
-        
+
         if stocks:
             if anomaly_type in (None, AnomalyType.VOLATILITY):
                 results.append(_detect_volatility(stocks, top_n))
-            
+
             if anomaly_type in (None, AnomalyType.NEW_HIGH):
                 # P1-4: Try to use K-line data for true new high detection
                 try:
@@ -559,11 +558,11 @@ async def _detect_anomalies_internal(
                         key=lambda x: x.get("change_pct", 0),
                         reverse=True
                     )[:20]  # P0: Reduced from 50 to 20 to match kline batch limit
-                    
+
                     if gainers:
                         symbols = [s.get("symbol", "") for s in gainers if s.get("symbol")]
                         kline_data = await _fetch_kline_batch(symbols, days=60)
-                        
+
                         if kline_data:
                             results.append(_detect_new_high_with_kline(stocks, kline_data, top_n))
                         else:
@@ -574,20 +573,20 @@ async def _detect_anomalies_internal(
                 except (httpx.HTTPError, asyncio.TimeoutError, RequestsConnectionError, ProxyError, RemoteDisconnected, MaxRetryError) as e:
                     logger.warning(f"[HTTP] failed, using fallback: {e}", exc_info=True)
                     results.append(_detect_new_high_simple(stocks, top_n))
-            
+
             if anomaly_type in (None, AnomalyType.VOLUME_SURGE):
                 results.append(_detect_volume_surge(stocks, top_n))
-    
+
     if anomaly_type in (None, AnomalyType.CAPITAL_OUTFLOW):
         flows = await _fetch_capital_flow()
         if flows:
             results.append(_detect_capital_outflow(flows, top_n))
-    
+
     if anomaly_type in (None, AnomalyType.INSTITUTION_RESEARCH):
         research = await _fetch_institution_research()
         if research:
             results.append(_detect_institution_research(research, top_n))
-    
+
     return {
         "anomalies": [
             {

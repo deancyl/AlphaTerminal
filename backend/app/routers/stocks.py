@@ -10,7 +10,6 @@ Timeout Behavior:
 import asyncio
 import logging
 import os
-import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter, Query
@@ -187,10 +186,10 @@ def _load_stock_cache():
     global _STOCK_CACHE, _STOCK_CACHE_LOADED
     if _STOCK_CACHE_LOADED:
         return
-    
+
     try:
         from app.utils.sina_stock_fetcher import fetch_all_stocks_sina
-        
+
         stocks = fetch_all_stocks_sina(
             page_size=500,
             max_pages=20,
@@ -198,7 +197,7 @@ def _load_stock_cache():
             exclude_bj=True,
             delay=0.3
         )
-        
+
         if stocks and len(stocks) > 100:
             for stock in stocks:
                 symbol = stock['symbol']
@@ -213,12 +212,12 @@ def _load_stock_cache():
             logger.warning(f"[Stocks] Sina fetch returned {len(stocks) if stocks else 0} stocks, using fallback")
             _STOCK_CACHE = _COMMON_STOCKS.copy()
             logger.info(f"[Stocks] Stock cache loaded from fallback: {len(_STOCK_CACHE)} stocks")
-        
+
     except Exception as e:
         logger.error(f"[Stocks] Cache load error: {e}", exc_info=True)
         _STOCK_CACHE = _COMMON_STOCKS.copy()
         logger.info(f"[Stocks] Stock cache loaded from fallback: {len(_STOCK_CACHE)} stocks")
-    
+
     _STOCK_CACHE_LOADED = True
 
 
@@ -261,20 +260,20 @@ def _search_stocks_local(q):
     q_lower = q.lower()
     results = []
     seen = set()
-    
+
     def add_stock(stock):
         key = stock['code']
         if key not in seen:
             seen.add(key)
             results.append(stock)
-    
+
     # 优先搜索常用股票
     for stock in _COMMON_STOCKS:
         if q_lower in stock['code'].lower() or q_lower in stock['name'].lower():
             add_stock(stock)
             if len(results) >= 20:
                 return results
-    
+
     # 再搜索全量缓存（沪/深股票）
     _load_stock_cache()  # 确保缓存已加载
     for stock in _STOCK_CACHE:
@@ -282,7 +281,7 @@ def _search_stocks_local(q):
             add_stock(stock)
             if len(results) >= 20:
                 break
-    
+
     return results
 
 
@@ -290,7 +289,7 @@ def _search_stocks_local(q):
 @handle_errors(module="stocks")
 async def search_stocks(q: str = ""):
     logger.info(f"[Stocks] search called with q='{q}'")
-    
+
     if not q or len(q) < 1:
         return success_response({'stocks': [], 'count': 0})
 
@@ -307,7 +306,7 @@ async def search_stocks(q: str = ""):
     except Exception as e:
         logger.warning(f"[Stocks] search error: {e}", exc_info=True)
         results = []
-    
+
     return success_response({'stocks': results, 'count': len(results)})
 
 
@@ -331,10 +330,10 @@ async def get_all_stocks(
     """
     try:
         from app.db.database import get_all_stocks
-        
+
         # Use database-level search for better performance
         total, stocks = get_all_stocks(limit=limit, offset=offset, search=q if q else None)
-        
+
         return success_response({
             'stocks': stocks,
             'count': len(stocks),
@@ -358,12 +357,12 @@ async def get_quote(symbol: str):
                 else:
                     sym = 'sz' + sym
                 bare_symbol = symbol
-            
+
             with httpx.Client(timeout=5.0) as client:
                 resp = client.get(f"https://qt.gtimg.cn/q={sym}")
                 resp.raise_for_status()
                 raw = resp.text
-            
+
             result = {
                 'symbol': symbol,
                 'name': '',
@@ -385,7 +384,7 @@ async def get_quote(symbol: str):
                 'listDate': None,
                 'business': '暂无主营业务数据',
             }
-            
+
             for line in raw.splitlines():
                 line = line.strip()
                 if "=" not in line or "none_match" in line:
@@ -411,10 +410,10 @@ async def get_quote(symbol: str):
                 except (ValueError, IndexError) as e:
                     logger.debug(f"[Stocks] parse line error: {e}")
                     continue
-            
+
             try:
                 import akshare as ak
-                
+
                 if bare_symbol.startswith('6'):
                     try:
                         info_df = ak.stock_info_sh_name_code()
@@ -426,7 +425,7 @@ async def get_quote(symbol: str):
                                     result['listDate'] = str(list_date)
                     except Exception as e:
                         logger.debug(f"[Stocks] stock_info_sh_name_code error: {e}")
-                
+
                 try:
                     profile_df = ak.stock_profile_cninfo(symbol=bare_symbol)
                     if profile_df is not None and len(profile_df) > 0:
@@ -439,16 +438,16 @@ async def get_quote(symbol: str):
                             result['listDate'] = str(profile.get('上市日期', '')) if profile.get('上市日期') else None
                 except Exception as e:
                     logger.debug(f"[Stocks] stock_profile_cninfo error for {bare_symbol}: {e}")
-                
+
                 try:
                     exchange = "SH" if bare_symbol.startswith('6') else "SZ"
                     spot_df = ak.stock_individual_spot_xq(symbol=f"{exchange}{bare_symbol}")
                     if spot_df is not None and len(spot_df) > 0:
                         spot_data = dict(zip(spot_df['item'], spot_df['value']))
-                        
+
                         float_shares = spot_data.get('流通股')
                         float_market_cap = spot_data.get('流通值')
-                        
+
                         if float_shares:
                             try:
                                 result['floatShares'] = float(float_shares)
@@ -461,7 +460,7 @@ async def get_quote(symbol: str):
                                 logger.debug(f"[Stocks] Failed to parse floatMarketCap for {bare_symbol}: {e}")
                 except Exception as e:
                     logger.debug(f"[Stocks] stock_individual_spot_xq error for {bare_symbol}: {e}")
-                
+
                 if not result.get('totalShares'):
                     try:
                         from datetime import datetime
@@ -475,7 +474,7 @@ async def get_quote(symbol: str):
                                 result['totalShares'] = float(total_wan) * 10000
                     except Exception as e:
                         logger.debug(f"[Stocks] stock_share_change_cninfo error for {bare_symbol}: {e}")
-                
+
                 if not result.get('totalShares'):
                     try:
                         holder_df = ak.stock_main_stock_holder(stock=bare_symbol)
@@ -488,7 +487,7 @@ async def get_quote(symbol: str):
                                 logger.debug(f"[Stocks] Derived totalShares from stock_main_stock_holder: {result['totalShares']}")
                     except Exception as e:
                         logger.debug(f"[Stocks] stock_main_stock_holder error for {bare_symbol}: {e}")
-                
+
                 if not result.get('industry') or result['industry'] == '--':
                     try:
                         info_df = ak.stock_individual_info_em(symbol=bare_symbol)
@@ -498,7 +497,7 @@ async def get_quote(symbol: str):
                                 result['industry'] = info_dict.get('行业', '--') or '--'
                             if not result.get('business') or result['business'] == '暂无主营业务数据':
                                 result['business'] = info_dict.get('主营业务', '暂无主营业务数据') or '暂无主营业务数据'
-                            
+
                             def parse_capital(value):
                                 if not value:
                                     return None
@@ -512,12 +511,12 @@ async def get_quote(symbol: str):
                                         return float(value)
                                 except (ValueError, TypeError):
                                     return None
-                            
+
                             if not result.get('totalShares'):
                                 result['totalShares'] = parse_capital(info_dict.get('总股本', None))
                             if not result.get('floatShares'):
                                 result['floatShares'] = parse_capital(info_dict.get('流通股', None))
-                            
+
                             if result['price'] > 0:
                                 if result.get('totalShares') and not result.get('totalMarketCap'):
                                     result['totalMarketCap'] = result['price'] * result['totalShares']
@@ -525,10 +524,10 @@ async def get_quote(symbol: str):
                                     result['floatMarketCap'] = result['price'] * result['floatShares']
                     except Exception as e:
                         logger.debug(f"[Stocks] stock_individual_info_em error for {bare_symbol}: {e}")
-                    
+
             except Exception as e:
                 logger.debug(f"[Stocks] akshare info error for {bare_symbol}: {e}")
-            
+
             return result
         except Exception as e:
             logger.warning(f"[Stocks] quote error for {symbol}: {e}", exc_info=True)
@@ -554,15 +553,15 @@ async def get_limit_summary():
         try:
             zt_df = ak.stock_zt_pool_em(date=today)
             dt_df = ak.stock_zt_pool_dtgc_em(date=today)
-            
+
             zt_count = len(zt_df) if zt_df is not None else 0
             dt_count = len(dt_df) if dt_df is not None else 0
-            
+
             industry_dist = {}
             if zt_df is not None and len(zt_df) > 0:
                 industry_counts = zt_df['所属行业'].astype(str).value_counts()
                 industry_dist = industry_counts.to_dict()
-            
+
             def _safe_sort_by_turnover(df):
                 if df is None or len(df) == 0:
                     return None
@@ -571,11 +570,11 @@ async def get_limit_summary():
                 if col is None:
                     return None
                 return df.sort_values(col, ascending=False).head(5)
-            
+
             strong_df = _safe_sort_by_turnover(zt_df)
             CHANGE_COLS = ['涨跌幅', '涨跌额', 'change_pct']
             NAME_COLS = ['名称', 'name', '股票名称']
-            
+
             return {
                 'date': today,
                 'zt_count': zt_count,

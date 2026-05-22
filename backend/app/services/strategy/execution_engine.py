@@ -28,7 +28,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 import pandas as pd
 
 # Configure logger with DEBUG level
@@ -87,7 +87,7 @@ class ExecutionMetrics:
     avg_bar_time_ms: float = 0.0
     peak_memory_mb: float = 0.0
     cpu_usage_pct: float = 0.0
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -135,7 +135,7 @@ class ExecutionResult:
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     debug_log: List[str] = field(default_factory=list)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
@@ -183,7 +183,7 @@ class ExecutionConfig:
     take_profit_pct: float = 0.0
     enable_debug_logging: bool = True
     debug_level: int = 5
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -219,7 +219,7 @@ class StrategyExecutionEngine:
         engine = StrategyExecutionEngine()
         result = engine.execute_strategy(compiled_strategy, data)
     """
-    
+
     def __init__(self, config: Optional[ExecutionConfig] = None):
         """
         Initialize execution engine.
@@ -230,11 +230,11 @@ class StrategyExecutionEngine:
         self._config = config or ExecutionConfig()
         self._debug_log: List[str] = []
         self._active_executions: Dict[str, ExecutionResult] = {}
-        
+
         # Import dependencies
         self._backtest_engine = None
         self._strategy_compiler = None
-        
+
         # ══════════════════════════════════════════════════════════════
         # DEBUG CYCLE 1: Execution Initialization
         # ══════════════════════════════════════════════════════════════
@@ -254,12 +254,12 @@ class StrategyExecutionEngine:
         self._log_debug("-" * 80)
         self._log_debug("✓ Execution engine initialized successfully")
         self._log_debug("")
-    
+
     def _log_debug(self, message: str):
         """Add message to debug log"""
         self._debug_log.append(message)
         logger.debug(message)
-    
+
     def _get_backtest_engine(self):
         """Lazy load BacktestEngine"""
         if self._backtest_engine is None:
@@ -270,7 +270,7 @@ class StrategyExecutionEngine:
             self._TradeDirection = TradeDirection
             self._backtest_engine = True
         return self._BacktestEngine, self._BacktestConfig
-    
+
     def _get_strategy_compiler(self):
         """Lazy load StrategyCompiler"""
         if self._strategy_compiler is None:
@@ -279,7 +279,7 @@ class StrategyExecutionEngine:
             self._CompilationResult = CompilationResult
             self._strategy_compiler = True
         return self._StrategyCompiler
-    
+
     def execute_strategy(
         self,
         compiled_strategy: Any,
@@ -306,9 +306,9 @@ class StrategyExecutionEngine:
         execution_id = str(uuid.uuid4())
         strategy_id = strategy_id or f"strategy_{int(time.time())}"
         strategy_name = strategy_name or "Unnamed Strategy"
-        
+
         start_time = datetime.now()
-        
+
         result = ExecutionResult(
             execution_id=execution_id,
             strategy_id=strategy_id,
@@ -317,9 +317,9 @@ class StrategyExecutionEngine:
             status=ExecutionStatus.PENDING,
             start_time=start_time,
         )
-        
+
         self._active_executions[execution_id] = result
-        
+
         try:
             # ══════════════════════════════════════════════════════════════
             # DEBUG CYCLE 2: Strategy Compilation Check
@@ -327,58 +327,58 @@ class StrategyExecutionEngine:
             self._log_debug("=" * 80)
             self._log_debug("DEBUG CYCLE 2: STRATEGY COMPILATION CHECK")
             self._log_debug("=" * 80)
-            
+
             execute_func = None
             spec = None
-            
+
             # Check if compiled_strategy is a CompilationResult
             if hasattr(compiled_strategy, 'execute_func'):
                 # It's a CompilationResult
                 if not compiled_strategy.success:
                     raise ValueError(f"Strategy compilation failed: {compiled_strategy.errors}")
-                
+
                 execute_func = compiled_strategy.execute_func
                 spec = compiled_strategy.spec
-                
-                self._log_debug(f"Strategy Type: CompilationResult")
+
+                self._log_debug("Strategy Type: CompilationResult")
                 self._log_debug(f"Strategy Name: {spec.name if spec else 'Unknown'}")
                 self._log_debug(f"Strategy Type: {spec.strategy_type if spec else 'Unknown'}")
-                self._log_debug(f"Compilation Success: True")
+                self._log_debug("Compilation Success: True")
                 self._log_debug(f"Parameters: {list(spec.parameters.keys()) if spec else []}")
-                
+
             elif callable(compiled_strategy):
                 # It's already an execute function
                 execute_func = compiled_strategy
-                
-                self._log_debug(f"Strategy Type: Callable Function")
+
+                self._log_debug("Strategy Type: Callable Function")
                 self._log_debug(f"Strategy Name: {strategy_name}")
                 self._log_debug(f"Function: {execute_func.__name__ if hasattr(execute_func, '__name__') else 'lambda'}")
-                
+
             else:
                 raise ValueError(f"Invalid strategy type: {type(compiled_strategy)}")
-            
+
             self._log_debug("✓ Strategy compilation validated")
             self._log_debug("")
-            
+
             # Update status
             result.status = ExecutionStatus.RUNNING
-            
+
             # ══════════════════════════════════════════════════════════════
             # DEBUG CYCLE 3: Data Loading Validation
             # ══════════════════════════════════════════════════════════════
             self._log_debug("=" * 80)
             self._log_debug("DEBUG CYCLE 3: DATA LOADING VALIDATION")
             self._log_debug("=" * 80)
-            
+
             # Validate data
             if data is None or len(data) == 0:
                 raise ValueError("Data cannot be empty")
-            
+
             required_cols = ['open', 'high', 'low', 'close', 'volume']
             missing_cols = [col for col in required_cols if col not in data.columns]
             if missing_cols:
                 raise ValueError(f"Missing required columns: {missing_cols}")
-            
+
             # Ensure timestamp column
             if 'timestamp' not in data.columns:
                 if isinstance(data.index, pd.DatetimeIndex):
@@ -386,7 +386,7 @@ class StrategyExecutionEngine:
                     data.rename(columns={'index': 'timestamp'}, inplace=True)
                 else:
                     data['timestamp'] = pd.date_range(start='2020-01-01', periods=len(data), freq='D')
-            
+
             self._log_debug(f"Data Shape: {data.shape[0]} rows × {data.shape[1]} columns")
             self._log_debug(f"Date Range: {data['timestamp'].min()} to {data['timestamp'].max()}")
             self._log_debug(f"Price Range: ${data['close'].min():.2f} to ${data['close'].max():.2f}")
@@ -394,19 +394,19 @@ class StrategyExecutionEngine:
             self._log_debug(f"Symbol: {symbol}")
             self._log_debug("✓ Data validated successfully")
             self._log_debug("")
-            
+
             # ══════════════════════════════════════════════════════════════
             # DEBUG CYCLE 4: Execution Progress Tracking
             # ══════════════════════════════════════════════════════════════
             self._log_debug("=" * 80)
             self._log_debug("DEBUG CYCLE 4: EXECUTION PROGRESS TRACKING")
             self._log_debug("=" * 80)
-            
+
             execution_start = time.time()
-            
+
             # Create backtest configuration
             BacktestEngine, BacktestConfig = self._get_backtest_engine()
-            
+
             backtest_config = BacktestConfig(
                 initial_capital=self._config.initial_capital,
                 commission=self._config.commission,
@@ -417,19 +417,19 @@ class StrategyExecutionEngine:
                 stop_loss_pct=self._config.stop_loss_pct,
                 take_profit_pct=self._config.take_profit_pct,
             )
-            
-            self._log_debug(f"Backtest Config Created:")
+
+            self._log_debug("Backtest Config Created:")
             self._log_debug(f"  Initial Capital: ${backtest_config.initial_capital:,.2f}")
             self._log_debug(f"  Commission: {backtest_config.commission * 100:.4f}%")
             self._log_debug(f"  Slippage: {backtest_config.slippage * 100:.4f}%")
-            
+
             # Create backtest engine
             bt_engine = BacktestEngine(backtest_config)
-            
+
             self._log_debug("Backtest Engine Created")
             self._log_debug("Starting Strategy Execution...")
             self._log_debug("")
-            
+
             # Wrap execute function for backtest
             def strategy_wrapper(ctx):
                 """Wrapper to execute strategy with context"""
@@ -443,16 +443,16 @@ class StrategyExecutionEngine:
                         'volume': ctx.volume,
                         'timestamp': ctx.timestamp,
                     }
-                    
+
                     # Create single-row DataFrame
                     bar_df = pd.DataFrame([bar_data])
-                    
+
                     # Execute strategy
                     if spec and spec.strategy_type == "indicator":
                         # Indicator strategy
                         params_dict = params or {}
                         output = execute_func(bar_df, params_dict)
-                        
+
                         # Process signals
                         if output and 'signals' in output:
                             signals = output['signals']
@@ -465,7 +465,7 @@ class StrategyExecutionEngine:
                     else:
                         # Script strategy or callable
                         output = execute_func(bar_df)
-                        
+
                         # Process output
                         if output and 'signals' in output:
                             signals = output['signals']
@@ -475,30 +475,30 @@ class StrategyExecutionEngine:
                             elif signals.get('sell', False):
                                 if ctx.has_position(symbol):
                                     ctx.close_position(symbol)
-                                
+
                 except Exception as e:
                     self._log_debug(f"ERROR in strategy execution at bar: {e}")
                     logger.warning(f"Strategy execution error: {e}", exc_info=True)
-            
+
             # Run backtest
             self._log_debug("Running Backtest...")
             backtest_result = bt_engine.run_strategy(strategy_wrapper, data, symbol)
-            
+
             execution_time_ms = (time.time() - execution_start) * 1000
-            
+
             self._log_debug(f"Execution Time: {execution_time_ms:.2f}ms")
             self._log_debug(f"Bars Processed: {len(data)}")
             self._log_debug(f"Trades Executed: {len(backtest_result.trades)}")
             self._log_debug("✓ Execution completed")
             self._log_debug("")
-            
+
             # ══════════════════════════════════════════════════════════════
             # DEBUG CYCLE 5: Result Generation and Storage
             # ══════════════════════════════════════════════════════════════
             self._log_debug("=" * 80)
             self._log_debug("DEBUG CYCLE 5: RESULT GENERATION AND STORAGE")
             self._log_debug("=" * 80)
-            
+
             # Create execution metrics
             metrics = ExecutionMetrics(
                 execution_time_ms=execution_time_ms,
@@ -506,13 +506,13 @@ class StrategyExecutionEngine:
                 trades_executed=len(backtest_result.trades),
                 avg_bar_time_ms=execution_time_ms / len(data) if len(data) > 0 else 0.0,
             )
-            
-            self._log_debug(f"Metrics Generated:")
+
+            self._log_debug("Metrics Generated:")
             self._log_debug(f"  Execution Time: {metrics.execution_time_ms:.2f}ms")
             self._log_debug(f"  Bars Processed: {metrics.bars_processed}")
             self._log_debug(f"  Trades Executed: {metrics.trades_executed}")
             self._log_debug(f"  Avg Bar Time: {metrics.avg_bar_time_ms:.4f}ms")
-            
+
             # Update result
             result.status = ExecutionStatus.COMPLETED
             result.end_time = datetime.now()
@@ -521,14 +521,14 @@ class StrategyExecutionEngine:
             result.equity_curve = [e.to_dict() for e in backtest_result.equity_curve]
             result.backtest_result = backtest_result.to_dict()
             result.debug_log = self._debug_log.copy()
-            
-            self._log_debug(f"Result Generated:")
+
+            self._log_debug("Result Generated:")
             self._log_debug(f"  Execution ID: {result.execution_id}")
             self._log_debug(f"  Strategy ID: {result.strategy_id}")
             self._log_debug(f"  Status: {result.status.value}")
             self._log_debug(f"  Trades: {len(result.trades)}")
             self._log_debug(f"  Equity Points: {len(result.equity_curve)}")
-            
+
             # Log performance summary
             if backtest_result.trades:
                 total_return = backtest_result.metrics.total_return
@@ -536,21 +536,21 @@ class StrategyExecutionEngine:
                 sharpe = backtest_result.metrics.sharpe_ratio
                 max_dd = backtest_result.metrics.max_drawdown_pct
                 win_rate = backtest_result.metrics.win_rate
-                
+
                 self._log_debug("")
                 self._log_debug("Performance Summary:")
                 self._log_debug(f"  Total Return: ${total_return:,.2f} ({total_return_pct:.2f}%)")
                 self._log_debug(f"  Sharpe Ratio: {sharpe:.3f}")
                 self._log_debug(f"  Max Drawdown: {max_dd:.2f}%")
                 self._log_debug(f"  Win Rate: {win_rate:.2f}%")
-            
+
             self._log_debug("✓ Result stored successfully")
             self._log_debug("=" * 80)
             self._log_debug("✓ EXECUTION COMPLETED SUCCESSFULLY")
             self._log_debug("=" * 80)
-            
+
             return result
-            
+
         except Exception as e:
             # Error handling
             self._log_debug("=" * 80)
@@ -558,20 +558,20 @@ class StrategyExecutionEngine:
             self._log_debug("=" * 80)
             self._log_debug(f"ERROR: {type(e).__name__}: {e}")
             self._log_debug(f"Traceback:\n{traceback.format_exc()}")
-            
+
             result.status = ExecutionStatus.FAILED
             result.end_time = datetime.now()
             result.errors.append(str(e))
             result.errors.append(traceback.format_exc())
             result.debug_log = self._debug_log.copy()
-            
+
             return result
-        
+
         finally:
             # Clean up
             if execution_id in self._active_executions:
                 del self._active_executions[execution_id]
-    
+
     def run_backtest(
         self,
         strategy_code: str,
@@ -594,9 +594,9 @@ class StrategyExecutionEngine:
         # Compile strategy
         StrategyCompiler = self._get_strategy_compiler()
         compiler = StrategyCompiler(debug_level=self._config.debug_level)
-        
+
         compilation_result = compiler.compile(strategy_code, strategy_type="auto")
-        
+
         if not compilation_result.success:
             execution_id = str(uuid.uuid4())
             return ExecutionResult(
@@ -610,10 +610,10 @@ class StrategyExecutionEngine:
                 errors=compilation_result.errors,
                 debug_log=self._debug_log,
             )
-        
+
         # Execute strategy
         strategy_name = compilation_result.spec.name if compilation_result.spec else "Unnamed"
-        
+
         return self.execute_strategy(
             compiled_strategy=compilation_result,
             data=data,
@@ -621,7 +621,7 @@ class StrategyExecutionEngine:
             params=config,
             symbol=symbol,
         )
-    
+
     def get_execution_status(self, execution_id: str) -> Optional[Dict[str, Any]]:
         """
         Get execution status by ID.
@@ -642,7 +642,7 @@ class StrategyExecutionEngine:
                 'start_time': result.start_time.isoformat() if result.start_time else None,
             }
         return None
-    
+
     def cancel_execution(self, execution_id: str) -> bool:
         """
         Cancel active execution.
@@ -660,7 +660,7 @@ class StrategyExecutionEngine:
             self._log_debug(f"Execution {execution_id} cancelled")
             return True
         return False
-    
+
     def get_active_executions(self) -> List[Dict[str, Any]]:
         """
         Get all active executions.
@@ -711,7 +711,7 @@ def create_execution_engine(
         enable_debug_logging=enable_debug_logging,
         debug_level=debug_level,
     )
-    
+
     return StrategyExecutionEngine(config)
 
 
@@ -765,17 +765,17 @@ output = {
 if __name__ == "__main__":
     print("Testing Strategy Execution Engine...")
     print("=" * 80)
-    
+
     # Create sample data
     import numpy as np
-    
+
     np.random.seed(42)
     dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
-    
+
     # Generate random price data with trend
     returns = np.random.randn(100) * 0.02
     price_data = 100 * (1 + returns).cumprod()
-    
+
     data = pd.DataFrame({
         'timestamp': dates,
         'open': price_data * (1 + np.random.randn(100) * 0.005),
@@ -784,31 +784,31 @@ if __name__ == "__main__":
         'close': price_data,
         'volume': np.random.randint(1000000, 5000000, 100),
     })
-    
+
     # Create execution engine
     engine = create_execution_engine(
         initial_capital=100000,
         enable_debug_logging=True,
         debug_level=5,
     )
-    
+
     # Run backtest
     print("\n[Test 1] Running Backtest with Strategy Code")
     result = engine.run_backtest(EXAMPLE_STRATEGY_CODE, data)
-    
+
     print(f"\nResult: {result.status.value}")
     print(f"Execution ID: {result.execution_id}")
     print(f"Strategy: {result.strategy_name}")
     print(f"Execution Time: {result.metrics.execution_time_ms:.2f}ms")
     print(f"Trades: {result.metrics.trades_executed}")
-    
+
     if result.backtest_result:
         metrics = result.backtest_result.get('metrics', {})
-        print(f"\nPerformance:")
+        print("\nPerformance:")
         print(f"  Total Return: {metrics.get('total_return_pct', 0):.2f}%")
         print(f"  Sharpe Ratio: {metrics.get('sharpe_ratio', 0):.3f}")
         print(f"  Max Drawdown: {metrics.get('max_drawdown_pct', 0):.2f}%")
         print(f"  Win Rate: {metrics.get('win_rate', 0):.2f}%")
-    
+
     print("\n" + "=" * 80)
     print("Test completed!")

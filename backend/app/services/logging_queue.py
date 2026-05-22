@@ -3,7 +3,6 @@
 """
 import asyncio
 import logging
-import time
 from typing import Optional
 
 # 全局日志队列
@@ -19,19 +18,19 @@ def get_log_queue() -> asyncio.Queue:
 
 class WebSocketLogHandler(logging.Handler):
     """自定义日志 Handler，将日志推送到 WebSocket 队列"""
-    
+
     def __init__(self):
         super().__init__()
         self.setLevel(logging.INFO)
         self.setFormatter(logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         ))
-    
+
     def emit(self, record):
         """发送日志到队列"""
         try:
             log_msg = self.format(record)
-            
+
             # 解析日志级别
             level = "INFO"
             if record.levelno >= logging.ERROR:
@@ -40,7 +39,7 @@ class WebSocketLogHandler(logging.Handler):
                 level = "WARNING"
             elif record.levelno >= logging.DEBUG:
                 level = "DEBUG"
-            
+
             # 构造消息（保留完整日志，前端可自行截断显示）
             # 如果有异常信息，确保完整保留堆栈
             msg = {
@@ -49,7 +48,7 @@ class WebSocketLogHandler(logging.Handler):
                 "message": log_msg[:2000] if len(log_msg) > 2000 else log_msg,  # 提高上限到2000字符
                 "truncated": len(log_msg) > 2000  # 标记是否被截断
             }
-            
+
             # 推送到队列（不阻塞）
             queue = get_log_queue()
             try:
@@ -61,7 +60,7 @@ class WebSocketLogHandler(logging.Handler):
                 except (asyncio.QueueEmpty, ValueError):
                     pass
                 queue.put_nowait(msg)
-                
+
         except (asyncio.QueueFull, ValueError, TypeError):
             self.handleError(record)
 
@@ -69,13 +68,13 @@ class WebSocketLogHandler(logging.Handler):
 def init_logging_queue():
     """初始化日志队列 - 将应用日志接入 WebSocket 流"""
     queue = get_log_queue()
-    
+
     # 添加自定义 Handler
     handler = WebSocketLogHandler()
-    
+
     # 添加到 root logger
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.INFO)
-    
+
     return queue

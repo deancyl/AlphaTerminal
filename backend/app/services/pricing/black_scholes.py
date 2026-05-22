@@ -7,10 +7,9 @@ Default parameters calibrated for Chinese A-share market.
 import logging
 import math
 from dataclasses import dataclass
-from datetime import datetime, date, timezone
+from datetime import date
 from typing import Optional, Dict, Any, List, Tuple
 
-import numpy as np
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ class OptionsPricingEngine:
         - Risk-free rate: 2.5% (China 10Y treasury)
         - Dividend yield: 2.0% (HS300 average dividend)
     """
-    
+
     def __init__(
         self,
         risk_free_rate: float = 0.025,
@@ -45,7 +44,7 @@ class OptionsPricingEngine:
         self.q = dividend_yield
         self._vol_lib = None
         self._vol_lib_vec = None
-    
+
     @property
     def vol_lib(self):
         """Lazy load vollib (py_vollib is deprecated)"""
@@ -73,7 +72,7 @@ class OptionsPricingEngine:
                 logger.error(f"[Pricing] vollib not installed: {e}", exc_info=True)
                 raise ImportError("vollib required. Install: pip install py_vollib")
         return self._vol_lib
-    
+
     @property
     def vol_lib_vec(self):
         """Lazy load py_vollib_vectorized"""
@@ -85,7 +84,7 @@ class OptionsPricingEngine:
                 logger.warning("[Pricing] py_vollib_vectorized not available, using scalar mode", exc_info=True)
                 self._vol_lib_vec = None
         return self._vol_lib_vec
-    
+
     def calculate_time_to_expiry(
         self,
         expiry_date: date,
@@ -103,11 +102,11 @@ class OptionsPricingEngine:
         """
         if current_date is None:
             current_date = date.today()
-        
+
         days = (expiry_date - current_date).days
         days = max(days, 1)
         return days / 365.0
-    
+
     def parse_expiry_from_code(self, code: str) -> Optional[date]:
         """
         Parse expiry date from CFFEX contract code.
@@ -125,24 +124,24 @@ class OptionsPricingEngine:
         try:
             if len(code) < 5:
                 return None
-            
+
             year_part = code[-4:-2]
             month_part = code[-2:]
-            
+
             year = 2000 + int(year_part)
             month = int(month_part)
-            
+
             first_day = date(year, month, 1)
-            
+
             first_friday = 1 + (4 - first_day.weekday()) % 7
             third_friday = first_friday + 14
-            
+
             return date(year, month, third_friday)
-            
+
         except (ValueError, IndexError) as e:
             logger.warning(f"[Pricing] Failed to parse expiry from code: {code} - {e}", exc_info=True)
             return None
-    
+
     def bisection_iv(
         self,
         price: float,
@@ -177,31 +176,31 @@ class OptionsPricingEngine:
         """
         sigma_low = 0.001
         sigma_high = 5.0
-        
+
         flag = 'c' if option_type == 'call' else 'p'
-        
+
         for _ in range(max_iterations):
             sigma_mid = (sigma_low + sigma_high) / 2
-            
+
             try:
                 price_mid = self.vol_lib['bsm'](flag, S, K, T, r, sigma_mid, q)
             except (ValueError, TypeError, ZeroDivisionError):
                 price_mid = None
-            
+
             if price_mid is None:
                 sigma_high = sigma_mid
                 continue
-            
+
             if abs(price_mid - price) < tolerance:
                 return sigma_mid
-            
+
             if price_mid < price:
                 sigma_low = sigma_mid
             else:
                 sigma_high = sigma_mid
-        
+
         return (sigma_low + sigma_high) / 2
-    
+
     def calculate_iv(
         self,
         price: float,
@@ -228,28 +227,28 @@ class OptionsPricingEngine:
         """
         if price <= 0 or spot <= 0 or strike <= 0 or time_to_expiry <= 0:
             return None, None
-        
+
         flag = 'c' if is_call else 'p'
         option_type = 'call' if is_call else 'put'
-        
+
         # Try vollib's lets_be_rational first
         try:
             iv = self.vol_lib['iv'](
                 price, spot, strike, time_to_expiry, self.r, self.q, flag
             )
-            
+
             if math.isfinite(iv) and iv > 0:
                 return iv, 'rational_approximation'
         except Exception as e:
             logger.debug(f"[Pricing] IV rational_approximation failed: S={spot}, K={strike}, T={time_to_expiry:.4f}, P={price} - {e}")
-        
+
         # Fallback to bisection method
         iv = self.bisection_iv(price, spot, strike, time_to_expiry, is_call)
         if iv is not None and math.isfinite(iv) and iv > 0:
             return iv, 'bisection'
-        
+
         return None, None
-    
+
 
     async def get_risk_free_rate_async(self) -> float:
         """
@@ -269,10 +268,10 @@ class OptionsPricingEngine:
                         return float(data['data']['rate'])
         except Exception as e:
             logger.debug(f"[Pricing] Failed to fetch risk-free rate: {e}")
-        
+
         # Fallback to default
         return self.r
-    
+
     def bisection_iv(
         self,
         price: float,
@@ -302,23 +301,23 @@ class OptionsPricingEngine:
         """
         if price <= 0 or spot <= 0 or strike <= 0 or time_to_expiry <= 0:
             return None
-        
+
         flag = 'c' if is_call else 'p'
-        
+
         sigma_low = 0.001
         sigma_high = 5.0
-        
+
         for _ in range(max_iterations):
             sigma_mid = (sigma_low + sigma_high) / 2
-            
+
             try:
                 price_mid = self.vol_lib['bsm'](
                     flag, spot, strike, time_to_expiry, self.r, sigma_mid, self.q
                 )
-                
+
                 if abs(price_mid - price) < tolerance:
                     return sigma_mid
-                
+
                 if price_mid < price:
                     sigma_low = sigma_mid
                 else:
@@ -326,7 +325,7 @@ class OptionsPricingEngine:
             except (ValueError, TypeError, ZeroDivisionError):
                 # If BSM fails, narrow the range
                 sigma_high = sigma_mid
-        
+
         return None
 
     def calculate_greeks(
@@ -352,9 +351,9 @@ class OptionsPricingEngine:
         """
         if spot <= 0 or strike <= 0 or time_to_expiry <= 0 or volatility <= 0:
             return None
-        
+
         flag = 'c' if is_call else 'p'
-        
+
         try:
             delta = self.vol_lib['delta'](
                 flag, spot, strike, time_to_expiry, self.r, volatility, self.q
@@ -371,10 +370,10 @@ class OptionsPricingEngine:
             rho = self.vol_lib['rho'](
                 flag, spot, strike, time_to_expiry, self.r, volatility, self.q
             )
-            
+
             if not all(math.isfinite(g) for g in [delta, gamma, theta, vega, rho]):
                 return None
-            
+
             return GreeksResult(
                 delta=delta,
                 gamma=gamma,
@@ -383,11 +382,11 @@ class OptionsPricingEngine:
                 rho=rho,
                 iv=volatility,
             )
-            
+
         except (ValueError, RuntimeError) as e:
             logger.debug(f"[Pricing] Greeks calculation failed: {e}")
             return None
-    
+
     def price_option_chain(
         self,
         options: List[Dict[str, Any]],
@@ -413,39 +412,39 @@ class OptionsPricingEngine:
         """
         if not options or spot <= 0:
             return options
-        
+
         results = []
-        
+
         for opt in options:
             result = opt.copy()
-            
+
             strike = opt.get('strike')
             price = opt.get('latest')
             is_call = opt.get('is_call', True)
             code = opt.get('code', '')
-            
+
             if strike is None or strike <= 0:
                 results.append(result)
                 continue
-            
+
             if expiry_date is None:
                 expiry_date = self.parse_expiry_from_code(code)
-            
+
             if expiry_date is None:
                 expiry_date = date.today()
-            
+
             T = self.calculate_time_to_expiry(expiry_date)
-            
+
             iv = None
             iv_method = None
             if price and price > 0:
                 iv, iv_method = self.calculate_iv(price, spot, strike, T, is_call)
-            
+
             if iv is None:
                 iv = default_volatility
-            
+
             greeks = self.calculate_greeks(spot, strike, T, iv, is_call)
-            
+
             if greeks:
                 result['delta'] = round(greeks.delta, 4)
                 result['gamma'] = round(greeks.gamma, 4)
@@ -453,9 +452,9 @@ class OptionsPricingEngine:
                 result['vega'] = round(greeks.vega, 4)
                 result['rho'] = round(greeks.rho, 4)
                 result['iv'] = round(greeks.iv, 4) if greeks.iv else None
-            
+
             results.append(result)
-        
+
         return results
 
 

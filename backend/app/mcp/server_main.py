@@ -223,7 +223,6 @@ def run_stdio():
 
 def run_http():
     """Run MCP server in HTTP mode"""
-    import urllib.request
     from http.server import HTTPServer, BaseHTTPRequestHandler
 
     host = os.environ.get('ALPHATERMINAL_HOST', '0.0.0.0')

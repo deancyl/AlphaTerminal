@@ -9,8 +9,8 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import date, datetime
-from typing import List, Optional, Dict, Any
+from datetime import date
+from typing import List
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class PlaybackEngine(ABC):
     
     Subclasses implement specific data sources (daily/minute).
     """
-    
+
     @abstractmethod
     async def get_bars(
         self,
@@ -67,12 +67,12 @@ class PlaybackEngine(ABC):
             List of Bar objects sorted by date ascending
         """
         pass
-    
+
     @abstractmethod
     def get_interval(self) -> str:
         """Return the interval type (e.g., "daily", "minute")."""
         pass
-    
+
     @abstractmethod
     def get_interval_seconds(self) -> int:
         """Return the interval in seconds (for playback timing)."""
@@ -85,7 +85,7 @@ class DailyPlaybackEngine(PlaybackEngine):
     
     Uses stock_zh_a_hist() for historical daily data.
     """
-    
+
     def __init__(self, adjust: str = "qfq"):
         """
         Args:
@@ -93,19 +93,19 @@ class DailyPlaybackEngine(PlaybackEngine):
         """
         self.adjust = adjust
         self._ak = None
-    
+
     @property
     def ak(self):
         if self._ak is None:
             self._ak = _get_akshare()
         return self._ak
-    
+
     def get_interval(self) -> str:
         return "daily"
-    
+
     def get_interval_seconds(self) -> int:
         return 86400
-    
+
     async def get_bars(
         self,
         symbol: str,
@@ -113,10 +113,10 @@ class DailyPlaybackEngine(PlaybackEngine):
         end_date: date
     ) -> List[Bar]:
         code = symbol[2:] if symbol.startswith(('sh', 'sz')) else symbol
-        
+
         start_str = start_date.strftime("%Y%m%d")
         end_str = end_date.strftime("%Y%m%d")
-        
+
         def _fetch():
             try:
                 df = self.ak.stock_zh_a_hist(
@@ -126,10 +126,10 @@ class DailyPlaybackEngine(PlaybackEngine):
                     start_date=start_str,
                     end_date=end_str,
                 )
-                
+
                 if df is None or df.empty:
                     return []
-                
+
                 bars = []
                 for _, row in df.iterrows():
                     bars.append(Bar(
@@ -144,17 +144,17 @@ class DailyPlaybackEngine(PlaybackEngine):
                         turnover=float(row.get('换手率', 0) or 0),
                     ))
                 return bars
-                
+
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] bars for {symbol}: {e}", exc_info=True)
                 return []
-        
+
         loop = asyncio.get_running_loop()
         bars = await asyncio.wait_for(
             loop.run_in_executor(_executor, _fetch),
             timeout=30.0
         )
-        
+
         logger.info(f"[DailyPlaybackEngine] Fetched {len(bars)} bars for {symbol} ({start_date} to {end_date})")
         return bars
 
@@ -165,13 +165,13 @@ class MinutePlaybackEngine(PlaybackEngine):
     
     Will use intraday data source when available.
     """
-    
+
     def get_interval(self) -> str:
         return "minute"
-    
+
     def get_interval_seconds(self) -> int:
         return 60
-    
+
     async def get_bars(
         self,
         symbol: str,

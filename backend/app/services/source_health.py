@@ -32,14 +32,14 @@ class HealthCheckResult:
 
 class SourceHealthChecker:
     """数据源健康检查器"""
-    
+
     SOURCES = ["sina", "eastmoney", "akshare", "tencent"]
-    
+
     def __init__(self, check_interval: int = 30):
         self.check_interval = check_interval
         self._results: Dict[str, HealthCheckResult] = {}
         self._running = False
-    
+
     async def check_source(self, source: str) -> HealthCheckResult:
         """检查单个数据源"""
         start = time.time()
@@ -57,10 +57,10 @@ class SourceHealthChecker:
                 ok = True
             else:
                 ok = True
-            
+
             latency = (time.time() - start) * 1000
             status = SourceStatus.HEALTHY if latency < 1000 else SourceStatus.DEGRADED
-            
+
             return HealthCheckResult(
                 source=source,
                 status=status,
@@ -75,7 +75,7 @@ class SourceHealthChecker:
                 last_check=datetime.now(),
                 error=str(e)
             )
-    
+
     async def check_all(self) -> Dict[str, HealthCheckResult]:
         """检查所有数据源"""
         results = await asyncio.gather(*[
@@ -83,7 +83,7 @@ class SourceHealthChecker:
         ])
         self._results = {r.source: r for r in results}
         return self._results
-    
+
     def get_status(self) -> Dict[str, dict]:
         """获取当前状态"""
         return {

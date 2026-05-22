@@ -10,7 +10,7 @@ Phase B: 统一 API 响应格式
 import logging
 import time
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Query
 from app.services.sentiment_engine import (
@@ -200,12 +200,12 @@ async def market_fund_flow():
     cached = _get_cached("market_fund_flow")
     if cached:
         return cached
-    
+
     FETCH_TIMEOUT = 30
-    
+
     try:
         loop = asyncio.get_event_loop()
-        
+
         async def fetch_with_timeout():
             try:
                 return await asyncio.wait_for(
@@ -215,13 +215,13 @@ async def market_fund_flow():
             except asyncio.TimeoutError:
                 logger.warning(f"[FundFlow] fetch timeout after {FETCH_TIMEOUT}s", exc_info=True)
                 return None
-        
+
         df = await fetch_with_timeout()
         if df is None:
             return error_response(500, "资金流数据获取超时")
-        
+
         df = df.tail(30)
-        
+
         result = []
         for _, row in df.iterrows():
             result.append({
@@ -239,7 +239,7 @@ async def market_fund_flow():
                 "small_net": int(row.get("小单净流入-净额", 0) or 0),
                 "small_pct": float(row.get("小单净流入-净占比", 0) or 0),
             })
-        
+
         res = success_response({
             "items": result,
             "total": len(result),
@@ -258,12 +258,12 @@ async def industry_fund_flow():
     cached = _get_cached("market_fund_flow_industry")
     if cached:
         return cached
-    
+
     FETCH_TIMEOUT = 30
-    
+
     try:
         loop = asyncio.get_event_loop()
-        
+
         async def fetch_with_timeout():
             try:
                 return await asyncio.wait_for(
@@ -273,11 +273,11 @@ async def industry_fund_flow():
             except asyncio.TimeoutError:
                 logger.warning(f"[IndustryFundFlow] fetch timeout after {FETCH_TIMEOUT}s", exc_info=True)
                 return None
-        
+
         df = await fetch_with_timeout()
         if df is None:
             return error_response(500, "行业资金流数据获取超时")
-        
+
         result = []
         for _, row in df.iterrows():
             try:
@@ -289,7 +289,7 @@ async def industry_fund_flow():
                 "change_pct": float(row.get("今日涨跌幅", 0) or 0),
                 "main_net": main_net,
             })
-        
+
         res = success_response({
             "items": result[:20],
             "total": len(result),

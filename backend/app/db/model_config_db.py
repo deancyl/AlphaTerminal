@@ -63,7 +63,7 @@ def get_all_model_configs() -> Dict[str, Dict[str, Any]]:
         rows = conn.execute(
             "SELECT key, value FROM admin_config WHERE key LIKE 'llm_%'"
         ).fetchall()
-        
+
         result = {}
         for row in rows:
             try:
@@ -86,15 +86,15 @@ def add_model_to_config(provider_key: str, model_id: str, model_config: Dict[str
     config = get_model_config(provider_key)
     if not config:
         config = {"models": {}, "default_model": None, "migration_version": 1}
-    
+
     if 'models' not in config:
         config['models'] = {}
-    
+
     config['models'][model_id] = model_config
-    
+
     if not config.get('default_model'):
         config['default_model'] = model_id
-    
+
     set_model_config(provider_key, config)
     return True
 
@@ -103,7 +103,7 @@ def update_model_in_config(provider_key: str, model_id: str, updates: Dict[str, 
     config = get_model_config(provider_key)
     if not config or 'models' not in config or model_id not in config['models']:
         return False
-    
+
     config['models'][model_id].update(updates)
     set_model_config(provider_key, config)
     return True
@@ -113,13 +113,13 @@ def remove_model_from_config(provider_key: str, model_id: str) -> bool:
     config = get_model_config(provider_key)
     if not config or 'models' not in config or model_id not in config['models']:
         return False
-    
+
     del config['models'][model_id]
-    
+
     if config.get('default_model') == model_id:
         remaining = list(config['models'].keys())
         config['default_model'] = remaining[0] if remaining else None
-    
+
     set_model_config(provider_key, config)
     return True
 
@@ -128,7 +128,7 @@ def set_default_model(provider_key: str, model_id: str) -> bool:
     config = get_model_config(provider_key)
     if not config or 'models' not in config or model_id not in config['models']:
         return False
-    
+
     config['default_model'] = model_id
     set_model_config(provider_key, config)
     return True
@@ -145,7 +145,7 @@ def get_enabled_models(provider_key: str) -> List[str]:
     config = get_model_config(provider_key)
     if not config or 'models' not in config:
         return []
-    
+
     return [
         model_id for model_id, model_config in config['models'].items()
         if model_config.get('enabled', True)

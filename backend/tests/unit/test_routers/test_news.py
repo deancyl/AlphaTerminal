@@ -181,7 +181,7 @@ class TestNewsDetailEndpoint:
             mock_response = MagicMock()
             mock_response.text = mock_html
             mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
-            
+
             response = client.get("/api/v1/news/detail?url=https://example.com/news/1")
             assert response.status_code == 200
             data = response.json()
@@ -276,7 +276,7 @@ class TestNewsEventsForSymbolEndpoint:
                 assert response.status_code == 200
                 data = response.json()
                 events = data["data"]["events"]
-                
+
                 types = [e["type"] for e in events]
                 assert "bullish" in types or "bearish" in types or "neutral" in types
 

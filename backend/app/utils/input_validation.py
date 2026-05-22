@@ -31,12 +31,12 @@ def validate_stock_symbol(symbol: str, market: str = "all") -> Tuple[bool, str, 
     """
     if not symbol:
         return False, "", "股票代码不能为空"
-    
+
     symbol = symbol.strip().upper()
-    
+
     if len(symbol) > 20:
         return False, "", "股票代码长度不能超过20字符"
-    
+
     if market == "astock":
         if not SYMBOL_PATTERN_A_STOCK.match(symbol):
             return False, "", "A股代码格式错误，应为6位数字（如 600519）"
@@ -49,7 +49,7 @@ def validate_stock_symbol(symbol: str, market: str = "all") -> Tuple[bool, str, 
     else:
         if not SYMBOL_PATTERN_ALL.match(symbol):
             return False, "", "股票代码格式错误"
-    
+
     normalized = normalize_symbol(symbol)
     return True, normalized, ""
 
@@ -64,30 +64,30 @@ def normalize_symbol(symbol: str) -> str:
     """
     if not symbol:
         return symbol
-    
+
     symbol = symbol.strip().upper()
-    
+
     if symbol.startswith("SH") or symbol.startswith("SZ"):
         return symbol.lower()
-    
+
     if symbol.startswith("HK"):
         return symbol.lower()
-    
+
     if symbol.startswith("US"):
         return symbol.lower()
-    
+
     if re.match(r'^[0-9]{6}$', symbol):
         if symbol.startswith('6'):
             return f"sh{symbol}"
         else:
             return f"sz{symbol}"
-    
+
     if re.match(r'^[0-9]{4,5}$', symbol):
         return f"hk{symbol}"
-    
+
     if re.match(r'^[A-Z]{1,5}$', symbol):
         return f"us{symbol}"
-    
+
     return symbol
 
 
@@ -104,7 +104,7 @@ def validate_date_string(date_str: str, format: str = "%Y-%m-%d") -> Tuple[bool,
     """
     if not date_str:
         return False, None, "日期不能为空"
-    
+
     try:
         parsed = datetime.strptime(date_str.strip(), format)
         return True, parsed, ""
@@ -133,19 +133,19 @@ def validate_date_range(
     valid_start, start, err_start = validate_date_string(start_date)
     if not valid_start or start is None:
         return False, 0, err_start
-    
+
     valid_end, end, err_end = validate_date_string(end_date)
     if not valid_end or end is None:
         return False, 0, err_end
-    
+
     days_span = (end - start).days
-    
+
     if days_span < min_days:
         return False, days_span, f"时间跨度不足 {min_days} 天"
-    
+
     if days_span > max_days:
         return False, days_span, f"时间跨度超过 {max_days} 天"
-    
+
     return True, days_span, ""
 
 
@@ -169,18 +169,18 @@ def validate_numeric_bounds(
     """
     if value is None:
         return False, 0, f"{field_name}不能为空"
-    
+
     try:
         value = float(value)
     except (TypeError, ValueError):
         return False, 0, f"{field_name}必须是数字"
-    
+
     if min_val is not None and value < min_val:
         return False, value, f"{field_name}不能小于 {min_val}"
-    
+
     if max_val is not None and value > max_val:
         return False, value, f"{field_name}不能大于 {max_val}"
-    
+
     return True, value, ""
 
 
@@ -204,16 +204,16 @@ def validate_pagination(
     """
     if page is None or page < 1:
         page = 1
-    
+
     if page_size is None or page_size < 1:
         page_size = 20
-    
+
     if page > max_page:
         return False, 1, 20, f"页码不能超过 {max_page}"
-    
+
     if page_size > max_page_size:
         return False, 1, 20, f"每页数量不能超过 {max_page_size}"
-    
+
     return True, page, page_size, ""
 
 
@@ -227,16 +227,16 @@ def sanitize_string(value: str, max_length: int = 500) -> str:
     """
     if not value:
         return ""
-    
+
     value = value.strip()
-    
+
     if len(value) > max_length:
         value = value[:max_length]
-    
+
     dangerous_chars = ['<', '>', '"', "'", '\n', '\r', '\t']
     for char in dangerous_chars:
         value = value.replace(char, '')
-    
+
     return value
 
 

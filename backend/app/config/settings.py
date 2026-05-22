@@ -21,58 +21,58 @@ from pydantic import field_validator
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
-    
+
     # Proxy Configuration
     HTTP_PROXY: str = ""
     HTTPS_PROXY: str = ""
-    
+
     # API Keys (NEVER hardcode defaults for sensitive values)
     ALPHA_VANTAGE_API_KEY: str = ""
     ADMIN_API_KEY: str = ""
-    
+
     # Environment
     ENV: str = "development"
-    
+
     # Debug Mode - DEFAULT TO FALSE for security
     DEBUG_MODE: bool = False
-    
+
     # CORS
     ALLOWED_ORIGINS: str = "*"
-    
+
     # Database
     DATABASE_PATH: str = ""
-    
+
     # Logging
     LOG_LEVEL: str = "info"
-    
+
     # Backend Server
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8002
-    
+
     # Frontend Server
     FRONTEND_HOST: str = "0.0.0.0"
     FRONTEND_PORT: int = 60100
-    
+
     # Agent Debug Flags - DEFAULT TO FALSE
     AGENT_DB_DEBUG: bool = False
     AGENT_AUTH_DEBUG: bool = False
-    
+
     # Copilot Timeout Configuration (seconds)
     COPILOT_TIMEOUT_SECONDS: int = 120
     COPILOT_STREAM_TIMEOUT_SECONDS: int = 180
     COPILOT_CONNECT_TIMEOUT_SECONDS: int = 10
-    
+
     # Forex Mock Data Control (Compliance)
     # Default: False for production - prevents fake data display
     FOREX_ALLOW_MOCK_DATA: bool = False
-    
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": True,
         "extra": "ignore",
     }
-    
+
     @field_validator("DEBUG_MODE", "AGENT_DB_DEBUG", "AGENT_AUTH_DEBUG", "FOREX_ALLOW_MOCK_DATA", mode="before")
     @classmethod
     def validate_bool_from_str(cls, v):
@@ -80,7 +80,7 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return v.lower() == "true"
         return v
-    
+
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
     def validate_origins(cls, v):
@@ -88,25 +88,25 @@ class Settings(BaseSettings):
         if not v:
             return "*"
         return v
-    
+
     def get_allowed_origins_list(self) -> List[str]:
         """Parse ALLOWED_ORIGINS into a list."""
         if self.ALLOWED_ORIGINS == "*":
             return ["*"]
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
-    
+
     def is_production(self) -> bool:
         """Check if running in production environment."""
         return self.ENV.lower() == "production"
-    
+
     def is_development(self) -> bool:
         """Check if running in development environment."""
         return self.ENV.lower() == "development"
-    
+
     def get_proxy_url(self) -> Optional[str]:
         """Get proxy URL (HTTP_PROXY or HTTPS_PROXY)."""
         return self.HTTP_PROXY or self.HTTPS_PROXY or None
-    
+
     def has_alpha_vantage_key(self) -> bool:
         """Check if Alpha Vantage API key is configured."""
         return bool(self.ALPHA_VANTAGE_API_KEY and self.ALPHA_VANTAGE_API_KEY != "your_api_key_here")

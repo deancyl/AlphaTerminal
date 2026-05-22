@@ -38,7 +38,7 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
     If a request exceeds the timeout, returns 504 Gateway Timeout.
     Health check endpoints are exempted.
     """
-    
+
     def __init__(
         self,
         app: ASGIApp,
@@ -48,17 +48,17 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.timeout = timeout or REQUEST_TIMEOUT
         self.exempt_paths = exempt_paths or EXEMPT_PATHS
-    
+
     def _is_exempt(self, path: str) -> bool:
         for exempt in self.exempt_paths:
             if path.startswith(exempt):
                 return True
         return False
-    
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         if self._is_exempt(request.url.path):
             return await call_next(request)
-        
+
         try:
             return await asyncio.wait_for(
                 call_next(request),

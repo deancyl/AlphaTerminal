@@ -10,16 +10,14 @@ Provides endpoints for:
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator
 
 from app.utils.errors import success_response, error_response, ErrorCode
-from app.middleware import require_api_key
 from app.db.database import _get_conn
 from app.services.attribution import (
     get_factor_registry,
@@ -42,12 +40,12 @@ class SandboxRequest(BaseModel):
     start_date: str = Field(..., description="开始日期 YYYY-MM-DD")
     end_date: str = Field(..., description="结束日期 YYYY-MM-DD")
     initial_capital: float = Field(default=100000, ge=10000, le=1e9, description="初始资金")
-    
+
     @field_validator('symbols')
     @classmethod
     def validate_symbols(cls, v: List[str]) -> List[str]:
         return [s.strip().lower() for s in v if s.strip()]
-    
+
     @field_validator('start_date', 'end_date')
     @classmethod
     def validate_date_format(cls, v: str) -> str:
@@ -73,16 +71,16 @@ async def list_factors(
 ):
     """列出所有可用因子"""
     registry = get_factor_registry()
-    
+
     cat_filter = None
     if category:
         try:
             cat_filter = FactorCategory(category.lower())
         except ValueError:
             pass
-    
+
     factors = registry.list_factors(cat_filter)
-    
+
     return success_response({
         "factors": [f.to_dict() for f in factors],
         "total": len(factors),
@@ -95,7 +93,7 @@ async def list_categories():
     """列出因子类别"""
     registry = get_factor_registry()
     categories = registry.list_categories()
-    
+
     return success_response({
         "categories": categories,
         "total": len(categories),
@@ -111,16 +109,16 @@ async def run_sandbox(req: SandboxRequest):
     计算指定股票组合在选定因子上的归因分析
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_run():
         registry = get_factor_registry()
         engine = get_attribution_engine()
-        
+
         all_results = []
-        
+
         for symbol in req.symbols:
             db_symbol = symbol.replace("sh", "").replace("sz", "")
-            
+
             conn = _get_conn()
             try:
                 rows = conn.execute("""
@@ -129,22 +127,22 @@ async def run_sandbox(req: SandboxRequest):
                     WHERE symbol = ? AND date >= ? AND date <= ?
                     ORDER BY date ASC
                 """, (db_symbol, req.start_date, req.end_date)).fetchall()
-                
+
                 if len(rows) < 20:
                     continue
-                
+
                 df = pd.DataFrame(rows, columns=['date', 'open', 'high', 'low', 'close', 'volume'])
                 df['date'] = pd.to_datetime(df['date'])
-                
+
                 returns = np.zeros(len(df))
                 returns[1:] = np.diff(np.log(df['close'].values + 1e-10))
-                
+
                 factor_data = pd.DataFrame(index=df.index)
                 for factor_id in req.factors:
                     factor_values = registry.calculate(factor_id, df)
                     if factor_values is not None:
                         factor_data[factor_id] = factor_values
-                
+
                 result = engine.calculate_attribution(
                     returns=returns,
                     factor_data=factor_data,
@@ -152,22 +150,22 @@ async def run_sandbox(req: SandboxRequest):
                     period_start=req.start_date,
                     period_end=req.end_date,
                 )
-                
+
                 all_results.append({
                     "symbol": symbol,
                     "attribution": result.to_dict(),
                 })
-                
+
             finally:
                 conn.close()
-        
+
         return all_results
-    
+
     results = await loop.run_in_executor(_executor, _sync_run)
-    
+
     if not results:
         return error_response(ErrorCode.NOT_FOUND, "未找到有效数据")
-    
+
     return success_response({
         "results": results,
         "total": len(results),
@@ -189,14 +187,14 @@ async def run_realtime(req: RealtimeRequest):
     基于最近N天的数据进行快速归因分析
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_run():
         registry = get_factor_registry()
         engine = get_attribution_engine()
-        
+
         symbol = req.symbol.strip().lower()
         db_symbol = symbol.replace("sh", "").replace("sz", "")
-        
+
         conn = _get_conn()
         try:
             rows = conn.execute("""
@@ -206,23 +204,23 @@ async def run_realtime(req: RealtimeRequest):
                 ORDER BY date DESC
                 LIMIT ?
             """, (db_symbol, req.lookback_days + 10)).fetchall()
-            
+
             if len(rows) < 20:
                 return None
-            
+
             rows.reverse()
             df = pd.DataFrame(rows, columns=['date', 'open', 'high', 'low', 'close', 'volume'])
             df['date'] = pd.to_datetime(df['date'])
-            
+
             returns = np.zeros(len(df))
             returns[1:] = np.diff(np.log(df['close'].values + 1e-10))
-            
+
             factor_data = pd.DataFrame(index=df.index)
             for factor_id in req.factors:
                 factor_values = registry.calculate(factor_id, df)
                 if factor_values is not None:
                     factor_data[factor_id] = factor_values
-            
+
             result = engine.calculate_attribution(
                 returns=returns,
                 factor_data=factor_data,
@@ -230,22 +228,22 @@ async def run_realtime(req: RealtimeRequest):
                 period_start=str(df['date'].iloc[0].date()),
                 period_end=str(df['date'].iloc[-1].date()),
             )
-            
+
             return {
                 "symbol": symbol,
                 "attribution": result.to_dict(),
                 "latest_price": float(df['close'].iloc[-1]),
                 "latest_date": str(df['date'].iloc[-1].date()),
             }
-            
+
         finally:
             conn.close()
-    
+
     result = await loop.run_in_executor(_executor, _sync_run)
-    
+
     if result is None:
         return error_response(ErrorCode.NOT_FOUND, "未找到有效数据")
-    
+
     return success_response(result)
 
 
@@ -255,7 +253,7 @@ async def health_check():
     """健康检查"""
     registry = get_factor_registry()
     engine = get_attribution_engine()
-    
+
     return success_response({
         "status": "healthy",
         "factors_registered": len(registry.list_factors()),

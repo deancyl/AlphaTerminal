@@ -32,12 +32,12 @@ def safe_divide(dividend: Union[int, float], divisor: Union[int, float], default
     """
     if divisor is None or divisor == 0 or (isinstance(divisor, float) and (math.isnan(divisor) or math.isinf(divisor))):
         return default_value
-    
+
     result = dividend / divisor
-    
+
     if math.isnan(result) or math.isinf(result):
         return default_value
-    
+
     return result
 
 
@@ -85,15 +85,15 @@ def safe_average(values: Optional[List[Union[int, float]]], default_value: float
     """
     if not values or not isinstance(values, (list, tuple)):
         return default_value
-    
+
     valid_values = [
-        v for v in values 
+        v for v in values
         if v is not None and isinstance(v, (int, float)) and not math.isnan(v) and not math.isinf(v)
     ]
-    
+
     if not valid_values:
         return default_value
-    
+
     return sum(valid_values) / len(valid_values)
 
 
@@ -111,7 +111,7 @@ def safe_round(value: Union[int, float], decimals: int = 2, default_value: float
     """
     if value is None or (isinstance(value, float) and (math.isnan(value) or math.isinf(value))):
         return default_value
-    
+
     return round(float(value), decimals)
 
 

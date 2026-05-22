@@ -5,8 +5,8 @@ Calculates factor contributions to portfolio returns using regression-based attr
 """
 
 import logging
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any
+from dataclasses import dataclass
+from typing import List, Optional, Tuple, Any
 import numpy as np
 import pandas as pd
 
@@ -46,7 +46,7 @@ class AttributionResult:
     num_observations: int
     period_start: str
     period_end: str
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for API response"""
         return {
@@ -81,10 +81,10 @@ class AttributionEngine:
     
     Uses regression-based factor model to decompose returns into factor contributions.
     """
-    
+
     def __init__(self):
         self.min_observations = 20
-    
+
     def calculate_attribution(
         self,
         returns: np.ndarray,
@@ -110,19 +110,19 @@ class AttributionEngine:
         if len(returns) < self.min_observations:
             logger.warning(f"[Attribution] Insufficient observations: {len(returns)} < {self.min_observations}")
             return self._empty_result(returns, period_start, period_end)
-        
+
         # Prepare factor matrix
         factor_matrix, valid_factor_ids = self._prepare_factor_matrix(factor_data, factor_ids)
-        
+
         if factor_matrix.shape[1] == 0:
             logger.warning("[Attribution] No valid factors for regression")
             return self._empty_result(returns, period_start, period_end)
-        
+
         # Align returns with factor data
         min_len = min(len(returns), len(factor_matrix))
         returns = returns[-min_len:]
         factor_matrix = factor_matrix[-min_len:]
-        
+
         # Run regression
         try:
             result = self._run_regression(returns, factor_matrix, valid_factor_ids, factor_data)
@@ -132,7 +132,7 @@ class AttributionEngine:
         except Exception as e:
             logger.error(f"[Attribution] Regression failed: {e}", exc_info=True)
             return self._empty_result(returns, period_start, period_end)
-    
+
     def calculate_rolling_attribution(
         self,
         returns: np.ndarray,
@@ -155,11 +155,11 @@ class AttributionEngine:
             List of AttributionResult for each window
         """
         results = []
-        
+
         for i in range(window, len(returns), step):
             window_returns = returns[i - window:i]
             window_factor_data = factor_data.iloc[i - window:i]
-            
+
             result = self.calculate_attribution(
                 window_returns,
                 window_factor_data,
@@ -168,9 +168,9 @@ class AttributionEngine:
                 period_end=str(i),
             )
             results.append(result)
-        
+
         return results
-    
+
     def _prepare_factor_matrix(
         self,
         factor_data: pd.DataFrame,
@@ -179,7 +179,7 @@ class AttributionEngine:
         """Prepare factor matrix for regression"""
         valid_factors = []
         factor_columns = []
-        
+
         for fid in factor_ids:
             if fid in factor_data.columns:
                 col_data = factor_data[fid].values
@@ -187,24 +187,24 @@ class AttributionEngine:
                 if not np.all(np.isnan(col_data)):
                     valid_factors.append(fid)
                     factor_columns.append(col_data)
-        
+
         if not valid_factors:
             return np.array([]).reshape(len(factor_data), 0), []
-        
+
         factor_matrix = np.column_stack(factor_columns)
-        
+
         # Standardize factors (z-score)
         factor_matrix = self._standardize(factor_matrix)
-        
+
         return factor_matrix, valid_factors
-    
+
     def _standardize(self, matrix: np.ndarray) -> np.ndarray:
         """Standardize factor values (z-score normalization)"""
         mean = np.nanmean(matrix, axis=0)
         std = np.nanstd(matrix, axis=0)
         std[std == 0] = 1  # Avoid division by zero
         return (matrix - mean) / std
-    
+
     def _run_regression(
         self,
         returns: np.ndarray,
@@ -217,46 +217,46 @@ class AttributionEngine:
         valid_mask = ~np.isnan(returns)
         for i in range(factor_matrix.shape[1]):
             valid_mask &= ~np.isnan(factor_matrix[:, i])
-        
+
         returns_clean = returns[valid_mask]
         factors_clean = factor_matrix[valid_mask]
-        
+
         if len(returns_clean) < self.min_observations:
             return self._empty_result(returns, "0", "0")
-        
+
         # Add constant for intercept
         X = np.column_stack([np.ones(len(factors_clean)), factors_clean])
         y = returns_clean
-        
+
         # OLS regression
         try:
             beta, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
         except np.linalg.LinAlgError:
             return self._empty_result(returns, "0", "0")
-        
+
         # Calculate statistics
         n = len(y)
         k = len(factor_ids)
-        
+
         # Predicted values and residuals
         y_pred = X @ beta
         resid = y - y_pred
-        
+
         # R-squared
         ss_res = np.sum(resid ** 2)
         ss_tot = np.sum((y - np.mean(y)) ** 2)
         r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
-        
+
         # Adjusted R-squared
         adjusted_r_squared = 1 - (1 - r_squared) * (n - 1) / (n - k - 1) if n > k + 1 else 0
-        
+
         # Standard errors and t-statistics
         mse = ss_res / (n - k - 1) if n > k + 1 else 0
         try:
             var_beta = mse * np.linalg.inv(X.T @ X)
             se_beta = np.sqrt(np.diag(var_beta))
             t_stats = beta / se_beta
-            
+
             # P-values (two-tailed)
             if _scipy_available and stats is not None:
                 p_values = 2 * (1 - stats.t.cdf(np.abs(t_stats), n - k - 1))
@@ -265,7 +265,7 @@ class AttributionEngine:
         except (np.linalg.LinAlgError, ValueError):
             t_stats = np.zeros(len(beta))
             p_values = np.ones(len(beta))
-        
+
         # F-statistic
         ms_model = (ss_tot - ss_res) / k if k > 0 else 0
         f_statistic = ms_model / mse if mse > 0 else 0
@@ -273,20 +273,20 @@ class AttributionEngine:
             f_p_value = 1 - stats.f.cdf(f_statistic, k, n - k - 1)
         else:
             f_p_value = 1
-        
+
         # Factor contributions
         factor_contributions = []
         total_return = np.mean(returns_clean) * 252  # Annualized
-        
+
         for i, fid in enumerate(factor_ids):
             # Get factor metadata
             factor_name = fid
             category = "unknown"
-            
+
             # Calculate contribution
             exposure = np.mean(factors_clean[:, i])
             contribution = beta[i + 1] * exposure  # +1 for intercept
-            
+
             factor_contributions.append(FactorContribution(
                 factor_id=fid,
                 factor_name=factor_name,
@@ -297,10 +297,10 @@ class AttributionEngine:
                 t_statistic=t_stats[i + 1] if i + 1 < len(t_stats) else 0,
                 p_value=p_values[i + 1] if i + 1 < len(p_values) else 1,
             ))
-        
+
         # Residual (unexplained return)
         residual = total_return - sum(fc.return_attribution for fc in factor_contributions)
-        
+
         return AttributionResult(
             total_return=total_return,
             factor_contributions=factor_contributions,
@@ -313,7 +313,7 @@ class AttributionEngine:
             period_start="",
             period_end="",
         )
-    
+
     def _empty_result(self, returns: np.ndarray, period_start: str, period_end: str) -> AttributionResult:
         """Return empty attribution result"""
         total_return = np.mean(returns) * 252 if len(returns) > 0 else 0

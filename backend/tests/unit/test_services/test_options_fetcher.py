@@ -9,15 +9,14 @@ import pytest
 import pandas as pd
 import asyncio
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock, AsyncMock, PropertyMock
-from typing import Dict, Any, List
+from unittest.mock import patch, MagicMock
 
 from app.services.fetchers.options_fetcher import (
     OptionsFetcher,
     clean_value,
     options_fetcher,
 )
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState
+from app.services.circuit_breaker import CircuitBreaker
 
 
 # ============================================================================
@@ -114,9 +113,9 @@ class TestOptionsFetcherChain:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_cffex_chain("io2506")
-        
+
         assert result is not None
         assert result["symbol"] == "io2506"
         assert "calls" in result
@@ -131,9 +130,9 @@ class TestOptionsFetcherChain:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_cffex_chain("io2506")
-        
+
         assert "symbol" in result
         assert "name" in result
         assert "calls" in result
@@ -147,7 +146,7 @@ class TestOptionsFetcherChain:
     ):
         """Should handle SSE format (via get_sse_greeks)."""
         fetcher = options_fetcher_with_mock_cb
-        
+
         assert hasattr(fetcher, 'get_sse_greeks')
         assert callable(fetcher.get_sse_greeks)
 
@@ -159,9 +158,9 @@ class TestOptionsFetcherChain:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_cffex_chain("io2506")
-        
+
         assert isinstance(result["calls"], list)
         assert isinstance(result["puts"], list)
         assert len(result["calls"]) > 0
@@ -175,13 +174,13 @@ class TestOptionsFetcherChain:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_cffex_chain("io2506")
-        
+
         for call in result["calls"]:
             assert call["strike"] is not None
             assert call["strike"] > 0
-        
+
         for put in result["puts"]:
             assert put["strike"] is not None
             assert put["strike"] > 0
@@ -194,10 +193,10 @@ class TestOptionsFetcherChain:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result_io = await fetcher.get_cffex_chain("io2506")
         assert result_io["symbol"] == "io2506"
-        
+
         result_mo = await fetcher.get_cffex_chain("mo2506")
         assert result_mo["symbol"] == "mo2506"
 
@@ -217,9 +216,9 @@ class TestOptionsFetcherGreeks:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_sse_greeks_sina.return_value = mock_sse_greeks_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_sse_greeks("10004023")
-        
+
         assert result is not None
         assert result["code"] == "10004023"
         assert result["source"] == "akshare"
@@ -232,9 +231,9 @@ class TestOptionsFetcherGreeks:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_sse_greeks_sina.return_value = mock_sse_greeks_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_sse_greeks("10004023")
-        
+
         if result["delta"] is not None:
             assert -1.0 <= result["delta"] <= 1.0
 
@@ -246,9 +245,9 @@ class TestOptionsFetcherGreeks:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_sse_greeks_sina.return_value = mock_sse_greeks_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_sse_greeks("10004023")
-        
+
         if result["gamma"] is not None:
             assert result["gamma"] >= 0
 
@@ -260,9 +259,9 @@ class TestOptionsFetcherGreeks:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_sse_greeks_sina.return_value = mock_sse_greeks_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_sse_greeks("10004023")
-        
+
         if result["theta"] is not None:
             assert isinstance(result["theta"], (int, float))
 
@@ -274,9 +273,9 @@ class TestOptionsFetcherGreeks:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_sse_greeks_sina.return_value = mock_sse_greeks_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_sse_greeks("10004023")
-        
+
         if result["vega"] is not None:
             assert result["vega"] >= 0
 
@@ -288,9 +287,9 @@ class TestOptionsFetcherGreeks:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_sse_greeks_sina.return_value = mock_sse_greeks_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_sse_greeks("10004023")
-        
+
         if result["iv"] is not None:
             assert 0 <= result["iv"] <= 5.0
 
@@ -306,29 +305,29 @@ class TestOptionsFetcherHistory:
     async def test_fetch_history_success(self, options_fetcher_with_mock_cb):
         """Should successfully fetch historical options data."""
         fetcher = options_fetcher_with_mock_cb
-        
+
         result = await fetcher.get_kline("IO2506C3800")
-        
+
         assert result is None
 
     @pytest.mark.asyncio
     async def test_fetch_history_with_date_range(self, options_fetcher_with_mock_cb):
         """Should handle date range parameters."""
         fetcher = options_fetcher_with_mock_cb
-        
+
         result = await fetcher.get_kline(
             "IO2506C3800",
             start_date="2024-01-01",
             end_date="2024-12-31"
         )
-        
+
         assert result is None
 
     @pytest.mark.asyncio
     async def test_fetch_history_data_structure(self, options_fetcher_with_mock_cb):
         """Should return correct data structure."""
         fetcher = options_fetcher_with_mock_cb
-        
+
         result = await fetcher.get_kline(
             symbol="IO2506C3800",
             period="daily",
@@ -336,7 +335,7 @@ class TestOptionsFetcherHistory:
             start_date="2024-01-01",
             end_date="2024-12-31"
         )
-        
+
         assert result is None
 
 
@@ -355,9 +354,9 @@ class TestOptionsFetcherDataValidation:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_cffex_chain("io2506")
-        
+
         required_fields = ["symbol", "name", "calls", "puts", "update_time", "source"]
         for field in required_fields:
             assert field in result
@@ -370,9 +369,9 @@ class TestOptionsFetcherDataValidation:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_sse_greeks_sina.return_value = mock_sse_greeks_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_sse_greeks("10004023")
-        
+
         required_fields = ["code", "delta", "gamma", "theta", "vega", "iv", "source"]
         for field in required_fields:
             assert field in result
@@ -399,9 +398,9 @@ class TestOptionsFetcherDataValidation:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_empty_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_cffex_chain("io2506")
-        
+
         assert result is not None
         assert result["calls"] == []
         assert result["puts"] == []
@@ -423,9 +422,9 @@ class TestOptionsFetcherErrorHandling:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.side_effect = ConnectionError("Network error")
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_cffex_chain("io2506")
-        
+
         assert result is not None
         assert result["source"] == "empty"
         assert "error" in result
@@ -437,12 +436,12 @@ class TestOptionsFetcherErrorHandling:
         """Should handle timeout gracefully."""
         fetcher = options_fetcher_with_mock_cb
         fetcher._ak = mock_akshare
-        
+
         with patch('asyncio.wait_for') as mock_wait:
             mock_wait.side_effect = asyncio.TimeoutError()
-            
+
             result = await fetcher.get_cffex_chain("io2506")
-            
+
             assert result is not None
             assert result["source"] == "empty"
 
@@ -454,9 +453,9 @@ class TestOptionsFetcherErrorHandling:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.side_effect = ValueError("Invalid symbol")
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.get_cffex_chain("invalid_symbol")
-        
+
         assert result is not None
         assert result["source"] == "empty"
 
@@ -466,9 +465,9 @@ class TestOptionsFetcherErrorHandling:
     ):
         """Should respect circuit breaker state."""
         fetcher = OptionsFetcher(circuit_breaker=mock_circuit_breaker_open)
-        
+
         result = await fetcher.get_cffex_chain("io2506")
-        
+
         assert result is not None
         assert result["source"] == "empty"
         assert "error" in result
@@ -489,10 +488,10 @@ class TestOptionsFetcherCache:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result1 = await fetcher.get_cffex_chain("io2506")
         result2 = await fetcher.get_cffex_chain("io2506")
-        
+
         assert result1["symbol"] == result2["symbol"]
         assert result1["calls"] == result2["calls"]
         assert mock_akshare.option_cffex_hs300_spot_sina.call_count == 1
@@ -505,10 +504,10 @@ class TestOptionsFetcherCache:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result1 = await fetcher.get_cffex_chain("io2506")
         result2 = await fetcher.get_cffex_chain("io2507")
-        
+
         assert mock_akshare.option_cffex_hs300_spot_sina.call_count == 2
 
     @pytest.mark.asyncio
@@ -519,14 +518,14 @@ class TestOptionsFetcherCache:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result1 = await fetcher.get_cffex_chain("io2506")
-        
+
         cache_key = "cffex_chain_io2506"
         fetcher._cache_ttl[cache_key] = datetime.now() - timedelta(seconds=1)
-        
+
         result2 = await fetcher.get_cffex_chain("io2506")
-        
+
         assert mock_akshare.option_cffex_hs300_spot_sina.call_count == 2
 
 
@@ -541,9 +540,9 @@ class TestOptionsFetcherContractList:
     async def test_get_contract_list_cffex(self, options_fetcher_with_mock_cb):
         """Should return CFFEX contract list."""
         fetcher = options_fetcher_with_mock_cb
-        
+
         result = await fetcher.get_contract_list("CFFEX")
-        
+
         assert result["exchange"] == "CFFEX"
         assert "contracts" in result
         assert len(result["contracts"]) > 0
@@ -552,9 +551,9 @@ class TestOptionsFetcherContractList:
     async def test_get_contract_list_sse(self, options_fetcher_with_mock_cb):
         """Should return SSE contract list."""
         fetcher = options_fetcher_with_mock_cb
-        
+
         result = await fetcher.get_contract_list("SSE")
-        
+
         assert result["exchange"] == "SSE"
         assert "contracts" in result
         assert len(result["contracts"]) > 0
@@ -563,9 +562,9 @@ class TestOptionsFetcherContractList:
     async def test_contract_list_has_required_fields(self, options_fetcher_with_mock_cb):
         """Contract list should have required fields."""
         fetcher = options_fetcher_with_mock_cb
-        
+
         result = await fetcher.get_contract_list("CFFEX")
-        
+
         for contract in result["contracts"]:
             assert "code" in contract
             assert "name" in contract
@@ -582,13 +581,13 @@ class TestOptionsFetcherHealth:
     def test_is_healthy_when_available(self, mock_circuit_breaker_available):
         """Should return True when circuit breaker is available."""
         fetcher = OptionsFetcher(circuit_breaker=mock_circuit_breaker_available)
-        
+
         assert fetcher.is_healthy() is True
 
     def test_is_healthy_when_unavailable(self, mock_circuit_breaker_open):
         """Should return False when circuit breaker is open."""
         fetcher = OptionsFetcher(circuit_breaker=mock_circuit_breaker_open)
-        
+
         assert fetcher.is_healthy() is False
 
     @pytest.mark.asyncio
@@ -599,9 +598,9 @@ class TestOptionsFetcherHealth:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.return_value = mock_cffex_chain_df
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.ping()
-        
+
         assert result is True
 
     @pytest.mark.asyncio
@@ -610,9 +609,9 @@ class TestOptionsFetcherHealth:
         fetcher = options_fetcher_with_mock_cb
         mock_akshare.option_cffex_hs300_spot_sina.side_effect = Exception("Failed")
         fetcher._ak = mock_akshare
-        
+
         result = await fetcher.ping()
-        
+
         assert result is False
 
 
@@ -664,15 +663,13 @@ class TestOptionsFetcherSingleton:
 
     def test_singleton_exists(self):
         """Should have a singleton instance."""
-        from app.services.fetchers.options_fetcher import options_fetcher
-        
+
         assert options_fetcher is not None
         assert isinstance(options_fetcher, OptionsFetcher)
 
     def test_singleton_has_required_methods(self):
         """Singleton should have all required methods."""
-        from app.services.fetchers.options_fetcher import options_fetcher
-        
+
         assert hasattr(options_fetcher, 'get_cffex_chain')
         assert hasattr(options_fetcher, 'get_sse_greeks')
         assert hasattr(options_fetcher, 'get_contract_list')

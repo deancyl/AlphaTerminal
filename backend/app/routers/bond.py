@@ -11,13 +11,12 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime
 from fastapi import APIRouter, Query
-import httpx
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
-from app.services.fetchers.bond_fetcher import get_bond_fetcher, STALE_DATA_THRESHOLD_DAYS
+from app.services.fetchers.bond_fetcher import get_bond_fetcher
 from app.utils.error_decorator import handle_errors
 
 _bond_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="bond_")
@@ -72,32 +71,32 @@ async def _fetch_curve_data_for_cache():
     5. Mock data
     """
     global _LAST_FETCH_TIME
-    
+
     try:
         if not _bond_cb.is_available():
             logger.warning("[Bond] Circuit breaker is OPEN, using mock fallback")
             with _CACHE_LOCK:
                 _LAST_FETCH_TIME = time.time()
             return _bond_fetcher._get_mock_data(is_stale=True)
-        
+
         # Use bond_fetcher's multi-source fallback chain
         # This will try bond_spot_quote (real-time) first, then fallback to other sources
         data = await _bond_fetcher.fetch_yield_curve()
-        
+
         if data and data.get("yield_curve"):
             _bond_cb.record_success()
             with _CACHE_LOCK:
                 _LAST_FETCH_TIME = time.time()
-            
+
             source = data.get("source", "unknown")
             last_update = data.get("last_update", "")
             logger.info(f"[Bond] Yield curve fetched from {source}, last_update: {last_update}")
-            
+
             return data
         else:
             _bond_cb.record_failure()
             logger.warning("[Bond] bond_fetcher returned empty data")
-            
+
     except asyncio.TimeoutError:
         _bond_cb.record_failure()
         logger.warning("[Bond] bond_fetcher timeout", exc_info=True)
@@ -114,7 +113,8 @@ async def _fetch_curve_data_for_cache():
 
 async def _fetch_history_df_for_cache():
     """Fetch function for get_or_set_async - returns DataFrame"""
-    import akshare as ak, warnings
+    import akshare as ak
+    import warnings
     warnings.filterwarnings("ignore")
     logger.info("[Bond] _fetch_history_df_for_cache: fetching fresh data from akshare (cache miss)")
     try:
@@ -161,7 +161,7 @@ async def bond_curve():
         source = cache_data.get("source", "unknown")
         last_update = cache_data.get("last_update", "")
         is_stale = cache_data.get("is_stale", False)
-        
+
         warning = None
         warning_level = None
         if is_stale:
@@ -176,7 +176,7 @@ async def bond_curve():
                     warning_level = "warning"
             except (ValueError, TypeError):
                 pass
-        
+
         return success_response({
             "yield_curve":     cache_data.get("yield_curve", {}),
             "yield_curve_1m":  cache_data.get("yield_curve_1m", {}),
@@ -256,25 +256,25 @@ async def bond_history(
         )
         if df is None or df.empty:
             raise ValueError("empty df")
-        
+
         curve_name_col = df.columns[0]
         if "曲线名称" in df.columns or curve_name_col in df.columns:
             col_to_use = "曲线名称" if "曲线名称" in df.columns else curve_name_col
             df_gov = df[df[col_to_use].astype(str).str.contains("国债")].copy()
         else:
             df_gov = df.copy()
-        
+
         if df_gov.empty:
             df_gov = df
-        
+
         date_col = "日期" if "日期" in df_gov.columns else (df_gov.columns[1] if len(df_gov.columns) > 1 else df_gov.columns[0])
         if date_col in df_gov.columns:
             df_gov = df_gov.sort_values(date_col)
-        
+
         tenor_col = next((c for c in df_gov.columns if c == tenor or c.startswith(tenor + '(') or c.startswith(tenor + '（')), None)
         if not tenor_col:
             raise ValueError(f"tenor column not found: {tenor}")
-        
+
         numeric = []
         for val in df_gov[tenor_col]:
             if val is not None:
@@ -291,7 +291,7 @@ async def bond_history(
             percentile = None
         days_map = {"1M": 22, "3M": 66, "6M": 132, "1Y": 252, "3Y": 756}
         n_rows = days_map.get(period, 252)
-        
+
         history = []
         tail_df = df_gov[[date_col, tenor_col]].dropna().tail(n_rows)
         for _, r in tail_df.iterrows():
@@ -302,12 +302,12 @@ async def bond_history(
                 history.append({"date": date_str, "yield": y_val})
             except (ValueError, TypeError):
                 pass
-        
+
         total = len(history)
-        
+
         if offset > 0 or limit < total:
             history = history[offset:offset + limit]
-        
+
         return success_response({
             "tenor": tenor,
             "current": round(current_yield, 6) if current_yield else None,
@@ -337,7 +337,7 @@ def _init_cache_warmup():
     """Start background cache warmup with real data."""
     global _LAST_FETCH_TIME
     logger.info("[Bond] Starting background cache warmup...")
-    
+
     async def warmup():
         try:
             data = await _fetch_curve_data_for_cache()
@@ -347,7 +347,7 @@ def _init_cache_warmup():
                 logger.warning("[Bond] Cache warmup returned empty data")
         except Exception as e:
             logger.warning(f"[Bond] Cache warmup failed: {e}", exc_info=True)
-    
+
     import asyncio
     try:
         loop = asyncio.get_running_loop()

@@ -62,19 +62,19 @@ class Notification:
     recipient: str = ""
     subject: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def __post_init__(self):
         """Validate notification after initialization."""
         self._validate_notification()
-    
+
     def _validate_notification(self):
         """Validate notification fields."""
         if not self.message:
             raise ValueError("message cannot be empty")
-        
+
         if not self.recipient:
             raise ValueError("recipient cannot be empty")
-        
+
         if self.channel == NotificationChannel.EMAIL and not self.subject:
             raise ValueError("subject is required for email notifications")
 
@@ -101,11 +101,11 @@ class NotificationConfig:
     max_notifications_per_hour: int = 100
     email_enabled: bool = True
     webhook_enabled: bool = True
-    
+
     def __post_init__(self):
         """Validate configuration after initialization."""
         self._validate_config()
-    
+
     def _validate_config(self):
         """Validate all configuration parameters."""
         # Cycle 1: Notification config validation
@@ -118,28 +118,28 @@ class NotificationConfig:
         logger.debug(f"  max_notifications_per_hour: {self.max_notifications_per_hour}")
         logger.debug(f"  email_enabled: {self.email_enabled}")
         logger.debug(f"  webhook_enabled: {self.webhook_enabled}")
-        
+
         errors = []
-        
+
         if self.retry_attempts < 0 or self.retry_attempts > 10:
             errors.append(f"retry_attempts must be in [0, 10], got {self.retry_attempts}")
-        
+
         if self.retry_delay_seconds < 0 or self.retry_delay_seconds > 60:
             errors.append(f"retry_delay_seconds must be in [0, 60], got {self.retry_delay_seconds}")
-        
+
         if self.timeout_seconds < 1 or self.timeout_seconds > 300:
             errors.append(f"timeout_seconds must be in [1, 300], got {self.timeout_seconds}")
-        
+
         if self.max_notifications_per_hour < 1 or self.max_notifications_per_hour > 1000:
             errors.append(f"max_notifications_per_hour must be in [1, 1000], got {self.max_notifications_per_hour}")
-        
+
         if errors:
             logger.error(f"  [VALIDATION FAILED] {len(errors)} errors:")
             for err in errors:
                 logger.error(f"    - {err}")
             raise ValueError(f"Invalid notification configuration: {'; '.join(errors)}")
-        
-        logger.debug(f"  [VALIDATION PASSED] All parameters within acceptable ranges")
+
+        logger.debug("  [VALIDATION PASSED] All parameters within acceptable ranges")
         logger.debug("=" * 60)
 
 
@@ -153,7 +153,7 @@ class NotificationTemplates:
         - Risk alerts (stop loss, position limit)
         - Performance summaries (daily/weekly)
     """
-    
+
     @staticmethod
     def trade_notification(
         symbol: str,
@@ -176,7 +176,7 @@ class NotificationTemplates:
             Dictionary with subject and message
         """
         action_upper = action.upper()
-        
+
         if action_upper == "BUY":
             subject = f"📈 Trade Executed: BUY {shares} {symbol} @ ${price:.2f}"
             message = f"""
@@ -205,9 +205,9 @@ Total: ${shares * price:.2f}
 
 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
-        
+
         return {"subject": subject.strip(), "message": message.strip()}
-    
+
     @staticmethod
     def risk_alert(
         alert_type: str,
@@ -230,7 +230,7 @@ Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             Dictionary with subject and message
         """
         alert_type_upper = alert_type.upper()
-        
+
         if alert_type_upper == "STOP_LOSS":
             subject = f"🚨 Risk Alert: Stop Loss Triggered for {symbol}"
             body = f"""
@@ -277,9 +277,9 @@ Risk Alert: {alert_type_upper}
 
 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
-        
+
         return {"subject": subject.strip(), "body": body.strip()}
-    
+
     @staticmethod
     def performance_summary(
         period: str,
@@ -306,7 +306,7 @@ Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             Dictionary with subject and message
         """
         period_upper = period.upper()
-        
+
         subject = f"📊 {period_upper} Performance Summary"
         message = f"""
 Performance Summary - {period_upper}
@@ -319,7 +319,7 @@ Total Trades: {total_trades}
 
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
-        
+
         return {"subject": subject.strip(), "message": message.strip()}
 
 
@@ -334,21 +334,21 @@ class NotificationService:
         - Status tracking and error handling
         - Rate limiting and retry logic
     """
-    
+
     def __init__(self, config: Optional[NotificationConfig] = None):
         """Initialize notification service with configuration."""
         self.config = config or NotificationConfig()
         self.notifications: Dict[str, Notification] = {}
         self.notification_history: List[Dict[str, Any]] = []
-        
-        logger.info(f"[NotificationService] Initialized with config:")
+
+        logger.info("[NotificationService] Initialized with config:")
         logger.info(f"  enabled: {self.config.enabled}")
         logger.info(f"  retry_attempts: {self.config.retry_attempts}")
         logger.info(f"  email_enabled: {self.config.email_enabled}")
         logger.info(f"  webhook_enabled: {self.config.webhook_enabled}")
-    
+
     # ── Template Rendering ─────────────────────────────────────────────────
-    
+
     def create_template(
         self,
         template_name: str,
@@ -372,18 +372,18 @@ class NotificationService:
         logger.debug("[Cycle 2: Template Rendering]")
         logger.debug(f"  template_name: {template_name}")
         logger.debug(f"  variables: {variables}")
-        
+
         template_name_lower = template_name.lower()
-        
+
         try:
             if template_name_lower == "trade":
                 required_vars = ["symbol", "action", "shares", "price"]
                 missing_vars = [v for v in required_vars if v not in variables]
-                
+
                 if missing_vars:
                     logger.error(f"  [ERROR] Missing required variables: {missing_vars}")
                     raise ValueError(f"Missing required variables for trade template: {missing_vars}")
-                
+
                 template = NotificationTemplates.trade_notification(
                     symbol=variables["symbol"],
                     action=variables["action"],
@@ -391,19 +391,19 @@ class NotificationService:
                     price=variables["price"],
                     pnl=variables.get("pnl"),
                 )
-                
-                logger.debug(f"  [SUCCESS] Trade template rendered")
+
+                logger.debug("  [SUCCESS] Trade template rendered")
                 logger.debug(f"    subject: {template['subject']}")
                 result = template["message"]
-                
+
             elif template_name_lower == "risk_alert":
                 required_vars = ["alert_type"]
                 missing_vars = [v for v in required_vars if v not in variables]
-                
+
                 if missing_vars:
                     logger.error(f"  [ERROR] Missing required variables: {missing_vars}")
                     raise ValueError(f"Missing required variables for risk_alert template: {missing_vars}")
-                
+
                 template = NotificationTemplates.risk_alert(
                     alert_type=variables["alert_type"],
                     symbol=variables.get("symbol"),
@@ -411,20 +411,20 @@ class NotificationService:
                     threshold=variables.get("threshold"),
                     message=variables.get("message"),
                 )
-                
-                logger.debug(f"  [SUCCESS] Risk alert template rendered")
+
+                logger.debug("  [SUCCESS] Risk alert template rendered")
                 logger.debug(f"    subject: {template['subject']}")
                 result = template["body"]
-                
+
             elif template_name_lower == "performance":
-                required_vars = ["period", "total_return", "total_return_pct", 
+                required_vars = ["period", "total_return", "total_return_pct",
                                "sharpe_ratio", "max_drawdown", "win_rate", "total_trades"]
                 missing_vars = [v for v in required_vars if v not in variables]
-                
+
                 if missing_vars:
                     logger.error(f"  [ERROR] Missing required variables: {missing_vars}")
                     raise ValueError(f"Missing required variables for performance template: {missing_vars}")
-                
+
                 template = NotificationTemplates.performance_summary(
                     period=variables["period"],
                     total_return=variables["total_return"],
@@ -434,20 +434,20 @@ class NotificationService:
                     win_rate=variables["win_rate"],
                     total_trades=variables["total_trades"],
                 )
-                
-                logger.debug(f"  [SUCCESS] Performance template rendered")
+
+                logger.debug("  [SUCCESS] Performance template rendered")
                 logger.debug(f"    subject: {template['subject']}")
                 result = template["message"]
-                
+
             else:
                 logger.error(f"  [ERROR] Unknown template: {template_name}")
                 raise ValueError(f"Unknown template: {template_name}")
-            
-            logger.debug(f"  [RESULT] Template rendered successfully")
+
+            logger.debug("  [RESULT] Template rendered successfully")
             logger.debug("=" * 60)
-            
+
             return result
-            
+
         except ValueError as e:
             logger.error(f"  [ERROR] Template validation error: {e}", exc_info=True)
             logger.debug("=" * 60)
@@ -460,9 +460,9 @@ class NotificationService:
             logger.error(f"  [ERROR] Template rendering failed: {e}", exc_info=True)
             logger.debug("=" * 60)
             raise
-    
+
     # ── Channel Validation ────────────────────────────────────────────────
-    
+
     def validate_channel(
         self,
         channel: NotificationChannel,
@@ -486,53 +486,53 @@ class NotificationService:
         logger.debug("[Cycle 3: Channel Validation]")
         logger.debug(f"  channel: {channel}")
         logger.debug(f"  recipient: {recipient}")
-        
+
         if not self.config.enabled:
-            logger.error(f"  [ERROR] Notifications are disabled")
+            logger.error("  [ERROR] Notifications are disabled")
             logger.debug("=" * 60)
             raise ValueError("Notifications are disabled in configuration")
-        
+
         # Validate channel
         if channel == NotificationChannel.EMAIL:
             if not self.config.email_enabled:
-                logger.error(f"  [ERROR] Email notifications are disabled")
+                logger.error("  [ERROR] Email notifications are disabled")
                 logger.debug("=" * 60)
                 raise ValueError("Email notifications are disabled in configuration")
-            
+
             # Basic email validation
             if "@" not in recipient or "." not in recipient:
                 logger.error(f"  [ERROR] Invalid email address: {recipient}")
                 logger.debug("=" * 60)
                 raise ValueError(f"Invalid email address: {recipient}")
-            
-            logger.debug(f"  [VALID] Email channel validated")
-            
+
+            logger.debug("  [VALID] Email channel validated")
+
         elif channel == NotificationChannel.WEBHOOK:
             if not self.config.webhook_enabled:
-                logger.error(f"  [ERROR] Webhook notifications are disabled")
+                logger.error("  [ERROR] Webhook notifications are disabled")
                 logger.debug("=" * 60)
                 raise ValueError("Webhook notifications are disabled in configuration")
-            
+
             # Basic URL validation
             if not recipient.startswith(("http://", "https://")):
                 logger.error(f"  [ERROR] Invalid webhook URL: {recipient}")
                 logger.debug("=" * 60)
                 raise ValueError(f"Invalid webhook URL: {recipient}")
-            
-            logger.debug(f"  [VALID] Webhook channel validated")
-            
+
+            logger.debug("  [VALID] Webhook channel validated")
+
         else:
             logger.error(f"  [ERROR] Unknown channel: {channel}")
             logger.debug("=" * 60)
             raise ValueError(f"Unknown channel: {channel}")
-        
-        logger.debug(f"  [RESULT] Channel validation passed")
+
+        logger.debug("  [RESULT] Channel validation passed")
         logger.debug("=" * 60)
-        
+
         return True
-    
+
     # ── Send Operations ────────────────────────────────────────────────────
-    
+
     def send_notification(
         self,
         channel: NotificationChannel,
@@ -561,11 +561,11 @@ class NotificationService:
         logger.debug(f"  recipient: {recipient}")
         logger.debug(f"  subject: {subject}")
         logger.debug(f"  message_length: {len(message)}")
-        
+
         try:
             # Validate channel
             self.validate_channel(channel, recipient)
-            
+
             # Create notification object
             notification = Notification(
                 channel=channel,
@@ -574,9 +574,9 @@ class NotificationService:
                 subject=subject,
                 metadata=metadata or {},
             )
-            
+
             logger.debug(f"  [CREATED] Notification ID: {notification.id}")
-            
+
             # Send based on channel
             if channel == NotificationChannel.EMAIL:
                 success = self.send_email(
@@ -596,17 +596,17 @@ class NotificationService:
             else:
                 logger.error(f"  [ERROR] Unknown channel: {channel}")
                 success = False
-            
+
             # Update notification status
             if success:
                 notification.status = NotificationStatus.SENT
                 notification.sent_at = datetime.now()
-                logger.debug(f"  [SUCCESS] Notification sent successfully")
+                logger.debug("  [SUCCESS] Notification sent successfully")
             else:
                 notification.status = NotificationStatus.FAILED
                 notification.error = "Send operation failed"
-                logger.error(f"  [FAILED] Notification send failed")
-            
+                logger.error("  [FAILED] Notification send failed")
+
             # Store notification
             self.notifications[notification.id] = notification
             self.notification_history.append({
@@ -616,12 +616,12 @@ class NotificationService:
                 "status": notification.status.value,
                 "timestamp": datetime.now().isoformat(),
             })
-            
+
             logger.debug(f"  [RESULT] Status: {notification.status.value}")
             logger.debug("=" * 60)
-            
+
             return success
-            
+
         except ValueError as e:
             logger.error(f"  [ERROR] Validation error: {e}", exc_info=True)
             logger.debug("=" * 60)
@@ -634,7 +634,7 @@ class NotificationService:
             logger.error(f"  [ERROR] Send operation failed: {e}", exc_info=True)
             logger.debug("=" * 60)
             return False
-    
+
     def send_email(
         self,
         to: str,
@@ -655,14 +655,14 @@ class NotificationService:
         logger.debug(f"  [MOCK EMAIL] Sending email to: {to}")
         logger.debug(f"  [MOCK EMAIL] Subject: {subject}")
         logger.debug(f"  [MOCK EMAIL] Body length: {len(body)} characters")
-        
+
         # Mock email sending - always succeeds for testing
         # In production, this would integrate with an email service
-        
+
         # Simulate successful send
         logger.info(f"[NotificationService] Mock email sent to {to}")
         return True
-    
+
     def send_webhook(
         self,
         url: str,
@@ -680,16 +680,16 @@ class NotificationService:
         """
         logger.debug(f"  [MOCK WEBHOOK] Sending webhook to: {url}")
         logger.debug(f"  [MOCK WEBHOOK] Payload: {json.dumps(payload, indent=2)}")
-        
+
         # Mock webhook sending - always succeeds for testing
         # In production, this would make an HTTP POST request
-        
+
         # Simulate successful send
         logger.info(f"[NotificationService] Mock webhook sent to {url}")
         return True
-    
+
     # ── Status Tracking ───────────────────────────────────────────────────
-    
+
     def get_notification_status(
         self,
         notification_id: str,
@@ -707,14 +707,14 @@ class NotificationService:
         logger.debug("=" * 60)
         logger.debug("[Cycle 5: Status Tracking]")
         logger.debug(f"  notification_id: {notification_id}")
-        
+
         if notification_id not in self.notifications:
             logger.warning(f"  [NOT FOUND] Notification {notification_id} not found")
             logger.debug("=" * 60)
             return None
-        
+
         notification = self.notifications[notification_id]
-        
+
         status_dict = {
             "id": notification.id,
             "channel": notification.channel.value,
@@ -724,17 +724,17 @@ class NotificationService:
             "error": notification.error,
             "recipient": notification.recipient,
         }
-        
-        logger.debug(f"  [FOUND] Notification status:")
+
+        logger.debug("  [FOUND] Notification status:")
         logger.debug(f"    status: {status_dict['status']}")
         logger.debug(f"    channel: {status_dict['channel']}")
         logger.debug(f"    recipient: {status_dict['recipient']}")
         logger.debug(f"    created_at: {status_dict['created_at']}")
         logger.debug(f"    sent_at: {status_dict['sent_at']}")
         logger.debug("=" * 60)
-        
+
         return status_dict
-    
+
     def get_notification_history(
         self,
         limit: int = 50,
@@ -749,14 +749,14 @@ class NotificationService:
             List of notification history entries
         """
         logger.debug(f"[NotificationService] Getting notification history (limit: {limit})")
-        
+
         # Return most recent notifications
         history = self.notification_history[-limit:]
-        
+
         logger.debug(f"[NotificationService] Returning {len(history)} notifications")
-        
+
         return history
-    
+
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get notification statistics.
@@ -765,12 +765,12 @@ class NotificationService:
             Dictionary with notification statistics
         """
         logger.debug("[NotificationService] Getting notification statistics")
-        
+
         total = len(self.notifications)
         sent = sum(1 for n in self.notifications.values() if n.status == NotificationStatus.SENT)
         failed = sum(1 for n in self.notifications.values() if n.status == NotificationStatus.FAILED)
         pending = sum(1 for n in self.notifications.values() if n.status == NotificationStatus.PENDING)
-        
+
         stats = {
             "total_notifications": total,
             "sent": sent,
@@ -779,13 +779,13 @@ class NotificationService:
             "success_rate": (sent / total * 100) if total > 0 else 0.0,
             "history_count": len(self.notification_history),
         }
-        
+
         logger.debug(f"[NotificationService] Statistics: {stats}")
-        
+
         return stats
-    
+
     # ── Convenience Methods ───────────────────────────────────────────────
-    
+
     def notify_trade(
         self,
         symbol: str,
@@ -816,14 +816,14 @@ class NotificationService:
             price=price,
             pnl=pnl,
         )
-        
+
         return self.send_notification(
             channel=NotificationChannel.EMAIL,
             message=template["message"],
             recipient=recipient,
             subject=template["subject"],
         )
-    
+
     def notify_risk_alert(
         self,
         alert_type: str,
@@ -854,14 +854,14 @@ class NotificationService:
             threshold=threshold,
             message=message,
         )
-        
+
         return self.send_notification(
             channel=NotificationChannel.EMAIL,
             message=template["body"],
             recipient=recipient,
             subject=template["subject"],
         )
-    
+
     def notify_performance_summary(
         self,
         period: str,
@@ -898,7 +898,7 @@ class NotificationService:
             win_rate=win_rate,
             total_trades=total_trades,
         )
-        
+
         return self.send_notification(
             channel=NotificationChannel.EMAIL,
             message=template["message"],

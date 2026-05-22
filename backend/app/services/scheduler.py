@@ -206,7 +206,7 @@ def start_scheduler():
     init_tables()
 
     is_primary_worker = acquire_scheduler_lock()
-    
+
     if not is_primary_worker:
         logger.info("[Scheduler] Skipping job registration (secondary worker)")
         return
@@ -220,7 +220,7 @@ def start_scheduler():
             logger.info("[Scheduler] 历史K线回填完成")
         except Exception as e:
             logger.error(f"[Scheduler] 历史K线回填失败: {e}", exc_info=True)
-        
+
         # 立即触发 Sina HQ 拉取（后台线程，包含今日实时数据）
         from app.services.sentiment_engine import trigger_spot_fetch
         try:
@@ -228,7 +228,7 @@ def start_scheduler():
             logger.info("[Scheduler] Sina HQ 个股触发完成")
         except Exception as e:
             logger.error(f"[Scheduler] Sina HQ 触发失败: {e}", exc_info=True)
-        
+
         # Mark backend as ready
         from app.routers.health import set_backend_ready
         set_backend_ready(True)
@@ -243,13 +243,13 @@ def start_scheduler():
             from app.services.streaming import get_streaming_manager
             from app.services.ws_manager import ws_manager
             from app.services.fetchers.sina import SinaFetcher
-            
+
             streaming_manager = get_streaming_manager()
             ws_manager.register_streaming_manager(streaming_manager)
-            
+
             sina_fetcher = SinaFetcher()
             streaming_manager.set_http_fetcher(sina_fetcher)
-            
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -259,7 +259,7 @@ def start_scheduler():
                 loop.close()
         except Exception as e:
             logger.error(f"[Scheduler] Streaming startup failed: {e}", exc_info=True)
-    
+
     threading.Thread(target=_start_streaming, daemon=True).start()
     logger.info("[Scheduler] WebSocket streaming task triggered (background)")
 
@@ -307,7 +307,7 @@ def start_scheduler():
 
     scheduler.add_job(
         _realtime_daily_job,
-        "interval", 
+        "interval",
         seconds=10,
         id="realtime_daily",
         name="RealtimeDaily",
@@ -342,7 +342,7 @@ def start_scheduler():
         import time as _time
         _time.sleep(3)
         _fetch_all_stocks_job()
-        
+
         _time.sleep(5)
         try:
             from app.db.database import get_all_stocks_count
@@ -354,7 +354,7 @@ def start_scheduler():
                 logger.info(f"[Scheduler] Health check passed: {count} stocks loaded")
         except Exception as e:
             logger.error(f"[Scheduler] Health check failed: {e}", exc_info=True)
-    
+
     import threading
     threading.Thread(target=_initial_all_stocks, daemon=True).start()
     logger.info("[Scheduler] 全市场A股初始抓取已触发（后台，3秒后开始，8秒后健康检查）")
@@ -415,22 +415,21 @@ def start_scheduler():
         from app.services.fetchers.forex_fetcher import forex_fetcher
         from app.services.data_cache import get_cache
         from datetime import datetime
-        import asyncio
-        
+
         try:
             cache = get_cache()
-            
+
             # Fetch spot quotes (sync wrapper for async)
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 quotes = loop.run_until_complete(forex_fetcher.get_spot_quotes())
-                
+
                 # Build cross-rate matrix data
                 currency_list = ["USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF"]
                 cfets_rmb = loop.run_until_complete(forex_fetcher.get_cfets_spot())
                 cfets_cross = loop.run_until_complete(forex_fetcher.get_cfets_crosses())
-                
+
                 from decimal import Decimal
                 rates_dict = {}
                 for q in quotes:
@@ -440,19 +439,19 @@ def start_scheduler():
                         from_curr = symbol[:3]
                         to_curr = symbol[3:]
                         rates_dict[f"{from_curr}/{to_curr}"] = Decimal(str(latest))
-                
+
                 for q in cfets_rmb:
                     pair = q.get("pair", "")
                     mid = q.get("mid")
                     if mid and "/" in pair:
                         rates_dict[pair] = Decimal(str(mid))
-                
+
                 for q in cfets_cross:
                     pair = q.get("pair", "")
                     mid = q.get("mid")
                     if mid and "/" in pair:
                         rates_dict[pair] = Decimal(str(mid))
-                
+
                 # Build matrix
                 matrix = []
                 for base_curr in currency_list:
@@ -471,7 +470,7 @@ def start_scheduler():
                     matrix.append({"base": base_curr, "rates": row_rates})
             finally:
                 loop.close()
-            
+
             # Cache spot quotes
             if quotes:
                 cache.set("forex:spot_quotes", {
@@ -479,7 +478,7 @@ def start_scheduler():
                     "last_update_time": datetime.now().isoformat(),
                     "status": "ready"
                 }, ttl=120)
-            
+
             # Cache matrix
             if matrix:
                 cache.set("forex:matrix", {
@@ -488,7 +487,7 @@ def start_scheduler():
                     "last_update_time": datetime.now().isoformat(),
                     "status": "ready"
                 }, ttl=120)
-            
+
             logger.info(f"[Scheduler] Forex polling complete: {len(quotes) if quotes else 0} quotes, matrix {len(matrix)}x{len(matrix[0]['rates']) if matrix else 0}")
         except Exception as e:
             logger.error(f"[Scheduler] Forex polling failed: {e}", exc_info=True)
@@ -598,7 +597,7 @@ def start_scheduler():
         name="MemoryMonitor",
         replace_existing=True,
     )
-    
+
     scheduler.add_job(
         _cache_cleanup_job,
         "interval",
@@ -608,7 +607,7 @@ def start_scheduler():
         replace_existing=True,
     )
     logger.info("[Scheduler] Cache cleanup job registered (every 5 minutes)")
-    
+
     scheduler.start()
     logger.info("[Scheduler] APScheduler 已启动")
 
@@ -630,47 +629,46 @@ def _cache_cleanup_job():
 
 async def run_initial_data_fetch():
     """Blocking startup: Fetch core data before accepting HTTP requests"""
-    import asyncio
-    
+
     logger.info("[Startup] Starting blocking data fetch...")
-    
+
     loop = asyncio.get_running_loop()
-    
+
     # Fetch forex data directly
     try:
         from app.services.fetchers.forex_fetcher import forex_fetcher
         from app.services.data_cache import get_cache
-        
+
         cache = get_cache()
         quotes = await forex_fetcher.get_spot_quotes()
-        
+
         # Build cross-rate matrix data
         currency_list = ["USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF"]
         cfets_rmb = await forex_fetcher.get_cfets_spot()
         cfets_cross = await forex_fetcher.get_cfets_crosses()
-        
+
         from decimal import Decimal
         rates_dict = {}
         for q in quotes:
             symbol = q.get("symbol", "")
             if symbol.endswith("CNY"):
                 rates_dict[symbol.replace("CNY", "")] = Decimal(str(q.get("bid", q.get("price", 0))))
-        
+
         # Add CFETS rates
         for item in cfets_rmb:
             symbol = item.get("symbol", "")
             if symbol.endswith("CNY"):
                 rates_dict[symbol.replace("CNY", "")] = Decimal(str(item.get("bid", item.get("price", 0))))
-        
+
         cache.set("forex:spot:v1", quotes, ttl=60)
         cache.set("forex:rates:v1", {k: float(v) for k, v in rates_dict.items()}, ttl=60)
-        
+
         logger.info("[Startup] Forex data fetched")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] forex failed: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"[Startup] forex fetch error: {e}", exc_info=True)
-    
+
     logger.info("[Startup] Blocking data fetch complete")
 
 
@@ -681,7 +679,7 @@ def _memory_monitor():
         import psutil
         process = psutil.Process()
         mem_mb = process.memory_info().rss / 1024 / 1024
-        
+
         if mem_mb > MEMORY_THRESHOLD_MB:
             logger.warning(f"[MemoryMonitor] 内存使用 {mem_mb:.1f}MB 超过阈值 {MEMORY_THRESHOLD_MB}MB，执行强制gc")
             gc.collect()
@@ -699,7 +697,7 @@ def _bond_polling_job():
     try:
         import asyncio
         from app.routers.bond import _fetch_curve_data_for_cache
-        
+
         # Create event loop for background thread
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -708,7 +706,7 @@ def _bond_polling_job():
             loop.run_until_complete(_fetch_curve_data_for_cache())
         finally:
             loop.close()
-        
+
         logger.info("[Scheduler] Bond data pre-fetch completed")
     except Exception as e:
         logger.error(f"[Scheduler] Bond polling failed: {e}", exc_info=True)
@@ -716,20 +714,19 @@ def _bond_polling_job():
 
 def _macro_polling_job():
     """后台轮询宏观数据并写入全局缓存"""
-    import asyncio
     from app.services.data_cache import get_cache
-    
+
     try:
         cache = get_cache()
         ak = _get_ak()
-        
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         def fetch_sync():
             try:
                 pd = _get_pd()
-                
+
                 gdp_df = ak.macro_china_gdp()
                 cpi_df = ak.macro_china_cpi()
                 ppi_df = ak.macro_china_ppi()
@@ -739,7 +736,7 @@ def _macro_polling_job():
                 industrial_df = ak.macro_china_gyzjz()
                 unemployment_df = ak.macro_china_urban_unemployment()
                 # calendar_df = ak.macro_china_event_report()  # Function removed from akshare
-                
+
                 return {
                     'gdp': gdp_df, 'cpi': cpi_df, 'ppi': ppi_df,
                     'pmi': pmi_df, 'm2': m2_df, 'social': social_df,
@@ -749,17 +746,17 @@ def _macro_polling_job():
             except Exception as e:
                 logger.error(f"[MacroPolling] Fetch error: {e}", exc_info=True)
                 return None
-        
+
         data = loop.run_in_executor(_macro_executor, fetch_sync)
         results = loop.run_until_complete(data)
         loop.close()
-        
+
         if results is None:
             logger.error("[MacroPolling] No data fetched")
             return
-        
+
         dashboard = {}
-        
+
         def process_df(df, limit, columns, rename_map):
             if df is None or len(df) == 0:
                 return None
@@ -773,13 +770,13 @@ def _macro_polling_job():
                         df_work[new_col] = df_work[old_col].apply(_safe_float)
             df_work = df_work.drop(columns=[c for c in columns if c not in rename_map.values()])
             return df_work.to_dict('records')
-        
+
         latest_gdp = results['gdp'].iloc[0] if len(results['gdp']) > 0 else None
         latest_cpi = results['cpi'].iloc[0] if len(results['cpi']) > 0 else None
         latest_ppi = results['ppi'].iloc[0] if len(results['ppi']) > 0 else None
         latest_pmi = results['pmi'].iloc[0] if len(results['pmi']) > 0 else None
         latest_m2 = results['m2'].iloc[0] if len(results['m2']) > 0 else None
-        
+
         dashboard["overview"] = {
             "gdp": {
                 "quarter": _safe_strftime(latest_gdp['季度']) if latest_gdp is not None else None,
@@ -804,7 +801,7 @@ def _macro_polling_job():
                 "yoy": _safe_float(latest_m2['今值']) if latest_m2 is not None else None,
             },
         }
-        
+
         calendar_items = []
         if results['calendar'] is not None and len(results['calendar']) > 0:
             for _, row in results['calendar'].head(20).iterrows():
@@ -814,61 +811,61 @@ def _macro_polling_job():
                     "importance": "high" if "重要" in str(row.get('重要性', '')) else "normal"
                 })
         dashboard["calendar"] = calendar_items
-        
+
         dashboard["gdp"] = {
             "data": process_df(results['gdp'], 20, ['季度', '国内生产总值-绝对值', '国内生产总值-同比增长'],
                                {'季度': 'quarter', '国内生产总值-绝对值': 'gdp_absolute', '国内生产总值-同比增长': 'gdp_yoy'}),
             "unit": "亿元", "frequency": "季度"
         }
-        
+
         dashboard["cpi"] = {
             "data": process_df(results['cpi'], 24, ['月份', '全国-当月', '全国-同比增长', '全国-环比增长'],
                                {'月份': 'month', '全国-当月': 'nation_current', '全国-同比增长': 'nation_yoy', '全国-环比增长': 'nation_mom'}),
             "unit": "", "frequency": "月度"
         }
-        
+
         dashboard["ppi"] = {
             "data": process_df(results['ppi'], 24, ['月份', '当月', '当月同比增长'],
                                {'月份': 'month', '当月': 'current', '当月同比增长': 'yoy'}),
             "unit": "", "frequency": "月度"
         }
-        
+
         dashboard["pmi"] = {
             "data": process_df(results['pmi'], 24, ['日期', '今值'],
                                {'日期': 'month', '今值': 'manufacturing_index'}),
             "unit": "", "frequency": "月度"
         }
-        
+
         dashboard["m2"] = {
             "data": process_df(results['m2'], 24, ['日期', '今值'],
                                {'日期': 'month', '今值': 'm2_yoy'}),
             "unit": "%", "frequency": "月度"
         }
-        
+
         dashboard["social_financing"] = {
             "data": process_df(results['social'], 24, ['月份', '社会融资规模增量'],
                                {'月份': 'month', '社会融资规模增量': 'total'}),
             "unit": "亿元", "frequency": "月度"
         }
-        
+
         dashboard["industrial_production"] = {
             "data": process_df(results['industrial'], 24, ['月份', '同比增长'],
                                {'月份': 'month', '同比增长': 'yoy'}),
             "unit": "%", "frequency": "月度"
         }
-        
+
         dashboard["unemployment"] = {
             "data": process_df(results['unemployment'], 24, ['date', 'value'],
                                {'date': 'month', 'value': 'rate'}),
             "unit": "%", "frequency": "月度"
         }
-        
+
         dashboard["last_update"] = datetime.now().isoformat()
         dashboard["status"] = "ready"
-        
+
         cache.set("macro:dashboard", dashboard, ttl=3600)
         logger.info(f"[MacroPolling] Complete, cached macro:dashboard with {len(dashboard)} indicators")
-        
+
     except Exception as e:
         logger.error(f"[MacroPolling] Failed: {e}", exc_info=True)
 

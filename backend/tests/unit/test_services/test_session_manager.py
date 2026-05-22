@@ -9,9 +9,8 @@ Tests:
 - test_cleanup_expired_sessions
 """
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 from datetime import datetime, timedelta
-import time
 
 from app.services.session_manager import (
     SessionManager,
@@ -53,9 +52,9 @@ class TestSessionManager:
             "total_tokens": 0,
             "total_cost_usd": 0.0
         }
-        
+
         result = manager.create_or_get_session(user_id="user-1")
-        
+
         assert result is not None
         assert result.session_id == "test-session-123"
         assert result.user_id == "user-1"
@@ -78,9 +77,9 @@ class TestSessionManager:
             "total_tokens": 1000,
             "total_cost_usd": 0.05
         }
-        
+
         result = manager.get_session("existing-session")
-        
+
         assert result is not None
         assert result.session_id == "existing-session"
         assert result.bound_models == ["openai:gpt-4"]
@@ -93,27 +92,27 @@ class TestSessionManager:
     def test_session_ttl_expires(self, manager, mock_session_db):
         """Session should detect when expired."""
         expired_time = (datetime.now() - timedelta(hours=1)).isoformat()
-        
+
         session = SessionState(
             session_id="expired-session",
             created_at="2024-01-01T00:00:00",
             last_active_at="2024-01-01T00:00:00",
             expires_at=expired_time
         )
-        
+
         assert session.is_expired() is True
 
     def test_session_not_expired(self, manager, mock_session_db):
         """Session should detect when not expired."""
         future_time = (datetime.now() + timedelta(hours=1)).isoformat()
-        
+
         session = SessionState(
             session_id="active-session",
             created_at="2024-01-01T00:00:00",
             last_active_at="2024-01-01T00:00:00",
             expires_at=future_time
         )
-        
+
         assert session.is_expired() is False
 
     # ========================================================================
@@ -134,9 +133,9 @@ class TestSessionManager:
             "total_cost_usd": 0.0
         }
         mock_session_db.update_session_models.return_value = True
-        
+
         result = manager.bind_model("test-session", "openai", "gpt-4")
-        
+
         assert result is True
         mock_session_db.update_session_models.assert_called_once()
 
@@ -154,11 +153,11 @@ class TestSessionManager:
             "total_tokens": 0,
             "total_cost_usd": 0.0
         }
-        
+
         result = manager.get_bound_model("test-session", "openai")
-        
+
         assert result == "gpt-4"
-        
+
         result2 = manager.get_bound_model("test-session", "deepseek")
         assert result2 == "deepseek-chat"
 
@@ -168,9 +167,9 @@ class TestSessionManager:
     def test_cleanup_expired_sessions(self, manager, mock_session_db):
         """cleanup should remove expired sessions."""
         mock_session_db.cleanup_expired_sessions.return_value = 5
-        
+
         deleted = mock_session_db.cleanup_expired_sessions()
-        
+
         assert deleted == 5
 
 
@@ -191,35 +190,35 @@ class TestSessionManagerEdgeCases:
     def test_get_nonexistent_session(self, manager, mock_session_db):
         """get_session should return None for non-existent session."""
         mock_session_db.get_session.return_value = None
-        
+
         result = manager.get_session("nonexistent")
-        
+
         assert result is None
 
     def test_update_session_usage(self, manager, mock_session_db):
         """update_session_usage should update stats."""
         mock_session_db.update_session_stats.return_value = True
-        
+
         result = manager.update_session_usage("test-session", tokens=100, cost_usd=0.01)
-        
+
         assert result is True
         mock_session_db.update_session_stats.assert_called_once()
 
     def test_touch_session(self, manager, mock_session_db):
         """touch_session should update last active time."""
         mock_session_db.update_session_activity.return_value = True
-        
+
         result = manager.touch_session("test-session")
-        
+
         assert result is True
         mock_session_db.update_session_activity.assert_called_once()
 
     def test_delete_session(self, manager, mock_session_db):
         """delete_session should remove session."""
         mock_session_db.delete_session.return_value = True
-        
+
         result = manager.delete_session("test-session")
-        
+
         assert result is True
         mock_session_db.delete_session.assert_called_once_with("test-session")
 
@@ -239,9 +238,9 @@ class TestSessionManagerEdgeCases:
                 "total_cost_usd": 0.0
             }
         ]
-        
+
         result = manager.get_active_sessions()
-        
+
         assert len(result) == 1
         assert result[0].session_id == "session-1"
 
@@ -249,12 +248,12 @@ class TestSessionManagerEdgeCases:
         """Singleton should return same instance."""
         import app.services.session_manager as module
         module._manager_instance = None
-        
+
         instance1 = get_session_manager()
         instance2 = get_session_manager()
-        
+
         assert instance1 is instance2
-        
+
         instance1._shutdown = True
         module._manager_instance = None
 

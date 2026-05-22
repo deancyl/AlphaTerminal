@@ -22,8 +22,8 @@ import time
 import tempfile
 import os
 import sys
-from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from datetime import datetime
+from typing import Dict, Any
 import pandas as pd
 import numpy as np
 
@@ -44,32 +44,32 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 class DebugCycleTracker:
     """Track and log 5 comprehensive debug cycles"""
-    
+
     def __init__(self):
         self.cycle_times = {}
         self.cycle_results = {}
         self.start_time = time.time()
-        
+
     def start_cycle(self, cycle_num: int, name: str):
         """Start a debug cycle"""
         logger.debug("=" * 80)
         logger.debug(f"[CYCLE {cycle_num}: {name}] Starting...")
         logger.debug("=" * 80)
         self.cycle_times[f"cycle_{cycle_num}_start"] = time.time()
-        
+
     def end_cycle(self, cycle_num: int, name: str, success: bool, details: Dict[str, Any] = None):
         """End a debug cycle"""
         end_time = time.time()
         start_time = self.cycle_times.get(f"cycle_{cycle_num}_start", end_time)
         duration = end_time - start_time
-        
+
         self.cycle_results[f"cycle_{cycle_num}"] = {
             "name": name,
             "success": success,
             "duration_seconds": round(duration, 3),
             "details": details or {}
         }
-        
+
         status = "✅ PASSED" if success else "❌ FAILED"
         logger.debug("=" * 80)
         logger.debug(f"[CYCLE {cycle_num}: {name}] {status}")
@@ -78,13 +78,13 @@ class DebugCycleTracker:
             for key, value in details.items():
                 logger.debug(f"  {key}: {value}")
         logger.debug("=" * 80)
-        
+
     def get_summary(self) -> Dict[str, Any]:
         """Get summary of all cycles"""
         total_duration = time.time() - self.start_time
         successful = sum(1 for r in self.cycle_results.values() if r["success"])
         total = len(self.cycle_results)
-        
+
         return {
             "total_cycles": total,
             "successful_cycles": successful,
@@ -107,11 +107,11 @@ def test_db():
     """Create temporary test database"""
     fd, path = tempfile.mkstemp(suffix='.db')
     os.close(fd)
-    
+
     logger.debug(f"[FIXTURE] Created test database: {path}")
-    
+
     yield path
-    
+
     # Cleanup
     if os.path.exists(path):
         os.unlink(path)
@@ -121,20 +121,20 @@ def test_db():
 @pytest.fixture(scope="module")
 def agent_db(test_db):
     """Create AgentDB instance with test database"""
-    from app.db.agent_db import AgentDB, AgentToken
-    
+    from app.db.agent_db import AgentDB
+
     # Override database path
     import app.db.agent_db as agent_db_module
     original_db_path = agent_db_module.DB_PATH
     agent_db_module.DB_PATH = test_db
-    
+
     # Create instance
     db = AgentDB()
-    
-    logger.debug(f"[FIXTURE] Created AgentDB instance with test DB")
-    
+
+    logger.debug("[FIXTURE] Created AgentDB instance with test DB")
+
     yield db
-    
+
     # Restore original path
     agent_db_module.DB_PATH = original_db_path
 
@@ -143,7 +143,7 @@ def agent_db(test_db):
 def risk_manager():
     """Create RiskManager instance"""
     from app.services.risk_manager import RiskManager, RiskConfig
-    
+
     config = RiskConfig(
         max_risk_per_trade=2.0,
         max_portfolio_risk=6.0,
@@ -152,10 +152,10 @@ def risk_manager():
         trailing_stop_enabled=True,
         trailing_activation_pct=5.0
     )
-    
+
     manager = RiskManager(config=config)
-    logger.debug(f"[FIXTURE] Created RiskManager instance")
-    
+    logger.debug("[FIXTURE] Created RiskManager instance")
+
     return manager
 
 
@@ -163,17 +163,17 @@ def risk_manager():
 def notification_service():
     """Create NotificationService instance"""
     from app.services.notification_service import NotificationService, NotificationConfig
-    
+
     config = NotificationConfig(
         enabled=True,
         retry_attempts=3,
         email_enabled=True,
         webhook_enabled=True
     )
-    
+
     service = NotificationService(config=config)
-    logger.debug(f"[FIXTURE] Created NotificationService instance")
-    
+    logger.debug("[FIXTURE] Created NotificationService instance")
+
     return service
 
 
@@ -181,30 +181,30 @@ def notification_service():
 def performance_calculator():
     """Create PerformanceMetricsCalculator instance"""
     from app.services.performance_analyzer import PerformanceMetricsCalculator
-    
+
     calculator = PerformanceMetricsCalculator(
         risk_free_rate=0.02,
         trading_days=252
     )
-    logger.debug(f"[FIXTURE] Created PerformanceMetricsCalculator instance")
-    
+    logger.debug("[FIXTURE] Created PerformanceMetricsCalculator instance")
+
     return calculator
 
 
 @pytest.fixture(scope="module")
 def sample_market_data():
     """Generate sample market data for testing"""
-    logger.debug(f"[FIXTURE] Generating sample market data")
-    
+    logger.debug("[FIXTURE] Generating sample market data")
+
     # Generate 100 days of sample data
     dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
-    
+
     # Create realistic price data with trend
     np.random.seed(42)
     base_price = 100.0
     returns = np.random.normal(0.001, 0.02, 100)
     prices = base_price * np.cumprod(1 + returns)
-    
+
     # Create OHLCV data
     data = pd.DataFrame({
         'open': prices * (1 + np.random.uniform(-0.01, 0.01, 100)),
@@ -213,9 +213,9 @@ def sample_market_data():
         'close': prices,
         'volume': np.random.randint(1000000, 10000000, 100)
     }, index=dates)
-    
+
     logger.debug(f"[FIXTURE] Generated {len(data)} rows of market data")
-    
+
     return data
 
 
@@ -233,18 +233,18 @@ class TestAgentTokenWorkflow:
       3. Use token (update usage)
       4. Revoke token
     """
-    
+
     def test_01_create_token(self, agent_db):
         """Test token creation"""
         from app.db.agent_db import AgentToken
         import hashlib
         import uuid
-        
+
         # Create test token
         token_id = str(uuid.uuid4())
         token_value = f"test_token_{uuid.uuid4().hex}"
         token_hash = hashlib.sha256(token_value.encode()).hexdigest()
-        
+
         token = AgentToken(
             id=token_id,
             name="Test Agent",
@@ -256,61 +256,60 @@ class TestAgentTokenWorkflow:
             paper_only=True,
             rate_limit=120
         )
-        
+
         # Save token
         success = agent_db.save_token(token)
-        
+
         assert success, "Token creation failed"
         logger.debug(f"[TEST] Created token: {token_id}")
-        
+
         # Store for later tests
         self.__class__.token_id = token_id
         self.__class__.token_hash = token_hash
-        
+
     def test_02_verify_token(self, agent_db):
         """Test token verification"""
         # Retrieve token by hash
         token = agent_db.get_token_by_hash(self.__class__.token_hash)
-        
+
         assert token is not None, "Token not found"
         assert token.id == self.__class__.token_id, "Token ID mismatch"
         assert token.is_active, "Token should be active"
         assert "read" in token.scopes, "Token should have 'read' scope"
-        
+
         logger.debug(f"[TEST] Verified token: {token.id}")
-        
+
     def test_03_use_token(self, agent_db):
         """Test token usage tracking"""
-        from app.db.agent_db import AgentToken
-        
+
         # Get token
         token = agent_db.get_token_by_id(self.__class__.token_id)
         assert token is not None, "Token not found"
-        
+
         # Update last used
         token.last_used_at = datetime.now().isoformat()
         success = agent_db.update_token(token)
-        
+
         assert success, "Token update failed"
-        
+
         # Verify update
         updated_token = agent_db.get_token_by_id(self.__class__.token_id)
         assert updated_token.last_used_at is not None, "last_used_at should be set"
-        
+
         logger.debug(f"[TEST] Updated token usage: {updated_token.last_used_at}")
-        
+
     def test_04_revoke_token(self, agent_db):
         """Test token revocation"""
         # Revoke token
         success = agent_db.revoke_token(self.__class__.token_id)
-        
+
         assert success, "Token revocation failed"
-        
+
         # Verify revocation
         revoked_token = agent_db.get_token_by_id(self.__class__.token_id)
         assert revoked_token is not None, "Token should still exist"
         assert not revoked_token.is_active, "Token should be inactive"
-        
+
         logger.debug(f"[TEST] Revoked token: {self.__class__.token_id}")
 
 
@@ -327,11 +326,11 @@ class TestStrategyExecution:
       2. Execute backtest
       3. Generate results
     """
-    
+
     def test_01_compile_strategy(self):
         """Test strategy compilation"""
         from app.services.backtest.engine import BacktestEngine, BacktestConfig, TimeFrame
-        
+
         # Create backtest config
         config = BacktestConfig(
             initial_capital=100000.0,
@@ -339,16 +338,16 @@ class TestStrategyExecution:
             slippage=0.0001,
             timeframe=TimeFrame.D1
         )
-        
+
         # Create engine
         engine = BacktestEngine(config=config)
-        
+
         assert engine is not None, "Engine creation failed"
         logger.debug(f"[TEST] Created backtest engine with config: {config.initial_capital}")
-        
+
         # Store for later tests
         self.__class__.engine = engine
-        
+
     def test_02_execute_backtest(self, sample_market_data):
         """Test backtest execution"""
         from app.services.backtest.engine import BacktestEngine, BacktestConfig, TimeFrame, StrategyContext
@@ -390,11 +389,11 @@ class TestStrategyExecution:
         assert results is not None, "Backtest failed to produce results"
         assert hasattr(results, 'metrics'), "Results should contain metrics"
 
-        logger.debug(f"[TEST] Backtest completed")
+        logger.debug("[TEST] Backtest completed")
 
         # Store results
         self.__class__.backtest_results = results
-        
+
     def test_03_analyze_results(self):
         """Test results analysis"""
         results = self.__class__.backtest_results
@@ -406,7 +405,7 @@ class TestStrategyExecution:
 
         assert metrics is not None, "Metrics should be available"
 
-        logger.debug(f"[TEST] Backtest results analyzed successfully")
+        logger.debug("[TEST] Backtest results analyzed successfully")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -422,28 +421,28 @@ class TestPerformanceMetrics:
       2. Calculate metrics
       3. Generate report
     """
-    
+
     def test_01_generate_equity_curve(self, sample_market_data):
         """Test equity curve generation"""
         # Simulate equity curve from price data
         prices = sample_market_data['close']
         initial_capital = 100000.0
-        
+
         # Simple buy and hold strategy
         shares = int(initial_capital / prices.iloc[0])
         equity = prices * shares
-        
+
         equity_curve = pd.Series(equity.values, index=prices.index)
-        
+
         assert len(equity_curve) > 0, "Equity curve is empty"
         assert equity_curve.iloc[0] > 0, "Initial equity should be positive"
-        
+
         logger.debug(f"[TEST] Generated equity curve: {len(equity_curve)} points, "
                     f"start={equity_curve.iloc[0]:.2f}, end={equity_curve.iloc[-1]:.2f}")
-        
+
         # Store for later tests
         self.__class__.equity_curve = equity_curve
-        
+
     def test_02_calculate_metrics(self, performance_calculator):
         """Test metrics calculation"""
         equity_curve = self.__class__.equity_curve
@@ -471,11 +470,11 @@ class TestPerformanceMetrics:
             'sortino_ratio': sortino,
             'max_drawdown': max_dd
         }
-        
+
     def test_03_generate_report(self):
         """Test report generation"""
         metrics = self.__class__.metrics
-        
+
         # Generate summary report
         report = {
             'performance_summary': {
@@ -485,10 +484,10 @@ class TestPerformanceMetrics:
                 'timestamp': datetime.now().isoformat()
             }
         }
-        
+
         assert 'performance_summary' in report, "Report missing performance_summary"
-        
-        logger.debug(f"[TEST] Generated performance report")
+
+        logger.debug("[TEST] Generated performance report")
         logger.debug(f"  Sharpe Ratio: {report['performance_summary']['sharpe_ratio']}")
         logger.debug(f"  Sortino Ratio: {report['performance_summary']['sortino_ratio']}")
         logger.debug(f"  Max Drawdown: {report['performance_summary']['max_drawdown_pct']}%")
@@ -508,11 +507,10 @@ class TestRiskManagement:
       3. Update trailing stop
       4. Check triggers
     """
-    
+
     def test_01_create_position(self, risk_manager):
         """Test position creation"""
-        from app.services.risk_manager import Position
-        
+
         # Register position
         position = risk_manager.register_position(
             symbol="600519",
@@ -521,51 +519,51 @@ class TestRiskManagement:
             stop_pct=8.0,
             profit_pct=15.0
         )
-        
+
         assert position is not None, "Position creation failed"
         assert position.symbol == "600519", "Symbol mismatch"
         assert position.shares == 100, "Shares mismatch"
-        
+
         logger.debug(f"[TEST] Created position: {position.symbol} {position.shares} shares @ {position.entry_price}")
         logger.debug(f"  Stop loss: {position.stop_price}")
         logger.debug(f"  Take profit: {position.target_price}")
-        
+
         # Store for later tests
         self.__class__.position = position
-        
+
     def test_02_set_stop_loss(self, risk_manager):
         """Test stop loss setting"""
         position = self.__class__.position
-        
+
         assert position.stop_price is not None, "Stop price should be set"
         assert position.stop_price < position.entry_price, "Stop should be below entry"
-        
+
         # Calculate expected stop
         expected_stop = position.entry_price * (1 - 0.08)  # 8% stop
-        
+
         assert abs(position.stop_price - expected_stop) < 0.01, "Stop price calculation incorrect"
-        
+
         logger.debug(f"[TEST] Stop loss verified: {position.stop_price}")
-        
+
     def test_03_update_trailing_stop(self, risk_manager):
         """Test trailing stop update"""
         position = self.__class__.position
-        
+
         # Simulate price movement (5% profit - should activate trailing)
         current_price = position.entry_price * 1.05
-        
+
         trailing_stop = risk_manager.update_trailing_stop(
             position=position,
             current_price=current_price,
             trail_pct=8.0
         )
-        
+
         # Trailing stop should be activated
         assert position.trailing_activated, "Trailing stop should be activated"
         assert trailing_stop > 0, "Trailing stop should be positive"
-        
+
         logger.debug(f"[TEST] Trailing stop activated at: {trailing_stop}")
-        
+
         # Simulate further price increase
         new_price = position.entry_price * 1.10
         new_trailing = risk_manager.update_trailing_stop(
@@ -573,35 +571,35 @@ class TestRiskManagement:
             current_price=new_price,
             trail_pct=8.0
         )
-        
+
         # Trailing stop should move up
         assert new_trailing >= trailing_stop, "Trailing stop should only move up"
-        
+
         logger.debug(f"[TEST] Trailing stop updated to: {new_trailing}")
-        
+
     def test_04_check_triggers(self, risk_manager):
         """Test trigger checks"""
         position = self.__class__.position
-        
+
         # Test stop loss trigger
         stop_triggered = risk_manager.check_stop_triggered(
             position=position,
             current_price=position.stop_price - 10  # Below stop
         )
-        
+
         assert stop_triggered, "Stop loss should be triggered"
-        
-        logger.debug(f"[TEST] Stop loss trigger verified")
-        
+
+        logger.debug("[TEST] Stop loss trigger verified")
+
         # Test profit target
         profit_reached = risk_manager.check_profit_target(
             position=position,
             current_price=position.target_price + 10  # Above target
         )
-        
+
         assert profit_reached, "Profit target should be reached"
-        
-        logger.debug(f"[TEST] Profit target trigger verified")
+
+        logger.debug("[TEST] Profit target trigger verified")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -618,7 +616,7 @@ class TestNotificationFlow:
       3. Send notification
       4. Check status
     """
-    
+
     def test_01_create_event(self):
         """Test event creation"""
         event = {
@@ -629,18 +627,18 @@ class TestNotificationFlow:
             'price': 1800.0,
             'timestamp': datetime.now().isoformat()
         }
-        
+
         assert event['type'] == 'trade', "Event type mismatch"
-        
+
         logger.debug(f"[TEST] Created event: {event['type']} - {event['action']} {event['shares']} {event['symbol']}")
-        
+
         # Store for later tests
         self.__class__.event = event
-        
+
     def test_02_render_template(self, notification_service):
         """Test template rendering"""
         event = self.__class__.event
-        
+
         # Create template
         message = notification_service.create_template(
             template_name='trade',
@@ -651,22 +649,22 @@ class TestNotificationFlow:
                 'price': event['price']
             }
         )
-        
+
         assert message is not None, "Template rendering failed"
         assert event['symbol'] in message, "Message should contain symbol"
         assert event['action'] in message.upper(), "Message should contain action"
-        
-        logger.debug(f"[TEST] Template rendered successfully")
-        
+
+        logger.debug("[TEST] Template rendered successfully")
+
         # Store for later tests
         self.__class__.message = message
-        
+
     def test_03_send_notification(self, notification_service):
         """Test notification sending"""
         from app.services.notification_service import NotificationChannel
-        
+
         message = self.__class__.message
-        
+
         # Send notification (mocked)
         success = notification_service.send_notification(
             channel=NotificationChannel.EMAIL,
@@ -674,20 +672,20 @@ class TestNotificationFlow:
             recipient='test@example.com',
             subject='Trade Notification'
         )
-        
+
         assert success, "Notification send failed"
-        
-        logger.debug(f"[TEST] Notification sent successfully")
-        
+
+        logger.debug("[TEST] Notification sent successfully")
+
     def test_04_check_status(self, notification_service):
         """Test status tracking"""
         # Get statistics
         stats = notification_service.get_statistics()
-        
+
         assert stats is not None, "Statistics should be available"
         assert stats['total_notifications'] > 0, "Should have at least one notification"
         assert stats['sent'] > 0, "Should have sent notifications"
-        
+
         logger.debug(f"[TEST] Notification statistics: total={stats['total_notifications']}, "
                     f"sent={stats['sent']}, success_rate={stats['success_rate']:.1f}%")
 
@@ -706,7 +704,7 @@ class TestDebugCycles:
     Cycle 4: Performance benchmarking
     Cycle 5: Cleanup and summary
     """
-    
+
     def test_cycle_1_initialization(self, agent_db, risk_manager, notification_service, performance_calculator):
         """Cycle 1: Test initialization"""
         cycle_tracker.start_cycle(1, "Test Initialization")
@@ -717,7 +715,7 @@ class TestDebugCycles:
             assert risk_manager is not None, "RiskManager not initialized"
             assert notification_service is not None, "NotificationService not initialized"
             assert performance_calculator is not None, "PerformanceMetricsCalculator not initialized"
-            
+
             # Log component details
             details = {
                 "agent_db": "initialized",
@@ -725,16 +723,16 @@ class TestDebugCycles:
                 "notification_service": "initialized",
                 "performance_calculator": "initialized"
             }
-            
+
             cycle_tracker.end_cycle(1, "Test Initialization", True, details)
-            
+
         except AssertionError as e:
             cycle_tracker.end_cycle(1, "Test Initialization", False, {"error": str(e)})
             raise
         except Exception as e:
             cycle_tracker.end_cycle(1, "Test Initialization", False, {"error": str(e)})
             raise
-            
+
     def test_cycle_2_integration(self, agent_db, risk_manager, notification_service):
         """Cycle 2: Component integration check"""
         cycle_tracker.start_cycle(2, "Component Integration Check")
@@ -744,7 +742,6 @@ class TestDebugCycles:
             integration_tests = []
 
             # Test 1: Agent DB + Risk Manager
-            from app.services.risk_manager import Position
             position = risk_manager.register_position(
                 symbol="TEST",
                 entry_price=100.0,
@@ -778,7 +775,7 @@ class TestDebugCycles:
         except Exception as e:
             cycle_tracker.end_cycle(2, "Component Integration Check", False, {"error": str(e)})
             raise
-            
+
     def test_cycle_3_data_flow(self, sample_market_data, performance_calculator):
         """Cycle 3: Data flow validation"""
         cycle_tracker.start_cycle(3, "Data Flow Validation")
@@ -824,7 +821,7 @@ class TestDebugCycles:
         except Exception as e:
             cycle_tracker.end_cycle(3, "Data Flow Validation", False, {"error": str(e)})
             raise
-            
+
     def test_cycle_4_performance(self, sample_market_data, performance_calculator):
         """Cycle 4: Performance benchmarking"""
         cycle_tracker.start_cycle(4, "Performance Benchmarking")
@@ -869,7 +866,7 @@ class TestDebugCycles:
         except Exception as e:
             cycle_tracker.end_cycle(4, "Performance Benchmarking", False, {"error": str(e)})
             raise
-            
+
     def test_cycle_5_cleanup(self):
         """Cycle 5: Cleanup and summary"""
         cycle_tracker.start_cycle(5, "Cleanup and Summary")
@@ -922,11 +919,11 @@ class TestDebugCycles:
 
 class TestErrorHandling:
     """Test error handling across all components"""
-    
+
     def test_invalid_token_creation(self, agent_db):
         """Test error handling for invalid token"""
         from app.db.agent_db import AgentToken
-        
+
         # Try to create token with empty ID
         try:
             token = AgentToken(
@@ -942,7 +939,7 @@ class TestErrorHandling:
         except Exception as e:
             # Expected to fail
             logger.debug(f"[TEST] Expected error for invalid token: {e}")
-            
+
     def test_invalid_position_parameters(self, risk_manager):
         """Test error handling for invalid position parameters"""
         # Try to create position with invalid parameters
@@ -955,11 +952,11 @@ class TestErrorHandling:
             assert False, "Should have raised error for negative price"
         except ValueError as e:
             logger.debug(f"[TEST] Expected error for invalid position: {e}")
-            
+
     def test_invalid_notification_recipient(self, notification_service):
         """Test error handling for invalid notification recipient"""
         from app.services.notification_service import NotificationChannel
-        
+
         # Try to send to invalid email
         try:
             success = notification_service.send_notification(

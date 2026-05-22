@@ -55,10 +55,10 @@ def fetch_all_stocks_sina_sync(page_size: int = 500) -> List[Dict]:
     try:
         all_stocks = []
         page = 1
-        
+
         while True:
             url = f"http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page={page}&num={page_size}&sort=changepercent&asc=0&node=hs_a"
-            
+
             if HAS_CURL_CFFI:
                 response = curl_requests.get(
                     url,
@@ -68,23 +68,23 @@ def fetch_all_stocks_sina_sync(page_size: int = 500) -> List[Dict]:
                 )
             else:
                 response = curl_requests.get(url, timeout=15, proxies=_PROXIES)
-            
+
             if response.status_code != 200:
                 break
-            
+
             data = json.loads(response.text)
             if not data:
                 break
-            
+
             for item in data:
                 try:
                     symbol = item.get("symbol", "")
                     code = item.get("code", "")
-                    
+
                     # Skip Beijing Stock Exchange stocks
                     if symbol.startswith("bj"):
                         continue
-                    
+
                     all_stocks.append({
                         "symbol": symbol,
                         "name": item.get("name", ""),
@@ -99,14 +99,14 @@ def fetch_all_stocks_sina_sync(page_size: int = 500) -> List[Dict]:
                     })
                 except (ValueError, TypeError):
                     continue
-            
+
             if len(data) < page_size:
                 break
             page += 1
-        
+
         logger.info(f"[Sina] Fetched {len(all_stocks)} stocks")
         return all_stocks
-        
+
     except Exception as e:
         logger.error(f"[Sina] Error fetching stocks: {e}", exc_info=True)
         return []

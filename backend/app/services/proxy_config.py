@@ -5,7 +5,6 @@ proxy_config.py — 统一代理配置 + 智能分流
 """
 import os
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,6 @@ Provides lazy initialization and graceful fallback when Qlib is not available.
 v0.6.61: Redis removed - using SQLite only for caching.
 """
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -44,10 +43,10 @@ class QlibInitializer:
         )
         initializer.init()
     """
-    
+
     DEFAULT_PROVIDER_URI = "~/.qlib/qlib_data/cn_data"
     DEFAULT_REGION = "cn"
-    
+
     def __init__(
         self,
         provider_uri: Optional[str] = None,
@@ -60,7 +59,7 @@ class QlibInitializer:
         self.expression_cache = expression_cache
         self.dataset_cache = dataset_cache
         self._initialized = False
-    
+
     def init(self, force: bool = False) -> bool:
         """
         Initialize Qlib.
@@ -72,40 +71,39 @@ class QlibInitializer:
             True if initialization successful, False otherwise
         """
         global _QLIB_INITIALIZED
-        
+
         if _QLIB_INITIALIZED and not force:
             return True
-        
+
         if not is_qlib_available():
             logger.warning("[Qlib] Cannot initialize - pyqlib not installed")
             return False
-        
+
         try:
             import qlib
-            from qlib.config import REG_CN
-            
+
             config = {
                 "provider_uri": self.provider_uri,
                 "region": self.region,
             }
-            
+
             if self.expression_cache:
                 config["expression_cache"] = self.expression_cache
-            
+
             if self.dataset_cache:
                 config["dataset_cache"] = self.dataset_cache
-            
+
             qlib.init(**config)
             _QLIB_INITIALIZED = True
             self._initialized = True
-            
+
             logger.info(f"[Qlib] Initialized with provider: {self.provider_uri}")
             return True
-            
+
         except Exception as e:
             logger.error(f"[Qlib] Initialization failed: {e}", exc_info=True)
             return False
-    
+
     def download_data(self, target_dir: Optional[str] = None) -> bool:
         """
         Download Qlib data if not already present.
@@ -118,33 +116,32 @@ class QlibInitializer:
         """
         if not is_qlib_available():
             return False
-        
+
         try:
-            from qlib.data import simple_data_handler
             import subprocess
-            
+
             target = target_dir or self.provider_uri
             target_path = Path(target).expanduser()
-            
+
             if target_path.exists():
                 logger.info(f"[Qlib] Data already exists at {target_path}")
                 return True
-            
+
             target_path.mkdir(parents=True, exist_ok=True)
-            
+
             subprocess.run(
                 ["python", "-m", "qlib.run.get_data", "qlib_data", "cn", target],
                 check=True,
                 capture_output=True,
             )
-            
+
             logger.info(f"[Qlib] Data downloaded to {target_path}")
             return True
-            
+
         except Exception as e:
             logger.error(f"[Qlib] Data download failed: {e}", exc_info=True)
             return False
-    
+
     @property
     def is_initialized(self) -> bool:
         return self._initialized

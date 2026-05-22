@@ -51,10 +51,10 @@ async def api_exception_handler(request: Request, exc: APIException) -> JSONResp
             "method": request.method,
         }
     )
-    
+
     # 使用映射表获取正确的HTTP状态码，避免AttributeError
     http_status = _HTTP_STATUS_MAP.get(exc.code, 500)
-    
+
     return JSONResponse(
         status_code=http_status,
         content=exc.to_dict()
@@ -71,7 +71,7 @@ async def http_exception_handler_wrapper(request: Request, exc: HTTPException) -
             "method": request.method,
         }
     )
-    
+
     return JSONResponse(
         status_code=exc.status_code,
         content=http_exception_handler(exc)
@@ -87,7 +87,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "message": error.get("msg", "验证失败"),
             "type": error.get("type", "validation_error"),
         })
-    
+
     logger.warning(
         f"Validation Error: {len(errors)} field(s) failed validation",
         extra={
@@ -96,7 +96,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "errors": errors,
         }
     )
-    
+
     return JSONResponse(
         status_code=422,
         content=error_response(
@@ -110,9 +110,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """处理通用异常"""
     trace_id = str(exc.trace_id) if hasattr(exc, 'trace_id') else None
-    
+
     sanitized_message = sanitize_error(exc, log_full_error=True)
-    
+
     logger.error(
         f"Unhandled Exception: {str(exc)}",
         extra={
@@ -123,7 +123,7 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         },
         exc_info=True
     )
-    
+
     return JSONResponse(
         status_code=500,
         content=error_response(
@@ -142,15 +142,15 @@ def setup_exception_handlers(app: FastAPI) -> None:
     """
     # 自定义API异常
     app.add_exception_handler(APIException, api_exception_handler)
-    
+
     # FastAPI HTTP异常
     app.add_exception_handler(HTTPException, http_exception_handler_wrapper)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler_wrapper)
-    
+
     # 请求验证异常
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
-    
+
     # 通用异常（最后注册，作为兜底）
     app.add_exception_handler(Exception, general_exception_handler)
-    
+
     logger.info("Exception handlers configured")

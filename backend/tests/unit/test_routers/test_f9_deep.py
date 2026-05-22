@@ -10,7 +10,6 @@ import pandas as pd
 from fastapi.testclient import TestClient
 from app.main import app
 from app.routers import f9_deep
-from app.utils.response import ErrorCode
 
 client = TestClient(app)
 
@@ -126,7 +125,7 @@ def mock_stock_info_df():
 
 class TestF9HealthEndpoint:
     """Tests for /api/v1/f9/health endpoint"""
-    
+
     def test_health_endpoint_success(self):
         """Test health check returns ok status"""
         response = client.get("/api/v1/f9/health")
@@ -140,14 +139,14 @@ class TestF9HealthEndpoint:
 
 class TestF9FinancialEndpoint:
     """Tests for /api/v1/f9/{symbol}/financial endpoint"""
-    
+
     def test_financial_endpoint_success(self, mock_financial_df):
         """Test financial endpoint returns data successfully"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
             mock_breaker.__enter__ = MagicMock(return_value=None)
             mock_breaker.__exit__ = MagicMock(return_value=False)
             mock_breaker.is_available.return_value = True
-            
+
             with patch('akshare.stock_financial_analysis_indicator', return_value=mock_financial_df):
                 response = client.get("/api/v1/f9/600519/financial")
                 assert response.status_code == 200
@@ -156,7 +155,7 @@ class TestF9FinancialEndpoint:
                 assert "indicators" in data["data"]
                 assert "latest" in data["data"]
                 assert "trend" in data["data"]
-    
+
     def test_financial_endpoint_with_prefix(self, mock_financial_df):
         """Test financial endpoint handles symbol prefix (sh600519)"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
@@ -167,7 +166,7 @@ class TestF9FinancialEndpoint:
             with patch('akshare.stock_financial_analysis_indicator', return_value=mock_financial_df):
                 response = client.get("/api/v1/f9/sh600519/financial")
                 assert response.status_code == 200
-    
+
     def test_financial_endpoint_cache_hit(self, mock_financial_df):
         """Test financial endpoint returns cached data on second request"""
         # Clear cache first
@@ -192,7 +191,7 @@ class TestF9FinancialEndpoint:
 
 class TestF9InstitutionEndpoint:
     """Tests for /api/v1/f9/{symbol}/institution endpoint"""
-    
+
     def test_institution_endpoint_success(self, mock_institution_df):
         """Test institution endpoint returns data successfully"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
@@ -224,7 +223,7 @@ class TestF9InstitutionEndpoint:
 
 class TestF9ForecastEndpoint:
     """Tests for /api/v1/f9/{symbol}/forecast endpoint"""
-    
+
     def test_forecast_endpoint_success(self, mock_forecast_eps_df, mock_forecast_institution_df):
         """Test forecast endpoint returns data successfully"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
@@ -250,7 +249,7 @@ class TestF9ForecastEndpoint:
 
 class TestF9ShareholderEndpoint:
     """Tests for /api/v1/f9/{symbol}/shareholder endpoint"""
-    
+
     def test_shareholder_endpoint_success(self, mock_shareholder_df):
         """Test shareholder endpoint returns data successfully"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
@@ -273,7 +272,7 @@ class TestF9ShareholderEndpoint:
 
 class TestF9MarginEndpoint:
     """Tests for /api/v1/f9/{symbol}/margin endpoint"""
-    
+
     def test_margin_endpoint_success(self, mock_margin_df):
         """Test margin endpoint returns data successfully"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
@@ -303,7 +302,7 @@ class TestF9MarginEndpoint:
 
 class TestF9AnnouncementsEndpoint:
     """Tests for /api/v1/f9/{symbol}/announcements endpoint"""
-    
+
     def test_announcements_endpoint_success(self, mock_announcements_df):
         """Test announcements endpoint returns data successfully"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
@@ -355,7 +354,7 @@ class TestF9AnnouncementsEndpoint:
 
 class TestF9PeersEndpoint:
     """Tests for /api/v1/f9/{symbol}/peers endpoint"""
-    
+
     def test_peers_endpoint_success(self, mock_stock_info_df, mock_financial_df):
         """Test peers endpoint returns data successfully"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
@@ -378,42 +377,42 @@ class TestF9PeersEndpoint:
 
 class TestF9SymbolNormalization:
     """Tests for symbol normalization"""
-    
+
     def test_normalize_sh_prefix(self):
         """Test normalize_f9_symbol removes sh prefix"""
         result = f9_deep.normalize_f9_symbol("sh600519")
         assert result == "600519"
-    
+
     def test_normalize_sz_prefix(self):
         """Test normalize_f9_symbol removes sz prefix"""
         result = f9_deep.normalize_f9_symbol("sz000001")
         assert result == "000001"
-    
+
     def test_normalize_hk_prefix(self):
         """Test normalize_f9_symbol removes hk prefix"""
         result = f9_deep.normalize_f9_symbol("hk00700")
         assert result == "00700"
-    
+
     def test_normalize_us_prefix(self):
         """Test normalize_f9_symbol removes us prefix"""
         result = f9_deep.normalize_f9_symbol("usAAPL")
         assert result == "AAPL"
-    
+
     def test_normalize_no_prefix(self):
         """Test normalize_f9_symbol handles no prefix"""
         result = f9_deep.normalize_f9_symbol("600519")
         assert result == "600519"
-    
+
     def test_normalize_empty_string(self):
         """Test normalize_f9_symbol handles empty string"""
         result = f9_deep.normalize_f9_symbol("")
         assert result == ""
-    
+
     def test_normalize_case_insensitive(self):
         """Test normalize_f9_symbol is case insensitive"""
         result = f9_deep.normalize_f9_symbol("SH600519")
         assert result == "600519"
-        
+
         result = f9_deep.normalize_f9_symbol("Sh600519")
         assert result == "600519"
 
@@ -422,27 +421,27 @@ class TestF9SymbolNormalization:
 
 class TestF9InputValidation:
     """Tests for input validation"""
-    
+
     def test_announcements_page_validation_min(self):
         """Test announcements page=0 is normalized to 1"""
         response = client.get("/api/v1/f9/600519/announcements?page=0")
         assert response.status_code == 200
-    
+
     def test_announcements_page_validation_negative(self):
         """Test announcements page=-1 is normalized to 1"""
         response = client.get("/api/v1/f9/600519/announcements?page=-1")
         assert response.status_code == 200
-    
+
     def test_announcements_page_size_validation_min(self):
         """Test announcements page_size=0 is normalized to 20"""
         response = client.get("/api/v1/f9/600519/announcements?page_size=0")
         assert response.status_code == 200
-    
+
     def test_announcements_page_size_validation_max(self):
         """Test announcements page_size=101 returns error response"""
         response = client.get("/api/v1/f9/600519/announcements?page_size=101")
         assert response.status_code == 200
-    
+
     def test_announcements_valid_pagination(self, mock_announcements_df):
         """Test announcements valid pagination parameters"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
@@ -459,7 +458,7 @@ class TestF9InputValidation:
 
 class TestF9CircuitBreaker:
     """Tests for circuit breaker endpoints"""
-    
+
     def test_circuit_breaker_status_endpoint(self):
         """Test circuit breaker status endpoint"""
         response = client.get("/api/v1/f9/circuit_breaker/status")
@@ -469,7 +468,7 @@ class TestF9CircuitBreaker:
         assert "name" in data["data"]
         assert "state" in data["data"]
         assert "is_available" in data["data"]
-    
+
     def test_circuit_breaker_reset_endpoint(self):
         """Test circuit breaker reset endpoint"""
         response = client.post("/api/v1/f9/circuit_breaker/reset")
@@ -483,7 +482,7 @@ class TestF9CircuitBreaker:
 
 class TestF9ErrorHandling:
     """Tests for error handling"""
-    
+
     def test_financial_empty_data_handling(self):
         """Test financial endpoint handles empty data gracefully"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
@@ -495,12 +494,12 @@ class TestF9ErrorHandling:
                 response = client.get("/api/v1/f9/600519/financial")
                 # Should return empty data, not crash
                 assert response.status_code == 200
-    
+
     def test_circuit_breaker_open_handling(self):
         """Test endpoint handles circuit breaker open state"""
         with patch('app.routers.f9_deep.akshare_breaker') as mock_breaker:
             mock_breaker.is_available.return_value = False
-            
+
             response = client.get("/api/v1/f9/600519/financial")
             # Should return 503 or error response
             assert response.status_code in [200, 503]
@@ -510,16 +509,16 @@ class TestF9ErrorHandling:
 
 class TestF9Cache:
     """Tests for caching behavior"""
-    
+
     def test_cache_key_format(self):
         """Test cache key format"""
         assert f9_deep.NAMESPACE == "f9:"
         assert f9_deep.TTL == 300
-    
+
     def test_cache_functions_exist(self):
         """Test cache functions exist"""
         import asyncio
-        
+
         # Test get_cached and set_cached are async functions
         assert asyncio.iscoroutinefunction(f9_deep.get_cached)
         assert asyncio.iscoroutinefunction(f9_deep.set_cached)
@@ -529,12 +528,12 @@ class TestF9Cache:
 
 class TestF9Timeout:
     """Tests for timeout protection"""
-    
+
     def test_timeout_constant_import(self):
         """Test AKSHARE_TIMEOUT is imported"""
         from app.config.timeout import AKSHARE_TIMEOUT
         assert AKSHARE_TIMEOUT > 0
-    
+
     def test_run_with_timeout_function_exists(self):
         """Test run_with_timeout function exists"""
         import asyncio
@@ -545,17 +544,17 @@ class TestF9Timeout:
 
 class TestF9Integration:
     """Integration tests for F9 endpoints"""
-    
+
     def test_all_endpoints_exist(self):
         """Test all F9 endpoints are registered"""
         # Health check
         response = client.get("/api/v1/f9/health")
         assert response.status_code == 200
-        
+
         # Circuit breaker status
         response = client.get("/api/v1/f9/circuit_breaker/status")
         assert response.status_code == 200
-    
+
     def test_endpoint_paths_correct(self):
         """Test endpoint paths are correct"""
         # These should return validation errors or success, not 404
@@ -563,7 +562,7 @@ class TestF9Integration:
             "/api/v1/f9/health",
             "/api/v1/f9/circuit_breaker/status",
         ]
-        
+
         for endpoint in endpoints:
             response = client.get(endpoint)
             assert response.status_code != 404, f"Endpoint {endpoint} not found"

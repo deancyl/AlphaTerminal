@@ -22,7 +22,6 @@ from pydantic import BaseModel, Field
 
 from app.services import quote_source
 from app.services.scheduler import scheduler
-from app.services.sectors_cache import is_ready as sectors_cache_ready
 from app.db.database import _get_conn, _db_path
 from app.config.settings import get_settings
 from app.utils.ip_validation import get_client_ip_safe
@@ -194,17 +193,17 @@ def verify_admin_key(
     x_real_ip: Optional[str] = Header(None)
 ):
     """Admin API 密钥校验（带速率限制）"""
-    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip, 
+    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
                                     request.client.host if request and request.client else None)
-    
+
     configured_key = os.environ.get("ADMIN_API_KEY", "")
-    
+
     if not configured_key:
         return True
-    
+
     if not _check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
-    
+
     if api_key != configured_key:
         _record_failure(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
@@ -239,28 +238,28 @@ def get_admin_session(
     """
     client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
                                     request.client.host if request.client else None)
-    
+
     settings = get_settings()
     configured_key = settings.ADMIN_API_KEY
-    
+
     if not configured_key:
         raise HTTPException(status_code=400, detail="ADMIN_API_KEY not configured")
-    
+
     if not _check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
-    
+
     if x_admin_api_key != configured_key:
         _record_failure(client_ip)
         logger.warning(f"[Admin] Invalid API key attempt from IP {client_ip}")
         raise HTTPException(status_code=401, detail="Invalid API key")
-    
+
     _cleanup_expired_sessions()
     session_token = _create_admin_session(configured_key)
-    
+
     logger.info(f"[Admin] Session token issued for IP {client_ip}")
-    
+
     session = session_db.get_admin_session(session_token)
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -281,13 +280,13 @@ def validate_admin_session(
     """Validate an admin session token."""
     client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
                                     request.client.host if request.client else None)
-    
+
     if not x_admin_session:
         return {"code": 1, "message": "No session token provided", "data": {"valid": False}}
-    
+
     _cleanup_expired_sessions()
     is_valid = _validate_admin_session(x_admin_session, client_ip)
-    
+
     if is_valid:
         session = session_db.get_admin_session(x_admin_session)
         return {
@@ -317,26 +316,26 @@ def get_admin_token(
     """
     client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
                                     request.client.host if request.client else None)
-    
+
     settings = get_settings()
     configured_key = settings.ADMIN_API_KEY
-    
+
     if not configured_key:
         raise HTTPException(status_code=400, detail="ADMIN_API_KEY not configured")
-    
+
     if not _check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
-    
+
     if x_admin_api_key != configured_key:
         _record_failure(client_ip)
         logger.warning(f"[Admin] Invalid API key attempt from IP {client_ip}")
         raise HTTPException(status_code=401, detail="Invalid API key")
-    
+
     _cleanup_expired_sessions()
     jwt_token, expires_at = _generate_jwt_token(configured_key)
-    
+
     logger.info(f"[Admin] JWT token issued for IP {client_ip}, expires at {expires_at}")
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -360,13 +359,13 @@ def validate_admin_token(
     """
     client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
                                     request.client.host if request.client else None)
-    
+
     if not x_admin_token:
         raise HTTPException(status_code=401, detail="No token provided")
-    
+
     _cleanup_expired_sessions()
     is_valid, error_msg = _validate_jwt_token(x_admin_token)
-    
+
     if is_valid:
         return {
             "code": 0,
@@ -379,7 +378,7 @@ def validate_admin_token(
 
 # router 定义（在 verify_admin_key 之后）
 router = APIRouter(
-    prefix="/admin", 
+    prefix="/admin",
     tags=["admin"],
     dependencies=[Depends(verify_admin_key)]
 )
@@ -429,13 +428,13 @@ def get_llm_settings():
 @handle_errors(module="admin")
 def save_llm_settings(body: LLMSettingsRequest):
     """保存 LLM 配置到数据库（永久生效）"""
-    from app.db.database import get_admin_config, set_admin_config
+    from app.db.database import set_admin_config
     provider = body.provider.lower()
     key_map  = {
-        "deepseek": "llm_deepseek", 
-        "qianwen": "llm_qianwen", 
-        "openai": "llm_openai", 
-        "siliconflow": "llm_siliconflow", 
+        "deepseek": "llm_deepseek",
+        "qianwen": "llm_qianwen",
+        "openai": "llm_openai",
+        "siliconflow": "llm_siliconflow",
         "opencode": "llm_opencode",
         "opencode_go": "llm_opencode_go",
         "opencode_zen": "llm_opencode_zen",
@@ -459,10 +458,10 @@ def save_llm_settings(body: LLMSettingsRequest):
 def get_all_models():
     """Get all configured models across all providers"""
     from app.services.model_config_service import get_model_config_service
-    
+
     service = get_model_config_service()
     providers = service.get_all_providers()
-    
+
     result = {}
     for provider_name, provider_state in providers.items():
         models_data = []
@@ -483,7 +482,7 @@ def get_all_models():
             "model_count": len(models_data),
             "models": models_data
         }
-    
+
     return {"code": 0, "data": result}
 
 @router.get("/models/{provider}")
@@ -491,14 +490,14 @@ def get_all_models():
 def get_provider_models(provider: str):
     """Get models for a specific provider"""
     from app.services.model_config_service import get_model_config_service
-    
+
     service = get_model_config_service()
     providers = service.get_all_providers()
-    
+
     provider_lower = provider.lower()
     if provider_lower not in providers:
         return {"code": 1, "error": f"Provider '{provider}' not found"}
-    
+
     provider_state = providers[provider_lower]
     models_data = []
     for model_id, model in provider_state.models.items():
@@ -511,7 +510,7 @@ def get_provider_models(provider: str):
             "api_key_masked": _mask_key(model.api_key),
             "base_url": model.base_url
         })
-    
+
     return {
         "code": 0,
         "data": {
@@ -527,18 +526,18 @@ def get_provider_models(provider: str):
 def add_model(body: ModelConfigRequest):
     """Add a new model configuration"""
     from app.services.model_config_service import get_model_config_service
-    
+
     service = get_model_config_service()
-    
+
     config = {
         "enabled": body.enabled,
         "max_concurrent": body.concurrency_limit,
         "context_length": body.context_length,
         "metadata": {}
     }
-    
+
     success = service.add_model(body.provider.lower(), body.model_id, config)
-    
+
     if success:
         return {"code": 0, "message": f"Model '{body.model_id}' added to provider '{body.provider}'"}
     else:
@@ -549,9 +548,9 @@ def add_model(body: ModelConfigRequest):
 def update_model(body: ModelUpdateRequest):
     """Update model configuration"""
     from app.services.model_config_service import get_model_config_service
-    
+
     service = get_model_config_service()
-    
+
     updates = {}
     if body.context_length is not None:
         updates["context_length"] = body.context_length
@@ -559,12 +558,12 @@ def update_model(body: ModelUpdateRequest):
         updates["max_concurrent"] = body.concurrency_limit
     if body.enabled is not None:
         updates["enabled"] = body.enabled
-    
+
     if not updates:
         return {"code": 1, "error": "No fields to update"}
-    
+
     success = service.update_model(body.provider.lower(), body.model_id, updates)
-    
+
     if success:
         return {"code": 0, "message": f"Model '{body.model_id}' updated"}
     else:
@@ -575,10 +574,10 @@ def update_model(body: ModelUpdateRequest):
 def remove_model(provider: str, model_id: str):
     """Remove a model from a provider"""
     from app.services.model_config_service import get_model_config_service
-    
+
     service = get_model_config_service()
     success = service.remove_model(provider.lower(), model_id)
-    
+
     if success:
         return {"code": 0, "message": f"Model '{model_id}' removed from '{provider}'"}
     else:
@@ -589,24 +588,24 @@ def remove_model(provider: str, model_id: str):
 def set_default_model(body: SetDefaultModelRequest):
     """Set the default model for a provider"""
     from app.services.model_config_service import get_model_config_service
-    
+
     service = get_model_config_service()
     success = service.set_default(body.provider.lower(), body.model_id)
-    
+
     if success:
         return {"code": 0, "message": f"Default model set to '{body.model_id}' for '{body.provider}'"}
     else:
-        return {"code": 1, "error": f"Failed to set default model"}
+        return {"code": 1, "error": "Failed to set default model"}
 
 @router.post("/models/test")
 @handle_errors(module="admin")
 def test_model_connection(body: TestConnectionRequest):
     """Test connection to a model"""
     from app.services.model_config_service import get_model_config_service
-    
+
     service = get_model_config_service()
     result = service.test_connection(body.provider.lower(), body.model_id)
-    
+
     if result.get("success"):
         return {"code": 0, "data": result}
     else:
@@ -617,7 +616,7 @@ def test_model_connection(body: TestConnectionRequest):
 def get_pricing_catalog():
     """Get pricing catalog for all models"""
     from app.db.seed_pricing_catalog import get_all_pricing
-    
+
     pricing = get_all_pricing()
     return {"code": 0, "data": pricing}
 
@@ -626,7 +625,7 @@ def get_pricing_catalog():
 def add_custom_pricing(body: CustomPricingRequest):
     """Add custom pricing for a model"""
     from app.db.seed_pricing_catalog import seed_pricing_catalog
-    
+
     custom_model = {
         "model_id": body.model_id,
         "provider": body.provider,
@@ -636,13 +635,13 @@ def add_custom_pricing(body: CustomPricingRequest):
         "context_length": 4096,
         "metadata": json.dumps({"currency": body.currency, "custom": True})
     }
-    
+
     result = seed_pricing_catalog(models=[custom_model], force=True)
-    
+
     if result.get("inserted", 0) > 0 or result.get("updated", 0) > 0:
         return {"code": 0, "message": f"Custom pricing added for '{body.model_id}'", "data": result}
     else:
-        return {"code": 1, "error": f"Failed to add custom pricing", "data": result}
+        return {"code": 1, "error": "Failed to add custom pricing", "data": result}
 
 
 @router.post("/settings/llm/test")
@@ -655,10 +654,10 @@ def test_llm_connection(body: LLMTestRequest):
     base_url = body.base_url.strip()
     model    = (body.model or "").strip()
     defaults = {
-        "deepseek": "deepseek-chat", 
-        "qianwen": "qwen-plus", 
-        "openai": "gpt-3.5-turbo", 
-        "siliconflow": "deepseek-ai/DeepSeek-V3", 
+        "deepseek": "deepseek-chat",
+        "qianwen": "qwen-plus",
+        "openai": "gpt-3.5-turbo",
+        "siliconflow": "deepseek-ai/DeepSeek-V3",
         "opencode": "opencode-chat",
         "opencode_go": "minimax-m2.7",
         "opencode_zen": "minimax-m2.5-free",
@@ -701,13 +700,12 @@ class CircuitBreakerControl(BaseModel):
 @handle_errors(module="admin")
 async def get_sources_status():
     """获取所有数据源实时状态（合并 SQLite 持久化的熔断状态）"""
-    from app.services import quote_source
-    
+
     status_data = quote_source.get_source_status()
     real_time = status_data.get("sources", {})
-    
+
     loop = asyncio.get_event_loop()
-    
+
     def _sync_fetch_states():
         try:
             conn = _get_conn()
@@ -720,9 +718,9 @@ async def get_sources_status():
             return db_states
         except sqlite3.OperationalError:
             return {}
-    
+
     db_states = await loop.run_in_executor(_executor, _sync_fetch_states)
-    
+
     merged = {}
     for source, status in real_time.items():
         db_state = db_states.get(source, {})
@@ -732,14 +730,13 @@ async def get_sources_status():
             "fail_count": db_state.get("fail_count", 0),
             "last_fail_time": db_state.get("last_fail_time")
         }
-    
+
     return {"sources": merged, "timestamp": int(time.time())}
 
 @router.post("/sources/circuit_breaker")
 @handle_errors(module="admin")
 async def control_circuit_breaker(control: CircuitBreakerControl):
     """手动控制熔断器"""
-    from app.services import quote_source
 
     if control.action == "open":
         quote_source.open_circuit(control.source)
@@ -756,8 +753,6 @@ async def control_circuit_breaker(control: CircuitBreakerControl):
 @handle_errors(module="admin")
 async def probe_all_sources():
     """主动探测所有数据源并返回实时延迟（包含熔断状态、主源标记和历史）"""
-    import asyncio
-    from app.services import quote_source
 
     sources = quote_source.DATA_SOURCES.keys()
     results = {}
@@ -785,7 +780,7 @@ async def probe_all_sources():
 async def get_balance_config():
     """获取负载均衡配置"""
     loop = asyncio.get_event_loop()
-    
+
     def _sync_get():
         conn = _get_conn()
         try:
@@ -796,7 +791,7 @@ async def get_balance_config():
             return row
         finally:
             conn.close()
-    
+
     row = await loop.run_in_executor(_executor, _sync_get)
     if row:
         import json
@@ -809,7 +804,7 @@ async def set_balance_config(config: SourceBalanceConfig):
     """设置负载均衡配置"""
     import json
     loop = asyncio.get_event_loop()
-    
+
     def _sync_set():
         conn = _get_conn()
         try:
@@ -822,7 +817,7 @@ async def set_balance_config(config: SourceBalanceConfig):
             conn.close()
         finally:
             conn.close()
-    
+
     await loop.run_in_executor(_executor, _sync_set)
     return {"message": "负载均衡配置已更新", "config": config.dict()}
 
@@ -923,44 +918,44 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
     """数据库维护操作"""
     action = body.action
     loop = asyncio.get_event_loop()
-    
+
     if action == "vacuum":
         from app.services.background_tasks import get_task_manager
-        
+
         task_manager = get_task_manager()
         task_id = task_manager.create_task("vacuum")
-        
+
         def _run_vacuum():
             try:
                 task_manager.start_task(task_id)
                 task_manager.update_progress(task_id, 0, "准备执行 VACUUM...")
-                
+
                 conn = _get_conn()
                 try:
                     task_manager.update_progress(task_id, 10, "执行 WAL checkpoint...")
                     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                    
+
                     task_manager.update_progress(task_id, 20, "开始 VACUUM...")
                     conn.execute("VACUUM")
-                    
+
                     task_manager.update_progress(task_id, 90, "VACUUM 完成，清理连接...")
                     conn.close()
-                    
+
                     task_manager.complete_task(task_id, {"message": "数据库已优化 (VACUUM)"})
                 except Exception as e:
                     conn.close()
                     task_manager.fail_task(task_id, str(e))
             except Exception as e:
                 task_manager.fail_task(task_id, str(e))
-        
+
         loop.run_in_executor(_executor, _run_vacuum)
-        
+
         return {
             "code": 0,
             "message": "VACUUM 已在后台启动",
             "task_id": task_id
         }
-    
+
     elif action == "wal_checkpoint":
         def _sync_checkpoint():
             conn = _get_conn()
@@ -971,10 +966,10 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
                 return {"message": "WAL checkpoint 完成", "result": result}
             finally:
                 conn.close()
-        
+
         result = await loop.run_in_executor(_executor, _sync_checkpoint)
         return {"code": 0, **result}
-    
+
     def _sync_maintenance():
         conn = _get_conn()
         try:
@@ -992,7 +987,7 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
                 raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
         finally:
             conn.close()
-    
+
     return await loop.run_in_executor(_executor, _sync_maintenance)
 
 
@@ -1001,13 +996,13 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
 async def get_maintenance_task_status(task_id: str):
     """获取数据库维护任务状态"""
     from app.services.background_tasks import get_task_manager
-    
+
     task_manager = get_task_manager()
     task = task_manager.get_task(task_id)
-    
+
     if not task:
         return {"code": 1, "error": f"Task '{task_id}' not found"}
-    
+
     return {"code": 0, "data": task.to_dict()}
 
 @router.get("/database/stats")
@@ -1015,12 +1010,12 @@ async def get_maintenance_task_status(task_id: str):
 async def get_database_stats():
     """获取数据库统计信息"""
     loop = asyncio.get_event_loop()
-    
+
     def _sync_get_stats():
         conn = _get_conn()
         try:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 SELECT name, 
                        (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=name) as count
@@ -1028,7 +1023,7 @@ async def get_database_stats():
                 WHERE type='table'
             """)
             tables = cursor.fetchall()
-            
+
             stats = {}
             _ALLOWED_TABLES = frozenset({
                 'market_data_realtime', 'market_data_daily', 'market_data_periodic',
@@ -1045,13 +1040,13 @@ async def get_database_stats():
                     stats[table_name] = count
                 except sqlite3.OperationalError:
                     stats[table_name] = -1
-            
+
             db_size = os.path.getsize(_db_path) if os.path.exists(_db_path) else 0
             conn.close()
             return {"tables": stats, "total_tables": len(tables), "db_size_bytes": db_size, "db_size_mb": round(db_size / (1024 * 1024), 2)}
         finally:
             conn.close()
-    
+
     return await loop.run_in_executor(_executor, _sync_get_stats)
 
 
@@ -1066,7 +1061,7 @@ async def get_system_metrics():
     cpu_percent = psutil.cpu_percent(interval=1)
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
-    
+
     return {
         "cpu_percent": cpu_percent,
         "memory": {
@@ -1092,10 +1087,10 @@ async def get_recent_logs(lines: int = Query(default=100, ge=1, le=1000)):
     log_file = _DEFAULT_LOG_DIR / "app.log"
     if not log_file.exists():
         return {"logs": [], "message": "日志文件不存在"}
-    
+
     with open(log_file, 'r') as f:
         all_lines = f.readlines()
-    
+
     recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
     return {"logs": recent_lines}
 
@@ -1112,10 +1107,10 @@ def get_token_stats(
 ):
     """Get total token usage statistics"""
     from app.services.token_tracking_service import get_token_tracking_service
-    
+
     service = get_token_tracking_service()
     stats = service.get_total_stats(start_time, end_time)
-    
+
     return {"code": 0, "data": stats}
 
 @router.get("/tokens/history")
@@ -1130,7 +1125,7 @@ def get_token_history(
 ):
     """Get token usage history with filters"""
     from app.services.token_tracking_service import get_token_tracking_service
-    
+
     service = get_token_tracking_service()
     history = service.get_usage_history(
         model_id=model_id,
@@ -1140,7 +1135,7 @@ def get_token_history(
         end_date=end_date,
         limit=limit
     )
-    
+
     return {"code": 0, "data": history, "count": len(history)}
 
 @router.get("/tokens/aggregated")
@@ -1151,10 +1146,10 @@ def get_token_aggregated(
 ):
     """Get aggregated token usage statistics for charts"""
     from app.services.token_tracking_service import get_token_tracking_service
-    
+
     service = get_token_tracking_service()
     aggregated = service.get_aggregated_stats(aggregate_type, limit)
-    
+
     return {"code": 0, "data": aggregated, "count": len(aggregated)}
 
 @router.get("/tokens/breakdown/models")
@@ -1165,10 +1160,10 @@ def get_token_breakdown_models(
 ):
     """Get token usage breakdown by model"""
     from app.services.token_tracking_service import get_token_tracking_service
-    
+
     service = get_token_tracking_service()
     breakdown = service.get_model_breakdown(start_time, end_time)
-    
+
     return {"code": 0, "data": breakdown, "count": len(breakdown)}
 
 @router.get("/tokens/breakdown/providers")
@@ -1178,10 +1173,10 @@ def get_token_breakdown_providers(
 ):
     """Get token usage breakdown by provider"""
     from app.services.token_tracking_service import get_token_tracking_service
-    
+
     service = get_token_tracking_service()
     breakdown = service.get_provider_breakdown(days)
-    
+
     return {"code": 0, "data": breakdown, "count": len(breakdown)}
 
 @router.get("/tokens/session/{session_id}")
@@ -1189,14 +1184,14 @@ def get_token_breakdown_providers(
 def get_session_token_usage(session_id: str):
     """Get token usage for a specific session"""
     from app.services.token_tracking_service import get_token_tracking_service
-    
+
     service = get_token_tracking_service()
     history = service.get_usage_history(session_id=session_id, limit=1000)
-    
+
     total_tokens = sum(r.get("total_tokens", 0) for r in history)
     total_cost = sum(r.get("cost_usd", 0) for r in history)
     total_requests = len(history)
-    
+
     return {
         "code": 0,
         "data": {
@@ -1220,10 +1215,10 @@ def get_active_sessions(
 ):
     """Get all active sessions"""
     from app.services.session_manager import get_session_manager
-    
+
     manager = get_session_manager()
     sessions = manager.get_active_sessions(limit)
-    
+
     return {
         "code": 0,
         "data": [s.to_dict() for s in sessions],
@@ -1235,10 +1230,10 @@ def get_active_sessions(
 def get_sessions_stats():
     """Get global session statistics"""
     from app.services.session_manager import get_session_manager
-    
+
     manager = get_session_manager()
     stats = manager.get_global_stats()
-    
+
     return {"code": 0, "data": stats}
 
 @router.get("/sessions/{session_id}")
@@ -1246,13 +1241,13 @@ def get_sessions_stats():
 def get_session_details(session_id: str):
     """Get session details by ID"""
     from app.services.session_manager import get_session_manager
-    
+
     manager = get_session_manager()
     session = manager.get_session(session_id)
-    
+
     if not session:
         return {"code": 1, "error": f"Session '{session_id}' not found"}
-    
+
     return {"code": 0, "data": session.to_dict()}
 
 @router.delete("/sessions/{session_id}")
@@ -1260,10 +1255,10 @@ def get_session_details(session_id: str):
 def terminate_session(session_id: str):
     """Terminate a session"""
     from app.services.session_manager import get_session_manager
-    
+
     manager = get_session_manager()
     success = manager.delete_session(session_id)
-    
+
     if success:
         return {"code": 0, "message": f"Session '{session_id}' terminated"}
     else:
@@ -1274,9 +1269,9 @@ def terminate_session(session_id: str):
 def trigger_session_cleanup():
     """Manually trigger session cleanup"""
     from app.db import session_db
-    
+
     deleted = session_db.cleanup_expired_sessions()
-    
+
     return {"code": 0, "message": f"Cleaned up {deleted} expired sessions", "data": {"deleted_count": deleted}}
 
 @router.get("/sessions/{session_id}/conversations")
@@ -1284,13 +1279,13 @@ def trigger_session_cleanup():
 def get_session_conversations(session_id: str):
     """Get conversation history for a session"""
     from app.db import session_db
-    
+
     session = session_db.get_session(session_id)
     if not session:
         return {"code": 1, "error": f"Session '{session_id}' not found"}
-    
+
     conversations = session_db.get_session_conversations(session_id) if hasattr(session_db, 'get_session_conversations') else []
-    
+
     return {"code": 0, "data": conversations, "count": len(conversations)}
 
 
@@ -1315,13 +1310,13 @@ async def token_stream_ws(websocket: WebSocket):
         "last_pong": time.time(),
         "missed_pongs": 0
     }
-    
+
     await websocket.send_json({
         "type": "connected",
         "conn_id": conn_id,
         "timestamp": int(time.time())
     })
-    
+
     try:
         while True:
             try:
@@ -1333,12 +1328,12 @@ async def token_stream_ws(websocket: WebSocket):
                 conn_state = _token_stream_connections.get(conn_id)
                 if not conn_state:
                     break
-                
+
                 await websocket.send_json({
                     "type": "ping",
                     "timestamp": int(time.time())
                 })
-                
+
                 try:
                     msg = await asyncio.wait_for(websocket.receive_json(), timeout=PONG_TIMEOUT)
                     if msg.get("action") == "pong":
@@ -1375,15 +1370,15 @@ _log_stream_connections: dict = {}  # conn_id -> {"last_pong": float, "missed_po
 async def log_stream_ws(websocket: WebSocket):
     """WebSocket实时日志流 with heartbeat"""
     await websocket.accept()
-    
+
     conn_id = f"log_ws_{int(time.time())}_{secrets.token_hex(4)}"
     _log_stream_connections[conn_id] = {
         "last_pong": time.time(),
         "missed_pongs": 0
     }
-    
+
     queue = _log_queue
-    
+
     await websocket.send_json({
         "type": "connected",
         "conn_id": conn_id,
@@ -1391,7 +1386,7 @@ async def log_stream_ws(websocket: WebSocket):
         "level": "INFO",
         "message": "Log stream connected. Waiting for logs..."
     })
-    
+
     try:
         while True:
             try:
@@ -1403,12 +1398,12 @@ async def log_stream_ws(websocket: WebSocket):
                 conn_state = _log_stream_connections.get(conn_id)
                 if not conn_state:
                     break
-                
+
                 await websocket.send_json({
                     "type": "ping",
                     "timestamp": int(time.time())
                 })
-                
+
                 try:
                     msg = await asyncio.wait_for(websocket.receive_json(), timeout=PONG_TIMEOUT)
                     if msg.get("action") == "pong":
@@ -1469,7 +1464,7 @@ async def toggle_watchdog_endpoint(body: WatchdogToggleRequest):
     请求体: {"enabled": true/false}
     """
     from app.services.watchdog import toggle_watchdog
-    
+
     success = toggle_watchdog(body.enabled)
     if success:
         return {
@@ -1532,9 +1527,9 @@ async def get_ws_metrics():
 async def get_websocket_stats():
     """获取所有 WebSocket 连接统计（包括 token_stream 和 log_stream）"""
     from app.services.ws_manager import ws_manager
-    
+
     ws_metrics = await ws_manager.get_metrics()
-    
+
     token_conns = []
     now = time.time()
     for conn_id, state in _token_stream_connections.items():
@@ -1543,7 +1538,7 @@ async def get_websocket_stats():
             "last_pong_age": now - state["last_pong"],
             "missed_pongs": state["missed_pongs"]
         })
-    
+
     log_conns = []
     for conn_id, state in _log_stream_connections.items():
         log_conns.append({
@@ -1551,7 +1546,7 @@ async def get_websocket_stats():
             "last_pong_age": now - state["last_pong"],
             "missed_pongs": state["missed_pongs"]
         })
-    
+
     return {
         "code": 0,
         "data": {
@@ -1581,15 +1576,15 @@ async def get_rate_limit_stats():
     """获取速率限制统计信息"""
     from app.middleware.rate_limit import get_limiter
     from app.config.rate_limit import ENDPOINT_LIMITS
-    
+
     limiter = get_limiter()
     stats = limiter.get_stats()
-    
+
     endpoint_limits = {
         name: {"requests": limit.requests, "period": limit.period}
         for name, limit in ENDPOINT_LIMITS.items()
     }
-    
+
     blocked_ips = []
     now = time.time()
     for key, entry in stats.get("entries", {}).items():
@@ -1602,7 +1597,7 @@ async def get_rate_limit_stats():
                 "reset_at": entry.get("reset_at", 0),
                 "remaining_seconds": max(0, int(entry.get("reset_at", 0) - now))
             })
-    
+
     return {
         "code": 0,
         "data": {
@@ -1619,9 +1614,9 @@ async def get_rate_limit_stats():
 async def reset_rate_limit(ip: Optional[str] = None):
     """重置速率限制（可选指定IP）"""
     from app.middleware.rate_limit import get_limiter
-    
+
     limiter = get_limiter()
-    
+
     if ip:
         keys_to_reset = [k for k in limiter._storage.keys() if k.startswith(f"{ip}:")]
         for key in keys_to_reset:
@@ -1663,20 +1658,20 @@ async def collect_web_vitals(request: Request):
     try:
         body = await request.body()
         body_str = body.decode('utf-8') if isinstance(body, bytes) else body
-        
+
         if request.headers.get('content-type', '').startswith('application/json') or body_str.startswith('{'):
             data = json.loads(body_str)
         else:
             data = json.loads(body_str)
-        
+
         metric = WebVitalsMetric(**data)
         _web_vitals_buffer.append(metric.dict())
         if len(_web_vitals_buffer) > WEB_VITALS_MAX_BUFFER:
             _web_vitals_buffer.pop(0)
-        
+
         if metric.rating == "poor":
             logger.warning(f"[WebVitals] Poor metric: {metric.name}={metric.value}ms on {metric.page}")
-        
+
         return {"code": 0, "message": "Metric recorded"}
     except Exception as e:
         logger.error(f"[WebVitals] Failed to parse metric: {e}", exc_info=True)
@@ -1687,7 +1682,7 @@ async def collect_web_vitals(request: Request):
 async def get_web_vitals_stats():
     if not _web_vitals_buffer:
         return {"code": 0, "data": {"metrics": [], "summary": "No metrics collected"}}
-    
+
     summary = {}
     for m in _web_vitals_buffer:
         name = m["name"]
@@ -1697,11 +1692,11 @@ async def get_web_vitals_stats():
         summary[name]["values"].append(m["value"])
         if m["rating"] == "poor":
             summary[name]["poor_count"] += 1
-    
+
     for name, stats in summary.items():
         stats["avg"] = sum(stats["values"]) / len(stats["values"])
         stats["values"] = stats["values"][-10:]
-    
+
     return {
         "code": 0,
         "data": {
@@ -1721,10 +1716,10 @@ async def get_web_vitals_stats():
 async def get_streaming_status():
     """获取 WebSocket 流式数据推送状态"""
     from app.services.streaming import get_streaming_manager
-    
+
     manager = get_streaming_manager()
     status = manager.get_status()
-    
+
     return {
         "code": 0,
         "data": status
@@ -1736,10 +1731,10 @@ async def get_streaming_status():
 async def trigger_streaming_failover():
     """手动触发流式数据切换到 HTTP 轮询模式"""
     from app.services.streaming import get_streaming_manager
-    
+
     manager = get_streaming_manager()
     await manager.force_failover()
-    
+
     return {
         "code": 0,
         "message": "已切换到 HTTP 轮询模式",
@@ -1752,10 +1747,10 @@ async def trigger_streaming_failover():
 async def reset_streaming_circuit_breaker():
     """重置流式数据熔断器并尝试恢复 WebSocket 连接"""
     from app.services.streaming import get_streaming_manager
-    
+
     manager = get_streaming_manager()
     await manager.reset_circuit_breaker()
-    
+
     return {
         "code": 0,
         "message": "熔断器已重置，正在尝试恢复 WebSocket 连接",
@@ -1768,10 +1763,10 @@ async def reset_streaming_circuit_breaker():
 async def get_streaming_symbols():
     """获取当前订阅的流式数据 symbols"""
     from app.services.streaming import get_streaming_manager
-    
+
     manager = get_streaming_manager()
     stats = manager.stats
-    
+
     return {
         "code": 0,
         "data": {
@@ -1786,10 +1781,10 @@ async def get_streaming_symbols():
 async def add_streaming_symbols(symbols: List[str] = Body(...)):
     """添加流式数据订阅 symbols"""
     from app.services.streaming import get_streaming_manager
-    
+
     manager = get_streaming_manager()
     await manager.add_symbols(symbols)
-    
+
     return {
         "code": 0,
         "message": f"已添加 {len(symbols)} 个订阅",
@@ -1801,10 +1796,10 @@ async def add_streaming_symbols(symbols: List[str] = Body(...)):
 @handle_errors(module="admin")
 async def remove_streaming_symbols(symbols: List[str] = Body(...)):
     from app.services.streaming import get_streaming_manager
-    
+
     manager = get_streaming_manager()
     await manager.remove_symbols(symbols)
-    
+
     return {
         "code": 0,
         "message": f"已移除 {len(symbols)} 个订阅",
@@ -1818,9 +1813,9 @@ def _start_admin_session_cleanup_thread():
     global _admin_session_cleanup_running
     if _admin_session_cleanup_running:
         return
-    
+
     _admin_session_cleanup_running = True
-    
+
     def cleanup_loop():
         import time as _time
         while True:
@@ -1829,7 +1824,7 @@ def _start_admin_session_cleanup_thread():
                 session_db.cleanup_expired_admin_sessions()
             except Exception as e:
                 logger.warning(f"[AdminSession] Cleanup thread error: {e}", exc_info=True)
-    
+
     import threading
     thread = threading.Thread(target=cleanup_loop, daemon=True, name="admin_session_cleanup")
     thread.start()
@@ -1855,13 +1850,12 @@ async def get_source_topology():
     Returns nodes (data sources) and edges (fallback relationships).
     Each node has status indicator (green/yellow/red).
     """
-    from app.services import quote_source
-    
+
     # Get current status
     status_data = quote_source.get_source_status()
     sources = status_data.get("sources", {})
     current_source = quote_source._current_source
-    
+
     # Build nodes
     nodes = []
     for name, status in sources.items():
@@ -1874,7 +1868,7 @@ async def get_source_topology():
             node_status = "yellow"  # Not probed yet
         else:
             node_status = "red"  # Unhealthy
-        
+
         nodes.append({
             "id": name,
             "name": name.upper(),
@@ -1888,12 +1882,12 @@ async def get_source_topology():
             "is_current": name == current_source,
             "last_check": status.get("last_fail_time")
         })
-    
+
     # Build edges (fallback chain)
     # Default fallback order: tencent -> sina -> eastmoney
     fallback_order = ["tencent", "sina", "eastmoney"]
     edges = []
-    
+
     for i in range(len(fallback_order) - 1):
         source = fallback_order[i]
         target = fallback_order[i + 1]
@@ -1903,7 +1897,7 @@ async def get_source_topology():
             "type": "fallback",
             "label": f"{source} → {target}"
         })
-    
+
     # Add bidirectional edges for visualization
     for node in nodes:
         if node["id"] not in fallback_order:
@@ -1914,7 +1908,7 @@ async def get_source_topology():
                 "type": "fallback",
                 "label": f"fallback → {node['id']}"
             })
-    
+
     return {
         "code": 0,
         "data": {
@@ -1937,34 +1931,33 @@ async def switch_data_source(body: SourceSwitchRequest):
     2. Sets the fallback as current source
     3. Logs the switch for audit trail
     """
-    from app.services import quote_source
     from app.services.audit_chain import log_audit_event
-    
+
     source = body.source.lower()
     fallback = body.fallback.lower()
-    
+
     # Validate sources exist
     status_data = quote_source.get_source_status()
     sources = status_data.get("sources", {})
-    
+
     if source not in sources:
         raise HTTPException(status_code=400, detail=f"Source '{source}' not found")
     if fallback not in sources:
         raise HTTPException(status_code=400, detail=f"Fallback '{fallback}' not found")
-    
+
     # Check if fallback is healthy
     fallback_status = sources.get(fallback, {})
     if fallback_status.get("state") == "open":
         raise HTTPException(status_code=400, detail=f"Fallback '{fallback}' is currently circuit-broken")
-    
+
     # Perform the switch
     try:
         # Open circuit on source
         quote_source.open_circuit(source)
-        
+
         # Set fallback as current
         quote_source._current_source = fallback
-        
+
         # Log audit event
         log_audit_event(
             actor_id="admin",
@@ -1975,9 +1968,9 @@ async def switch_data_source(body: SourceSwitchRequest):
             before_state={"current_source": source},
             after_state={"current_source": fallback}
         )
-        
+
         logger.info(f"[Admin] Switched data source from {source} to {fallback}")
-        
+
         return {
             "code": 0,
             "message": f"已切换数据源: {source} → {fallback}",
@@ -1999,7 +1992,7 @@ async def get_source_config():
     Get current data source configuration (priority, weights, health check settings).
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_get():
         conn = _get_conn()
         try:
@@ -2010,9 +2003,9 @@ async def get_source_config():
             return row
         finally:
             conn.close()
-    
+
     row = await loop.run_in_executor(_executor, _sync_get)
-    
+
     if row:
         config = json.loads(row[0])
     else:
@@ -2025,7 +2018,7 @@ async def get_source_config():
                 "fail_threshold": 3
             }
         }
-    
+
     return {
         "code": 0,
         "data": config
@@ -2039,7 +2032,7 @@ async def update_source_config(config: SourceBalanceConfig):
     Update data source configuration (hot-swap without restart).
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_set():
         conn = _get_conn()
         try:
@@ -2052,11 +2045,11 @@ async def update_source_config(config: SourceBalanceConfig):
             conn.close()
         finally:
             conn.close()
-    
+
     await loop.run_in_executor(_executor, _sync_set)
-    
+
     logger.info(f"[Admin] Updated source config: strategy={config.strategy}")
-    
+
     return {
         "code": 0,
         "message": "数据源配置已更新",
@@ -2076,7 +2069,7 @@ async def get_error_history(
     since_hours: Optional[int] = Query(24, ge=1, le=168),
 ):
     from app.db.error_history_db import get_error_history as _get_error_history
-    
+
     errors = _get_error_history(
         limit=limit,
         offset=offset,
@@ -2084,7 +2077,7 @@ async def get_error_history(
         resolved=resolved,
         since_hours=since_hours,
     )
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -2103,9 +2096,9 @@ async def get_error_stats(
     since_hours: int = Query(24, ge=1, le=168),
 ):
     from app.db.error_history_db import get_error_stats as _get_error_stats
-    
+
     stats = _get_error_stats(since_hours=since_hours)
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -2117,9 +2110,9 @@ async def get_error_stats(
 @handle_errors(module="admin")
 async def resolve_error(error_id: int):
     from app.db.error_history_db import mark_error_resolved
-    
+
     success = mark_error_resolved(error_id)
-    
+
     if success:
         return {
             "code": 0,
@@ -2140,9 +2133,9 @@ async def cleanup_errors(
     days: int = Query(7, ge=1, le=30),
 ):
     from app.db.error_history_db import cleanup_old_errors
-    
+
     deleted = cleanup_old_errors(days=days)
-    
+
     return {
         "code": 0,
         "message": f"已清理 {deleted} 条过期错误记录",
@@ -2155,9 +2148,9 @@ async def cleanup_errors(
 async def get_sina_fetcher_status():
     """Get Sina stock fetcher circuit breaker status."""
     from app.utils.sina_stock_fetcher import _SINA_STOCK_CB
-    
+
     stats = _SINA_STOCK_CB._stats
-    
+
     return {
         "code": 0,
         "message": "success",

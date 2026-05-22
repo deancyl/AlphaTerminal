@@ -92,7 +92,7 @@ def _fetch_frankfurter_history_sync(
 ) -> List[Dict[str, Any]]:
     try:
         url = f"https://api.frankfurter.app/{start_date}..{end_date}?from={from_currency}&to={to_currency}"
-        
+
         if HAS_CURL_CFFI:
             response = curl_requests.get(
                 url,
@@ -102,14 +102,14 @@ def _fetch_frankfurter_history_sync(
             )
         else:
             response = curl_requests.get(url, timeout=15, proxies=_PROXIES)
-        
+
         if response.status_code != 200:
             logger.warning(f"[Frankfurter] API returned {response.status_code}")
             return []
-        
+
         data = json.loads(response.text)
         rates = data.get("rates", {})
-        
+
         history = []
         for date in sorted(rates.keys()):
             rate = rates[date].get(to_currency)
@@ -123,10 +123,10 @@ def _fetch_frankfurter_history_sync(
                     "amplitude": 0,
                     "source": "frankfurter"
                 })
-        
+
         logger.info(f"[Frankfurter] Fetched {len(history)} days for {from_currency}/{to_currency}")
         return history
-        
+
     except Exception as e:
         logger.error(f"[Frankfurter] Error: {e}", exc_info=True)
         return []
@@ -151,17 +151,17 @@ class ForexFetcher(BaseMarketFetcher):
         # 计算交叉汇率
         rate = fetcher.calculate_cross_rate("EUR", "JPY", rates_dict)
     """
-    
+
     name = "forex"
     display_name = "Forex 数据源 (AKShare)"
-    
+
     supports_quote = True
     supports_kline = True
     supports_order_book = False
     supports_futures = False
     supports_hk = False
     supports_us = False
-    
+
     MAJOR_PAIRS = {
         "USDCNY": "美元兑人民币",
         "EURUSD": "欧元兑美元",
@@ -174,9 +174,9 @@ class ForexFetcher(BaseMarketFetcher):
         "GBPCNY": "英镑兑人民币",
         "JPYCNY": "日元兑人民币",
     }
-    
+
     MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF"]
-    
+
     def __init__(
         self,
         proxy: Optional[str] = None,
@@ -191,24 +191,24 @@ class ForexFetcher(BaseMarketFetcher):
             )
         )
         self._ak = None
-        
+
         # Use unified DataCache instead of inline dict
         self._data_cache = get_cache()
         self._cache_lock = asyncio.Lock()
-        
+
     @property
     def ak(self):
         if self._ak is None:
             self._ak = _get_akshare()
         return self._ak
-    
+
     def _get_cached(self, key: str) -> Optional[Any]:
         """Get from unified DataCache"""
         result = self._data_cache.get(key)
         if result is not None:
             logger.debug(f"[Forex] Cache HIT: {key}")
         return result
-    
+
     def _set_cached(self, key: str, value: Any, ttl_seconds: int = 300):
         self._data_cache.set(key, value, ttl=ttl_seconds)
         logger.debug(f"[Forex] Cache SET: {key} (TTL={ttl_seconds}s)")
@@ -220,7 +220,7 @@ class ForexFetcher(BaseMarketFetcher):
         改进：优先尝试CFETS官方数据，最后才使用静态数据
         """
         ts = int(datetime.now().timestamp())
-        
+
         # 尝试CFETS银行间报价（更权威）
         try:
             ak = _get_akshare()
@@ -232,7 +232,7 @@ class ForexFetcher(BaseMarketFetcher):
                     return quotes
         except Exception as e:
             logger.warning(f"[Forex] CFETS银行间报价获取失败: {e}", exc_info=True)
-        
+
         # 尝试CFETS交叉汇率
         try:
             ak = _get_akshare()
@@ -244,7 +244,7 @@ class ForexFetcher(BaseMarketFetcher):
                     return quotes
         except Exception as e:
             logger.warning(f"[Forex] CFETS交叉汇率获取失败: {e}", exc_info=True)
-        
+
         # 尝试BOC官方中间价
         try:
             ak = _get_akshare()
@@ -256,11 +256,11 @@ class ForexFetcher(BaseMarketFetcher):
                     return quotes
         except Exception as e:
             logger.warning(f"[Forex] BOC官方中间价获取失败: {e}", exc_info=True)
-        
+
         # 最后才使用最小静态数据
         logger.warning("[Forex] 所有数据源失败，使用最小静态回退数据")
         return self._get_minimal_static_fallback()
-    
+
     def _parse_cfets_to_quotes(self, df, ts: int) -> List[Dict[str, Any]]:
         """解析CFETS银行间报价为标准格式"""
         quotes = []
@@ -270,22 +270,22 @@ class ForexFetcher(BaseMarketFetcher):
             "CAD/CNY": "CADCNY", "CHF/CNY": "CHFCNY", "SGD/CNY": "SGDCNY",
             "NZD/CNY": "NZDCNY",
         }
-        
+
         for _, row in df.iterrows():
             pair = str(row.get('货币对', ''))
             symbol = cfets_to_standard.get(pair)
             if not symbol:
                 continue
-            
+
             bid = clean_value(row.get('买报价'))
             ask = clean_value(row.get('卖报价'))
             mid = clean_value(row.get('中间价'))
-            
+
             if bid is None or ask is None:
                 continue
-            
+
             latest = mid if mid else (bid + ask) / 2
-            
+
             quotes.append({
                 "symbol": symbol, "name": self._get_currency_name(symbol),
                 "latest": round(latest, 6), "bid": round(bid, 6), "ask": round(ask, 6),
@@ -293,9 +293,9 @@ class ForexFetcher(BaseMarketFetcher):
                 "open": round(latest, 6), "high": round(latest, 6), "low": round(latest, 6),
                 "prev_close": round(latest, 6), "source": "cfets", "is_demo": False, "timestamp": ts,
             })
-        
+
         return quotes
-    
+
     def _parse_cfets_pair_to_quotes(self, df, ts: int) -> List[Dict[str, Any]]:
         """解析CFETS交叉汇率为标准格式"""
         quotes = []
@@ -303,21 +303,21 @@ class ForexFetcher(BaseMarketFetcher):
             "EUR/USD": "EURUSD", "GBP/USD": "GBPUSD", "USD/JPY": "USDJPY",
             "AUD/USD": "AUDUSD", "USD/CAD": "USDCAD", "USD/CHF": "USDCHF",
         }
-        
+
         for _, row in df.iterrows():
             pair = str(row.get('货币对', ''))
             symbol = pair_to_standard.get(pair)
             if not symbol:
                 continue
-            
+
             bid = clean_value(row.get('买报价'))
             ask = clean_value(row.get('卖报价'))
-            
+
             if bid is None or ask is None:
                 continue
-            
+
             latest = (bid + ask) / 2
-            
+
             quotes.append({
                 "symbol": symbol, "name": self._get_currency_name(symbol),
                 "latest": round(latest, 6), "bid": round(bid, 6), "ask": round(ask, 6),
@@ -325,27 +325,27 @@ class ForexFetcher(BaseMarketFetcher):
                 "open": round(latest, 6), "high": round(latest, 6), "low": round(latest, 6),
                 "prev_close": round(latest, 6), "source": "cfets", "is_demo": False, "timestamp": ts,
             })
-        
+
         return quotes
-    
+
     def _parse_boc_to_quotes(self, df, ts: int) -> List[Dict[str, Any]]:
         """解析BOC官方中间价为标准格式"""
         quotes = []
         if df is None or df.empty:
             return quotes
-        
+
         latest_row = df.iloc[-1]
         boc_to_standard = {
             '美元': 'USDCNY', '欧元': 'EURCNY', '日元': 'JPYCNY',
             '英镑': 'GBPCNY', '港币': 'HKDCNY', '澳大利亚元': 'AUDCNY',
             '加拿大元': 'CADCNY', '瑞士法郎': 'CHFCNY',
         }
-        
+
         for cn_name, symbol in boc_to_standard.items():
             rate = clean_value(latest_row.get(cn_name))
             if rate is None:
                 continue
-            
+
             quotes.append({
                 "symbol": symbol, "name": self._get_currency_name(symbol),
                 "latest": round(rate, 6), "bid": round(rate, 6), "ask": round(rate, 6),
@@ -353,9 +353,9 @@ class ForexFetcher(BaseMarketFetcher):
                 "open": round(rate, 6), "high": round(rate, 6), "low": round(rate, 6),
                 "prev_close": round(rate, 6), "source": "boc", "is_demo": False, "timestamp": ts,
             })
-        
+
         return quotes
-    
+
     def _get_currency_name(self, symbol: str) -> str:
         """获取货币对中文名称"""
         names = {
@@ -367,7 +367,7 @@ class ForexFetcher(BaseMarketFetcher):
             "USDCHF": "美元/瑞郎",
         }
         return names.get(symbol, symbol)
-    
+
     def _get_minimal_static_fallback(self) -> List[Dict[str, Any]]:
         """最小静态回退数据（10个货币对：6个CNY + 4个USD-based用于三角套利）"""
         ts = int(datetime.now().timestamp())
@@ -385,7 +385,7 @@ class ForexFetcher(BaseMarketFetcher):
             {"symbol": "USDJPY", "name": "美元/日元", "latest": 149.25, "bid": 149.23, "ask": 149.27, "spread": 0.04, "change": 0.0, "change_pct": 0.0, "open": 149.25, "high": 149.25, "low": 149.25, "prev_close": 149.25, "source": "static", "is_demo": True, "timestamp": ts},
             {"symbol": "AUDUSD", "name": "澳元/美元", "latest": 0.6510, "bid": 0.6508, "ask": 0.6512, "spread": 0.0004, "change": 0.0, "change_pct": 0.0, "open": 0.6510, "high": 0.6510, "low": 0.6510, "prev_close": 0.6510, "source": "static", "is_demo": True, "timestamp": ts},
         ]
-    
+
 
     async def reset_circuit_breaker(self) -> dict:
         """
@@ -403,7 +403,7 @@ class ForexFetcher(BaseMarketFetcher):
             self.cb._state = CircuitState.CLOSED
             logger.info(f"[Forex] 熔断器手动重置: {old_state} -> closed")
             return {"success": True, "state": "closed"}
-    
+
     async def get_spot_quotes(self) -> List[Dict[str, Any]]:
         """
         获取所有实时报价 (EastMoney forex_spot_em)
@@ -426,23 +426,23 @@ class ForexFetcher(BaseMarketFetcher):
         cached = self._get_cached(cache_key)
         if cached:
             return cached
-        
+
         if not self.cb.is_available():
             logger.warning("[Forex] 熔断器打开，返回回退数据")
             return self._get_fallback_quotes()
-        
+
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(_spot_executor, self.ak.forex_spot_em),
                 timeout=30.0
             )
-            
+
             if df is None or df.empty:
                 self.cb.record_failure()
                 logger.warning("[Forex] forex_spot_em 返回空数据，返回回退数据")
                 return self._get_fallback_quotes()
-            
+
             quotes = []
             for _, row in df.iterrows():
                 quote = {
@@ -459,12 +459,12 @@ class ForexFetcher(BaseMarketFetcher):
                     "timestamp": int(datetime.now().timestamp()),
                 }
                 quotes.append(quote)
-            
+
             self._set_cached(cache_key, quotes, ttl_seconds=300)
             self.cb.record_success()
             logger.info(f"[Forex] 获取实时报价成功: {len(quotes)} 条")
             return quotes
-            
+
         except asyncio.TimeoutError:
             self.cb.record_failure()
             logger.warning("[Forex] 获取实时报价超时，返回回退数据", exc_info=True)
@@ -473,7 +473,7 @@ class ForexFetcher(BaseMarketFetcher):
             self.cb.record_failure()
             logger.error(f"[Forex] 获取实时报价失败: {e}，返回回退数据", exc_info=True)
             return self._get_fallback_quotes()
-    
+
     async def get_history(
         self,
         symbol: str,
@@ -485,7 +485,7 @@ class ForexFetcher(BaseMarketFetcher):
         cached = self._get_cached(cache_key)
         if cached:
             return cached[-limit:] if limit else cached
-        
+
         if not self.cb.is_available():
             cache = get_cache()
             stale_data, is_stale = cache.get_with_stale(cache_key, fresh_ttl=0, stale_ttl=86400)
@@ -493,17 +493,17 @@ class ForexFetcher(BaseMarketFetcher):
                 logger.warning(f"[Forex] Circuit breaker open, returning stale history: {symbol}")
                 return stale_data[-limit:] if limit else stale_data
             return []
-        
+
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(_history_executor, lambda: self.ak.forex_hist_em(symbol=symbol)),
                 timeout=30.0
             )
-            
+
             if df is None or df.empty:
                 raise ValueError("Empty response from akshare")
-            
+
             result_df = df.copy()
             if start_date:
                 mask = result_df['日期'] >= start_date
@@ -511,7 +511,7 @@ class ForexFetcher(BaseMarketFetcher):
             if end_date:
                 mask = result_df['日期'] <= end_date
                 result_df = result_df.loc[mask]
-            
+
             history = []
             for _, row in result_df.iterrows():
                 kline = {
@@ -523,48 +523,48 @@ class ForexFetcher(BaseMarketFetcher):
                     "amplitude": clean_value(row.get('振幅')),
                 }
                 history.append(kline)
-            
+
             self._set_cached(cache_key, history, ttl_seconds=1800)
             self.cb.record_success()
             logger.info(f"[Forex] 获取历史K线成功: {symbol} {len(history)} 条")
             return history[-limit:] if limit else history
-            
+
         except asyncio.TimeoutError:
             self.cb.record_failure()
             logger.warning(f"[Forex] 获取历史K线超时: {symbol}, 尝试Frankfurter回退", exc_info=True)
         except Exception as e:
             self.cb.record_failure()
             logger.warning(f"[Forex] 获取历史K线失败: {symbol} - {e}, 尝试Frankfurter回退", exc_info=True)
-        
+
         logger.info(f"[Forex] Using Frankfurter fallback for {symbol}")
-        
+
         try:
             from_currency = symbol[:3]
             to_currency = symbol[3:6]
-            
+
             if to_currency == "CNH":
                 to_currency = "CNY"
-            
+
             if not end_date:
                 end_date = datetime.now().strftime("%Y-%m-%d")
             if not start_date:
                 start_date = (datetime.now() - timedelta(days=limit)).strftime("%Y-%m-%d")
-            
+
             loop = asyncio.get_running_loop()
             history = await loop.run_in_executor(
                 _history_executor,
                 lambda: _fetch_frankfurter_history_sync(from_currency, to_currency, start_date, end_date)
             )
-            
+
             if history:
                 self._set_cached(cache_key, history, ttl_seconds=1800)
                 return history[-limit:] if limit else history
-            
+
         except Exception as e:
             logger.error(f"[Forex] Frankfurter fallback failed: {e}", exc_info=True)
-        
+
         return []
-    
+
     async def get_cfets_spot(self) -> List[Dict[str, Any]]:
         """
         获取CFETS银行间人民币报价 (fx_spot_quote)
@@ -581,21 +581,21 @@ class ForexFetcher(BaseMarketFetcher):
         cached = self._get_cached(cache_key)
         if cached:
             return cached
-        
+
         if not self.cb.is_available():
             return []
-        
+
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(_spot_executor, self.ak.fx_spot_quote),
                 timeout=30.0
             )
-            
+
             if df is None or df.empty:
                 self.cb.record_failure()
                 return []
-            
+
             quotes = []
             for _, row in df.iterrows():
                 bid = clean_value(row.get('买报价'))
@@ -610,12 +610,12 @@ class ForexFetcher(BaseMarketFetcher):
                     "timestamp": int(datetime.now().timestamp()),
                 }
                 quotes.append(quote)
-            
+
             self._set_cached(cache_key, quotes, ttl_seconds=300)
             self.cb.record_success()
             logger.info(f"[Forex] 获取CFETS人民币报价成功: {len(quotes)} 条")
             return quotes
-            
+
         except asyncio.TimeoutError:
             self.cb.record_failure()
             logger.warning("[Forex] 获取CFETS报价超时", exc_info=True)
@@ -624,7 +624,7 @@ class ForexFetcher(BaseMarketFetcher):
             self.cb.record_failure()
             logger.error(f"[Forex] 获取CFETS报价失败: {e}", exc_info=True)
             return []
-    
+
     async def get_cfets_crosses(self) -> List[Dict[str, Any]]:
         """
         获取CFETS非人民币交叉汇率 (fx_pair_quote)
@@ -636,21 +636,21 @@ class ForexFetcher(BaseMarketFetcher):
         cached = self._get_cached(cache_key)
         if cached:
             return cached
-        
+
         if not self.cb.is_available():
             return []
-        
+
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(_spot_executor, self.ak.fx_pair_quote),
                 timeout=30.0
             )
-            
+
             if df is None or df.empty:
                 self.cb.record_failure()
                 return []
-            
+
             quotes = []
             for _, row in df.iterrows():
                 bid = clean_value(row.get('买报价'))
@@ -665,12 +665,12 @@ class ForexFetcher(BaseMarketFetcher):
                     "timestamp": int(datetime.now().timestamp()),
                 }
                 quotes.append(quote)
-            
+
             self._set_cached(cache_key, quotes, ttl_seconds=300)
             self.cb.record_success()
             logger.info(f"[Forex] 获取CFETS交叉汇率成功: {len(quotes)} 条")
             return quotes
-            
+
         except asyncio.TimeoutError:
             self.cb.record_failure()
             logger.warning("[Forex] 获取CFETS交叉汇率超时", exc_info=True)
@@ -679,7 +679,7 @@ class ForexFetcher(BaseMarketFetcher):
             self.cb.record_failure()
             logger.error(f"[Forex] 获取CFETS交叉汇率失败: {e}", exc_info=True)
             return []
-    
+
     async def get_official_rates(self, days: int = 30) -> List[Dict[str, Any]]:
         """
         获取SAFE官方人民币中间价 (currency_boc_safe)
@@ -691,24 +691,24 @@ class ForexFetcher(BaseMarketFetcher):
         cached = self._get_cached(cache_key)
         if cached:
             return cached
-        
+
         if not self.cb.is_available():
             return []
-        
+
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(_history_executor, self.ak.currency_boc_safe),
                 timeout=30.0
             )
-            
+
             if df is None or df.empty:
                 self.cb.record_failure()
                 return []
-            
+
             if days and len(df) > days:
                 df = df.tail(days)
-            
+
             rates = []
             for _, row in df.iterrows():
                 rate = {
@@ -723,12 +723,12 @@ class ForexFetcher(BaseMarketFetcher):
                     "chf": clean_value(row.get('瑞士法郎')),
                 }
                 rates.append(rate)
-            
+
             self._set_cached(cache_key, rates, ttl_seconds=3600)
             self.cb.record_success()
             logger.info(f"[Forex] 获取官方中间价成功: {len(rates)} 条")
             return rates
-            
+
         except asyncio.TimeoutError:
             self.cb.record_failure()
             logger.warning("[Forex] 获取官方中间价超时", exc_info=True)
@@ -737,7 +737,7 @@ class ForexFetcher(BaseMarketFetcher):
             self.cb.record_failure()
             logger.error(f"[Forex] 获取官方中间价失败: {e}", exc_info=True)
             return []
-    
+
     def calculate_cross_rate(
         self,
         from_curr: str,
@@ -764,53 +764,53 @@ class ForexFetcher(BaseMarketFetcher):
         """
         from_curr = from_curr.upper()
         to_curr = to_curr.upper()
-        
+
         if from_curr == to_curr:
             return Decimal('1.0')
-        
+
         direct_key = f"{from_curr}/{to_curr}"
         if direct_key in rates:
             return rates[direct_key]
-        
+
         inverse_key = f"{to_curr}/{from_curr}"
         if inverse_key in rates:
             return Decimal('1') / rates[inverse_key]
-        
+
         from_usd_key = f"{from_curr}/USD"
         to_usd_key = f"{to_curr}/USD"
         usd_from_key = f"USD/{from_curr}"
         usd_to_key = f"USD/{to_curr}"
-        
+
         from_rate = None
         to_rate = None
-        
+
         if from_usd_key in rates:
             from_rate = rates[from_usd_key]
         elif usd_from_key in rates:
             from_rate = Decimal('1') / rates[usd_from_key]
-        
+
         if to_usd_key in rates:
             to_rate = rates[to_usd_key]
         elif usd_to_key in rates:
             to_rate = Decimal('1') / rates[usd_to_key]
-        
+
         if from_curr == "USD":
             if usd_to_key in rates:
                 return rates[usd_to_key]
             elif to_usd_key in rates:
                 return Decimal('1') / rates[to_usd_key]
-        
+
         if to_curr == "USD":
             if usd_from_key in rates:
                 return Decimal('1') / rates[usd_from_key]
             elif from_usd_key in rates:
                 return rates[from_usd_key]
-        
+
         if from_rate is None or to_rate is None:
             return None
-        
+
         cross_rate = from_rate / to_rate
-        
+
         return cross_rate.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
 
     def calculate_cross_rate_with_spread(
@@ -839,7 +839,7 @@ class ForexFetcher(BaseMarketFetcher):
         """
         from_curr = from_curr.upper()
         to_curr = to_curr.upper()
-        
+
         if from_curr == to_curr:
             return {
                 "bid": Decimal('1.0'),
@@ -847,11 +847,11 @@ class ForexFetcher(BaseMarketFetcher):
                 "mid": Decimal('1.0'),
                 "spread": Decimal('0.0')
             }
-        
+
         # Try direct rates first
         direct_key = f"{from_curr}/{to_curr}"
         inverse_key = f"{to_curr}/{from_curr}"
-        
+
         if direct_key in bid_rates and direct_key in ask_rates:
             bid = bid_rates[direct_key]
             ask = ask_rates[direct_key]
@@ -865,7 +865,7 @@ class ForexFetcher(BaseMarketFetcher):
             to_usd_key = f"{to_curr}/USD"
             usd_from_key = f"USD/{from_curr}"
             usd_to_key = f"USD/{to_curr}"
-            
+
             # Get from_curr to USD rates
             if from_usd_key in bid_rates and from_usd_key in ask_rates:
                 from_bid = bid_rates[from_usd_key]
@@ -879,7 +879,7 @@ class ForexFetcher(BaseMarketFetcher):
                 from_ask = Decimal('1.0')
             else:
                 return None
-            
+
             # Get to_curr to USD rates
             if to_usd_key in bid_rates and to_usd_key in ask_rates:
                 to_bid = bid_rates[to_usd_key]
@@ -893,17 +893,17 @@ class ForexFetcher(BaseMarketFetcher):
                 to_ask = Decimal('1.0')
             else:
                 return None
-            
+
             # Cross-rate calculation:
             # EUR/JPY_bid = EUR/USD_bid × USD/JPY_bid
             # EUR/JPY_ask = EUR/USD_ask × USD/JPY_ask
             bid = from_bid * to_bid
             ask = from_ask * to_ask
-        
+
         # Calculate mid and spread
         mid = (bid + ask) / 2
         spread_pct = ((ask - bid) / mid * 100) if mid > 0 else Decimal('0.0')
-        
+
         return {
             "bid": bid.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP),
             "ask": ask.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP),
@@ -918,7 +918,7 @@ class ForexFetcher(BaseMarketFetcher):
             if q.get('symbol') == symbol:
                 return q
         return None
-    
+
     async def get_kline(
         self,
         symbol: str,
@@ -929,19 +929,19 @@ class ForexFetcher(BaseMarketFetcher):
     ) -> Optional[List[Dict[str, Any]]]:
         """获取K线数据 (BaseMarketFetcher接口)"""
         return await self.get_history(symbol, start_date, end_date)
-    
+
     async def get_order_book(self, symbol: str) -> Optional[Dict]:
         """不支持订单簿"""
         return None
-    
+
     async def get_futures_quote(self, symbol: str) -> Optional[Dict]:
         """不支持期货行情"""
         return None
-    
+
     def is_healthy(self) -> bool:
         """检查数据源是否健康"""
         return self.cb.is_available()
-    
+
     async def ping(self) -> bool:
         """探测数据源连通性"""
         try:
@@ -965,12 +965,12 @@ def get_circuit_breaker_status() -> dict:
         }
     """
     from datetime import datetime
-    
+
     last_failure_ts = forex_fetcher.cb._stats.last_failure_time
     last_failure_iso = None
     if last_failure_ts is not None:
         last_failure_iso = datetime.fromtimestamp(last_failure_ts).isoformat()
-    
+
     return {
         "is_open": not forex_fetcher.cb.is_available(),
         "failure_count": forex_fetcher.cb._stats.consecutive_failures,

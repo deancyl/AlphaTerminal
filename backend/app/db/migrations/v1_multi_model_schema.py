@@ -16,7 +16,6 @@ All tables use IF NOT EXISTS to prevent data loss.
 import sqlite3
 import logging
 import threading
-from datetime import datetime
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
@@ -84,7 +83,7 @@ def create_model_pricing_catalog_table(conn):
             updated_at TEXT NOT NULL
         )
     """)
-    
+
     # Indexes for common queries
     conn.execute("CREATE INDEX IF NOT EXISTS idx_pricing_provider ON model_pricing_catalog(provider)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_pricing_builtin ON model_pricing_catalog(is_builtin)")
@@ -114,7 +113,7 @@ def create_token_usage_logs_table(conn):
             created_at TEXT NOT NULL
         )
     """)
-    
+
     # Indexes for time-series queries
     conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_session ON token_usage_logs(session_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_model ON token_usage_logs(model_id)")
@@ -145,7 +144,7 @@ def create_copilot_sessions_table(conn):
             total_cost_usd REAL DEFAULT 0.0
         )
     """)
-    
+
     # Indexes for session queries
     conn.execute("CREATE INDEX IF NOT EXISTS idx_session_user ON copilot_sessions(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_session_active ON copilot_sessions(last_active_at)")
@@ -168,7 +167,7 @@ def create_model_config_versions_table(conn):
             change_summary TEXT
         )
     """)
-    
+
     # Index for version queries
     conn.execute("CREATE INDEX IF NOT EXISTS idx_config_version_created ON model_config_versions(created_at)")
     logger.debug("[Schema] Created model_config_versions table")
@@ -198,7 +197,7 @@ def create_usage_aggregates_table(conn):
             UNIQUE(aggregate_type, aggregate_key, model_id, provider, user_id)
         )
     """)
-    
+
     # Indexes for aggregate queries
     conn.execute("CREATE INDEX IF NOT EXISTS idx_agg_type ON usage_aggregates(aggregate_type)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_agg_key ON usage_aggregates(aggregate_key)")
@@ -225,12 +224,12 @@ def init_multi_model_schema():
             create_copilot_sessions_table(conn)
             create_model_config_versions_table(conn)
             create_usage_aggregates_table(conn)
-            
+
             # Commit all changes
             conn.commit()
-            
+
             # Verify tables exist
-            tables = ['model_pricing_catalog', 'token_usage_logs', 'copilot_sessions', 
+            tables = ['model_pricing_catalog', 'token_usage_logs', 'copilot_sessions',
                       'model_config_versions', 'usage_aggregates']
             for table in tables:
                 result = conn.execute(
@@ -239,9 +238,9 @@ def init_multi_model_schema():
                 ).fetchone()
                 if not result:
                     raise RuntimeError(f"Failed to create table: {table}")
-            
-            logger.info(f"[Schema] Multi-model schema initialized successfully")
-            
+
+            logger.info("[Schema] Multi-model schema initialized successfully")
+
         except Exception as e:
             logger.error(f"[Schema] Failed to initialize schema: {e}", exc_info=True)
             conn.rollback()
@@ -257,9 +256,9 @@ def verify_schema():
     Returns:
         dict: Table name -> exists (bool)
     """
-    tables = ['model_pricing_catalog', 'token_usage_logs', 'copilot_sessions', 
+    tables = ['model_pricing_catalog', 'token_usage_logs', 'copilot_sessions',
               'model_config_versions', 'usage_aggregates']
-    
+
     conn = _get_conn()
     try:
         result = {}
@@ -281,9 +280,9 @@ def get_table_stats():
     Returns:
         dict: Table name -> row count
     """
-    tables = ['model_pricing_catalog', 'token_usage_logs', 'copilot_sessions', 
+    tables = ['model_pricing_catalog', 'token_usage_logs', 'copilot_sessions',
               'model_config_versions', 'usage_aggregates']
-    
+
     conn = _get_conn()
     try:
         stats = {}
@@ -299,11 +298,11 @@ if __name__ == "__main__":
     # Run schema initialization
     logging.basicConfig(level=logging.INFO)
     init_multi_model_schema()
-    
+
     # Verify and print stats
     verification = verify_schema()
     stats = get_table_stats()
-    
+
     print("\n=== Multi-Model Schema Verification ===")
     for table, exists in verification.items():
         status = "✅" if exists else "❌"

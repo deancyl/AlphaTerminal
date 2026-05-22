@@ -202,11 +202,11 @@ class QueryClassifier:
     Classifies user queries into predefined types and extracts
     stock symbols, sectors, and macro indicators.
     """
-    
+
     def __init__(self):
         self._lock = threading.Lock()
         logger.info("[QueryClassifier] Initialized")
-    
+
     def classify(self, query: str) -> ClassificationResult:
         """
         Classify a user query.
@@ -223,17 +223,17 @@ class QueryClassifier:
                 confidence=0.0,
                 original_query=query or ""
             )
-        
+
         query = query.strip()
-        
+
         # Extract entities first
         symbols = self._extract_symbols(query)
         sector = self._extract_sector(query)
         macro_indicators = self._extract_macro_indicators(query)
-        
+
         # Classify query type
         query_type, confidence = self._classify_type(query, symbols, sector, macro_indicators)
-        
+
         result = ClassificationResult(
             query_type=query_type,
             symbols=symbols,
@@ -242,15 +242,15 @@ class QueryClassifier:
             confidence=confidence,
             original_query=query
         )
-        
+
         logger.debug(f"[QueryClassifier] Classified '{query}' as {query_type.value} (confidence: {confidence:.2f})")
-        
+
         return result
-    
+
     def _classify_type(
-        self, 
-        query: str, 
-        symbols: List[str], 
+        self,
+        query: str,
+        symbols: List[str],
         sector: Optional[str],
         macro_indicators: List[str]
     ) -> Tuple[QueryType, float]:
@@ -268,67 +268,67 @@ class QueryClassifier:
             QueryType.SECTOR_COMPARISON: 0.0,
             QueryType.QUICK_QA: 0.1,  # Base score for default
         }
-        
+
         # Check portfolio patterns (highest priority)
         for pattern in PORTFOLIO_PATTERNS:
             if re.search(pattern, query):
                 scores[QueryType.PORTFOLIO_RISK] += 0.8
                 break
-        
+
         # Check comparison patterns
         for pattern in COMPARISON_PATTERNS:
             match = re.search(pattern, query)
             if match:
                 scores[QueryType.SECTOR_COMPARISON] += 0.9
                 break
-        
+
         # Check quick QA patterns (specific metric questions)
         for pattern in QUICK_QA_PATTERNS:
             if re.search(pattern, query):
                 scores[QueryType.QUICK_QA] += 0.85
                 break
-        
+
         # Check macro patterns
         for pattern in MACRO_PATTERNS:
             if re.search(pattern, query):
                 scores[QueryType.MACRO_IMPACT] += 0.7
                 break
-        
+
         # Check if macro indicators mentioned
         if macro_indicators:
             scores[QueryType.MACRO_IMPACT] += 0.3
-        
+
         # Check event patterns
         for pattern in EVENT_PATTERNS:
             match = re.search(pattern, query)
             if match:
                 scores[QueryType.EVENT_DRIVEN] += 0.7
                 break
-        
+
         # Check company deep dive patterns
         for pattern in COMPANY_PATTERNS:
             match = re.search(pattern, query)
             if match:
                 scores[QueryType.COMPANY_DEEP_DIVE] += 0.6
                 break
-        
+
         # Boost company deep dive if symbols found
         if symbols and len(symbols) == 1:
             scores[QueryType.COMPANY_DEEP_DIVE] += 0.2
-        
+
         # Boost comparison if multiple symbols found
         if symbols and len(symbols) >= 2:
             scores[QueryType.SECTOR_COMPARISON] += 0.3
-        
+
         # Determine best match
         best_type = max(scores.keys(), key=lambda k: scores[k])
         best_score = scores[best_type]
-        
+
         # Cap confidence at 1.0
         confidence = min(best_score, 1.0)
-        
+
         return best_type, confidence
-    
+
     def _extract_symbols(self, query: str) -> List[str]:
         """
         Extract stock symbols from query.
@@ -342,20 +342,20 @@ class QueryClassifier:
             List of normalized symbols (6-digit codes)
         """
         symbols = []
-        
+
         # Check Chinese stock names
         for name, code in STOCK_NAME_MAP.items():
             if name in query:
                 if code not in symbols:
                     symbols.append(code)
-        
+
         # Check prefixed codes (sh600519, sz000001)
         prefixed_pattern = r"[sS][hHzZ](\d{6})"
         for match in re.finditer(prefixed_pattern, query):
             code = match.group(1)
             if code not in symbols:
                 symbols.append(code)
-        
+
         # Check plain stock codes (6 digits)
         # Must be preceded/followed by non-digit to avoid false matches
         code_pattern = r"(?<![0-9])(\d{6})(?![0-9])"
@@ -364,9 +364,9 @@ class QueryClassifier:
             # Validate: A-share codes start with 0, 3, 6
             if code[0] in "036" and code not in symbols:
                 symbols.append(code)
-        
+
         return symbols
-    
+
     def _extract_sector(self, query: str) -> Optional[str]:
         """
         Extract sector name from query.
@@ -378,7 +378,7 @@ class QueryClassifier:
             if keyword in query:
                 return sector
         return None
-    
+
     def _extract_macro_indicators(self, query: str) -> List[str]:
         """
         Extract macro economic indicators from query.

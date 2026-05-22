@@ -11,7 +11,7 @@ Currently provides:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Protocol, List, Optional, Dict, Any
+from typing import Protocol, List, Optional, Dict
 
 from .order_status import OrderStatus
 
@@ -37,7 +37,7 @@ class BrokerAdapter(Protocol):
     All broker adapters must implement this Protocol for OMS compatibility.
     This enables future integration with real brokers (IBKR, XTP, etc.)
     """
-    
+
     def submit_order(
         self,
         order_id: str,
@@ -62,7 +62,7 @@ class BrokerAdapter(Protocol):
             ExecutionReport with broker response
         """
         ...
-    
+
     def cancel_order(self, order_id: str, broker_order_id: Optional[str]) -> bool:
         """
         Cancel order at broker.
@@ -75,7 +75,7 @@ class BrokerAdapter(Protocol):
             True if cancellation successful
         """
         ...
-    
+
     def get_order_status(self, broker_order_id: str) -> OrderStatus:
         """
         Query order status from broker.
@@ -87,7 +87,7 @@ class BrokerAdapter(Protocol):
             Current OrderStatus
         """
         ...
-    
+
     def get_execution_reports(self, broker_order_id: str) -> List[ExecutionReport]:
         """
         Get all execution reports for an order.
@@ -99,7 +99,7 @@ class BrokerAdapter(Protocol):
             List of ExecutionReport objects
         """
         ...
-    
+
     def get_market_price(self, symbol: str) -> float:
         """
         Get current market price for a symbol.
@@ -122,7 +122,7 @@ class MockBrokerAdapter:
     - Limit orders: Fill if price matches
     - Stop orders: Convert to market when triggered
     """
-    
+
     def __init__(self, fill_rate: float = 1.0, latency_ms: int = 100):
         self.fill_rate = fill_rate
         self.latency_ms = latency_ms
@@ -133,7 +133,7 @@ class MockBrokerAdapter:
             "sh600036": 35.0,
             "sz000858": 180.0,
         }
-    
+
     def submit_order(
         self,
         order_id: str,
@@ -144,7 +144,7 @@ class MockBrokerAdapter:
         price: Optional[float],
     ) -> ExecutionReport:
         market_price = self.get_market_price(symbol)
-        
+
         if order_type == "market":
             filled_qty = quantity if self.fill_rate >= 1.0 else int(quantity * self.fill_rate)
             return ExecutionReport(
@@ -156,7 +156,7 @@ class MockBrokerAdapter:
                 timestamp=datetime.now().isoformat(),
                 message="Mock market order executed",
             )
-        
+
         elif order_type == "limit":
             if price is None:
                 return ExecutionReport(
@@ -165,10 +165,10 @@ class MockBrokerAdapter:
                     reject_reason="Limit order requires price",
                     timestamp=datetime.now().isoformat(),
                 )
-            
+
             fill_condition = (side == "buy" and price >= market_price) or \
                             (side == "sell" and price <= market_price)
-            
+
             if fill_condition:
                 filled_qty = quantity if self.fill_rate >= 1.0 else int(quantity * self.fill_rate)
                 return ExecutionReport(
@@ -190,7 +190,7 @@ class MockBrokerAdapter:
                     timestamp=datetime.now().isoformat(),
                     message="Mock limit order pending",
                 )
-        
+
         elif order_type == "stop":
             return ExecutionReport(
                 order_id=order_id,
@@ -201,7 +201,7 @@ class MockBrokerAdapter:
                 timestamp=datetime.now().isoformat(),
                 message="Mock stop order pending",
             )
-        
+
         else:
             return ExecutionReport(
                 order_id=order_id,
@@ -209,18 +209,18 @@ class MockBrokerAdapter:
                 reject_reason=f"Unknown order type: {order_type}",
                 timestamp=datetime.now().isoformat(),
             )
-    
+
     def cancel_order(self, order_id: str, broker_order_id: Optional[str]) -> bool:
         return True
-    
+
     def get_order_status(self, broker_order_id: str) -> OrderStatus:
         return OrderStatus.PENDING
-    
+
     def get_execution_reports(self, broker_order_id: str) -> List[ExecutionReport]:
         return []
-    
+
     def get_market_price(self, symbol: str) -> float:
         return self._market_prices.get(symbol, 100.0)
-    
+
     def set_market_price(self, symbol: str, price: float) -> None:
         self._market_prices[symbol] = price

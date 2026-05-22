@@ -8,14 +8,13 @@ Endpoints:
 - GET /api/v1/agentic/tools - List available tools
 - GET /api/v1/agentic/workflow/{id} - Get workflow status
 """
-import asyncio
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel, Field
 
-from app.services.agentic.workflow_engine import get_workflow_engine, Workflow, WorkflowStatus
+from app.services.agentic.workflow_engine import get_workflow_engine, WorkflowStatus
 from app.services.agentic.tool_registry import get_tool_registry
 from app.utils.errors import success_response, error_response
 from app.utils.error_decorator import handle_errors
@@ -49,7 +48,7 @@ async def list_tools():
     """
     registry = get_tool_registry()
     tools = registry.list_tools()
-    
+
     return success_response({
         "tools": [t.to_dict() for t in tools],
         "count": len(tools)
@@ -73,11 +72,11 @@ async def create_workflow(
     """
     if not request.query or not request.query.strip():
         return error_response("Query cannot be empty", code=400)
-    
+
     engine = get_workflow_engine()
-    
+
     workflow = engine.plan_workflow(request.query.strip())
-    
+
     if request.execute:
         async def run_workflow():
             try:
@@ -86,9 +85,9 @@ async def create_workflow(
                 logger.error(f"[Agentic] Workflow {workflow.id} failed: {e}", exc_info=True)
                 workflow.status = WorkflowStatus.FAILED
                 workflow.result = f"执行失败: {str(e)}"
-        
+
         background_tasks.add_task(run_workflow)
-        
+
         return success_response({
             "workflow_id": workflow.id,
             "status": "running",
@@ -119,10 +118,10 @@ async def get_workflow_status(workflow_id: str):
     """
     engine = get_workflow_engine()
     workflow = engine.get_workflow(workflow_id)
-    
+
     if not workflow:
         return error_response(f"Workflow not found: {workflow_id}", code=404)
-    
+
     return success_response(workflow.to_dict())
 
 
@@ -143,13 +142,13 @@ async def execute_workflow(
     """
     engine = get_workflow_engine()
     workflow = engine.get_workflow(workflow_id)
-    
+
     if not workflow:
         return error_response(f"Workflow not found: {workflow_id}", code=404)
-    
+
     if workflow.status != WorkflowStatus.PENDING:
         return error_response(f"Workflow already {workflow.status.value}", code=400)
-    
+
     async def run_workflow():
         try:
             await engine.execute_workflow(workflow)
@@ -157,9 +156,9 @@ async def execute_workflow(
             logger.error(f"[Agentic] Workflow {workflow_id} failed: {e}", exc_info=True)
             workflow.status = WorkflowStatus.FAILED
             workflow.result = f"执行失败: {str(e)}"
-    
+
     background_tasks.add_task(run_workflow)
-    
+
     return success_response({
         "workflow_id": workflow_id,
         "status": "running",
@@ -181,7 +180,7 @@ async def list_workflows(limit: int = 20):
     """
     engine = get_workflow_engine()
     workflows = engine.list_workflows(limit=limit)
-    
+
     return success_response({
         "workflows": [w.to_dict() for w in workflows],
         "count": len(workflows)
@@ -194,7 +193,7 @@ async def health_check():
     """Health check endpoint"""
     registry = get_tool_registry()
     engine = get_workflow_engine()
-    
+
     return success_response({
         "status": "healthy",
         "tools_count": len(registry.list_tools()),

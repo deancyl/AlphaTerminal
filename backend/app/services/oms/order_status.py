@@ -22,7 +22,7 @@ from typing import Dict, List, Set
 
 class OrderStatus(Enum):
     """Order lifecycle states with clear semantics."""
-    
+
     STAGED = "staged"
     SUBMITTED = "submitted"
     VALIDATED = "validated"

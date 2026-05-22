@@ -4,8 +4,7 @@ Tests the retry functionality for macro data fetch failures.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-import asyncio
+from unittest.mock import patch
 
 
 class TestMacroRetryMechanism:
@@ -14,7 +13,7 @@ class TestMacroRetryMechanism:
     @pytest.mark.asyncio
     async def test_retry_on_failure(self):
         """Test that retry is triggered on fetch failure."""
-        from app.routers.market.overview import _get_macro_data, _MACRO_CACHE_TTL
+        from app.routers.market.overview import _MACRO_CACHE_TTL
 
         # Verify cache TTL is 60 seconds
         assert _MACRO_CACHE_TTL == 60, f"Expected TTL 60, got {_MACRO_CACHE_TTL}"

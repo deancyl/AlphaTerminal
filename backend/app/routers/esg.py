@@ -4,7 +4,6 @@ ESG评价体系 API
 功能: ESG评级查询、碳排放数据、ESG趋势分析
 """
 import logging
-from datetime import datetime, timedelta
 from fastapi import APIRouter, Query
 from typing import Optional, List
 from pydantic import BaseModel
@@ -63,11 +62,11 @@ async def get_esg_rating(symbol: str):
     cached = _get_cache(cache_key)
     if cached:
         return success_response(cached)
-    
+
     try:
         ak = _get_ak()
         ratings = []
-        
+
         # 华证ESG评级
         try:
             df_hz = ak.stock_esg_hz_sina()
@@ -88,7 +87,7 @@ async def get_esg_rating(symbol: str):
                     })
         except Exception as e:
             logger.warning(f"华证ESG数据获取失败: {e}", exc_info=True)
-        
+
         # MSCI ESG评级
         try:
             df_msci = ak.stock_esg_msci_sina(symbol=symbol)
@@ -104,7 +103,7 @@ async def get_esg_rating(symbol: str):
                     })
         except Exception as e:
             logger.warning(f"MSCI ESG数据获取失败: {e}", exc_info=True)
-        
+
         # 新浪ESG评级汇总
         try:
             df_rate = ak.stock_esg_rate_sina(symbol=symbol)
@@ -120,11 +119,11 @@ async def get_esg_rating(symbol: str):
                     })
         except Exception as e:
             logger.warning(f"新浪ESG数据获取失败: {e}", exc_info=True)
-        
+
         result = {"ratings": ratings, "total": len(ratings)}
         _set_cache(cache_key, result)
         return success_response(result)
-        
+
     except Exception as e:
         logger.error(f"获取ESG评级失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG评级失败: {str(e)}")
@@ -141,11 +140,11 @@ async def get_carbon_data():
     cached = _get_cache(cache_key)
     if cached:
         return success_response(cached)
-    
+
     try:
         ak = _get_ak()
         carbon_data = []
-        
+
         # 北京碳交易
         try:
             df_bj = ak.energy_carbon_bj()
@@ -159,7 +158,7 @@ async def get_carbon_data():
                 })
         except Exception as e:
             logger.warning(f"北京碳交易数据获取失败: {e}", exc_info=True)
-        
+
         # 国内碳交易
         try:
             df_domestic = ak.energy_carbon_domestic()
@@ -173,11 +172,11 @@ async def get_carbon_data():
                     })
         except Exception as e:
             logger.warning(f"国内碳交易数据获取失败: {e}", exc_info=True)
-        
+
         result = {"carbon_data": carbon_data, "total": len(carbon_data)}
         _set_cache(cache_key, result)
         return success_response(result)
-        
+
     except Exception as e:
         logger.error(f"获取碳排放数据失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取碳排放数据失败: {str(e)}")
@@ -196,14 +195,14 @@ async def get_esg_rank(
     cached = _get_cache(cache_key)
     if cached:
         return success_response(cached)
-    
+
     try:
         ak = _get_ak()
         df = ak.stock_esg_zd_sina()
-        
+
         if df is None or df.empty:
             return success_response({"items": [], "total": 0})
-        
+
         items = []
         for _, row in df.head(limit).iterrows():
             items.append({
@@ -213,11 +212,11 @@ async def get_esg_rank(
                 "score": float(row.get("ESG得分", 0)) if row.get("ESG得分") else None,
                 "date": str(row.get("评级日期", "")),
             })
-        
+
         result = {"items": items, "total": len(items)}
         _set_cache(cache_key, result)
         return success_response(result)
-        
+
     except Exception as e:
         logger.error(f"获取ESG排名失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG排名失败: {str(e)}")

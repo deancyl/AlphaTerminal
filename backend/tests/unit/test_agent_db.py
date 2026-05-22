@@ -11,7 +11,6 @@ Tests cover:
 """
 
 import os
-import tempfile
 import uuid
 import sqlite3
 from datetime import datetime, timedelta
@@ -543,7 +542,6 @@ class TestDatabaseIndexes:
 
     def test_indexes_exist(self, agent_db):
         """Test that indexes are created."""
-        import sqlite3
 
         from app.db.agent_db import _get_thread_conn
 

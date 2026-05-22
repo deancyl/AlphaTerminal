@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Optional, Callable, Any, Type
+from typing import Optional
 
 import httpx
 
@@ -66,7 +66,7 @@ async def get_shared_client() -> httpx.AsyncClient:
     Thread-safe via asyncio.Lock.
     """
     global _shared_client
-    
+
     if _shared_client is None or _shared_client.is_closed:
         async with _client_lock:
             if _shared_client is None or _shared_client.is_closed:
@@ -88,14 +88,14 @@ async def get_shared_client() -> httpx.AsyncClient:
                     f"[HTTPClient] Created shared client "
                     f"(max_conn={MAX_CONNECTIONS}, keepalive={MAX_KEEPALIVE_CONNECTIONS})"
                 )
-    
+
     return _shared_client
 
 
 async def close_shared_client():
     """Close the shared AsyncClient instance."""
     global _shared_client
-    
+
     if _shared_client is not None:
         async with _client_lock:
             if _shared_client is not None:

@@ -171,15 +171,15 @@ async def validate_strategy_code(request: CodeValidateRequest):
     """
     try:
         from app.services.strategy.ast_validator import get_security_report
-        
+
         report = get_security_report(request.code)
-        
+
         security_score = 100
         if report.violations:
             security_score = max(0, 100 - len(report.violations) * 20)
         if report.warnings:
             security_score = max(0, security_score - len(report.warnings) * 5)
-        
+
         return CodeValidateResponse(
             is_valid=report.is_valid,
             errors=[str(v) for v in report.violations],
@@ -208,29 +208,29 @@ def _generate_python_code(ast: StrategyAST) -> str:
     - Volume Surge (成交量异动)
     """
     lines = []
-    
+
     # Header annotations
     lines.append(f"# @name {ast.name}")
     if ast.description:
         lines.append(f"# @description {ast.description}")
-    
+
     # Risk management
     if ast.riskManagement:
         stop_loss = ast.riskManagement.get('stopLossPct', 2.0)
         take_profit = ast.riskManagement.get('takeProfitPct', 6.0)
         lines.append(f"# @strategy stopLossPct {stop_loss}")
         lines.append(f"# @strategy takeProfitPct {take_profit}")
-    
+
     lines.append("")
-    
+
     # Generate indicator calculations and signals
     buy_signals = []
     sell_signals = []
     indicators = {}
-    
+
     for idx, condition in enumerate(ast.conditions):
         cond_var = f"cond_{idx}"
-        
+
         if condition.indicator == "MA":
             # MA Cross strategy
             fast = condition.params.get('fast_period', 5)
@@ -239,14 +239,14 @@ def _generate_python_code(ast: StrategyAST) -> str:
             lines.append(f"ma_slow_{idx} = df['close'].rolling({slow}).mean()")
             indicators[f'ma_fast_{idx}'] = f'ma_fast_{idx}'
             indicators[f'ma_slow_{idx}'] = f'ma_slow_{idx}'
-            
+
             if condition.direction == 'cross_above':
                 lines.append(f"{cond_var} = (ma_fast_{idx} > ma_slow_{idx}) & (ma_fast_{idx}.shift(1) <= ma_slow_{idx}.shift(1))")
                 buy_signals.append(cond_var)
             elif condition.direction == 'cross_below':
                 lines.append(f"{cond_var} = (ma_fast_{idx} < ma_slow_{idx}) & (ma_fast_{idx}.shift(1) >= ma_slow_{idx}.shift(1))")
                 sell_signals.append(cond_var)
-        
+
         elif condition.indicator == "MACD":
             # MACD Cross strategy
             fast = condition.params.get('fast_period', 12)
@@ -260,14 +260,14 @@ def _generate_python_code(ast: StrategyAST) -> str:
             indicators[f'dif_{idx}'] = f'dif_{idx}'
             indicators[f'dea_{idx}'] = f'dea_{idx}'
             indicators[f'histogram_{idx}'] = f'histogram_{idx}'
-            
+
             if condition.direction == 'cross_above':
                 lines.append(f"{cond_var} = (dif_{idx} > dea_{idx}) & (dif_{idx}.shift(1) <= dea_{idx}.shift(1))")
                 buy_signals.append(cond_var)
             elif condition.direction == 'cross_below':
                 lines.append(f"{cond_var} = (dif_{idx} < dea_{idx}) & (dif_{idx}.shift(1) >= dea_{idx}.shift(1))")
                 sell_signals.append(cond_var)
-        
+
         elif condition.indicator == "RSI":
             # RSI strategy
             period = condition.params.get('period', 14)
@@ -280,7 +280,7 @@ def _generate_python_code(ast: StrategyAST) -> str:
             lines.append(f"rs_{idx} = avg_gain_{idx} / avg_loss_{idx}")
             lines.append(f"rsi_{idx} = 100 - (100 / (1 + rs_{idx}))")
             indicators[f'rsi_{idx}'] = f'rsi_{idx}'
-            
+
             if condition.direction == 'below':
                 # RSI < threshold (oversold)
                 lines.append(f"{cond_var} = rsi_{idx} < {threshold}")
@@ -289,7 +289,7 @@ def _generate_python_code(ast: StrategyAST) -> str:
                 # RSI > threshold (overbought)
                 lines.append(f"{cond_var} = rsi_{idx} > {threshold}")
                 sell_signals.append(cond_var)
-        
+
         elif condition.indicator == "BOLL":
             # Bollinger Bands strategy
             period = condition.params.get('period', 20)
@@ -302,7 +302,7 @@ def _generate_python_code(ast: StrategyAST) -> str:
             indicators[f'upper_{idx}'] = f'upper_{idx}'
             indicators[f'middle_{idx}'] = f'middle_{idx}'
             indicators[f'lower_{idx}'] = f'lower_{idx}'
-            
+
             if band == 'lower':
                 # Price breaks lower band
                 lines.append(f"{cond_var} = (df['close'] < lower_{idx}) & (df['close'].shift(1) >= lower_{idx}.shift(1))")
@@ -311,7 +311,7 @@ def _generate_python_code(ast: StrategyAST) -> str:
                 # Price breaks upper band
                 lines.append(f"{cond_var} = (df['close'] > upper_{idx}) & (df['close'].shift(1) <= upper_{idx}.shift(1))")
                 sell_signals.append(cond_var)
-        
+
         elif condition.indicator == "VOLUME":
             # Volume surge strategy
             period = condition.params.get('period', 20)
@@ -320,20 +320,20 @@ def _generate_python_code(ast: StrategyAST) -> str:
             lines.append(f"{cond_var} = df['volume'] > avg_vol_{idx} * {multiplier}")
             indicators[f'avg_vol_{idx}'] = f'avg_vol_{idx}'
             buy_signals.append(cond_var)
-    
+
     lines.append("")
-    
+
     # Combine signals
     if buy_signals:
         lines.append(f"buy = {' | '.join(buy_signals)}")
     else:
         lines.append("buy = pd.Series(False, index=df.index)")
-    
+
     if sell_signals:
         lines.append(f"sell = {' | '.join(sell_signals)}")
     else:
         lines.append("sell = pd.Series(False, index=df.index)")
-    
+
     # Output
     lines.append("")
     lines.append("output = {")
@@ -341,7 +341,7 @@ def _generate_python_code(ast: StrategyAST) -> str:
     lines.append(f"    'indicators': {{{indicators_str}}},")
     lines.append("    'signals': {'buy': buy, 'sell': sell}")
     lines.append("}")
-    
+
     return "\n".join(lines)
 
 
@@ -363,7 +363,7 @@ async def compile_strategy(request: CompileRequest):
     """
     try:
         ast = request.ast
-        
+
         # Validate AST
         if not ast.conditions:
             return {
@@ -374,14 +374,14 @@ async def compile_strategy(request: CompileRequest):
                     "errors": ["至少需要一个策略条件"],
                 }
             }
-        
+
         # Generate Python code
         python_code = _generate_python_code(ast)
-        
+
         # Validate generated code
         from app.services.strategy import StrategyValidator
         is_valid, error = StrategyValidator.validate(python_code)
-        
+
         if not is_valid:
             return {
                 "code": 0,
@@ -391,7 +391,7 @@ async def compile_strategy(request: CompileRequest):
                     "errors": [f"生成的代码验证失败: {error}"],
                 }
             }
-        
+
         return {
             "code": 0,
             "data": {
@@ -667,13 +667,13 @@ async def list_strategies():
 async def create_strategy(request: StrategyCreate, _: None = Depends(require_api_key)):
     """创建新策略"""
     from app.services.strategy import StrategyValidator
-    
+
     is_valid, error = StrategyValidator.validate(request.code)
     if not is_valid:
         raise HTTPException(status_code=400, detail=f"策略代码验证失败: {error}")
-    
+
     strategy_id = str(uuid.uuid4())
-    
+
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import create_strategy as db_create
         try:
@@ -703,7 +703,7 @@ async def create_strategy(request: StrategyCreate, _: None = Depends(require_api
             "created_at": now,
             "updated_at": now,
         }
-    
+
     return {
         "code": 0,
         "message": "策略创建成功",
@@ -732,14 +732,14 @@ async def get_strategy(strategy_id: str):
 async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = Depends(require_api_key)):
     """更新策略"""
     if USE_DB_PERSISTENCE:
-        from app.db.strategy_db import update_strategy as db_update, get_strategy as db_get
-        
+        from app.db.strategy_db import update_strategy as db_update
+
         if request.code is not None:
             from app.services.strategy import StrategyValidator
             is_valid, error = StrategyValidator.validate(request.code)
             if not is_valid:
                 raise HTTPException(status_code=400, detail=f"策略代码验证失败: {error}")
-        
+
         updated = db_update(
             strategy_id=strategy_id,
             name=request.name,
@@ -750,10 +750,10 @@ async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = D
             stop_loss_pct=request.stop_loss_pct,
             take_profit_pct=request.take_profit_pct,
         )
-        
+
         if updated is None:
             raise HTTPException(status_code=404, detail="策略不存在")
-        
+
         return {
             "code": 0,
             "message": "策略更新成功",
@@ -762,9 +762,9 @@ async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = D
     else:
         if strategy_id not in _strategies_db:
             raise HTTPException(status_code=404, detail="策略不存在")
-        
+
         data = _strategies_db[strategy_id]
-        
+
         if request.name is not None:
             data["name"] = request.name
         if request.description is not None:
@@ -783,9 +783,9 @@ async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = D
             data["stop_loss_pct"] = request.stop_loss_pct
         if request.take_profit_pct is not None:
             data["take_profit_pct"] = request.take_profit_pct
-        
+
         data["updated_at"] = datetime.now().isoformat()
-        
+
         return {
             "code": 0,
             "message": "策略更新成功",
@@ -806,7 +806,7 @@ async def delete_strategy(strategy_id: str, _: None = Depends(require_api_key)):
         if strategy_id not in _strategies_db:
             raise HTTPException(status_code=404, detail="策略不存在")
         del _strategies_db[strategy_id]
-    
+
     return {
         "code": 0,
         "message": "策略删除成功"

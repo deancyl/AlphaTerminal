@@ -20,7 +20,6 @@ import tempfile
 import os
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
-import pandas as pd
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -515,8 +514,6 @@ class TestStrategyCRUDEndpoints:
 
     def test_update_strategy_success(self, temp_strategy_db, sample_strategy_code, mock_api_key):
         """Test update strategy returns success."""
-        from app.db import strategy_db
-        from app.db import database
 
         strategy_id = "test-id-456"
 

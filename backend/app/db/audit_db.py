@@ -40,7 +40,7 @@ def init_audit_table():
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_logs(resource)")
-            
+
             # Add hash chain columns to existing tables (safe migration)
             for col, dtype, default in [
                 ("prev_hash", "TEXT", "NOT NULL DEFAULT ''"),
@@ -51,10 +51,10 @@ def init_audit_table():
                     conn.execute(f"ALTER TABLE audit_logs ADD COLUMN {col} {dtype} {default}")
                 except sqlite3.OperationalError:
                     pass  # Column already exists
-            
+
             # Create index after migration (in case column was just added)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_chain_index ON audit_logs(chain_index)")
-            
+
             conn.commit()
         finally:
             conn.close()
@@ -84,7 +84,7 @@ def log_audit(
     """
     now = datetime.now().isoformat()
     details_str = json.dumps(details, ensure_ascii=False) if details else None
-    
+
     with _lock:
         conn = _get_conn()
         try:
@@ -134,12 +134,12 @@ def get_audit_logs_keyset(
     try:
         conditions = []
         params = []
-        
+
         # Keyset pagination: get records BEFORE the cursor
         if after_timestamp and after_id is not None:
             conditions.append("(timestamp < ? OR (timestamp = ? AND id < ?))")
             params.extend([after_timestamp, after_timestamp, after_id])
-        
+
         # Regular filters
         if agent_id:
             conditions.append("agent_id = ?")
@@ -156,9 +156,9 @@ def get_audit_logs_keyset(
         if end_time:
             conditions.append("timestamp <= ?")
             params.append(end_time.isoformat())
-        
+
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
+
         # Keyset pagination: ORDER BY timestamp DESC, id DESC for stable ordering
         query = f"""
             SELECT * FROM audit_logs
@@ -167,7 +167,7 @@ def get_audit_logs_keyset(
             LIMIT ?
         """
         params.append(limit)
-        
+
         rows = conn.execute(query, params).fetchall()
         return [_row_to_dict(row) for row in rows]
     except Exception as e:
@@ -205,7 +205,7 @@ def get_audit_logs(
     try:
         conditions = []
         params = []
-        
+
         if agent_id:
             conditions.append("agent_id = ?")
             params.append(agent_id)
@@ -221,9 +221,9 @@ def get_audit_logs(
         if end_time:
             conditions.append("timestamp <= ?")
             params.append(end_time.isoformat())
-        
+
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
+
         query = f"""
             SELECT * FROM audit_logs
             WHERE {where_clause}
@@ -231,7 +231,7 @@ def get_audit_logs(
             LIMIT ? OFFSET ?
         """
         params.extend([limit, offset])
-        
+
         rows = conn.execute(query, params).fetchall()
         return [_row_to_dict(row) for row in rows]
     except Exception as e:
@@ -252,7 +252,7 @@ def count_audit_logs(
     try:
         conditions = []
         params = []
-        
+
         if agent_id:
             conditions.append("agent_id = ?")
             params.append(agent_id)
@@ -265,12 +265,12 @@ def count_audit_logs(
         if end_time:
             conditions.append("timestamp <= ?")
             params.append(end_time.isoformat())
-        
+
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
+
         query = f"SELECT COUNT(*) as cnt FROM audit_logs WHERE {where_clause}"
         row = conn.execute(query, params).fetchone()
-        
+
         return row["cnt"] if row else 0
     except Exception as e:
         logger.error(f"[AuditDB] Count failed: {e}", exc_info=True)
@@ -287,7 +287,7 @@ def delete_old_logs(days: int = 2555) -> int:
             cutoff = datetime.now()
             from datetime import timedelta
             cutoff_str = (cutoff - timedelta(days=days)).isoformat()
-            
+
             cursor = conn.execute(
                 "DELETE FROM audit_logs WHERE timestamp < ?",
                 (cutoff_str,)
@@ -311,7 +311,7 @@ def get_agent_activity_summary(agent_id: str, days: int = 7) -> Dict:
         cutoff = datetime.now()
         from datetime import timedelta
         cutoff_str = (cutoff - timedelta(days=days)).isoformat()
-        
+
         rows = conn.execute("""
             SELECT action, COUNT(*) as cnt
             FROM audit_logs
@@ -319,13 +319,13 @@ def get_agent_activity_summary(agent_id: str, days: int = 7) -> Dict:
             GROUP BY action
             ORDER BY cnt DESC
         """, (agent_id, cutoff_str)).fetchall()
-        
+
         total = conn.execute("""
             SELECT COUNT(*) as cnt
             FROM audit_logs
             WHERE agent_id = ? AND timestamp >= ?
         """, (agent_id, cutoff_str)).fetchone()
-        
+
         return {
             "agent_id": agent_id,
             "period_days": days,
@@ -342,11 +342,11 @@ def get_agent_activity_summary(agent_id: str, days: int = 7) -> Dict:
 def _row_to_dict(row: sqlite3.Row) -> Dict:
     """Convert sqlite3.Row to dict with JSON parsing"""
     result = dict(row)
-    
+
     if result.get("details"):
         try:
             result["details"] = json.loads(result["details"])
         except (json.JSONDecodeError, TypeError) as e:
             logger.warning(f"[AUDIT_DB] Failed to parse details JSON: {type(e).__name__}: {e}", exc_info=True)
-    
+
     return result

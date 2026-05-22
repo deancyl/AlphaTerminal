@@ -11,7 +11,6 @@ Timeout Behavior:
 import asyncio
 import logging
 import threading
-import time
 from datetime import datetime
 from fastapi import APIRouter
 import akshare as ak
@@ -123,7 +122,7 @@ _MOCK_COV_COMPARE = [
 async def _fetch_cov_list_async():
     """Async version with cross-platform timeout using asyncio.wait_for"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
+
     if not _CB_CIRCUIT_BREAKER.is_available():
         logger.warning("[ConvertibleBond] Circuit breaker OPEN, using mock fallback")
         cache_data = {
@@ -135,16 +134,16 @@ async def _fetch_cov_list_async():
         }
         _cache.set(f"{NAMESPACE}list", cache_data, ttl=TTL)
         return
-    
+
     try:
         import warnings
         warnings.filterwarnings("ignore")
-        
+
         df = await asyncio.wait_for(
             asyncio.to_thread(ak.bond_zh_cov),
             timeout=float(BOND_REFRESH_TIMEOUT)
         )
-        
+
         if df is not None and not df.empty:
             bonds = []
             for _, row in df.iterrows():
@@ -167,7 +166,7 @@ async def _fetch_cov_list_async():
                 except Exception as e:
                     logger.debug(f"[ConvertibleBond] parse row error: {e}")
                     continue
-            
+
             cache_data = {
                 "bonds": bonds,
                 "total": len(bonds),
@@ -185,7 +184,7 @@ async def _fetch_cov_list_async():
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_zh_cov failed: {type(e).__name__}: {e}", exc_info=True)
         _CB_CIRCUIT_BREAKER.record_failure()
-    
+
     cache_data = {
         "bonds": _MOCK_COV_LIST,
         "total": len(_MOCK_COV_LIST),
@@ -200,7 +199,7 @@ async def _fetch_cov_list_async():
 async def _fetch_cov_spot_async():
     """Async version with cross-platform timeout using asyncio.wait_for"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
+
     if not _CB_CIRCUIT_BREAKER.is_available():
         logger.warning("[ConvertibleBond] Circuit breaker OPEN for spot, using mock fallback")
         cache_data = {
@@ -212,16 +211,16 @@ async def _fetch_cov_spot_async():
         }
         _cache.set(f"{NAMESPACE}spot", cache_data, ttl=TTL)
         return
-    
+
     try:
         import warnings
         warnings.filterwarnings("ignore")
-        
+
         df = await asyncio.wait_for(
             asyncio.to_thread(ak.bond_zh_hs_cov_spot),
             timeout=float(BOND_REFRESH_TIMEOUT)
         )
-        
+
         if df is not None and not df.empty:
             spots = []
             for _, row in df.iterrows():
@@ -241,7 +240,7 @@ async def _fetch_cov_spot_async():
                 except Exception as e:
                     logger.debug(f"[ConvertibleBond] parse spot row error: {e}")
                     continue
-            
+
             cache_data = {
                 "spots": spots,
                 "total": len(spots),
@@ -259,7 +258,7 @@ async def _fetch_cov_spot_async():
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot failed: {type(e).__name__}: {e}", exc_info=True)
         _CB_CIRCUIT_BREAKER.record_failure()
-    
+
     cache_data = {
         "spots": _MOCK_COV_SPOT,
         "total": len(_MOCK_COV_SPOT),
@@ -274,7 +273,7 @@ async def _fetch_cov_spot_async():
 async def _fetch_cov_compare_async():
     """Async version with cross-platform timeout using asyncio.wait_for"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
+
     if not _CB_CIRCUIT_BREAKER.is_available():
         logger.warning("[ConvertibleBond] Circuit breaker OPEN for compare, using mock fallback")
         cache_data = {
@@ -286,16 +285,16 @@ async def _fetch_cov_compare_async():
         }
         _cache.set(f"{NAMESPACE}compare", cache_data, ttl=TTL)
         return
-    
+
     try:
         import warnings
         warnings.filterwarnings("ignore")
-        
+
         df = await asyncio.wait_for(
             asyncio.to_thread(ak.bond_cov_comparison),
             timeout=float(BOND_REFRESH_TIMEOUT)
         )
-        
+
         if df is not None and not df.empty:
             compares = []
             for _, row in df.iterrows():
@@ -317,7 +316,7 @@ async def _fetch_cov_compare_async():
                 except Exception as e:
                     logger.debug(f"[ConvertibleBond] parse compare row error: {e}")
                     continue
-            
+
             cache_data = {
                 "compares": compares,
                 "total": len(compares),
@@ -335,7 +334,7 @@ async def _fetch_cov_compare_async():
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_cov_comparison failed: {type(e).__name__}: {e}", exc_info=True)
         _CB_CIRCUIT_BREAKER.record_failure()
-    
+
     cache_data = {
         "compares": _MOCK_COV_COMPARE,
         "total": len(_MOCK_COV_COMPARE),
@@ -512,12 +511,12 @@ async def convertible_bond_value(symbol: str):
     try:
         import warnings
         warnings.filterwarnings("ignore")
-        
+
         df = await asyncio.wait_for(
             asyncio.to_thread(ak.bond_zh_cov_value_analysis, symbol=symbol),
             timeout=BOND_REFRESH_TIMEOUT
         )
-        
+
         if df is not None and not df.empty:
             values = []
             for _, row in df.iterrows():
@@ -534,7 +533,7 @@ async def convertible_bond_value(symbol: str):
                 except Exception as e:
                     logger.debug(f"[ConvertibleBond] parse value row error: {e}")
                     continue
-            
+
             return success_response({
                 "symbol": symbol,
                 "values": values,
@@ -561,28 +560,28 @@ async def convertible_bond_value(symbol: str):
 def _init_mock_cache():
     """同步填充 Mock 数据，保证 API 启动后立即可用"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
+
     _cache.set(f"{NAMESPACE}list", {
         "bonds": _MOCK_COV_LIST,
         "total": len(_MOCK_COV_LIST),
         "update_time": now_str,
         "source": "mock",
     }, ttl=TTL)
-    
+
     _cache.set(f"{NAMESPACE}spot", {
         "spots": _MOCK_COV_SPOT,
         "total": len(_MOCK_COV_SPOT),
         "update_time": now_str,
         "source": "mock",
     }, ttl=TTL)
-    
+
     _cache.set(f"{NAMESPACE}compare", {
         "compares": _MOCK_COV_COMPARE,
         "total": len(_MOCK_COV_COMPARE),
         "update_time": now_str,
         "source": "mock",
     }, ttl=TTL)
-    
+
     logger.info("[ConvertibleBond] Mock data initialized")
 
 _init_mock_cache()

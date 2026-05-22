@@ -33,11 +33,10 @@ Version: 0.6.35
 import asyncio
 import logging
 import threading
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +61,7 @@ class ExecutorInfo:
     last_activity: Optional[datetime] = None
     error_message: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
@@ -88,27 +87,27 @@ class ExecutorManager:
     
     Thread-safe singleton implementation.
     """
-    
+
     _instance = None
     _lock = threading.Lock()
-    
+
     def __new__(cls):
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         if hasattr(self, '_initialized') and self._initialized:
             return
-        
+
         self._executors: Dict[str, ExecutorInfo] = {}
         self._shutdown_timeout = 30.0  # seconds
         self._initialized = True
-        
+
         logger.info("[ExecutorManager] Initialized")
-    
+
     def register(
         self,
         name: str,
@@ -131,11 +130,11 @@ class ExecutorManager:
         if name in self._executors:
             logger.warning(f"[ExecutorManager] Executor '{name}' already registered")
             return False
-        
+
         # Auto-detect shutdown method
         if shutdown_method is None:
             shutdown_method = self._detect_shutdown_method(executor)
-        
+
         executor_info = ExecutorInfo(
             name=name,
             status=ExecutorStatus.IDLE,
@@ -144,13 +143,13 @@ class ExecutorManager:
             shutdown_method=shutdown_method,
             metadata=metadata or {},
         )
-        
+
         self._executors[name] = executor_info
-        
+
         logger.info(f"[ExecutorManager] Registered executor: {name} (shutdown: {shutdown_method})")
-        
+
         return True
-    
+
     def unregister(self, name: str) -> bool:
         """
         Unregister an executor (does not shutdown).
@@ -164,11 +163,11 @@ class ExecutorManager:
         if name not in self._executors:
             logger.warning(f"[ExecutorManager] Executor '{name}' not found")
             return False
-        
+
         del self._executors[name]
         logger.info(f"[ExecutorManager] Unregistered executor: {name}")
         return True
-    
+
     def get(self, name: str) -> Optional[Any]:
         """
         Get executor instance by name.
@@ -181,7 +180,7 @@ class ExecutorManager:
         """
         executor_info = self._executors.get(name)
         return executor_info.instance if executor_info else None
-    
+
     def get_info(self, name: str) -> Optional[ExecutorInfo]:
         """
         Get executor info by name.
@@ -193,7 +192,7 @@ class ExecutorManager:
             ExecutorInfo or None if not found
         """
         return self._executors.get(name)
-    
+
     def update_status(self, name: str, status: ExecutorStatus, error_message: Optional[str] = None):
         """
         Update executor status.
@@ -206,16 +205,16 @@ class ExecutorManager:
         if name not in self._executors:
             logger.warning(f"[ExecutorManager] Cannot update status: executor '{name}' not found")
             return
-        
+
         executor_info = self._executors[name]
         executor_info.status = status
         executor_info.last_activity = datetime.now()
-        
+
         if error_message:
             executor_info.error_message = error_message
-        
+
         logger.debug(f"[ExecutorManager] Updated status for '{name}': {status.value}")
-    
+
     def get_status(self) -> Dict[str, Any]:
         """
         Get status of all executors.
@@ -227,13 +226,13 @@ class ExecutorManager:
             name: info.to_dict()
             for name, info in self._executors.items()
         }
-        
+
         return {
             "total_executors": len(self._executors),
             "executors": executors_status,
             "shutdown_timeout": self._shutdown_timeout,
         }
-    
+
     async def shutdown_executor(self, name: str, timeout: Optional[float] = None) -> bool:
         """
         Shutdown a specific executor.
@@ -248,25 +247,25 @@ class ExecutorManager:
         if name not in self._executors:
             logger.warning(f"[ExecutorManager] Cannot shutdown: executor '{name}' not found")
             return False
-        
+
         executor_info = self._executors[name]
-        
+
         if executor_info.status == ExecutorStatus.STOPPED:
             logger.info(f"[ExecutorManager] Executor '{name}' already stopped")
             return True
-        
+
         executor_info.status = ExecutorStatus.STOPPING
         timeout = timeout or self._shutdown_timeout
-        
+
         logger.info(f"[ExecutorManager] Shutting down executor: {name} (timeout: {timeout}s)")
-        
+
         try:
             instance = executor_info.instance
             shutdown_method = executor_info.shutdown_method
-            
+
             if shutdown_method and hasattr(instance, shutdown_method):
                 method = getattr(instance, shutdown_method)
-                
+
                 # Check if method is async
                 if asyncio.iscoroutinefunction(method):
                     await asyncio.wait_for(method(), timeout=timeout)
@@ -274,27 +273,27 @@ class ExecutorManager:
                     # Run sync method in executor
                     loop = asyncio.get_event_loop()
                     await loop.run_in_executor(None, method)
-            
+
             executor_info.status = ExecutorStatus.STOPPED
             executor_info.last_activity = datetime.now()
-            
+
             logger.info(f"[ExecutorManager] Executor '{name}' shutdown successfully")
             return True
-            
+
         except asyncio.TimeoutError:
             error_msg = f"Shutdown timeout after {timeout}s"
             executor_info.status = ExecutorStatus.ERROR
             executor_info.error_message = error_msg
             logger.error(f"[ExecutorManager] {error_msg} for executor '{name}'", exc_info=True)
             return False
-            
+
         except Exception as e:
             error_msg = f"Shutdown error: {str(e)}"
             executor_info.status = ExecutorStatus.ERROR
             executor_info.error_message = error_msg
             logger.error(f"[ExecutorManager] {error_msg} for executor '{name}'", exc_info=True)
             return False
-    
+
     async def shutdown_all(self, timeout: Optional[float] = None) -> Dict[str, bool]:
         """
         Shutdown all registered executors.
@@ -306,24 +305,24 @@ class ExecutorManager:
             Dict mapping executor names to shutdown success status
         """
         logger.info(f"[ExecutorManager] Shutting down all executors ({len(self._executors)} total)")
-        
+
         results = {}
-        
+
         # Shutdown in reverse order of registration (LIFO)
         executor_names = list(self._executors.keys())[::-1]
-        
+
         for name in executor_names:
             success = await self.shutdown_executor(name, timeout=timeout)
             results[name] = success
-        
+
         # Summary
         successful = sum(1 for v in results.values() if v)
         total = len(results)
-        
+
         logger.info(f"[ExecutorManager] Shutdown complete: {successful}/{total} successful")
-        
+
         return results
-    
+
     def _detect_shutdown_method(self, executor: Any) -> Optional[str]:
         """
         Auto-detect shutdown method for an executor.
@@ -343,13 +342,13 @@ class ExecutorManager:
             "destroy",
             "teardown",
         ]
-        
+
         for method_name in shutdown_methods:
             if hasattr(executor, method_name):
                 return method_name
-        
+
         return None
-    
+
     def set_shutdown_timeout(self, timeout: float):
         """
         Set default shutdown timeout.

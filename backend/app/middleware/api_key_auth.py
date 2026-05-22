@@ -12,7 +12,6 @@ Usage:
     async def sensitive_endpoint(_: None = Depends(require_api_key)):
         ...
 """
-import os
 import logging
 from typing import Optional
 
@@ -53,11 +52,11 @@ async def require_api_key(
         HTTPException: 401 if missing/invalid API key
     """
     api_key = _get_api_key()
-    
+
     if not _is_auth_enabled():
         logger.debug(f"[AUTH_SKIP] No ADMIN_API_KEY configured, skipping auth for {request.url.path}")
         return None
-    
+
     if credentials is None:
         logger.warning(f"[AUTH_FAIL] Missing Authorization header for {request.url.path}")
         raise HTTPException(
@@ -65,9 +64,9 @@ async def require_api_key(
             detail="API key required. Include Authorization: Bearer <key>",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     provided_key = credentials.credentials
-    
+
     if provided_key != api_key:
         logger.warning(
             f"[AUTH_FAIL] Invalid API key for {request.url.path} "
@@ -78,10 +77,10 @@ async def require_api_key(
             detail="Invalid API key",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     client_ip = request.client.host if request.client else "unknown"
     logger.info(f"[AUTH_OK] API key authenticated for {request.url.path} from {client_ip}")
-    
+
     return None
 
 
@@ -100,10 +99,10 @@ async def optional_api_key(
     """
     if not _is_auth_enabled():
         return False
-    
+
     if credentials is None:
         return False
-    
+
     api_key = _get_api_key()
     return credentials.credentials == api_key
 
@@ -122,7 +121,7 @@ class APIKeyAuth:
                 raise HTTPException(401)
             ...
     """
-    
+
     def __init__(
         self,
         request: Request,
@@ -131,23 +130,23 @@ class APIKeyAuth:
         self.request = request
         self.credentials = credentials
         self._is_authenticated = self._check_auth()
-    
+
     def _check_auth(self) -> bool:
         """Check if the request is authenticated."""
         if not _is_auth_enabled():
             return True
-        
+
         if self.credentials is None:
             return False
-        
+
         api_key = _get_api_key()
         return self.credentials.credentials == api_key
-    
+
     @property
     def is_authenticated(self) -> bool:
         """Check if authenticated."""
         return self._is_authenticated
-    
+
     def require_auth(self) -> None:
         """Raise 401 if not authenticated."""
         if not self._is_authenticated:

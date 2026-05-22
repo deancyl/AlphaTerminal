@@ -8,7 +8,6 @@ Tests the complete user flow for the wind vane widget:
 - Mobile layout visibility
 """
 
-import pytest
 
 
 class TestWindVaneDisplay:

@@ -7,8 +7,8 @@ against a list of trusted proxy CIDR ranges.
 
 import os
 import logging
-from typing import List, Optional, Set
-from ipaddress import ip_address, ip_network, IPv4Address, IPv6Address, IPv4Network, IPv6Network
+from typing import Optional, Set
+from ipaddress import ip_address, ip_network, IPv4Network, IPv6Network
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +35,12 @@ def _load_trusted_proxies() -> Set[IPv4Network | IPv6Network]:
         Set of ip_network objects representing trusted proxy ranges
     """
     global _trusted_proxies
-    
+
     if _trusted_proxies is not None:
         return _trusted_proxies
-    
+
     proxies_str = os.environ.get("TRUSTED_PROXIES", "")
-    
+
     if proxies_str:
         # Parse from environment variable
         cidr_list = [cidr.strip() for cidr in proxies_str.split(",") if cidr.strip()]
@@ -55,20 +55,20 @@ def _load_trusted_proxies() -> Set[IPv4Network | IPv6Network]:
             "::1/128",         # IPv6 loopback
             "fc00::/7",        # IPv6 ULA
         ]
-        logger.info(f"[IPValidation] Using default trusted proxies (private networks)")
-    
+        logger.info("[IPValidation] Using default trusted proxies (private networks)")
+
     networks: Set[IPv4Network | IPv6Network] = set()
-    
+
     for cidr in cidr_list:
         try:
             network = ip_network(cidr, strict=False)
             networks.add(network)
         except ValueError as e:
             logger.warning(f"[IPValidation] Invalid CIDR '{cidr}': {e}", exc_info=True)
-    
+
     _trusted_proxies = networks
     logger.info(f"[IPValidation] Loaded {len(networks)} trusted proxy ranges")
-    
+
     return _trusted_proxies
 
 
@@ -84,14 +84,14 @@ def is_trusted_proxy(ip_str: str) -> bool:
     """
     if not ip_str:
         return False
-    
+
     try:
         ip = ip_address(ip_str.strip())
     except ValueError:
         return False
-    
+
     trusted_networks = _load_trusted_proxies()
-    
+
     for network in trusted_networks:
         try:
             if ip in network:
@@ -99,7 +99,7 @@ def is_trusted_proxy(ip_str: str) -> bool:
         except TypeError:
             # IPv4 address cannot be in IPv6 network and vice versa
             continue
-    
+
     return False
 
 
@@ -115,7 +115,7 @@ def validate_ip_format(ip_str: str) -> bool:
     """
     if not ip_str:
         return False
-    
+
     try:
         ip_address(ip_str.strip())
         return True
@@ -169,37 +169,37 @@ def extract_client_ip(
             if validate_ip_format(real_ip):
                 return real_ip
         return "unknown"
-    
+
     # Step 2: If remote_addr is NOT trusted, ignore X-Forwarded-For
     # (prevents spoofing from untrusted sources)
     if not is_trusted_proxy(remote_addr):
         logger.debug(f"[IPValidation] Untrusted source {remote_addr}, ignoring X-Forwarded-For")
         return remote_addr
-    
+
     # Step 3: remote_addr IS trusted, parse X-Forwarded-For
     if x_forwarded_for:
         # Parse IPs from right to left
         # Format: client, proxy1, proxy2, ...
         # The rightmost non-trusted IP is the original client
         ips = [ip.strip() for ip in x_forwarded_for.split(",")]
-        
+
         # Iterate from right to left
         for ip in reversed(ips):
             if validate_ip_format(ip) and not is_trusted_proxy(ip):
                 logger.debug(f"[IPValidation] Extracted client IP {ip} from trusted proxy chain")
                 return ip
-        
+
         # All IPs in chain are trusted, use the leftmost
         if ips and validate_ip_format(ips[0]):
             logger.debug(f"[IPValidation] All IPs trusted, using leftmost: {ips[0]}")
             return ips[0]
-    
+
     # Step 4: Fall back to X-Real-IP
     if x_real_ip:
         real_ip = x_real_ip.strip()
         if validate_ip_format(real_ip):
             return real_ip
-    
+
     # Step 5: Use remote_addr as last resort
     return remote_addr
 

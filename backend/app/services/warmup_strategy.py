@@ -10,13 +10,12 @@
 import asyncio
 import logging
 from typing import List, Dict
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 class WarmupStrategy:
     """智能预热策略"""
-    
+
     # 热门股票（按成交量排序，Top 50）
     HOT_STOCKS: List[str] = [
         "sh600519",  # 贵州茅台
@@ -70,7 +69,7 @@ class WarmupStrategy:
         "sz000538",  # 云南白药
         "sh603899",  # 朝日啤酒
     ]
-    
+
     # 主要货币对
     HOT_FOREX: List[str] = [
         "USDCNY",    # 美元/人民币
@@ -84,7 +83,7 @@ class WarmupStrategy:
         "USDCAD",    # 美元/加元
         "USDCHF",    # 美元/瑞郎
     ]
-    
+
     # 主要指数
     HOT_INDEXES: List[str] = [
         "sh000001",  # 上证指数
@@ -96,11 +95,11 @@ class WarmupStrategy:
         "sh000852",  # 中证1000
         "sz399005",  # 中小板指
     ]
-    
+
     def __init__(self):
         self._warmed = False
         self._warmup_stats: Dict[str, int] = {}
-    
+
     async def warmup_all(self) -> Dict[str, int]:
         """
         预热所有热门数据
@@ -111,9 +110,9 @@ class WarmupStrategy:
         if self._warmed:
             logger.info("[WarmupStrategy] 已预热，跳过")
             return self._warmup_stats
-        
+
         logger.info("[WarmupStrategy] 开始预热热门数据...")
-        
+
         try:
             # 并行预热
             results = await asyncio.gather(
@@ -122,22 +121,22 @@ class WarmupStrategy:
                 self._warmup_indexes(),
                 return_exceptions=True
             )
-            
+
             # 统计
             self._warmup_stats = {
                 "stocks": results[0] if isinstance(results[0], int) else 0,
                 "forex": results[1] if isinstance(results[1], int) else 0,
                 "indexes": results[2] if isinstance(results[2], int) else 0,
             }
-            
+
             self._warmed = True
             logger.info(f"[WarmupStrategy] 预热完成: {self._warmup_stats}")
             return self._warmup_stats
-            
+
         except Exception as e:
             logger.error(f"[WarmupStrategy] 预热失败: {e}", exc_info=True)
             return {}
-    
+
     async def _warmup_stocks(self) -> int:
         """预热热门股票"""
         warmed = 0
@@ -151,17 +150,17 @@ class WarmupStrategy:
             except (ImportError, ValueError, AttributeError):
                 continue
         return warmed
-    
+
     async def _warmup_forex(self) -> int:
         """预热外汇"""
         warmed = len(self.HOT_FOREX)
         return warmed
-    
+
     async def _warmup_indexes(self) -> int:
         """预热指数"""
         warmed = len(self.HOT_INDEXES)
         return warmed
-    
+
     def get_stats(self) -> Dict[str, int]:
         """获取预热统计"""
         return self._warmup_stats

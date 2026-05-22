@@ -16,7 +16,7 @@ v2 新增: 滑动窗口熔断器（SlidingWindowCircuitBreaker）
 import time
 import threading
 from enum import Enum
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 from dataclasses import dataclass, field
 from collections import deque
 
@@ -58,14 +58,14 @@ class CircuitBreakerStats:
     last_failure_time: Optional[float] = None
     last_success_time: Optional[float] = None
     state_change_times: list = field(default_factory=list)
-    
+
     def record_success(self):
         self.total_calls += 1
         self.successful_calls += 1
         self.consecutive_successes += 1
         self.consecutive_failures = 0
         self.last_success_time = time.time()
-    
+
     def record_failure(self):
         self.total_calls += 1
         self.failed_calls += 1
@@ -87,7 +87,7 @@ class CircuitBreaker:
     
     如果熔断器 OPEN，会抛出 CircuitBreakerOpen 异常。
     """
-    
+
     def __init__(
         self,
         name: str,
@@ -100,12 +100,12 @@ class CircuitBreaker:
         self._opened_at: Optional[float] = None
         self._half_open_calls = 0
         self._stats = CircuitBreakerStats()
-    
+
     @property
     def state(self) -> CircuitState:
         with self._state_lock:
             return self._get_state_unsafe()
-    
+
     def _get_state_unsafe(self) -> CircuitState:
         """获取状态（必须在持有锁时调用）"""
         if self._state == CircuitState.OPEN:
@@ -116,64 +116,64 @@ class CircuitBreaker:
                 self._stats.consecutive_failures = 0
                 self._record_state_change(CircuitState.HALF_OPEN)
         return self._state
-    
+
     def _record_state_change(self, new_state: CircuitState):
         self._stats.state_change_times.append({
             "time": time.time(),
             "from": self._state.value,
             "to": new_state.value
         })
-    
+
     def _can_execute(self) -> bool:
         """检查是否允许执行（在持有锁时调用）"""
         state = self._get_state_unsafe()
-        
+
         if state == CircuitState.CLOSED:
             return True
-        
+
         if state == CircuitState.OPEN:
             return False
-        
+
         # HALF_OPEN: 只允许一个调用
         if self._half_open_calls < self.config.half_open_max_calls:
             self._half_open_calls += 1
             return True
         return False
-    
+
     def record_success(self):
         """记录成功调用"""
         with self._state_lock:
             self._stats.record_success()
-            
+
             if self._state == CircuitState.HALF_OPEN:
                 if self._stats.consecutive_successes >= self.config.success_threshold:
                     self._state = CircuitState.CLOSED
                     self._stats.consecutive_successes = 0
                     self._stats.consecutive_failures = 0  # 修复: 进入 CLOSED 前必须重置失败计数
                     self._record_state_change(CircuitState.CLOSED)
-    
+
     def record_failure(self):
         """记录失败调用"""
         with self._state_lock:
             self._stats.record_failure()
-            
+
             if self._state == CircuitState.HALF_OPEN:
                 # 测试请求失败，重新打开
                 self._state = CircuitState.OPEN
                 self._opened_at = time.time()
                 self._record_state_change(CircuitState.OPEN)
-            
+
             elif self._state == CircuitState.CLOSED:
                 if self._stats.consecutive_failures >= self.config.failure_threshold:
                     self._state = CircuitState.OPEN
                     self._opened_at = time.time()
                     self._record_state_change(CircuitState.OPEN)
-    
+
     def is_available(self) -> bool:
         """检查当前是否可用"""
         with self._state_lock:
             return self._can_execute()
-    
+
     def get_stats(self) -> Dict:
         """获取统计信息"""
         with self._state_lock:
@@ -191,7 +191,7 @@ class CircuitBreaker:
                 "failure_threshold": self.config.failure_threshold,
                 "timeout": self.config.timeout,
             }
-    
+
     def reset(self):
         """重置熔断器"""
         with self._state_lock:
@@ -199,7 +199,7 @@ class CircuitBreaker:
             self._opened_at = None
             self._half_open_calls = 0
             self._stats = CircuitBreakerStats()
-    
+
     def __enter__(self):
         """上下文管理器入口 - 支持 with 语句"""
         if not self.is_available():
@@ -209,7 +209,7 @@ class CircuitBreaker:
                 stats.get("timeout", 30)
             )
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """上下文管理器出口"""
         if exc_type is not None and issubclass(exc_type, Exception):
@@ -229,10 +229,10 @@ class CircuitBreakerOpen(Exception):
 
 class CircuitContext:
     """熔断器上下文管理器"""
-    
+
     def __init__(self, breaker: CircuitBreaker):
         self.breaker = breaker
-    
+
     def __enter__(self):
         if not self.breaker.is_available():
             stats = self.breaker.get_stats()
@@ -241,7 +241,7 @@ class CircuitContext:
                 stats.get("timeout", 30)
             )
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None and issubclass(exc_type, Exception):
             self.breaker.record_failure()
@@ -268,7 +268,7 @@ class SlidingWindowCircuitBreaker:
         with cb:
             result = await fetcher.get_quote(symbol)
     """
-    
+
     def __init__(
         self,
         name: str,
@@ -283,7 +283,7 @@ class SlidingWindowCircuitBreaker:
         self._consecutive_failures = 0
         self._consecutive_successes = 0
         self._window: deque = deque()  # 存储 (timestamp, is_success) 元组
-    
+
     @property
     def state(self) -> CircuitState:
         """获取当前熔断器状态"""
@@ -295,36 +295,36 @@ class SlidingWindowCircuitBreaker:
                     self._half_open_calls = 0
                     self._consecutive_failures = 0
             return self._state
-    
+
     def _clean_window(self):
         """清理窗口外的过期记录"""
         now = time.time()
         cutoff = now - self.config.window_size
         while self._window and self._window[0][0] < cutoff:
             self._window.popleft()
-    
+
     def _get_window_stats(self) -> Dict[str, int]:
         """获取窗口内统计"""
         self._clean_window()
         total = len(self._window)
         failures = sum(1 for _, is_success in self._window if not is_success)
         return {"total": total, "failures": failures, "successes": total - failures}
-    
+
     def _should_open(self) -> bool:
         """判断是否应该熔断"""
         # 条件1: 连续失败快速熔断
         if self._consecutive_failures >= self.config.consecutive_failures:
             return True
-        
+
         # 条件2: 窗口内失败率熔断
         stats = self._get_window_stats()
         if stats["total"] >= self.config.min_calls:
             failure_rate = stats["failures"] / stats["total"]
             if failure_rate >= self.config.failure_rate_threshold:
                 return True
-        
+
         return False
-    
+
     def record_success(self):
         """记录成功调用"""
         with self._state_lock:
@@ -332,13 +332,13 @@ class SlidingWindowCircuitBreaker:
             self._window.append((now, True))
             self._consecutive_successes += 1
             self._consecutive_failures = 0
-            
+
             if self._state == CircuitState.HALF_OPEN:
                 if self._consecutive_successes >= self.config.success_threshold:
                     self._state = CircuitState.CLOSED
                     self._consecutive_successes = 0
                     self._consecutive_failures = 0
-    
+
     def record_failure(self):
         """记录失败调用"""
         with self._state_lock:
@@ -346,7 +346,7 @@ class SlidingWindowCircuitBreaker:
             self._window.append((now, False))
             self._consecutive_failures += 1
             self._consecutive_successes = 0
-            
+
             if self._state == CircuitState.HALF_OPEN:
                 self._state = CircuitState.OPEN
                 self._opened_at = time.time()
@@ -354,7 +354,7 @@ class SlidingWindowCircuitBreaker:
                 if self._should_open():
                     self._state = CircuitState.OPEN
                     self._opened_at = time.time()
-    
+
     def is_available(self) -> bool:
         """检查当前是否可用"""
         with self._state_lock:
@@ -369,7 +369,7 @@ class SlidingWindowCircuitBreaker:
                 return False
             # HALF_OPEN
             return True
-    
+
     def get_stats(self) -> Dict:
         """获取统计信息"""
         with self._state_lock:
@@ -377,7 +377,7 @@ class SlidingWindowCircuitBreaker:
             failure_rate = 0.0
             if window_stats["total"] > 0:
                 failure_rate = window_stats["failures"] / window_stats["total"]
-            
+
             return {
                 "name": self.name,
                 "state": self._state.value,
@@ -396,7 +396,7 @@ class SlidingWindowCircuitBreaker:
                     "timeout": self.config.timeout,
                 }
             }
-    
+
     def reset(self):
         """重置熔断器"""
         with self._state_lock:
@@ -406,12 +406,12 @@ class SlidingWindowCircuitBreaker:
             self._consecutive_failures = 0
             self._consecutive_successes = 0
             self._window.clear()
-    
+
     def __enter__(self):
         if not self.is_available():
             raise CircuitBreakerOpen(self.name, self.config.timeout)
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None and issubclass(exc_type, Exception):
             self.record_failure()
@@ -422,16 +422,16 @@ class SlidingWindowCircuitBreaker:
 
 class SlidingWindowCircuitContext:
     """滑动窗口熔断器上下文管理器"""
-    
+
     def __init__(self, breaker: SlidingWindowCircuitBreaker, source_name: str = ""):
         self.breaker = breaker
         self.source_name = source_name
-    
+
     def __enter__(self):
         if not self.breaker.is_available():
             raise CircuitBreakerOpen(self.breaker.name, self.breaker.config.timeout)
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None and issubclass(exc_type, Exception):
             self.breaker.record_failure()

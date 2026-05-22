@@ -15,7 +15,7 @@ AkShare Fetcher — 基于 AkShare 的数据获取器
 import asyncio
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
 from .base import BaseMarketFetcher
@@ -58,20 +58,20 @@ class AkShareFetcher(BaseMarketFetcher):
         # 获取基金净值
         nav = await fetcher.get_fund_nav("000001")
     """
-    
+
     name = "akshare"
     display_name = "AkShare 数据源"
-    
+
     supports_quote = True
     supports_kline = True
     supports_order_book = False
     supports_futures = False
     supports_hk = False
     supports_us = False
-    
+
     # 默认复权方式：前复权
     DEFAULT_ADJUST = "qfq"
-    
+
     def __init__(
         self,
         proxy: Optional[str] = None,
@@ -87,14 +87,14 @@ class AkShareFetcher(BaseMarketFetcher):
             )
         )
         self._ak = None
-    
+
     @property
     def ak(self):
         """延迟加载 AkShare 模块"""
         if self._ak is None:
             self._ak = _get_akshare()
         return self._ak
-    
+
     async def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
         获取实时行情（使用 ak.stock_zh_a_spot_em）
@@ -107,7 +107,7 @@ class AkShareFetcher(BaseMarketFetcher):
         """
         cache_key = f"akshare:quote:{symbol}"
         cache = get_cache()
-        
+
         if not self.cb.is_available():
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
@@ -117,18 +117,18 @@ class AkShareFetcher(BaseMarketFetcher):
             if stale_data:
                 logger.warning(f"[AkShare] Circuit breaker OPEN, returning stale data for {symbol}")
                 return stale_data
-            
+
             sqlite_data = cache.get_with_sqlite_fallback(cache_key, source="akshare")
             if sqlite_data:
                 logger.warning(f"[AkShare] Circuit breaker OPEN, returning SQLite fallback for {symbol}")
                 return sqlite_data
-            
+
             logger.error(f"[AkShare] Circuit breaker OPEN, no fallback available for {symbol}")
             return None
-        
+
         try:
             code = symbol[2:] if symbol.startswith(('sh', 'sz')) else symbol
-            
+
             def _fetch():
                 df = self.ak.stock_zh_a_spot_em()
                 row = df[df['代码'] == code]
@@ -149,12 +149,12 @@ class AkShareFetcher(BaseMarketFetcher):
                     "open": float(r.get('今开', 0) or 0),
                     "prev_close": float(r.get('昨收', 0) or 0),
                 }
-            
+
             result = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(_executor, _fetch),
                 timeout=AKSHARE_TIMEOUT
             )
-            
+
             if result:
                 self.cb.record_success()
                 cache.set(cache_key, result, ttl=300)
@@ -162,13 +162,13 @@ class AkShareFetcher(BaseMarketFetcher):
             else:
                 self.cb.record_failure()
                 logger.warning(f"[AkShare] {symbol} 未找到数据")
-            
+
             return result
-            
+
         except Exception as e:
             self.cb.record_failure()
             logger.warning(f"[AkShare] {symbol} 行情获取失败: {e}", exc_info=True)
-            
+
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
                 fresh_ttl=300,
@@ -177,9 +177,9 @@ class AkShareFetcher(BaseMarketFetcher):
             if stale_data:
                 logger.warning(f"[AkShare] Fetch failed, returning stale data for {symbol}", exc_info=True)
                 return stale_data
-            
+
             return None
-    
+
     async def get_kline(
         self,
         symbol: str,
@@ -204,7 +204,7 @@ class AkShareFetcher(BaseMarketFetcher):
         adjust = adjust or self.DEFAULT_ADJUST
         cache_key = f"akshare:kline:{symbol}:{period}:{adjust}"
         cache = get_cache()
-        
+
         if not self.cb.is_available():
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
@@ -214,17 +214,17 @@ class AkShareFetcher(BaseMarketFetcher):
             if stale_data:
                 logger.warning(f"[AkShare] Circuit breaker OPEN, returning stale K-line for {symbol}")
                 return stale_data
-            
+
             sqlite_data = cache.get_with_sqlite_fallback(cache_key, source="akshare")
             if sqlite_data:
                 logger.warning(f"[AkShare] Circuit breaker OPEN, returning SQLite fallback K-line for {symbol}")
                 return sqlite_data
-            
+
             logger.error(f"[AkShare] Circuit breaker OPEN, no fallback available for {symbol} K-line")
             return None
-        
+
         code = symbol[2:] if symbol.startswith(('sh', 'sz')) else symbol
-        
+
         period_map = {
             "day": "daily",
             "daily": "daily",
@@ -234,7 +234,7 @@ class AkShareFetcher(BaseMarketFetcher):
             "monthly": "monthly",
         }
         ak_period = period_map.get(period, "daily")
-        
+
         try:
             def _fetch():
                 df = self.ak.stock_zh_a_hist(
@@ -244,10 +244,10 @@ class AkShareFetcher(BaseMarketFetcher):
                     start_date=start_date or "19900101",
                     end_date=end_date or datetime.now().strftime("%Y%m%d"),
                 )
-                
+
                 if df is None or df.empty:
                     return None
-                
+
                 result = []
                 for _, row in df.iterrows():
                     result.append({
@@ -264,12 +264,12 @@ class AkShareFetcher(BaseMarketFetcher):
                         "turnover": float(row.get('换手率', 0) or 0),
                     })
                 return result
-            
+
             result = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(_executor, _fetch),
                 timeout=AKSHARE_TIMEOUT
             )
-            
+
             if result:
                 self.cb.record_success()
                 cache.set(cache_key, result, ttl=300)
@@ -277,13 +277,13 @@ class AkShareFetcher(BaseMarketFetcher):
             else:
                 self.cb.record_failure()
                 logger.warning(f"[AkShare] {symbol} K线数据为空")
-            
+
             return result
-            
+
         except Exception as e:
             self.cb.record_failure()
             logger.warning(f"[AkShare] {symbol} K线获取失败: {e}", exc_info=True)
-            
+
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
                 fresh_ttl=300,
@@ -292,9 +292,9 @@ class AkShareFetcher(BaseMarketFetcher):
             if stale_data:
                 logger.warning(f"[AkShare] K-line fetch failed, returning stale data for {symbol}", exc_info=True)
                 return stale_data
-            
+
             return None
-    
+
     async def get_fund_nav(
         self,
         fund_code: str,
@@ -312,7 +312,7 @@ class AkShareFetcher(BaseMarketFetcher):
         """
         cache_key = f"akshare:fund:{fund_code}:{period}"
         cache = get_cache()
-        
+
         if not self.cb.is_available():
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
@@ -322,25 +322,25 @@ class AkShareFetcher(BaseMarketFetcher):
             if stale_data:
                 logger.warning(f"[AkShare] Circuit breaker OPEN, returning stale fund nav for {fund_code}")
                 return stale_data
-            
+
             sqlite_data = cache.get_with_sqlite_fallback(cache_key, source="akshare")
             if sqlite_data:
                 logger.warning(f"[AkShare] Circuit breaker OPEN, returning SQLite fallback fund nav for {fund_code}")
                 return sqlite_data
-            
+
             logger.error(f"[AkShare] Circuit breaker OPEN, no fallback available for fund {fund_code}")
             return None
-        
+
         try:
             def _fetch():
                 df = self.ak.fund_open_fund_info_em(
                     fund=fund_code,
                     indicator=period,
                 )
-                
+
                 if df is None or df.empty:
                     return None
-                
+
                 result = []
                 for _, row in df.iterrows():
                     result.append({
@@ -350,12 +350,12 @@ class AkShareFetcher(BaseMarketFetcher):
                         "daily_growth": float(row.get('日增长率', 0) or 0),
                     })
                 return result
-            
+
             result = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(_executor, _fetch),
                 timeout=AKSHARE_TIMEOUT
             )
-            
+
             if result:
                 self.cb.record_success()
                 cache.set(cache_key, result, ttl=300)
@@ -363,13 +363,13 @@ class AkShareFetcher(BaseMarketFetcher):
             else:
                 self.cb.record_failure()
                 logger.warning(f"[AkShare] 基金 {fund_code} 净值数据为空")
-            
+
             return result
-            
+
         except asyncio.TimeoutError as e:
             self.cb.record_failure()
             logger.warning(f"[AkShare] 基金 {fund_code} 净值获取超时: {e}", exc_info=True)
-            
+
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
                 fresh_ttl=300,
@@ -378,12 +378,12 @@ class AkShareFetcher(BaseMarketFetcher):
             if stale_data:
                 logger.warning(f"[AkShare] Fund nav fetch failed, returning stale data for {fund_code}", exc_info=True)
                 return stale_data
-            
+
             return None
         except (ConnectionError, ValueError, KeyError) as e:
             self.cb.record_failure()
             logger.warning(f"[AkShare] 基金 {fund_code} 净值获取失败: {type(e).__name__}: {e}", exc_info=True)
-            
+
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
                 fresh_ttl=300,
@@ -392,21 +392,21 @@ class AkShareFetcher(BaseMarketFetcher):
             if stale_data:
                 logger.warning(f"[AkShare] Fund nav fetch failed, returning stale data for {fund_code}", exc_info=True)
                 return stale_data
-            
+
             return None
-    
+
     async def get_order_book(self, symbol: str) -> Optional[Dict]:
         """AkShare 不支持订单簿"""
         return None
-    
+
     async def get_futures_quote(self, symbol: str) -> Optional[Dict]:
         """AkShare 不支持期货行情（由专门的期货模块处理）"""
         return None
-    
+
     def is_healthy(self) -> bool:
         """检查数据源是否健康"""
         return self.cb.is_available()
-    
+
     async def ping(self) -> bool:
         """探测数据源连通性"""
         try:

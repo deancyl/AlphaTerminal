@@ -8,7 +8,7 @@ performance, and logging. Uses synchronous fetch_sync method.
 
 import pytest
 import time
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 from app.services.unified_fetcher import (
     UnifiedFetcher,
@@ -16,7 +16,7 @@ from app.services.unified_fetcher import (
     FetchResult,
     get_fetcher,
 )
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerOpen, CircuitState
+from app.services.circuit_breaker import CircuitBreaker
 
 
 # ============================================================================

@@ -74,7 +74,7 @@ def create_strategy(
     """
     now = datetime.now().isoformat()
     params_json = json.dumps(parameters or {}, ensure_ascii=False)
-    
+
     with _lock:
         conn = _get_conn()
         try:
@@ -95,7 +95,7 @@ def create_strategy(
                 now,
             ))
             conn.commit()
-            
+
             return {
                 "id": strategy_id,
                 "name": name,
@@ -108,7 +108,7 @@ def create_strategy(
                 "created_at": now,
                 "updated_at": now,
             }
-        except sqlite3.IntegrityError as e:
+        except sqlite3.IntegrityError:
             logger.error(f"[StrategyDB] Create failed - duplicate id: {strategy_id}", exc_info=True)
             raise ValueError(f"Strategy with id {strategy_id} already exists")
         except Exception as e:
@@ -134,10 +134,10 @@ def get_strategy(strategy_id: str) -> Optional[Dict[str, Any]]:
             "SELECT * FROM strategies WHERE id = ? AND deleted_at IS NULL",
             (strategy_id,)
         ).fetchone()
-        
+
         if row is None:
             return None
-        
+
         return _row_to_dict(row)
     except Exception as e:
         logger.error(f"[StrategyDB] Get failed: {e}", exc_info=True)
@@ -168,16 +168,16 @@ def list_strategies(
     try:
         conditions = []
         params = []
-        
+
         if not include_deleted:
             conditions.append("deleted_at IS NULL")
-        
+
         if market:
             conditions.append("market = ?")
             params.append(market)
-        
+
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
+
         query = f"""
             SELECT * FROM strategies 
             WHERE {where_clause}
@@ -185,7 +185,7 @@ def list_strategies(
             LIMIT ? OFFSET ?
         """
         params.extend([limit, offset])
-        
+
         rows = conn.execute(query, params).fetchall()
         return [_row_to_dict(row) for row in rows]
     except Exception as e:
@@ -225,11 +225,11 @@ def update_strategy(
     existing = get_strategy(strategy_id)
     if existing is None:
         return None
-    
+
     # Build update query
     updates = []
     params = []
-    
+
     if name is not None:
         updates.append("name = ?")
         params.append(name)
@@ -251,21 +251,21 @@ def update_strategy(
     if take_profit_pct is not None:
         updates.append("take_profit_pct = ?")
         params.append(take_profit_pct)
-    
+
     if not updates:
         return existing  # Nothing to update
-    
+
     updates.append("updated_at = ?")
     params.append(datetime.now().isoformat())
     params.append(strategy_id)
-    
+
     with _lock:
         conn = _get_conn()
         try:
             query = f"UPDATE strategies SET {', '.join(updates)} WHERE id = ? AND deleted_at IS NULL"
             conn.execute(query, params)
             conn.commit()
-            
+
             return get_strategy(strategy_id)
         except Exception as e:
             logger.error(f"[StrategyDB] Update failed: {e}", exc_info=True)
@@ -300,7 +300,7 @@ def delete_strategy(strategy_id: str, soft_delete: bool = True) -> bool:
                     "DELETE FROM strategies WHERE id = ?",
                     (strategy_id,)
                 )
-            
+
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -351,19 +351,19 @@ def count_strategies(market: Optional[str] = None, include_deleted: bool = False
     try:
         conditions = []
         params = []
-        
+
         if not include_deleted:
             conditions.append("deleted_at IS NULL")
-        
+
         if market:
             conditions.append("market = ?")
             params.append(market)
-        
+
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
+
         query = f"SELECT COUNT(*) as cnt FROM strategies WHERE {where_clause}"
         row = conn.execute(query, params).fetchone()
-        
+
         return row["cnt"] if row else 0
     except Exception as e:
         logger.error(f"[StrategyDB] Count failed: {e}", exc_info=True)
@@ -375,7 +375,7 @@ def count_strategies(market: Optional[str] = None, include_deleted: bool = False
 def _row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
     """Convert sqlite3.Row to dict with JSON parsing"""
     result = dict(row)
-    
+
     # Parse JSON fields
     if result.get("parameters"):
         try:
@@ -384,5 +384,5 @@ def _row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
             result["parameters"] = {}
     else:
         result["parameters"] = {}
-    
+
     return result

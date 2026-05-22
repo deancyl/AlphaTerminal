@@ -7,7 +7,7 @@ running backtest processes.
 import asyncio
 import logging
 from datetime import datetime
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from app.services.backtest_worker_registry import get_backtest_registry
 from app.middleware import require_api_key
 from app.utils.errors import success_response, error_response, ErrorCode
@@ -25,7 +25,7 @@ async def get_backtest_metrics():
     registry = get_backtest_registry()
     metrics = registry.get_metrics()
     summary = registry.get_summary()
-    
+
     return success_response({
         "workers": metrics,
         "summary": summary,
@@ -39,7 +39,7 @@ async def get_backtest_summary():
     """Get summary statistics for all workers."""
     registry = get_backtest_registry()
     summary = registry.get_summary()
-    
+
     return success_response(summary)
 
 
@@ -48,16 +48,16 @@ async def get_backtest_summary():
 async def kill_backtest(worker_id: str, _: None = Depends(require_api_key)):
     """Kill a runaway backtest worker."""
     registry = get_backtest_registry()
-    
+
     worker = registry.get_worker(worker_id)
     if not worker:
         return error_response(ErrorCode.NOT_FOUND, f"Worker {worker_id} not found")
-    
+
     if worker.status != "running":
         return error_response(ErrorCode.BAD_REQUEST, f"Worker {worker_id} is not running (status: {worker.status})")
-    
+
     success = await registry.kill(worker_id)
-    
+
     if success:
         return success_response({
             "worker_id": worker_id,
@@ -74,7 +74,7 @@ async def cleanup_completed_workers(_: None = Depends(require_api_key)):
     """Remove completed/failed workers from registry."""
     registry = get_backtest_registry()
     registry.cleanup_completed()
-    
+
     return success_response({
         "message": "Cleanup completed",
         "active_workers": len(registry.get_all_workers())
@@ -88,21 +88,21 @@ async def backtest_stream(websocket: WebSocket):
     await websocket.accept()
     registry = get_backtest_registry()
     registry.add_ws_client(websocket)
-    
+
     logger.info("[BacktestMonitor] WebSocket client connected")
-    
+
     try:
         while True:
             metrics = registry.get_metrics()
             summary = registry.get_summary()
-            
+
             await websocket.send_json({
                 "type": "backtest_metrics",
                 "timestamp": datetime.now().isoformat(),
                 "workers": metrics,
                 "summary": summary
             })
-            
+
             await asyncio.sleep(1.0)
     except WebSocketDisconnect:
         logger.info("[BacktestMonitor] WebSocket client disconnected")
@@ -118,7 +118,7 @@ async def health_check():
     """Health check for backtest monitor."""
     registry = get_backtest_registry()
     summary = registry.get_summary()
-    
+
     return success_response({
         "status": "healthy",
         "active_workers": summary["running"],

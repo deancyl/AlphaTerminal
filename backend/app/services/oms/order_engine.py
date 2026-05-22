@@ -15,15 +15,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from app.db.database import _get_conn, _lock
+from app.db.database import _get_conn
 
 from .order_status import (
     OrderStatus,
     is_valid_transition,
     get_allowed_transitions,
-    is_terminal_status,
 )
-from .broker_adapter import BrokerAdapter, MockBrokerAdapter, ExecutionReport
+from .broker_adapter import BrokerAdapter, MockBrokerAdapter
 from .pre_trade_validation import PreTradeValidator, ValidationResult
 
 logger = logging.getLogger(__name__)
@@ -48,7 +47,7 @@ class Order:
     cancelled_at: Optional[str] = None
     reject_reason: Optional[str] = None
     broker_order_id: Optional[str] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -83,7 +82,7 @@ class OrderExecutionEngine:
     
     All state transitions are validated against VALID_TRANSITIONS.
     """
-    
+
     def __init__(
         self,
         broker_adapter: Optional[BrokerAdapter] = None,
@@ -92,7 +91,7 @@ class OrderExecutionEngine:
         self.broker = broker_adapter or MockBrokerAdapter()
         self.validator = PreTradeValidator(self.broker)
         self.enable_audit = enable_audit
-    
+
     def create_order(
         self,
         portfolio_id: int,
@@ -110,7 +109,7 @@ class OrderExecutionEngine:
             raise ValueError(f"Quantity must be positive: {quantity}")
         if order_type == "limit" and price is None:
             raise ValueError("Limit order requires price")
-        
+
         order = Order(
             portfolio_id=portfolio_id,
             symbol=symbol,
@@ -120,18 +119,18 @@ class OrderExecutionEngine:
             price=price,
             status=OrderStatus.STAGED,
         )
-        
+
         order.id = self._save_order(order)
-        
+
         self._log_audit(
             action="order_created",
             order=order,
             details={"initial_status": "staged"},
         )
-        
+
         logger.info(f"[OMS] Created order {order.id}: {symbol} {side} {quantity}@{price}")
         return order
-    
+
     def validate_order(self, order: Order) -> ValidationResult:
         if order.status != OrderStatus.STAGED:
             from .pre_trade_validation import ValidationError
@@ -139,7 +138,7 @@ class OrderExecutionEngine:
                 is_valid=False,
                 errors=[ValidationError(code="INVALID_STATUS", message=f"Cannot validate order in {order.status.value} state")],
             )
-        
+
         result = self.validator.validate(
             portfolio_id=order.portfolio_id,
             symbol=order.symbol,
@@ -148,41 +147,41 @@ class OrderExecutionEngine:
             price=order.price,
             order_type=order.order_type,
         )
-        
+
         self._log_audit(
             action="order_validated",
             order=order,
             details={"is_valid": result.is_valid, "errors": [e.message for e in result.errors]},
         )
-        
+
         return result
-    
+
     def submit_order(self, order: Order) -> Order:
         if not is_valid_transition(order.status, OrderStatus.SUBMITTED):
             raise InvalidStateTransitionError(
                 f"Cannot submit order in {order.status.value} state. "
                 f"Allowed: {[s.value for s in get_allowed_transitions(order.status)]}"
             )
-        
+
         validation = self.validate_order(order)
         if not validation.is_valid:
             order.status = OrderStatus.REJECTED
             order.reject_reason = "; ".join(e.message for e in validation.errors)
             self._update_order(order)
-            
+
             self._log_audit(
                 action="order_rejected",
                 order=order,
                 details={"reason": order.reject_reason},
             )
-            
+
             logger.warning(f"[OMS] Order {order.id} rejected: {order.reject_reason}")
             return order
-        
+
         order.status = OrderStatus.SUBMITTED
         order.submitted_at = datetime.now().isoformat()
         self._update_order(order)
-        
+
         report = self.broker.submit_order(
             order_id=str(order.id),
             symbol=order.symbol,
@@ -191,7 +190,7 @@ class OrderExecutionEngine:
             quantity=order.quantity,
             price=order.price,
         )
-        
+
         if report.status == OrderStatus.REJECTED:
             order.status = OrderStatus.REJECTED
             order.reject_reason = report.reject_reason
@@ -210,45 +209,45 @@ class OrderExecutionEngine:
         else:
             order.status = OrderStatus.PENDING
             order.broker_order_id = report.broker_order_id
-        
+
         self._update_order(order)
-        
+
         self._log_audit(
             action="order_submitted",
             order=order,
             details={"broker_order_id": order.broker_order_id, "status": order.status.value},
         )
-        
+
         logger.info(f"[OMS] Order {order.id} submitted, status={order.status.value}")
         return order
-    
+
     def cancel_order(self, order_id: int) -> Order:
         order = self.get_order(order_id)
         if order is None:
             raise OrderNotFoundError(f"Order {order_id} not found")
-        
+
         if not is_valid_transition(order.status, OrderStatus.CANCELLED):
             raise InvalidStateTransitionError(
                 f"Cannot cancel order in {order.status.value} state. "
                 f"Allowed: {[s.value for s in get_allowed_transitions(order.status)]}"
             )
-        
+
         if order.broker_order_id:
             self.broker.cancel_order(str(order_id), order.broker_order_id)
-        
+
         order.status = OrderStatus.CANCELLED
         order.cancelled_at = datetime.now().isoformat()
         self._update_order(order)
-        
+
         self._log_audit(
             action="order_cancelled",
             order=order,
             details={"cancelled_at": order.cancelled_at},
         )
-        
+
         logger.info(f"[OMS] Order {order_id} cancelled")
         return order
-    
+
     def process_fill(
         self,
         order_id: int,
@@ -258,39 +257,39 @@ class OrderExecutionEngine:
         order = self.get_order(order_id)
         if order is None:
             raise OrderNotFoundError(f"Order {order_id} not found")
-        
+
         if order.status not in (OrderStatus.PENDING, OrderStatus.PARTIAL_FILLED):
             raise InvalidStateTransitionError(
                 f"Cannot fill order in {order.status.value} state"
             )
-        
+
         new_filled = order.filled_quantity + filled_quantity
-        
+
         if new_filled > order.quantity:
             raise ValueError(f"Fill quantity exceeds order: {new_filled} > {order.quantity}")
-        
+
         total_value = order.avg_fill_price * order.filled_quantity + fill_price * filled_quantity
         order.avg_fill_price = total_value / new_filled if new_filled > 0 else 0.0
         order.filled_quantity = new_filled
-        
+
         if new_filled == order.quantity:
             order.status = OrderStatus.FILLED
             order.filled_at = datetime.now().isoformat()
             self._execute_trade(order)
         else:
             order.status = OrderStatus.PARTIAL_FILLED
-        
+
         self._update_order(order)
-        
+
         self._log_audit(
             action="order_filled",
             order=order,
             details={"filled_quantity": filled_quantity, "fill_price": fill_price},
         )
-        
+
         logger.info(f"[OMS] Order {order_id} fill: +{filled_quantity}@{fill_price}")
         return order
-    
+
     def get_order(self, order_id: int) -> Optional[Order]:
         conn = _get_conn()
         try:
@@ -301,10 +300,10 @@ class OrderExecutionEngine:
                    FROM orders WHERE id=?""",
                 (order_id,),
             ).fetchone()
-            
+
             if row is None:
                 return None
-            
+
             return Order(
                 id=row["id"],
                 portfolio_id=row["portfolio_id"],
@@ -325,11 +324,11 @@ class OrderExecutionEngine:
             )
         finally:
             conn.close()
-    
+
     def get_order_status(self, order_id: int) -> Optional[OrderStatus]:
         order = self.get_order(order_id)
         return order.status if order else None
-    
+
     def get_open_orders(self, portfolio_id: int) -> List[Order]:
         conn = _get_conn()
         try:
@@ -342,11 +341,11 @@ class OrderExecutionEngine:
                    ORDER BY created_at DESC""",
                 (portfolio_id,),
             ).fetchall()
-            
+
             return [self._row_to_order(row) for row in rows]
         finally:
             conn.close()
-    
+
     def get_orders_by_portfolio(
         self,
         portfolio_id: int,
@@ -378,11 +377,11 @@ class OrderExecutionEngine:
                        LIMIT ? OFFSET ?""",
                     (portfolio_id, limit, offset),
                 ).fetchall()
-            
+
             return [self._row_to_order(row) for row in rows]
         finally:
             conn.close()
-    
+
     def _row_to_order(self, row: sqlite3.Row) -> Order:
         return Order(
             id=row["id"],
@@ -402,7 +401,7 @@ class OrderExecutionEngine:
             reject_reason=row["reject_reason"],
             broker_order_id=row["broker_order_id"],
         )
-    
+
     def _save_order(self, order: Order) -> int:
         conn = _get_conn()
         try:
@@ -429,7 +428,7 @@ class OrderExecutionEngine:
             return order_id
         finally:
             conn.close()
-    
+
     def _update_order(self, order: Order) -> None:
         conn = _get_conn()
         try:
@@ -454,13 +453,13 @@ class OrderExecutionEngine:
             conn.commit()
         finally:
             conn.close()
-    
+
     def _execute_trade(self, order: Order) -> None:
         if order.status != OrderStatus.FILLED:
             return
-        
+
         from app.services.trading import execute_buy, execute_sell
-        
+
         try:
             if order.side == "buy":
                 execute_buy(
@@ -478,19 +477,19 @@ class OrderExecutionEngine:
                     sell_price=order.avg_fill_price,
                     order_id=str(order.id),
                 )
-            
+
             logger.info(f"[OMS] Trade executed: {order.side} {order.filled_quantity} {order.symbol}@{order.avg_fill_price}")
         except Exception as e:
             logger.error(f"[OMS] Trade execution failed: {e}", exc_info=True)
             raise
-    
+
     def _log_audit(self, action: str, order: Order, details: Dict[str, Any]) -> None:
         if not self.enable_audit:
             return
-        
+
         try:
             from app.services.audit_chain import log_audit_event
-            
+
             log_audit_event(
                 actor_id="oms",
                 action=action,

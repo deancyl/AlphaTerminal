@@ -7,7 +7,7 @@ import textwrap
 import pandas as pd
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ class IndicatorStrategyParser:
     def _compile_code(self, code: str) -> Callable:
         code = textwrap.dedent(code)
         lines = code.split('\n')
-        
+
         # Find the first non-comment, non-empty line
         start_idx = 0
         for i, line in enumerate(lines):
@@ -166,14 +166,14 @@ class IndicatorStrategyParser:
             if stripped and not stripped.startswith('#'):
                 start_idx = i
                 break
-        
+
         # Collect all code lines (excluding comments)
         code_lines = []
         for line in lines[start_idx:]:
             stripped = line.strip()
             if stripped and not stripped.startswith('#'):
                 code_lines.append(line)
-        
+
         def execute_strategy(df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
             local_vars = {
                 'pd': pd,
@@ -327,7 +327,7 @@ class StrategyValidator:
         'import requests', 'eval(', 'exec(', 'open(', 'file(', '__import__',
         'compile(', 'getattr(', 'setattr(', 'delattr(',
     ]
-    
+
     FORBIDDEN_REGEX_PATTERNS = [
         r'eval\s*\(',           # eval( with whitespace
         r'exec\s*\(',           # exec( with whitespace
@@ -349,14 +349,14 @@ class StrategyValidator:
     @classmethod
     def validate(cls, code: str) -> Tuple[bool, Optional[str]]:
         import re
-        
+
         if not code or not code.strip():
             return False, "Strategy code cannot be empty"
 
         for pattern in cls.FORBIDDEN_PATTERNS:
             if pattern in code:
                 return False, f"Code contains forbidden pattern: {pattern}"
-        
+
         for regex_pattern in cls.FORBIDDEN_REGEX_PATTERNS:
             if re.search(regex_pattern, code):
                 return False, f"Code contains forbidden pattern: {regex_pattern}"

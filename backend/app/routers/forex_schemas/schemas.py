@@ -7,7 +7,7 @@ Forex Module - Pydantic Schemas
 """
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Literal
-from datetime import date, datetime
+from datetime import datetime
 
 
 # ==================== 基础模型 ====================

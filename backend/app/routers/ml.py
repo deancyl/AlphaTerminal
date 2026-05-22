@@ -8,7 +8,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, List, Optional, Any
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.error_decorator import handle_errors
@@ -63,10 +63,10 @@ class ModelResponse(BaseModel):
 async def list_models():
     """List all available ML models."""
     from app.services.qlib.model_loader import get_model_loader
-    
+
     loader = get_model_loader()
     models = loader.list_models()
-    
+
     result = []
     for m in models:
         result.append({
@@ -80,7 +80,7 @@ async def list_models():
             "params": m.params,
             "is_loaded": m.is_loaded,
         })
-    
+
     return success_response({"models": result, "total": len(result)})
 
 
@@ -89,17 +89,17 @@ async def list_models():
 async def create_model(req: ModelCreateRequest, _: None = Depends(require_api_key)):
     """Register a new ML model."""
     from app.services.qlib.model_loader import get_model_loader, ModelType, ModelProvider
-    
+
     loader = get_model_loader()
-    
+
     existing = loader.load_model(req.model_id)
     if existing is not None:
         return error_response(ErrorCode.BAD_REQUEST, f"Model {req.model_id} already exists")
-    
+
     try:
         model_type = ModelType(req.model_type)
         provider = ModelProvider(req.provider)
-        
+
         return success_response({
             "model_id": req.model_id,
             "model_type": req.model_type,
@@ -107,7 +107,7 @@ async def create_model(req: ModelCreateRequest, _: None = Depends(require_api_ke
             "feature_set": req.feature_set,
             "message": "Model registered. Use /train to train the model.",
         })
-        
+
     except ValueError as e:
         return error_response(ErrorCode.BAD_REQUEST, f"Invalid model type or provider: {e}")
 
@@ -117,10 +117,10 @@ async def create_model(req: ModelCreateRequest, _: None = Depends(require_api_ke
 async def get_model(model_id: str):
     """Get model details."""
     from app.services.qlib.model_loader import get_model_loader
-    
+
     loader = get_model_loader()
     models = loader.list_models()
-    
+
     for m in models:
         if m.model_id == model_id:
             return success_response({
@@ -134,7 +134,7 @@ async def get_model(model_id: str):
                 "params": m.params,
                 "is_loaded": m.is_loaded,
             })
-    
+
     return error_response(ErrorCode.NOT_FOUND, f"Model {model_id} not found")
 
 
@@ -143,9 +143,9 @@ async def get_model(model_id: str):
 async def delete_model(model_id: str, _: None = Depends(require_api_key)):
     """Delete a model."""
     from app.services.qlib.model_loader import get_model_loader
-    
+
     loader = get_model_loader()
-    
+
     if loader.delete_model(model_id):
         return success_response({"message": f"Model {model_id} deleted"})
     else:
@@ -160,13 +160,13 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
     from app.db.database import _get_conn
     from app.services.qlib.model_loader import get_model_loader, ModelType
     from app.services.qlib.feature_pipeline import FeaturePipeline, FeatureSet
-    
+
     loader = get_model_loader()
-    
+
     db_symbol = req.symbol.replace("sh", "").replace("sz", "")
-    
+
     loop = asyncio.get_event_loop()
-    
+
     @handle_errors(module="ml")
     def _sync_fetch_data():
         conn = _get_conn()
@@ -181,38 +181,38 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
             return rows
         finally:
             conn.close()
-    
+
     rows = await loop.run_in_executor(_executor, _sync_fetch_data)
-    
+
     if len(rows) < 100:
-        return error_response(ErrorCode.BAD_REQUEST, 
+        return error_response(ErrorCode.BAD_REQUEST,
             f"Insufficient data ({len(rows)} rows). Need at least 100 rows for training.")
-    
+
     df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
     df["date"] = pd.to_datetime(df["date"])
     df = df.set_index("date")
-    
+
     feature_set = FeatureSet.ALPHA158 if req.feature_set == "Alpha158" else FeatureSet.ALPHA360
     pipeline = FeaturePipeline(feature_set)
     features = pipeline.generate_features(df)
-    
+
     df["return_1d"] = df["close"].pct_change().shift(-1)
     df["return_5d"] = df["close"].pct_change(5).shift(-5)
-    
+
     target_col = req.target if req.target in df.columns else "return_1d"
     target = df[target_col].dropna()
-    
+
     features = features.loc[target.index]
-    
+
     train_size = int(len(features) * 0.8)
     X_train = features.iloc[:train_size]
     y_train = target.iloc[:train_size]
-    
+
     try:
         model_type = ModelType(req.model_id.split("_")[0]) if "_" in req.model_id else ModelType.LIGHTGBM
     except ValueError:
         model_type = ModelType.LIGHTGBM
-    
+
     model = loader.train_model(
         model_type=model_type,
         X_train=X_train,
@@ -220,21 +220,21 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
         params=req.params,
         model_id=req.model_id,
     )
-    
+
     if model is None:
         return error_response(ErrorCode.INTERNAL_ERROR, "Training failed")
-    
+
     X_test = features.iloc[train_size:]
     y_test = target.iloc[train_size:]
-    
+
     predictions = loader.predict(req.model_id, X_test)
-    
+
     if predictions is not None:
         mse = ((predictions - y_test.values) ** 2).mean()
         mae = abs(predictions - y_test.values).mean()
-        
+
         loader._save_model_metadata(req.model_id, loader._model_info.get(req.model_id))
-        
+
         return success_response({
             "model_id": req.model_id,
             "symbol": req.symbol,
@@ -260,21 +260,20 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
 async def predict_model(req: ModelPredictRequest, _: None = Depends(require_api_key)):
     """Generate predictions using a trained model."""
     import pandas as pd
-    import numpy as np
     from app.db.database import _get_conn
     from app.services.qlib.model_loader import get_model_loader
     from app.services.qlib.feature_pipeline import FeaturePipeline, FeatureSet
-    
+
     loader = get_model_loader()
-    
+
     model = loader.load_model(req.model_id)
     if model is None:
         return error_response(ErrorCode.NOT_FOUND, f"Model {req.model_id} not found")
-    
+
     db_symbol = req.symbol.replace("sh", "").replace("sz", "")
-    
+
     loop = asyncio.get_event_loop()
-    
+
     @handle_errors(module="ml")
     def _sync_fetch_data():
         conn = _get_conn()
@@ -289,24 +288,24 @@ async def predict_model(req: ModelPredictRequest, _: None = Depends(require_api_
             return rows
         finally:
             conn.close()
-    
+
     rows = await loop.run_in_executor(_executor, _sync_fetch_data)
-    
+
     if len(rows) == 0:
         return error_response(ErrorCode.NOT_FOUND, f"No data for {req.symbol} in date range")
-    
+
     df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
     df["date"] = pd.to_datetime(df["date"])
     df = df.set_index("date")
-    
+
     pipeline = FeaturePipeline(FeatureSet.ALPHA158)
     features = pipeline.generate_features(df)
-    
+
     predictions = loader.predict(req.model_id, features)
-    
+
     if predictions is None:
         return error_response(ErrorCode.INTERNAL_ERROR, "Prediction failed")
-    
+
     signals = []
     threshold = 0.5
     for pred in predictions:
@@ -316,14 +315,14 @@ async def predict_model(req: ModelPredictRequest, _: None = Depends(require_api_
             signals.append(-1)
         else:
             signals.append(0)
-    
+
     result_df = pd.DataFrame({
         "date": df.index.astype(str),
         "close": df["close"],
         "prediction": predictions,
         "signal": signals,
     })
-    
+
     return success_response({
         "model_id": req.model_id,
         "symbol": req.symbol,
@@ -337,11 +336,11 @@ async def ml_health_check():
     """Health check for ML module."""
     from app.services.qlib.qlib_init import is_qlib_available
     from app.services.qlib.model_loader import get_model_loader
-    
+
     qlib_available = is_qlib_available()
     loader = get_model_loader()
     models = loader.list_models()
-    
+
     return success_response({
         "status": "healthy",
         "qlib_available": qlib_available,
@@ -354,7 +353,6 @@ async def ml_health_check():
 # Phase 2: Portfolio Optimization & Factor Analysis Endpoints
 # ═══════════════════════════════════════════════════════════════
 
-import asyncio
 import numpy as np
 from app.utils.error_decorator import handle_errors
 
@@ -364,7 +362,7 @@ class PortfolioOptimizeRequest(BaseModel):
     symbols: List[str] = Field(..., min_length=1, max_length=50, description="List of stock symbols")
     start_date: str = Field(..., description="Start date YYYY-MM-DD")
     end_date: str = Field(..., description="End date YYYY-MM-DD")
-    method: str = Field(default="mvo", pattern="^(gmv|mvo|rp|inv)$", 
+    method: str = Field(default="mvo", pattern="^(gmv|mvo|rp|inv)$",
                         description="Optimization method: gmv=Global Min Variance, mvo=Mean-Variance, rp=Risk Parity, inv=Inverse Volatility")
     risk_aversion: float = Field(default=1.0, ge=0, le=10, description="Risk aversion parameter (higher = more conservative)")
     turnover_limit: float = Field(default=0.2, ge=0, le=1, description="Maximum turnover from current weights")
@@ -401,11 +399,9 @@ async def optimize_portfolio(req: PortfolioOptimizeRequest, _: None = Depends(re
     - rp: Risk Parity (equal risk contribution)
     - inv: Inverse Volatility (weight inversely proportional to volatility)
     """
-    import pandas as pd
-    from app.db.database import _get_conn
-    
+
     PORTFOLIO_OPT_TIMEOUT = 30  # seconds
-    
+
     try:
         result = await asyncio.wait_for(
             _run_portfolio_optimization(req),
@@ -423,9 +419,9 @@ async def _run_portfolio_optimization(req: PortfolioOptimizeRequest) -> Dict:
     """Execute portfolio optimization."""
     import pandas as pd
     from app.db.database import _get_conn
-    
+
     loop = asyncio.get_event_loop()
-    
+
     def _sync_fetch_all_data():
         conn = _get_conn()
         try:
@@ -438,11 +434,11 @@ async def _run_portfolio_optimization(req: PortfolioOptimizeRequest) -> Dict:
                     WHERE symbol = ? AND date >= ? AND date <= ?
                     ORDER BY date ASC
                 """, (db_symbol, req.start_date, req.end_date)).fetchall()
-                
+
                 if len(rows) < 30:
                     conn.close()
                     raise ValueError(f"Insufficient data for {symbol}: {len(rows)} rows")
-                
+
                 df = pd.DataFrame(rows, columns=["date", "close"])
                 df["date"] = pd.to_datetime(df["date"])
                 df = df.set_index("date")
@@ -451,16 +447,16 @@ async def _run_portfolio_optimization(req: PortfolioOptimizeRequest) -> Dict:
             return all_data
         finally:
             conn.close()
-    
+
     all_data = await loop.run_in_executor(_executor, _sync_fetch_all_data)
-    
+
     prices = pd.DataFrame(all_data)
-    
+
     returns = prices.pct_change().dropna()
-    
+
     expected_returns = returns.mean() * 252
     cov_matrix = returns.cov() * 252
-    
+
     if req.method == "gmv":
         weights = _optimize_gmv(cov_matrix, req.max_weight)
     elif req.method == "mvo":
@@ -469,14 +465,14 @@ async def _run_portfolio_optimization(req: PortfolioOptimizeRequest) -> Dict:
         weights = _optimize_risk_parity(cov_matrix, req.max_weight)
     else:
         weights = _optimize_inverse_vol(returns, req.max_weight)
-    
+
     portfolio_return = sum(weights.get(s, 0) * expected_returns.get(s, 0) for s in req.symbols)
     portfolio_volatility = np.sqrt(np.dot(
         list(weights.values()),
         np.dot(cov_matrix.values, list(weights.values()))
     )) if len(weights) > 0 else 0
     sharpe_ratio = portfolio_return / portfolio_volatility if portfolio_volatility > 0 else 0
-    
+
     return {
         "weights": weights,
         "expected_return": round(portfolio_return * 100, 2),
@@ -492,21 +488,21 @@ def _optimize_gmv(cov_matrix, max_weight: float) -> Dict[str, float]:
     """Global Minimum Variance optimization."""
     import numpy as np
     from scipy.optimize import minimize
-    
+
     n = len(cov_matrix)
     symbols = list(cov_matrix.columns)
-    
+
     def objective(w):
         return np.dot(w, np.dot(cov_matrix.values, w))
-    
+
     constraints = [
         {"type": "eq", "fun": lambda w: np.sum(w) - 1},  # Sum to 1
     ]
     bounds = [(0, max_weight) for _ in range(n)]  # Long only, max weight
-    
+
     x0 = np.ones(n) / n  # Equal weight initial
     result = minimize(objective, x0, method="SLSQP", bounds=bounds, constraints=constraints)
-    
+
     return {s: round(w, 4) for s, w in zip(symbols, result.x) if w > 0.001}
 
 
@@ -514,25 +510,25 @@ def _optimize_mvo(expected_returns, cov_matrix, risk_aversion: float, max_weight
     """Mean-Variance Optimization."""
     import numpy as np
     from scipy.optimize import minimize
-    
+
     n = len(cov_matrix)
     symbols = list(cov_matrix.columns)
     returns = expected_returns.values
-    
+
     def objective(w):
         portfolio_return = np.dot(w, returns)
         portfolio_variance = np.dot(w, np.dot(cov_matrix.values, w))
         # Maximize return - risk_aversion * variance
         return -portfolio_return + risk_aversion * portfolio_variance
-    
+
     constraints = [
         {"type": "eq", "fun": lambda w: np.sum(w) - 1},
     ]
     bounds = [(0, max_weight) for _ in range(n)]
-    
+
     x0 = np.ones(n) / n
     result = minimize(objective, x0, method="SLSQP", bounds=bounds, constraints=constraints)
-    
+
     return {s: round(w, 4) for s, w in zip(symbols, result.x) if w > 0.001}
 
 
@@ -540,29 +536,29 @@ def _optimize_risk_parity(cov_matrix, max_weight: float) -> Dict[str, float]:
     """Risk Parity optimization - equal risk contribution."""
     import numpy as np
     from scipy.optimize import minimize
-    
+
     n = len(cov_matrix)
     symbols = list(cov_matrix.columns)
-    
+
     def risk_contribution(w):
         portfolio_var = np.dot(w, np.dot(cov_matrix.values, w))
         marginal_contrib = np.dot(cov_matrix.values, w)
         risk_contrib = w * marginal_contrib / np.sqrt(portfolio_var) if portfolio_var > 0 else np.zeros(n)
         return risk_contrib
-    
+
     def objective(w):
         rc = risk_contribution(w)
         target_risk = 1.0 / n  # Equal risk contribution
         return np.sum((rc - target_risk) ** 2)
-    
+
     constraints = [
         {"type": "eq", "fun": lambda w: np.sum(w) - 1},
     ]
     bounds = [(0.001, max_weight) for _ in range(n)]
-    
+
     x0 = np.ones(n) / n
     result = minimize(objective, x0, method="SLSQP", bounds=bounds, constraints=constraints)
-    
+
     return {s: round(w, 4) for s, w in zip(symbols, result.x) if w > 0.001}
 
 
@@ -570,15 +566,15 @@ def _optimize_inverse_vol(returns, max_weight: float) -> Dict[str, float]:
     """Inverse Volatility optimization."""
     symbols = list(returns.columns)
     vols = returns.std() * np.sqrt(252)  # Annualized volatility
-    
+
     # Weight inversely proportional to volatility
     inv_vols = 1.0 / vols
     weights = inv_vols / inv_vols.sum()
-    
+
     # Apply max weight constraint
     weights = weights.clip(upper=max_weight)
     weights = weights / weights.sum()  # Renormalize
-    
+
     return {s: round(w, 4) for s, w in zip(symbols, weights.values) if w > 0.001}
 
 
@@ -593,11 +589,9 @@ async def analyze_factors(req: FactorAnalysisRequest, _: None = Depends(require_
     - IC and Rank IC for each factor
     - R-squared and model statistics
     """
-    import pandas as pd
-    from app.db.database import _get_conn
-    
+
     FACTOR_ANALYSIS_TIMEOUT = 30  # seconds
-    
+
     try:
         result = await asyncio.wait_for(
             _run_factor_analysis(req),
@@ -616,9 +610,9 @@ async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:
     import pandas as pd
     from scipy import stats
     from app.db.database import _get_conn
-    
+
     loop = asyncio.get_event_loop()
-    
+
     def _sync_fetch_data():
         conn = _get_conn()
         try:
@@ -633,52 +627,52 @@ async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:
             return rows
         finally:
             conn.close()
-    
+
     rows = await loop.run_in_executor(_executor, _sync_fetch_data)
-    
+
     if len(rows) < 60:
         raise ValueError(f"Insufficient data for factor analysis: {len(rows)} rows")
-    
+
     df = pd.DataFrame(rows, columns=["date", "close", "volume"])
     df["date"] = pd.to_datetime(df["date"])
     df = df.set_index("date")
-    
+
     df["return"] = df["close"].pct_change()
     df = df.dropna()
-    
+
     factor_data = {}
     exposures = {}
     ic_values = {}
-    
+
     if "momentum" in req.factors:
         df["momentum"] = df["close"].pct_change(252).shift(21)
         factor_data["momentum"] = df["momentum"]
-    
+
     if "value" in req.factors:
         df["value"] = -np.log(df["close"])
         factor_data["value"] = df["value"]
-    
+
     if "quality" in req.factors:
         df["quality"] = -df["return"].rolling(60).std()
         factor_data["quality"] = df["quality"]
-    
+
     if "size" in req.factors:
         df["size"] = -np.log(df["volume"] + 1)
         factor_data["size"] = df["size"]
-    
+
     if "volatility" in req.factors:
         df["volatility"] = df["return"].rolling(20).std()
         factor_data["volatility"] = df["volatility"]
-    
+
     for factor_name, factor_series in factor_data.items():
         aligned = pd.DataFrame({
             "return": df["return"],
             "factor": factor_series
         }).dropna()
-        
+
         if len(aligned) < 30:
             continue
-        
+
         slope, intercept, r_value, p_value, std_err = stats.linregress(
             aligned["factor"], aligned["return"]
         )
@@ -688,14 +682,14 @@ async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:
             "p_value": round(p_value, 4),
             "r_squared": round(r_value ** 2, 4),
         }
-        
+
         ic = aligned["factor"].corr(aligned["return"])
         rank_ic = aligned["factor"].corr(aligned["return"], method="spearman")
         ic_values[factor_name] = {
             "ic": round(ic, 4),
             "rank_ic": round(rank_ic, 4),
         }
-    
+
     return {
         "symbol": req.symbol,
         "start_date": req.start_date,
@@ -721,32 +715,32 @@ async def calculate_risk_metrics(req: RiskMetricsRequest):
     - Win rate
     """
     import numpy as np
-    
+
     returns = np.array(req.daily_returns)
-    
+
     if len(returns) < 2:
         return error_response(ErrorCode.BAD_REQUEST, "Need at least 2 return values")
-    
+
     # Annualization factor
     ann_factor = req.annual_periods
-    
+
     # Calculate metrics
     mean_return = np.mean(returns)
     std_return = np.std(returns, ddof=1)
-    
+
     ann_return = mean_return * ann_factor
     ann_volatility = std_return * np.sqrt(ann_factor)
     sharpe_ratio = ann_return / ann_volatility if ann_volatility > 0 else 0
-    
+
     # Max drawdown
     cumulative = np.cumprod(1 + returns)
     running_max = np.maximum.accumulate(cumulative)
     drawdowns = (cumulative - running_max) / running_max
     max_drawdown = np.min(drawdowns)
-    
+
     # Win rate
     win_rate = np.sum(returns > 0) / len(returns) * 100
-    
+
     return success_response({
         "annualized_return": round(ann_return * 100, 2),
         "annualized_volatility": round(ann_volatility * 100, 2),

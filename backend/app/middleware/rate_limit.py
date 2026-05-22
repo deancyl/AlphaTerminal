@@ -8,24 +8,20 @@ v0.6.61: Migrated from Fixed Window Counter to Token Bucket algorithm.
 """
 import time
 import logging
-from typing import Dict, Optional, Tuple, Any
-from dataclasses import dataclass, field
+from typing import Optional
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from app.middleware.rate_limit_token_bucket import TokenBucketRateLimiter, get_token_bucket_limiter
-from app.middleware.rate_limit_sqlite import SQLiteRateLimiter
 
 # Use Token Bucket as primary, SQLite Fixed Window as fallback
 PrimaryRateLimiter = TokenBucketRateLimiter
 
 from app.config.rate_limit import (
     RateLimitConfig,
-    EndpointLimit,
     get_limit_for_path,
     is_exempt_path,
-    ENDPOINT_LIMITS,
 )
 from app.utils.ip_validation import get_client_ip_safe
 
@@ -102,7 +98,7 @@ def create_rate_limit_response(
         "retry_after": retry_after,
         "detail": f"Rate limit exceeded. Try again in {retry_after} seconds."
     }
-    
+
     response = JSONResponse(
         status_code=429,
         content=content,
@@ -113,7 +109,7 @@ def create_rate_limit_response(
             "X-RateLimit-Reset": str(reset),
         }
     )
-    
+
     return response
 
 
@@ -144,37 +140,37 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.config = config or RateLimitConfig()
         self.limiter = get_limiter()
-    
+
     async def dispatch(self, request: Request, call_next):
         if not self.config.enabled:
             return await call_next(request)
-        
+
         path = request.url.path
-        
+
         if is_exempt_path(path):
             return await call_next(request)
-        
+
         if request.method == "OPTIONS":
             return await call_next(request)
-        
+
         client_ip = get_client_ip(request)
         endpoint_limit = get_limit_for_path(path)
-        
+
         # Get category for refill rate and burst capacity
         from app.config.rate_limit import get_endpoint_category
         category = get_endpoint_category(path)
         refill_rate = get_refill_rate_for_category(category)
         burst_capacity = get_burst_capacity_for_category(category)
-        
+
         key = f"{client_ip}:{path}"
-        
+
         # Use Token Bucket algorithm
         is_allowed, remaining, limit, reset = self.limiter.is_allowed(
             key,
             refill_rate=refill_rate,
             burst_capacity=burst_capacity
         )
-        
+
         if not is_allowed:
             retry_after = reset - int(time.time())
             logger.warning(
@@ -187,14 +183,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 remaining=remaining,
                 reset=reset
             )
-        
+
         response = await call_next(request)
-        
+
         response.headers["X-RateLimit-Limit"] = str(limit)
         response.headers["X-RateLimit-Remaining"] = str(remaining)
         response.headers["X-RateLimit-Reset"] = str(reset)
         response.headers["X-RateLimit-Algorithm"] = "token-bucket"
-        
+
         return response
 
 

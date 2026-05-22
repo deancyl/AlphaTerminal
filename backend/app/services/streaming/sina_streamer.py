@@ -22,7 +22,7 @@ except ImportError:
     websockets = None
     ClientConnection = None
 
-from .base_streamer import BaseStreamer, StreamerState
+from .base_streamer import BaseStreamer
 
 logger = logging.getLogger(__name__)
 
@@ -34,29 +34,29 @@ class SinaStreamer(BaseStreamer):
     Connects to Sina's WebSocket API and parses tick messages
     for broadcasting to connected clients.
     """
-    
+
     name = "sina"
     ws_url = "wss://hq.sinajs.cn/ws"
-    
+
     PING_INTERVAL = 30
     MESSAGE_TIMEOUT = 60
-    
+
     def __init__(self, on_tick=None, proxy: Optional[str] = None):
         super().__init__(on_tick=on_tick)
         self._proxy = proxy
         self._ws: Optional[Any] = None
         self._ping_task = None
         self._last_ping_time = 0.0
-    
+
     async def connect(self):
         if websockets is None:
             raise ImportError("websockets library not installed. Run: pip install websockets")
-        
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Origin": "https://finance.sina.com.cn",
         }
-        
+
         self._ws = await websockets.connect(
             self.ws_url,
             additional_headers=headers,
@@ -64,55 +64,55 @@ class SinaStreamer(BaseStreamer):
             ping_timeout=10,
             close_timeout=5,
         )
-        
+
         logger.info(f"[{self.name}] WebSocket connected to {self.ws_url}")
-    
+
     async def subscribe(self, symbols: List[str]):
         if not self._ws or not symbols:
             return
-        
+
         msg = json.dumps({
             "action": "subscribe",
             "symbols": symbols
         }, ensure_ascii=False)
-        
+
         await self._ws.send(msg)
         logger.debug(f"[{self.name}] Subscribed to {len(symbols)} symbols")
-    
+
     async def unsubscribe(self, symbols: List[str]):
         if not self._ws or not symbols:
             return
-        
+
         msg = json.dumps({
             "action": "unsubscribe",
             "symbols": symbols
         }, ensure_ascii=False)
-        
+
         await self._ws.send(msg)
         logger.debug(f"[{self.name}] Unsubscribed from {len(symbols)} symbols")
-    
+
     async def disconnect(self):
         ping_task: Optional[asyncio.Task] = self._ping_task
         self._ping_task = None
-        
+
         if ping_task is not None:
             ping_task.cancel()
             try:
                 await ping_task
             except asyncio.CancelledError:
                 pass
-        
+
         ws = self._ws
         self._ws = None
-        
+
         if ws is not None:
             try:
                 await ws.close()
             except (RuntimeError, ValueError, AttributeError):
                 pass
-        
+
         logger.info(f"[{self.name}] Disconnected")
-    
+
     async def _message_loop(self):
         while self._running and self._ws:
             try:
@@ -120,56 +120,56 @@ class SinaStreamer(BaseStreamer):
                     self._ws.recv(),
                     timeout=self.MESSAGE_TIMEOUT
                 )
-                
+
                 await self._handle_message(raw)
-                
+
             except asyncio.TimeoutError:
                 logger.warning(f"[{self.name}] Message timeout, sending ping", exc_info=True)
                 await self._send_ping()
-                
+
             except Exception as e:
                 if websockets and isinstance(e, websockets.exceptions.ConnectionClosed):
                     logger.warning(f"[{self.name}] Connection closed: {e}", exc_info=True)
                     raise
                 logger.error(f"[{self.name}] Message loop error: {e}", exc_info=True)
                 raise
-    
+
     async def _handle_message(self, raw: Union[str, bytes]):
         if isinstance(raw, bytes):
             raw = raw.decode('utf-8')
         try:
             data = json.loads(raw)
-            
+
             if data.get("type") == "pong":
                 logger.debug(f"[{self.name}] Received pong")
                 return
-            
+
             if data.get("type") == "tick":
                 tick = self._parse_tick(data)
                 if tick and tick.get("symbol"):
                     self._emit_tick(tick["symbol"], tick)
-                    
+
         except json.JSONDecodeError:
             logger.warning(f"[{self.name}] Invalid JSON: {raw[:100]}", exc_info=True)
         except Exception as e:
             logger.error(f"[{self.name}] Handle message error: {e}", exc_info=True)
-    
+
     def _parse_tick(self, data: Dict) -> Optional[Dict[str, Any]]:
         symbol = data.get("symbol", "")
         if not symbol:
             return None
-        
+
         symbol = symbol.lower().strip()
-        
+
         price = float(data.get("price", 0) or 0)
         prev_close = float(data.get("prev_close", 0) or 0)
-        
+
         if price <= 0:
             return None
-        
+
         change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
         change = round(price - prev_close, 3) if prev_close > 0 else 0.0
-        
+
         return {
             "type": "tick",
             "symbol": symbol,
@@ -187,7 +187,7 @@ class SinaStreamer(BaseStreamer):
             "timestamp": int(time.time()),
             "source": "sina_ws",
         }
-    
+
     async def _send_ping(self):
         if self._ws:
             try:
@@ -203,12 +203,12 @@ class MockSinaStreamer(BaseStreamer):
     
     Generates simulated tick data at regular intervals.
     """
-    
+
     name = "mock_sina"
     ws_url = "mock://localhost"
-    
+
     TICK_INTERVAL = 1.0
-    
+
     MOCK_PRICES = {
         "sh600519": {"name": "贵州茅台", "base": 1800.0},
         "sz000001": {"name": "平安银行", "base": 12.0},
@@ -217,32 +217,32 @@ class MockSinaStreamer(BaseStreamer):
         "sz399001": {"name": "深证成指", "base": 10500.0},
         "sz399006": {"name": "创业板指", "base": 2100.0},
     }
-    
+
     async def connect(self):
         logger.info(f"[{self.name}] Mock connection established")
-    
+
     async def subscribe(self, symbols: List[str]):
         logger.info(f"[{self.name}] Mock subscribed to {symbols}")
-    
+
     async def unsubscribe(self, symbols: List[str]):
         logger.info(f"[{self.name}] Mock unsubscribed from {symbols}")
-    
+
     async def disconnect(self):
         logger.info(f"[{self.name}] Mock disconnected")
-    
+
     async def _message_loop(self):
         import random
-        
+
         while self._running:
             for symbol in self._subscribed_symbols:
                 mock_data = self.MOCK_PRICES.get(symbol, {"name": symbol, "base": 100.0})
                 base_price = mock_data["base"]
-                
+
                 variation = random.uniform(-0.02, 0.02)
                 price = base_price * (1 + variation)
                 prev_close = base_price
                 change_pct = (price - prev_close) / prev_close * 100
-                
+
                 tick = {
                     "type": "tick",
                     "symbol": symbol,
@@ -260,7 +260,7 @@ class MockSinaStreamer(BaseStreamer):
                     "timestamp": int(time.time()),
                     "source": "mock",
                 }
-                
+
                 self._emit_tick(symbol, tick)
-            
+
             await asyncio.sleep(self.TICK_INTERVAL)

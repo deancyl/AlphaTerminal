@@ -14,12 +14,12 @@ DB_PATH = "/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/database.db
 def fix_portfolios_table(conn):
     """修复 portfolios 表缺失字段"""
     cursor = conn.cursor()
-    
+
     # 检查现有列
     cursor.execute("PRAGMA table_info(portfolios)")
     existing_cols = {row[1] for row in cursor.fetchall()}
     print(f"现有 portfolios 列：{existing_cols}")
-    
+
     # 需要添加的列
     new_cols = [
         ("currency", "TEXT DEFAULT 'CNY'"),
@@ -30,7 +30,7 @@ def fix_portfolios_table(conn):
         ("initial_capital", "REAL DEFAULT 0"),
         ("description", "TEXT DEFAULT ''"),
     ]
-    
+
     added = 0
     for col_name, col_def in new_cols:
         if col_name not in existing_cols:
@@ -41,7 +41,7 @@ def fix_portfolios_table(conn):
                 added += 1
             except sqlite3.OperationalError as e:
                 print(f"⚠️  {col_name} 可能已存在：{e}")
-    
+
     conn.commit()
     print(f"portfolios 表修复完成，新增 {added} 列")
     return added
@@ -49,7 +49,7 @@ def fix_portfolios_table(conn):
 def create_backtest_tables(conn):
     """创建回测相关表"""
     cursor = conn.cursor()
-    
+
     # backtest_strategies 表
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS backtest_strategies (
@@ -62,7 +62,7 @@ def create_backtest_tables(conn):
     )
     """)
     print("✅ CREATE TABLE backtest_strategies")
-    
+
     # backtest_results 表
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS backtest_results (
@@ -86,25 +86,25 @@ def create_backtest_tables(conn):
     )
     """)
     print("✅ CREATE TABLE backtest_results")
-    
+
     conn.commit()
     print("回测表创建完成")
 
 def verify_fix(conn):
     """验证修复结果"""
     cursor = conn.cursor()
-    
+
     print("\n=== 验证 portfolios 表结构 ===")
     cursor.execute("PRAGMA table_info(portfolios)")
     cols = [row[1] for row in cursor.fetchall()]
     print(f"列数：{len(cols)}")
     print(f"列名：{cols}")
-    
+
     print("\n=== 验证 backtest 表 ===")
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'backtest%'")
     tables = [row[0] for row in cursor.fetchall()]
     print(f"回测相关表：{tables}")
-    
+
     print("\n=== 验证 portfolios 数据 ===")
     cursor.execute("SELECT COUNT(*) FROM portfolios")
     count = cursor.fetchone()[0]
@@ -114,22 +114,22 @@ if __name__ == "__main__":
     print("=" * 60)
     print("Phase 6.7: 数据库迁移修复脚本")
     print("=" * 60)
-    
+
     try:
         conn = sqlite3.connect(DB_PATH)
         print(f"✅ 数据库连接成功：{DB_PATH}")
-        
+
         # 执行修复
         fix_portfolios_table(conn)
         create_backtest_tables(conn)
-        
+
         # 验证
         verify_fix(conn)
-        
+
         conn.close()
         print("\n✅ 数据库迁移修复完成！")
         sys.exit(0)
-        
+
     except Exception as e:
         print(f"\n❌ 修复失败：{type(e).__name__}: {e}")
         import traceback

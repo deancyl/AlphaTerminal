@@ -5,9 +5,7 @@ AlphaTerminal 实时新闻引擎 - Phase 5
 import asyncio
 import hashlib
 import logging
-import os
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
@@ -37,12 +35,12 @@ _CACHE_LOCK = threading.Lock()
 
 # ── 缓存去重说明 ─────────────────────────────────────────────────────────
 # 【重要】新闻快讯是时效性内容，不应使用持久化去重！
-# 
+#
 # 原因：
 # 1. 新闻有时效性，用户需要看到最新的新闻列表
 # 2. 持久化去重会阻止所有已见过的新闻再次显示
 # 3. 服务重启后，所有新闻都会被过滤掉，导致快讯无数据
-# 
+#
 # 正确做法：使用局部 seen 集合，仅在当前刷新周期内去重
 # 错误做法：使用全局持久化集合，跨会话去重
 #
@@ -231,7 +229,7 @@ def refresh_news_cache(background: bool = True):
                 ))
             finally:
                 loop.close()
-            
+
             all_news.extend(macro_news)
             sources_used.append(f"parallel:{len(_MACRO_SYMBOLS)}")
             logger.info(f"[SCHEDULER] 宏观快讯并行获取: {len(macro_news)} 条")

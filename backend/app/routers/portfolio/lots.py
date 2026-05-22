@@ -17,12 +17,10 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 
 from app.utils.errors import success_response
 from app.middleware import require_api_key
-from app.db.database import _get_conn, _lock, get_conn
+from app.db.database import _get_conn, get_conn
 from app.services.trading import (
-    execute_buy, execute_sell, get_open_lots, count_open_lots,
-    calc_unrealized_pnl,
+    execute_buy, execute_sell, get_open_lots, calc_unrealized_pnl,
     upsert_position_summary, update_market_value, get_position_summary,
-    LotRecord, SellResult,
 )
 
 from .dependencies import (
@@ -69,11 +67,11 @@ async def buy_lot(portfolio_id: int, body: BuyIn, _: None = Depends(require_api_
             "buy_date": lot.buy_date,
             "status": lot.status,
         }
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_portfolio_executor, _sync_work)
-    
+
     try:
         result = await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
         return success_response(result)
@@ -165,11 +163,11 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
                 for lc in result.lots_closed
             ],
         }
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_portfolio_executor, _sync_work)
-    
+
     try:
         result = await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
         return success_response(result)
@@ -232,12 +230,12 @@ async def list_lots(
             "includes_children": include_children,
             "portfolio_ids": all_ids if include_children else [portfolio_id],
         }
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -266,12 +264,12 @@ async def unrealized_pnl(
     """
     def _sync_work():
         return calc_unrealized_pnl(portfolio_id, symbol, current_price)
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -404,12 +402,12 @@ async def check_conservation(portfolio_id: int):
             }
         finally:
             conn.close()
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -444,10 +442,10 @@ async def get_portfolio_tree(portfolio_id: int):
                 FROM portfolio_tree 
                 ORDER BY depth, id
             """, (portfolio_id,)).fetchall()
-            
+
             if not tree_rows:
                 return {"tree": {}}
-            
+
             tree_ids = [r[0] for r in tree_rows]
             placeholders = ','.join(['?' for _ in tree_ids])
             pos_rows = conn.execute(f"""
@@ -455,13 +453,13 @@ async def get_portfolio_tree(portfolio_id: int):
                 FROM positions 
                 WHERE portfolio_id IN ({placeholders})
             """, tuple(tree_ids)).fetchall()
-            
+
             pos_map = {}
             for pid, sym, shares in pos_rows:
                 if pid not in pos_map:
                     pos_map[pid] = []
                 pos_map[pid].append((sym, shares))
-            
+
             spot = SpotCache.get_stocks() or []
             price_map = {}
             for s in spot:
@@ -470,16 +468,16 @@ async def get_portfolio_tree(portfolio_id: int):
                 price_map[code] = price
                 if len(code) > 2:
                     price_map[code[2:]] = price
-            
+
             node_map = {}
             for row in tree_rows:
                 pid, name, ptype, parent_id, cash, status, depth = row
-                
+
                 pos_value = 0.0
                 for sym, shares in pos_map.get(pid, []):
                     price = price_map.get(sym) or price_map.get(sym[2:] if len(sym) > 2 else sym) or 0.0
                     pos_value += shares * price
-                
+
                 node_map[pid] = {
                     "id": pid,
                     "name": name,
@@ -491,36 +489,36 @@ async def get_portfolio_tree(portfolio_id: int):
                     "children": [],
                     "_parent_id": parent_id,
                 }
-            
+
             root = None
             for row in tree_rows:
                 pid = row[0]
                 parent_id = row[3]
                 node = node_map[pid]
-                
+
                 if parent_id is None:
                     root = node
                 elif parent_id in node_map:
                     node_map[parent_id]["children"].append(node)
-            
+
             def clean_node(node):
                 if "_parent_id" in node:
                     del node["_parent_id"]
                 for child in node.get("children", []):
                     clean_node(child)
-            
+
             if root:
                 clean_node(root)
-            
+
             return {"tree": root}
         finally:
             conn.close()
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -579,12 +577,12 @@ async def list_lots_with_summary(
                 "has_more": offset + len(paginated) < total
             }
         }
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -614,12 +612,12 @@ async def lots_summary(
     def _sync_work():
         rows = get_position_summary(portfolio_id, symbol, include_children=include_children)
         return {"summary": rows, "count": len(rows), "includes_children": include_children}
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -650,12 +648,12 @@ async def refresh_market_value(
     """
     def _sync_work():
         return update_market_value(portfolio_id, symbol, current_price)
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -702,12 +700,12 @@ async def lots_echarts_data(
             "total_market_value": round(total_mv, 2),
             "positions": chart_data,
         }
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:

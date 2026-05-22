@@ -12,8 +12,7 @@ Key Features:
 import asyncio
 import logging
 import threading
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Any, Optional
 from threading import RLock
 
@@ -33,7 +32,7 @@ class ModelMetrics:
     rejected: int = 0
     total_requests: int = 0
     total_acquired: int = 0
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "model_key": self.model_key,
@@ -56,18 +55,18 @@ class ConcurrencyLimiter:
     - Queue with timeout
     - Metrics tracking
     """
-    
+
     def __init__(self):
         self._lock = RLock()
         self._semaphores: Dict[str, asyncio.Semaphore] = {}
         self._limits: Dict[str, int] = {}
         self._metrics: Dict[str, ModelMetrics] = {}
-        
+
         logger.info("[ConcurrencyLimiter] Initialized")
-    
+
     def _get_model_key(self, provider: str, model_id: str) -> str:
         return f"{provider}:{model_id}"
-    
+
     def _ensure_semaphore(self, model_key: str, max_concurrent: int = DEFAULT_MAX_CONCURRENT):
         """Ensure semaphore exists for model"""
         with self._lock:
@@ -77,13 +76,13 @@ class ConcurrencyLimiter:
                     self._semaphores[model_key] = asyncio.Semaphore(max_concurrent)
                 except RuntimeError:
                     self._semaphores[model_key] = asyncio.Semaphore(max_concurrent)
-                
+
                 self._limits[model_key] = max_concurrent
                 self._metrics[model_key] = ModelMetrics(
                     model_key=model_key,
                     max_concurrent=max_concurrent
                 )
-    
+
     async def acquire(
         self,
         provider: str,
@@ -102,36 +101,36 @@ class ConcurrencyLimiter:
             True if acquired, False if timeout
         """
         model_key = self._get_model_key(provider, model_id)
-        
+
         self._ensure_semaphore(model_key)
-        
+
         with self._lock:
             self._metrics[model_key].total_requests += 1
             self._metrics[model_key].queued += 1
-        
+
         try:
             semaphore = self._semaphores[model_key]
-            
+
             acquired = await asyncio.wait_for(
                 semaphore.acquire(),
                 timeout=timeout
             )
-            
+
             with self._lock:
                 self._metrics[model_key].queued -= 1
                 self._metrics[model_key].active += 1
                 self._metrics[model_key].total_acquired += 1
-            
+
             return True
-            
+
         except asyncio.TimeoutError:
             with self._lock:
                 self._metrics[model_key].queued -= 1
                 self._metrics[model_key].rejected += 1
-            
+
             logger.warning(f"[ConcurrencyLimiter] Timeout for {model_key}", exc_info=True)
             return False
-    
+
     def release(self, provider: str, model_id: str):
         """
         Release a slot for the model.
@@ -141,19 +140,19 @@ class ConcurrencyLimiter:
             model_id: Model ID
         """
         model_key = self._get_model_key(provider, model_id)
-        
+
         with self._lock:
             if model_key not in self._semaphores:
                 logger.warning(f"[ConcurrencyLimiter] No semaphore for {model_key}")
                 return
-            
+
             semaphore = self._semaphores[model_key]
             metrics = self._metrics[model_key]
-            
+
             if metrics.active > 0:
                 metrics.active -= 1
                 semaphore.release()
-    
+
     def get_metrics(self) -> Dict[str, Dict[str, Any]]:
         """
         Get all model metrics.
@@ -163,7 +162,7 @@ class ConcurrencyLimiter:
         """
         with self._lock:
             return {k: v.to_dict() for k, v in self._metrics.items()}
-    
+
     def get_model_metrics(self, provider: str, model_id: str) -> Optional[Dict[str, Any]]:
         """
         Get metrics for a specific model.
@@ -180,7 +179,7 @@ class ConcurrencyLimiter:
             if model_key in self._metrics:
                 return self._metrics[model_key].to_dict()
         return None
-    
+
     def update_limit(self, provider: str, model_id: str, new_limit: int):
         """
         Update concurrency limit for a model.
@@ -193,15 +192,15 @@ class ConcurrencyLimiter:
             new_limit: New max concurrent
         """
         model_key = self._get_model_key(provider, model_id)
-        
+
         with self._lock:
             self._limits[model_key] = new_limit
-            
+
             try:
                 self._semaphores[model_key] = asyncio.Semaphore(new_limit)
             except RuntimeError:
                 pass
-            
+
             if model_key in self._metrics:
                 self._metrics[model_key].max_concurrent = new_limit
             else:
@@ -209,9 +208,9 @@ class ConcurrencyLimiter:
                     model_key=model_key,
                     max_concurrent=new_limit
                 )
-            
+
             logger.info(f"[ConcurrencyLimiter] Updated {model_key} limit to {new_limit}")
-    
+
     def get_limit(self, provider: str, model_id: str) -> int:
         """
         Get current limit for a model.
@@ -225,7 +224,7 @@ class ConcurrencyLimiter:
         """
         model_key = self._get_model_key(provider, model_id)
         return self._limits.get(model_key, DEFAULT_MAX_CONCURRENT)
-    
+
     def reset_metrics(self, provider: str = None, model_id: str = None):
         """
         Reset metrics for a model or all models.
@@ -246,7 +245,7 @@ class ConcurrencyLimiter:
                     metrics.rejected = 0
                     metrics.total_requests = 0
                     metrics.total_acquired = 0
-    
+
     def get_summary(self) -> Dict[str, Any]:
         """
         Get overall summary.
@@ -259,7 +258,7 @@ class ConcurrencyLimiter:
             total_queued = sum(m.queued for m in self._metrics.values())
             total_rejected = sum(m.rejected for m in self._metrics.values())
             total_requests = sum(m.total_requests for m in self._metrics.values())
-            
+
             return {
                 "total_models": len(self._metrics),
                 "total_active": total_active,
@@ -272,14 +271,14 @@ class ConcurrencyLimiter:
 
 class ConcurrencyContext:
     """Context manager for automatic acquire/release"""
-    
+
     def __init__(self, limiter: ConcurrencyLimiter, provider: str, model_id: str, timeout: float = DEFAULT_TIMEOUT):
         self._limiter = limiter
         self._provider = provider
         self._model_id = model_id
         self._timeout = timeout
         self._acquired = False
-    
+
     async def __aenter__(self) -> bool:
         self._acquired = await self._limiter.acquire(
             self._provider,
@@ -287,7 +286,7 @@ class ConcurrencyContext:
             self._timeout
         )
         return self._acquired
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self._acquired:
             self._limiter.release(self._provider, self._model_id)

@@ -259,24 +259,24 @@ def _get_conn():
 def seed_pricing_catalog(models: List[Dict[str, Any]] = None, force: bool = False) -> Dict[str, int]:
     if models is None:
         models = BUILTIN_MODELS
-    
+
     conn = _get_conn()
     try:
         now = datetime.now().isoformat()
         inserted = 0
         updated = 0
         skipped = 0
-        
+
         for model in models:
             existing = conn.execute(
                 "SELECT model_id FROM model_pricing_catalog WHERE model_id = ?",
                 (model["model_id"],)
             ).fetchone()
-            
+
             if existing and not force:
                 skipped += 1
                 continue
-            
+
             if existing and force:
                 conn.execute("""
                     UPDATE model_pricing_catalog 
@@ -302,13 +302,13 @@ def seed_pricing_catalog(models: List[Dict[str, Any]] = None, force: bool = Fals
                     model["context_length"], model.get("metadata"), now, now
                 ))
                 inserted += 1
-        
+
         conn.commit()
-        
+
         logger.info(f"[Seed] Pricing catalog: {inserted} inserted, {updated} updated, {skipped} skipped")
-        
+
         return {"inserted": inserted, "updated": updated, "skipped": skipped}
-        
+
     finally:
         conn.close()
 
@@ -322,7 +322,7 @@ def get_all_pricing() -> List[Dict[str, Any]]:
             FROM model_pricing_catalog
             ORDER BY provider, model_id
         """).fetchall()
-        
+
         result = []
         for row in rows:
             result.append({
@@ -347,10 +347,10 @@ def get_pricing_by_model(model_id: str) -> Optional[Dict[str, Any]]:
             "SELECT * FROM model_pricing_catalog WHERE model_id = ?",
             (model_id,)
         ).fetchone()
-        
+
         if not row:
             return None
-        
+
         return {
             "model_id": row["model_id"],
             "provider": row["provider"],
@@ -369,7 +369,7 @@ def calculate_cost(model_id: str, prompt_tokens: int, completion_tokens: int) ->
     pricing = get_pricing_by_model(model_id)
     if not pricing:
         return None
-    
+
     input_cost = prompt_tokens * pricing["input_cost_per_token"]
     output_cost = completion_tokens * pricing["output_cost_per_token"]
     return input_cost + output_cost
@@ -377,14 +377,14 @@ def calculate_cost(model_id: str, prompt_tokens: int, completion_tokens: int) ->
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Seed model pricing catalog")
     parser.add_argument("--force", action="store_true", help="Force update existing entries")
     parser.add_argument("--list", action="store_true", help="List all pricing entries")
     args = parser.parse_args()
-    
+
     logging.basicConfig(level=logging.INFO)
-    
+
     if args.list:
         pricing = get_all_pricing()
         print(f"\n=== Pricing Catalog ({len(pricing)} models) ===")

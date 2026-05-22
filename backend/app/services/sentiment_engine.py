@@ -3,7 +3,6 @@
 策略：启动即填充 china_all + 后台 Sina HQ 增量刷新
 """
 import logging
-import os
 import threading
 from datetime import datetime
 
@@ -284,7 +283,7 @@ def _bg_sina_refresh():
         logger.warning("[SpotCache] Sina HQ 返回不足，尝试从数据库兜底")
     except Exception as e:
         logger.warning(f"[SpotCache] Sina HQ 失败，尝试从数据库兜底: {type(e).__name__}: {e}", exc_info=True)
-    
+
     # 兜底：从 market_all_stocks 读取全市场数据
     try:
         from app.db.database import get_all_stocks

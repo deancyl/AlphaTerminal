@@ -10,13 +10,10 @@ Tests:
 - test_hot_reload_reads_from_db
 """
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-import threading
+from unittest.mock import patch
 
 from app.services.model_config_service import (
     ModelConfigService,
-    ModelInstance,
-    ProviderState,
     get_model_config_service,
 )
 
@@ -43,12 +40,12 @@ class TestModelConfigService:
         # Reset the singleton
         import app.services.model_config_service as module
         module._service_instance = None
-        
+
         instance1 = get_model_config_service()
         instance2 = get_model_config_service()
-        
+
         assert instance1 is instance2, "Singleton should return same instance"
-        
+
         # Cleanup
         module._service_instance = None
 
@@ -70,9 +67,9 @@ class TestModelConfigService:
                 }
             }
         }
-        
+
         result = service.get_model("openai", "gpt-4")
-        
+
         assert result is not None
         assert result.model_id == "gpt-4"
         assert result.provider == "openai"
@@ -89,7 +86,7 @@ class TestModelConfigService:
     def test_add_model_creates_entry(self, service, mock_model_config_db):
         """add_model should create new model entry in DB."""
         mock_model_config_db.add_model_to_config.return_value = True
-        
+
         result = service.add_model(
             provider="openai",
             model_id="gpt-4-turbo",
@@ -100,10 +97,10 @@ class TestModelConfigService:
                 "metadata": {"description": "GPT-4 Turbo"}
             }
         )
-        
+
         assert result is True
         mock_model_config_db.add_model_to_config.assert_called_once()
-        
+
         call_args = mock_model_config_db.add_model_to_config.call_args
         assert call_args[0][0] == "llm_openai"
         assert call_args[0][1] == "gpt-4-turbo"
@@ -114,7 +111,7 @@ class TestModelConfigService:
     def test_update_model_modifies_config(self, service, mock_model_config_db):
         """update_model should modify existing model config."""
         mock_model_config_db.update_model_in_config.return_value = True
-        
+
         result = service.update_model(
             provider="openai",
             model_id="gpt-4",
@@ -123,7 +120,7 @@ class TestModelConfigService:
                 "enabled": False
             }
         )
-        
+
         assert result is True
         mock_model_config_db.update_model_in_config.assert_called_once_with(
             "llm_openai", "gpt-4", {"max_concurrent": 20, "enabled": False}
@@ -135,9 +132,9 @@ class TestModelConfigService:
     def test_remove_model_deletes_entry(self, service, mock_model_config_db):
         """remove_model should delete model from config."""
         mock_model_config_db.remove_model_from_config.return_value = True
-        
+
         result = service.remove_model(provider="openai", model_id="gpt-4")
-        
+
         assert result is True
         mock_model_config_db.remove_model_from_config.assert_called_once_with(
             "llm_openai", "gpt-4"
@@ -157,9 +154,9 @@ class TestModelConfigService:
                 "model1": {"enabled": True}
             }
         }
-        
+
         result1 = service.get_model("openai")
-        
+
         # Change DB config
         mock_model_config_db.get_model_config.return_value = {
             "api_key": "key2",
@@ -169,12 +166,12 @@ class TestModelConfigService:
                 "model2": {"enabled": True}
             }
         }
-        
+
         result2 = service.get_model("openai")
-        
+
         # Should have called DB twice (hot-reload)
         assert mock_model_config_db.get_model_config.call_count == 2
-        
+
         # Results should reflect different DB values
         assert result1.api_key == "key1"
         assert result2.api_key == "key2"
@@ -197,29 +194,29 @@ class TestModelConfigServiceEdgeCases:
     def test_get_model_returns_none_for_missing_provider(self, service, mock_model_config_db):
         """get_model should return None for non-existent provider."""
         mock_model_config_db.get_model_config.return_value = None
-        
+
         # Without env fallback
         with patch.dict('os.environ', {}, clear=True):
             result = service.get_model("nonexistent_provider")
-        
+
         assert result is None
 
     def test_get_all_providers_empty_db(self, service, mock_model_config_db):
         """get_all_providers should handle empty DB."""
         mock_model_config_db.get_all_model_configs.return_value = {}
-        
+
         with patch.dict('os.environ', {}, clear=True):
             result = service.get_all_providers()
-        
+
         assert isinstance(result, dict)
         # May have fallback providers from env
 
     def test_set_default_model(self, service, mock_model_config_db):
         """set_default should update default model."""
         mock_model_config_db.set_default_model.return_value = True
-        
+
         result = service.set_default("openai", "gpt-4-turbo")
-        
+
         assert result is True
         mock_model_config_db.set_default_model.assert_called_once_with(
             "llm_openai", "gpt-4-turbo"
@@ -228,9 +225,9 @@ class TestModelConfigServiceEdgeCases:
     def test_get_enabled_models(self, service, mock_model_config_db):
         """get_enabled_models should return list of enabled models."""
         mock_model_config_db.get_enabled_models.return_value = ["gpt-4", "gpt-3.5-turbo"]
-        
+
         result = service.get_enabled_models("openai")
-        
+
         assert result == ["gpt-4", "gpt-3.5-turbo"]
         mock_model_config_db.get_enabled_models.assert_called_once_with("llm_openai")
 

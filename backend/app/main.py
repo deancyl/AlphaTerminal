@@ -3,7 +3,6 @@ AlphaTerminal Backend - FastAPI Application Entry Point
 """
 import asyncio
 import logging
-import signal
 import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +10,6 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, FileResponse, ORJSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
-from pydantic import ValidationError
 from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
@@ -26,7 +24,7 @@ from app.services.watchdog import init_watchdog, stop_watchdog
 from app.middleware.agent_auth import audit_middleware
 from app.middleware.rate_limit import setup_rate_limiting, RateLimitConfig
 from app.config.settings import get_settings
-from app.services.executor_manager import executor_manager, ExecutorStatus
+from app.services.executor_manager import executor_manager
 
 # ── 优化服务导入 ───────────────────────────────────────────────────────────────
 # 这些服务是可选增强，不影响核心功能
@@ -47,30 +45,30 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理：启动和关闭时执行"""
     start_writer()
     init_watchdog()
-    
+
     logger.info("[Lifespan] Starting blocking data pre-warming...")
     await run_initial_data_fetch()
     logger.info("[Lifespan] Data pre-warming complete, starting HTTP server")
-    
+
     # Warmup macro cache in background
     asyncio.create_task(warmup_macro_cache())
     logger.info("[Lifespan] Macro cache warmup started in background")
-    
+
     # Warmup market_radar cache in background
     asyncio.create_task(warmup_market_radar_cache())
     logger.info("[Lifespan] Market Radar cache warmup started in background")
-    
+
     start_scheduler()
-    
+
     # 注册核心服务到 ExecutorManager
     executor_manager.register("scheduler", type('SchedulerProxy', (), {
         'shutdown': lambda: stop_scheduler()
     })(), shutdown_method="shutdown")
-    
+
     executor_manager.register("db_writer", type('DBWriterProxy', (), {
         'shutdown': lambda: stop_writer()
     })(), shutdown_method="shutdown")
-    
+
     executor_manager.register("watchdog", type('WatchdogProxy', (), {
         'shutdown': lambda: stop_watchdog()
     })(), shutdown_method="shutdown")
@@ -82,35 +80,35 @@ async def lifespan(app: FastAPI):
             # 初始化降级链（被动服务，无需启动）
             degradation_chain = get_degradation_chain()
             logger.info("[Lifespan] DegradationChain initialized")
-            
+
             # 初始化增量获取器（被动服务，无需启动）
             incremental_fetcher = get_incremental_fetcher()
             logger.info("[Lifespan] IncrementalKlineFetcher initialized")
-            
+
             # 初始化自适应熔断器管理器（被动服务，无需启动）
             adaptive_breaker_manager = get_adaptive_breaker_manager()
             logger.info("[Lifespan] AdaptiveCircuitBreaker initialized")
-            
+
             # 初始化健康检查器（被动服务，手动调用check_all）
             health_checker = get_health_checker()
             logger.info("[Lifespan] SourceHealthChecker initialized")
-            
+
             # 执行智能预热（异步，不阻塞启动）
             warmup_strategy = get_warmup_strategy()
             asyncio.create_task(warmup_strategy.warmup_all())
             logger.info("[Lifespan] WarmupStrategy started in background")
-            
+
         except Exception as e:
             logger.warning(f"[Lifespan] Optimization services initialization failed: {e}", exc_info=True)
 
     yield
-    
+
     # 关闭时：优雅退出 — 等待队列排空
     logger.info("[Lifespan] Starting graceful shutdown...")
-    
+
     # 使用 ExecutorManager 统一管理关闭
     shutdown_results = await executor_manager.shutdown_all(timeout=30.0)
-    
+
     failed_shutdowns = [name for name, success in shutdown_results.items() if not success]
     if failed_shutdowns:
         logger.warning(f"[Lifespan] Some executors failed to shutdown: {failed_shutdowns}")
@@ -140,7 +138,6 @@ audit_middleware(app)
 # ── Rate Limiting Middleware ───────────────────────────────────────────────────
 # Global rate limit: 200/minute, expensive endpoints have stricter limits
 # Can be disabled via RATE_LIMIT_ENABLED=false environment variable
-import os
 _rate_limit_enabled = os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
 rate_limit_config = RateLimitConfig(
     global_limit=200,
@@ -195,7 +192,7 @@ async def validation_exception_handler_legacy(request: Request, exc: RequestVali
     field = ".".join(str(l) for l in (first.get("loc") or []))
     msg   = first.get("msg", "") or str(exc)
     logger.warning(f"[422 ValidationError] path={request.url.path} field={field} msg={msg}")
-    
+
     def sanitize_value(v):
         if isinstance(v, Exception):
             return str(v)
@@ -207,9 +204,9 @@ async def validation_exception_handler_legacy(request: Request, exc: RequestVali
             return v
         else:
             return str(v)
-    
+
     sanitized_errors = [sanitize_value(e) for e in errors]
-    
+
     return JSONResponse(
         status_code=422,
         content={
@@ -334,11 +331,11 @@ FRONTEND_DIST = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend", "dist")
 # 如果 dist 目录存在，挂载静态文件服务
 if os.path.exists(FRONTEND_DIST):
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
-    
+
     @app.get("/")
     async def root():
         return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
-    
+
     @app.get("/{path:path}")
     async def catch_all(path: str):
         # 排除 API 路径

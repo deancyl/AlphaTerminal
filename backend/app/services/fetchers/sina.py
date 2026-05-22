@@ -23,11 +23,10 @@ from typing import Optional, List
 import httpx
 
 from .base import BaseMarketFetcher
-from .alphavantage import AlphavantageFetcher
 from ..http_client import ValidatedHTTPClient
-from ..circuit_breaker import CircuitBreaker, CircuitState
+from ..circuit_breaker import CircuitBreaker
 from ..data_validator import (
-    QuoteData, IndexQuoteData, KlineData,
+    QuoteData, KlineData,
     validate_quote, validate_kline,
     MarketType, DataType,
 )

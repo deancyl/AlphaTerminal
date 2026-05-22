@@ -39,7 +39,6 @@ def fetch_youtube_transcript(video_id: str, lang: str = "zh-CN") -> dict:
     Returns:
         {"title": str, "paragraphs": list[str], "duration": str, "source": str}
     """
-    import httpx
     from youtube_transcript_api import (
         YouTubeTranscriptApi,
         TranscriptsDisabled,

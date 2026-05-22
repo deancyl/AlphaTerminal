@@ -11,7 +11,6 @@ Validates orders before submission to broker:
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-import sqlite3
 
 from app.db.database import _get_conn
 
@@ -32,7 +31,7 @@ class ValidationResult:
     errors: List[ValidationError] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     validated_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    
+
     def add_error(
         self,
         code: str,
@@ -42,7 +41,7 @@ class ValidationResult:
     ) -> None:
         self.errors.append(ValidationError(code=code, message=message, field=field, details=details))
         self.is_valid = False
-    
+
     def add_warning(self, message: str) -> None:
         self.warnings.append(message)
 
@@ -57,13 +56,13 @@ class PreTradeValidator:
     3. Price sanity (within 10% of market)
     4. Position limits (max position size)
     """
-    
+
     MAX_POSITION_PCT = 0.3  # Max 30% of portfolio in single position
     PRICE_SANITY_PCT = 0.1  # Max 10% deviation from market price
-    
+
     def __init__(self, broker_adapter: Optional[Any] = None):
         self.broker_adapter = broker_adapter
-    
+
     def validate(
         self,
         portfolio_id: int,
@@ -74,17 +73,17 @@ class PreTradeValidator:
         order_type: str,
     ) -> ValidationResult:
         result = ValidationResult(is_valid=True)
-        
+
         if side == "buy":
             self._validate_buy_order(portfolio_id, symbol, quantity, price, order_type, result)
         elif side == "sell":
             self._validate_sell_order(portfolio_id, symbol, quantity, result)
-        
+
         if price is not None and order_type == "limit":
             self._validate_price_sanity(symbol, price, result)
-        
+
         return result
-    
+
     def _validate_buy_order(
         self,
         portfolio_id: int,
@@ -100,20 +99,20 @@ class PreTradeValidator:
                 "SELECT cash_balance FROM portfolios WHERE id=?",
                 (portfolio_id,),
             ).fetchone()
-            
+
             if not row:
                 result.add_error("PORTFOLIO_NOT_FOUND", f"Portfolio {portfolio_id} not found")
                 return
-            
+
             cash_balance = row["cash_balance"] or 0.0
-            
+
             if self.broker_adapter:
                 market_price = self.broker_adapter.get_market_price(symbol)
             else:
                 market_price = self._get_cached_price(symbol)
-            
+
             estimated_cost = quantity * (price or market_price)
-            
+
             if estimated_cost > cash_balance:
                 result.add_error(
                     "INSUFFICIENT_CASH",
@@ -125,12 +124,12 @@ class PreTradeValidator:
                         "shortfall": estimated_cost - cash_balance,
                     }
                 )
-            
+
             self._check_position_limit(portfolio_id, symbol, quantity, market_price, result)
-            
+
         finally:
             conn.close()
-    
+
     def _validate_sell_order(
         self,
         portfolio_id: int,
@@ -144,7 +143,7 @@ class PreTradeValidator:
                 "SELECT total_shares FROM position_summary WHERE portfolio_id=? AND symbol=?",
                 (portfolio_id, symbol),
             ).fetchone()
-            
+
             if not row or row["total_shares"] < quantity:
                 available = row["total_shares"] if row else 0
                 result.add_error(
@@ -159,7 +158,7 @@ class PreTradeValidator:
                 )
         finally:
             conn.close()
-    
+
     def _validate_price_sanity(
         self,
         symbol: str,
@@ -170,17 +169,17 @@ class PreTradeValidator:
             market_price = self.broker_adapter.get_market_price(symbol)
         else:
             market_price = self._get_cached_price(symbol)
-        
+
         if market_price <= 0:
             return
-        
+
         deviation = abs(price - market_price) / market_price
-        
+
         if deviation > self.PRICE_SANITY_PCT:
             result.add_warning(
                 f"Price {price:.2f} deviates {deviation*100:.1f}% from market {market_price:.2f}"
             )
-    
+
     def _check_position_limit(
         self,
         portfolio_id: int,
@@ -195,26 +194,26 @@ class PreTradeValidator:
                 "SELECT cash_balance, initial_capital FROM portfolios WHERE id=?",
                 (portfolio_id,),
             ).fetchone()
-            
+
             if not row:
                 return
-            
+
             total_capital = row["cash_balance"] + row["initial_capital"]
-            
+
             if total_capital <= 0:
                 return
-            
+
             new_position_value = quantity * price
-            
+
             pct_of_portfolio = new_position_value / total_capital
-            
+
             if pct_of_portfolio > self.MAX_POSITION_PCT:
                 result.add_warning(
                     f"Position would be {pct_of_portfolio*100:.1f}% of portfolio (max {self.MAX_POSITION_PCT*100:.0f}%)"
                 )
         finally:
             conn.close()
-    
+
     def _get_cached_price(self, symbol: str) -> float:
         conn = _get_conn()
         try:

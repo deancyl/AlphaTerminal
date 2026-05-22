@@ -21,11 +21,10 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import httpx
 import re
-import json
 
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
@@ -127,27 +126,27 @@ class IndexQuote:
 
 class GlobalIndexFetcher:
     """Multi-source global index data fetcher"""
-    
+
     def __init__(self):
         self._cache: Dict[str, Tuple[float, IndexQuote]] = {}
         self._sparkline_cache: Dict[str, Tuple[float, List[float]]] = {}
         self._lock = threading.Lock()
         self._ttl = 60  # 1 minute cache
         self._sparkline_ttl = 300  # 5 minutes for sparklines
-        
+
         # HTTP client configuration
         self._headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "application/json, text/plain, */*",
         }
-        
+
         # Proxy configuration from environment
         self._proxy = None
         import os
         http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
         if http_proxy:
             self._proxy = http_proxy
-    
+
     async def fetch_all_quotes(self) -> List[IndexQuote]:
         """Fetch quotes for all configured indices"""
         if not _GLOBAL_INDEX_CB.is_available():
@@ -156,17 +155,17 @@ class GlobalIndexFetcher:
             for region_symbols in GLOBAL_INDEX_SYMBOLS.values():
                 all_symbols.extend(region_symbols)
             return [self._create_mock_quote(s) for s in all_symbols]
-        
+
         all_symbols = []
         for region_symbols in GLOBAL_INDEX_SYMBOLS.values():
             all_symbols.extend(region_symbols)
-        
+
         results = []
         success_count = 0
         failure_count = 0
         tasks = [self._fetch_single_quote(symbol) for symbol in all_symbols]
         quotes = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         for symbol, quote in zip(all_symbols, quotes):
             if isinstance(quote, Exception):
                 logger.warning(f"[GlobalIndex] Failed to fetch {symbol}: {quote}")
@@ -179,20 +178,20 @@ class GlobalIndexFetcher:
             else:
                 success_count += 1
                 results.append(quote)
-        
+
         if success_count > failure_count:
             _GLOBAL_INDEX_CB.record_success()
         else:
             _GLOBAL_INDEX_CB.record_failure()
-        
+
         return results
-    
+
     async def _fetch_single_quote(self, symbol: str) -> IndexQuote:
         """Fetch quote for a single index"""
         cached = self._get_cached_quote(symbol)
         if cached:
             return cached
-        
+
         if symbol in TENCENT_SYMBOL_MAP:
             try:
                 quote = await self._fetch_from_tencent(symbol)
@@ -201,7 +200,7 @@ class GlobalIndexFetcher:
                     return quote
             except Exception as e:
                 logger.debug(f"[GlobalIndex] Tencent failed for {symbol}: {e}")
-        
+
         try:
             quote = await self._fetch_from_yahoo(symbol)
             if quote:
@@ -209,36 +208,36 @@ class GlobalIndexFetcher:
                 return quote
         except Exception as e:
             logger.debug(f"[GlobalIndex] Yahoo failed for {symbol}: {e}")
-        
+
         # Last resort: mock data
         raise Exception(f"All data sources failed for {symbol}")
-    
+
     async def _fetch_from_tencent(self, symbol: str) -> Optional[IndexQuote]:
         """Fetch from Tencent Finance API"""
         tencent_symbol = TENCENT_SYMBOL_MAP.get(symbol)
         if not tencent_symbol:
             return None
-        
+
         url = f"https://qt.gtimg.cn/q={tencent_symbol}"
-        
+
         async with httpx.AsyncClient(timeout=5.0) as client:
             if self._proxy:
                 client = httpx.AsyncClient(timeout=5.0, proxies=self._proxy)
             resp = await client.get(url, headers=self._headers)
             resp.raise_for_status()
-            
+
             # Parse Tencent format: v_symbol="1~name~code~price~..."
             text = resp.text
             match = re.search(r'v_([^=]+)="([^"]+)"', text)
             if not match:
                 return None
-            
+
             fields = match.group(2).split("~")
             if len(fields) < 35:
                 return None
-            
+
             meta = INDEX_METADATA.get(symbol, {})
-            
+
             return IndexQuote(
                 symbol=symbol,
                 name=meta.get("name", fields[1]),
@@ -255,48 +254,48 @@ class GlobalIndexFetcher:
                 timestamp=fields[30][-8:] if len(fields[30]) > 8 else fields[30],
                 is_mock=False,
             )
-    
+
     async def _fetch_from_yahoo(self, symbol: str) -> Optional[IndexQuote]:
         """Fetch from Yahoo Finance API"""
         yahoo_symbol = YAHOO_SYMBOL_MAP.get(symbol)
         if not yahoo_symbol:
             return None
-        
+
         # Yahoo Finance v8 API
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}"
         params = {
             "interval": "1d",
             "range": "1d",
         }
-        
+
         async with httpx.AsyncClient(timeout=10.0) as client:
             if self._proxy:
                 client = httpx.AsyncClient(timeout=10.0, proxies=self._proxy)
             resp = await client.get(url, headers=self._headers, params=params)
             resp.raise_for_status()
-            
+
             data = resp.json()
             result = data.get("chart", {}).get("result", [])
             if not result:
                 return None
-            
+
             quote_data = result[0]
             meta = quote_data.get("meta", {})
             indicators = quote_data.get("indicators", {}).get("quote", [{}])[0]
-            
+
             index_meta = INDEX_METADATA.get(symbol, {})
-            
+
             # Get latest values
             closes = indicators.get("close", [])
             opens = indicators.get("open", [])
             highs = indicators.get("high", [])
             lows = indicators.get("low", [])
             volumes = indicators.get("volume", [])
-            
+
             price = closes[-1] if closes else meta.get("regularMarketPrice", 0)
             prev_close = meta.get("previousClose", price)
             change_pct = ((price - prev_close) / prev_close * 100) if prev_close else 0
-            
+
             return IndexQuote(
                 symbol=symbol,
                 name=index_meta.get("name") or meta.get("shortName") or symbol,
@@ -313,10 +312,10 @@ class GlobalIndexFetcher:
                 timestamp=datetime.now().strftime("%H:%M"),
                 is_mock=False,
             )
-    
+
     async def fetch_kline_history(
-        self, 
-        symbol: str, 
+        self,
+        symbol: str,
         period: str = "daily",
         limit: int = 100
     ) -> List[Dict]:
@@ -334,49 +333,49 @@ class GlobalIndexFetcher:
         yahoo_symbol = YAHOO_SYMBOL_MAP.get(symbol)
         if not yahoo_symbol:
             raise ValueError(f"Unknown symbol: {symbol}")
-        
+
         # Calculate range based on limit
         if period == "weekly":
             range_str = f"{min(limit // 5 + 1, 104)}w"  # Max 2 years weekly
         else:
             range_str = f"{min(limit + 30, 730)}d"  # Max 2 years daily
-        
+
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}"
         params = {
             "interval": "1wk" if period == "weekly" else "1d",
             "range": range_str,
         }
-        
+
         async with httpx.AsyncClient(timeout=15.0) as client:
             if self._proxy:
                 client = httpx.AsyncClient(timeout=15.0, proxies=self._proxy)
             resp = await client.get(url, headers=self._headers, params=params)
             resp.raise_for_status()
-            
+
             data = resp.json()
             result = data.get("chart", {}).get("result", [])
             if not result:
                 return []
-            
+
             quote_data = result[0]
             timestamps = quote_data.get("timestamp", [])
             indicators = quote_data.get("indicators", {}).get("quote", [{}])[0]
-            
+
             opens = indicators.get("open", [])
             closes = indicators.get("close", [])
             highs = indicators.get("high", [])
             lows = indicators.get("low", [])
             volumes = indicators.get("volume", [])
-            
+
             klines = []
             for i in range(len(timestamps)):
                 if i >= len(closes):
                     break
-                    
+
                 # Skip None values
                 if closes[i] is None:
                     continue
-                
+
                 dt = datetime.fromtimestamp(timestamps[i])
                 klines.append({
                     "date": dt.strftime("%Y-%m-%d"),
@@ -387,10 +386,10 @@ class GlobalIndexFetcher:
                     "volume": int(volumes[i]) if volumes[i] else 0,
                     "change_pct": round((closes[i] - closes[i-1]) / closes[i-1] * 100, 2) if i > 0 and closes[i-1] else 0,
                 })
-            
+
             # Return last N bars
             return klines[-limit:]
-    
+
     async def fetch_sparkline(self, symbol: str, days: int = 20) -> List[float]:
         """
         Fetch sparkline data (last N close prices)
@@ -406,24 +405,24 @@ class GlobalIndexFetcher:
         cached = self._get_cached_sparkline(symbol)
         if cached:
             return cached
-        
+
         try:
             klines = await self.fetch_kline_history(symbol, "daily", days)
             sparkline = [k["close"] for k in klines]
-            
+
             # Cache it
             self._cache_sparkline(symbol, sparkline)
-            
+
             return sparkline
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.warning(f"[HTTP] sparkline for {symbol}: {e}", exc_info=True)
             return []
-    
+
     def _cache_quote(self, quote: IndexQuote):
         """Cache a quote"""
         with self._lock:
             self._cache[quote.symbol] = (time.time(), quote)
-    
+
     def _get_cached_quote(self, symbol: str) -> Optional[IndexQuote]:
         """Get cached quote if not expired"""
         with self._lock:
@@ -432,12 +431,12 @@ class GlobalIndexFetcher:
                 if time.time() - timestamp < self._ttl:
                     return quote
         return None
-    
+
     def _cache_sparkline(self, symbol: str, data: List[float]):
         """Cache sparkline data"""
         with self._lock:
             self._sparkline_cache[symbol] = (time.time(), data)
-    
+
     def _get_cached_sparkline(self, symbol: str) -> Optional[List[float]]:
         """Get cached sparkline if not expired"""
         with self._lock:
@@ -446,7 +445,7 @@ class GlobalIndexFetcher:
                 if time.time() - timestamp < self._sparkline_ttl:
                     return data
         return None
-    
+
     def _create_mock_quote(self, symbol: str) -> IndexQuote:
         """Create mock quote for fallback"""
         meta = INDEX_METADATA.get(symbol, {
@@ -456,7 +455,7 @@ class GlobalIndexFetcher:
             "market": "XX",
             "currency": "USD"
         })
-        
+
         # Generate realistic mock price based on symbol
         mock_prices = {
             "SPX": 4200, "IXIC": 14500, "DJI": 33500, "RUT": 1980, "VIX": 18.5,
@@ -464,12 +463,12 @@ class GlobalIndexFetcher:
             "SMI": 11200, "IBEX": 11500, "N225": 32500, "HSI": 18500, "KS11": 2650,
             "AXJO": 7600, "NSEI": 22500,
         }
-        
+
         base_price = mock_prices.get(symbol, 1000)
         import random
         change_pct = round(random.uniform(-2, 2), 2)
         price = round(base_price * (1 + change_pct / 100), 2)
-        
+
         return IndexQuote(
             symbol=symbol,
             name=meta.get("name", symbol),

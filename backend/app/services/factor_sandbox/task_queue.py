@@ -13,8 +13,8 @@ import json
 import uuid
 import threading
 from datetime import datetime
-from typing import Optional, Dict, Any, Callable
-from dataclasses import dataclass, asdict
+from typing import Optional, Dict
+from dataclasses import dataclass
 from enum import Enum
 import logging
 
@@ -48,7 +48,7 @@ class ScreeningJob:
 
 class FactorSandboxTaskQueue:
     """异步任务队列管理器"""
-    
+
     def __init__(self, max_workers: int = 2):
         self._lock = threading.Lock()
         self._jobs: Dict[str, ScreeningJob] = {}
@@ -57,10 +57,10 @@ class FactorSandboxTaskQueue:
         self._max_workers = max_workers
         self._running = False
         self._loop: asyncio.AbstractEventLoop = None
-        
+
         # 初始化数据库表
         self._init_db()
-    
+
     def _init_db(self):
         """创建任务队列表"""
         conn = sqlite3.connect(DB_PATH)
@@ -81,16 +81,16 @@ class FactorSandboxTaskQueue:
         """)
         conn.commit()
         conn.close()
-    
+
     def _get_conn(self):
         """获取数据库连接"""
         return sqlite3.connect(DB_PATH, check_same_thread=False)
-    
+
     def submit_job(self, factors: list, universe: str) -> str:
         """提交新任务"""
         job_id = str(uuid.uuid4())[:8]
         now = datetime.now().isoformat()
-        
+
         job = ScreeningJob(
             job_id=job_id,
             status=JobStatus.PENDING,
@@ -103,26 +103,26 @@ class FactorSandboxTaskQueue:
             created_at=now,
             updated_at=now
         )
-        
+
         # 保存到内存和数据库
         with self._lock:
             self._jobs[job_id] = job
-        
+
         self._save_job(job)
-        
+
         # 添加到队列
         if self._queue:
             self._queue.put_nowait(job_id)
-        
+
         logger.info(f"[TaskQueue] Job {job_id} submitted")
         return job_id
-    
+
     def get_job(self, job_id: str) -> Optional[ScreeningJob]:
         """获取任务状态"""
         with self._lock:
             if job_id in self._jobs:
                 return self._jobs[job_id]
-        
+
         # 从数据库加载
         conn = self._get_conn()
         cursor = conn.cursor()
@@ -132,7 +132,7 @@ class FactorSandboxTaskQueue:
         )
         row = cursor.fetchone()
         conn.close()
-        
+
         if row:
             job = ScreeningJob(
                 job_id=row[0],
@@ -149,23 +149,23 @@ class FactorSandboxTaskQueue:
             with self._lock:
                 self._jobs[job_id] = job
             return job
-        
+
         return None
-    
+
     def update_job(self, job_id: str, **kwargs):
         """更新任务状态"""
         with self._lock:
             if job_id not in self._jobs:
                 return
-            
+
             job = self._jobs[job_id]
             for key, value in kwargs.items():
                 if hasattr(job, key):
                     setattr(job, key, value)
-            
+
             job.updated_at = datetime.now().isoformat()
             self._save_job(job)
-    
+
     def _save_job(self, job: ScreeningJob):
         """保存任务到数据库"""
         conn = self._get_conn()
@@ -188,70 +188,70 @@ class FactorSandboxTaskQueue:
         ))
         conn.commit()
         conn.close()
-    
+
     async def start(self):
         """启动工作线程"""
         if self._running:
             return
-        
+
         self._running = True
         self._queue = asyncio.Queue()
         self._loop = asyncio.get_running_loop()
-        
+
         # 启动工作协程
         for i in range(self._max_workers):
             worker = asyncio.create_task(self._worker(i))
             self._workers.append(worker)
-        
+
         logger.info(f"[TaskQueue] Started {self._max_workers} workers")
-    
+
     async def stop(self):
         """停止工作线程"""
         self._running = False
-        
+
         # 取消所有工作协程
         for worker in self._workers:
             worker.cancel()
-        
+
         self._workers.clear()
         logger.info("[TaskQueue] Stopped")
-    
+
     async def _worker(self, worker_id: int):
         """工作协程"""
         logger.info(f"[TaskQueue] Worker {worker_id} started")
-        
+
         while self._running:
             try:
                 job_id = await asyncio.wait_for(self._queue.get(), timeout=1.0)
-                
+
                 job = self.get_job(job_id)
                 if not job:
                     continue
-                
+
                 # 更新状态为运行中
                 self.update_job(job_id, status=JobStatus.RUNNING)
-                
+
                 try:
                     # 执行筛选任务（通过回调）
                     # 这里不直接调用 screener，而是通过事件通知
                     # 实际筛选逻辑在 router 中通过 SSE 推送
-                    
+
                     # 等待外部设置结果
                     # 超时 5 分钟
                     await asyncio.sleep(0.1)
-                    
+
                 except asyncio.CancelledError:
                     self.update_job(job_id, status=JobStatus.CANCELLED)
                     break
                 except Exception as e:
                     logger.error(f"[TaskQueue] Worker {worker_id} error: {e}", exc_info=True)
                     self.update_job(job_id, status=JobStatus.FAILED, error=str(e))
-                
+
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
                 logger.error(f"[TaskQueue] Worker {worker_id} unexpected error: {e}", exc_info=True)
-        
+
         logger.info(f"[TaskQueue] Worker {worker_id} stopped")
 
 

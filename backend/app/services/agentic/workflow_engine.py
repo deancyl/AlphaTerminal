@@ -4,10 +4,7 @@ Workflow Engine for Agentic Workflow
 Orchestrates multi-step workflows based on natural language queries.
 Uses LLM for intent parsing and step planning.
 """
-import asyncio
-import json
 import logging
-import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -15,8 +12,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from app.services.agentic.tool_registry import get_tool_registry, Tool
-from app.services.model_config_service import get_model_config_service
+from app.services.agentic.tool_registry import get_tool_registry
 from app.services.copilot.query_classifier import get_query_classifier, QueryType
 
 logger = logging.getLogger(__name__)
@@ -44,7 +40,7 @@ class WorkflowStep:
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     elapsed_ms: float = 0.0
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -70,7 +66,7 @@ class Workflow:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     completed_at: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -91,12 +87,12 @@ class WorkflowEngine:
     Parses natural language queries into executable workflows,
     executes steps, and generates reports.
     """
-    
+
     def __init__(self):
         self.registry = get_tool_registry()
         self.classifier = get_query_classifier()
         self._workflows: Dict[str, Workflow] = {}
-    
+
     def parse_intent(self, query: str) -> Dict[str, Any]:
         """
         Parse user intent from natural language query.
@@ -105,9 +101,9 @@ class WorkflowEngine:
             Dict with query_type, symbols, sector, suggested_tools
         """
         result = self.classifier.classify(query)
-        
+
         suggested_tools = self._suggest_tools(result.query_type, result.symbols, result.sector)
-        
+
         return {
             "query_type": result.query_type.value,
             "symbols": result.symbols,
@@ -115,11 +111,11 @@ class WorkflowEngine:
             "confidence": result.confidence,
             "suggested_tools": suggested_tools
         }
-    
+
     def _suggest_tools(self, query_type: QueryType, symbols: List[str], sector: Optional[str]) -> List[str]:
         """Suggest tools based on query type"""
         base_tools = []
-        
+
         if query_type == QueryType.COMPANY_DEEP_DIVE:
             if symbols:
                 base_tools.extend(["get_quote", "get_financial", "get_kline", "get_news"])
@@ -133,12 +129,12 @@ class WorkflowEngine:
         elif query_type == QueryType.QUICK_QA:
             if symbols:
                 base_tools.extend(["get_quote", "get_financial"])
-        
+
         if sector:
             base_tools.append("get_sector_stocks")
-        
+
         return list(set(base_tools))
-    
+
     def plan_workflow(self, query: str) -> Workflow:
         """
         Plan a workflow based on the query.
@@ -147,17 +143,17 @@ class WorkflowEngine:
             Workflow with planned steps
         """
         intent = self.parse_intent(query)
-        
+
         workflow_id = f"wf_{uuid.uuid4().hex[:12]}"
-        
+
         steps = []
         symbols = intent.get("symbols", [])
         sector = intent.get("sector")
         tools = intent.get("suggested_tools", [])
-        
+
         for i, tool_name in enumerate(tools):
             params = {}
-            
+
             if tool_name == "get_quote":
                 if symbols:
                     params["symbol"] = symbols[0]
@@ -184,21 +180,21 @@ class WorkflowEngine:
                         break
                 if not params:
                     params["indicator"] = "GDP"
-            
+
             if params or tool_name in ["get_news"]:
                 steps.append(WorkflowStep(
                     id=f"{workflow_id}_step_{i+1}",
                     tool=tool_name,
                     params=params
                 ))
-        
+
         if not steps and symbols:
             steps.append(WorkflowStep(
                 id=f"{workflow_id}_step_1",
                 tool="get_quote",
                 params={"symbol": symbols[0]}
             ))
-        
+
         workflow = Workflow(
             id=workflow_id,
             query=query,
@@ -208,12 +204,12 @@ class WorkflowEngine:
                 "planned_at": datetime.now().isoformat()
             }
         )
-        
+
         self._workflows[workflow_id] = workflow
         logger.info(f"[WorkflowEngine] Planned workflow {workflow_id} with {len(steps)} steps")
-        
+
         return workflow
-    
+
     async def execute_step(self, step: WorkflowStep) -> Dict[str, Any]:
         """
         Execute a single workflow step.
@@ -223,21 +219,21 @@ class WorkflowEngine:
         """
         step.status = "running"
         step.started_at = datetime.now().isoformat()
-        
+
         result = await self.registry.execute(step.tool, step.params)
-        
+
         step.completed_at = datetime.now().isoformat()
         step.elapsed_ms = result.get("elapsed_ms", 0)
-        
+
         if result.get("success"):
             step.status = "completed"
             step.output = result.get("data")
         else:
             step.status = "failed"
             step.error = result.get("error", "Unknown error")
-        
+
         return result
-    
+
     async def execute_workflow(self, workflow: Workflow) -> Workflow:
         """
         Execute all steps in a workflow.
@@ -246,7 +242,7 @@ class WorkflowEngine:
             Updated workflow with results
         """
         workflow.status = WorkflowStatus.RUNNING
-        
+
         for step in workflow.steps:
             try:
                 await self.execute_step(step)
@@ -254,26 +250,26 @@ class WorkflowEngine:
                 logger.error(f"[WorkflowEngine] Step {step.id} failed: {e}", exc_info=True)
                 step.status = "failed"
                 step.error = str(e)
-        
+
         all_completed = all(s.status == "completed" for s in workflow.steps)
         any_failed = any(s.status == "failed" for s in workflow.steps)
-        
+
         if all_completed:
             workflow.status = WorkflowStatus.COMPLETED
         elif any_failed:
             workflow.status = WorkflowStatus.FAILED
         else:
             workflow.status = WorkflowStatus.COMPLETED
-        
+
         workflow.completed_at = datetime.now().isoformat()
-        
+
         workflow.result = await self.generate_report(workflow)
-        
+
         self._workflows[workflow.id] = workflow
         logger.info(f"[WorkflowEngine] Workflow {workflow.id} completed with status {workflow.status.value}")
-        
+
         return workflow
-    
+
     async def generate_report(self, workflow: Workflow) -> str:
         """
         Generate Markdown report from workflow results.
@@ -283,7 +279,7 @@ class WorkflowEngine:
         """
         query = workflow.query
         steps_data = []
-        
+
         for step in workflow.steps:
             if step.output:
                 steps_data.append({
@@ -291,12 +287,12 @@ class WorkflowEngine:
                     "params": step.params,
                     "output": step.output
                 })
-        
+
         if not steps_data:
             return f"# 分析报告\n\n查询：{query}\n\n未能获取到有效数据。"
-        
+
         report_lines = [
-            f"# 投研分析报告",
+            "# 投研分析报告",
             "",
             f"**查询**: {query}",
             f"**生成时间**: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}",
@@ -304,11 +300,11 @@ class WorkflowEngine:
             "---",
             ""
         ]
-        
+
         for step_data in steps_data:
             tool = step_data["tool"]
             output = step_data["output"]
-            
+
             if tool == "get_quote":
                 report_lines.extend(self._format_quote_section(output))
             elif tool == "get_financial":
@@ -321,7 +317,7 @@ class WorkflowEngine:
                 report_lines.extend(self._format_sector_section(output))
             elif tool == "get_macro_data":
                 report_lines.extend(self._format_macro_section(output))
-        
+
         report_lines.extend([
             "",
             "---",
@@ -333,30 +329,30 @@ class WorkflowEngine:
             "- 请结合自身风险承受能力做出投资决策",
             ""
         ])
-        
+
         return "\n".join(report_lines)
-    
+
     def _format_quote_section(self, data: Dict[str, Any]) -> List[str]:
         """Format quote data as Markdown"""
         if not data or data.get("error"):
             return ["## 📊 行情数据", "", "暂无行情数据", ""]
-        
+
         symbol = data.get("symbol", "")
         name = data.get("name", "")
         price = data.get("price", 0)
         change = data.get("change", 0)
         change_pct = data.get("change_pct", 0)
-        
+
         arrow = "▲" if change_pct >= 0 else "▼"
         color = "green" if change_pct >= 0 else "red"
-        
+
         return [
             "## 📊 实时行情",
             "",
             f"**{name} ({symbol})**",
             "",
-            f"| 指标 | 数值 |",
-            f"|------|------|",
+            "| 指标 | 数值 |",
+            "|------|------|",
             f"| 最新价 | ¥{price:.2f} |",
             f"| 涨跌幅 | {arrow}{abs(change_pct):.2f}% |",
             f"| 涨跌额 | {arrow}¥{abs(change):.2f} |",
@@ -365,31 +361,31 @@ class WorkflowEngine:
             f"| 最低 | ¥{data.get('low', 0):.2f} |",
             ""
         ]
-    
+
     def _format_financial_section(self, data: Dict[str, Any]) -> List[str]:
         """Format financial data as Markdown"""
         if not data or data.get("error"):
             return ["## 📈 财务数据", "", "暂无财务数据", ""]
-        
+
         latest = data.get("data", {})
         history = data.get("history", [])
-        
+
         lines = [
             "## 📈 财务指标",
             ""
         ]
-        
+
         if latest:
             key_metrics = ["roe", "roa", "pe_ttm", "pb", "debt_ratio", "current_ratio"]
             lines.append("| 指标 | 数值 |")
             lines.append("|------|------|")
-            
+
             for metric in key_metrics:
                 value = latest.get(metric)
                 if value is not None:
                     lines.append(f"| {metric.upper()} | {value} |")
             lines.append("")
-        
+
         if history:
             lines.append("**近8季度趋势**:")
             lines.append("")
@@ -401,29 +397,29 @@ class WorkflowEngine:
                 npm = h.get("net_profit_margin", h.get("销售净利率", ""))
                 lines.append(f"| {period} | {roe} | {npm} |")
             lines.append("")
-        
+
         return lines
-    
+
     def _format_kline_section(self, data: Dict[str, Any]) -> List[str]:
         """Format K-line data as Markdown"""
         if not data or data.get("error") or not data.get("data"):
             return ["## 📉 K线数据", "", "暂无K线数据", ""]
-        
+
         kline_data = data.get("data", [])
         symbol = data.get("symbol", "")
-        
+
         if len(kline_data) < 2:
             return ["## 📉 K线数据", "", "数据不足", ""]
-        
+
         latest = kline_data[-1]
         prev = kline_data[-2]
-        
+
         ma5 = sum(d["close"] for d in kline_data[-5:]) / 5 if len(kline_data) >= 5 else 0
         ma20 = sum(d["close"] for d in kline_data[-20:]) / 20 if len(kline_data) >= 20 else 0
-        
+
         recent_high = max(d["high"] for d in kline_data[-20:]) if len(kline_data) >= 20 else 0
         recent_low = min(d["low"] for d in kline_data[-20:]) if len(kline_data) >= 20 else 0
-        
+
         return [
             "## 📉 技术分析",
             "",
@@ -438,21 +434,21 @@ class WorkflowEngine:
             f"| 20日最低 | ¥{recent_low:.2f} | - |",
             ""
         ]
-    
+
     def _format_news_section(self, data: Dict[str, Any]) -> List[str]:
         """Format news data as Markdown"""
         if not data or not data.get("news"):
             return ["## 📰 相关新闻", "", "暂无相关新闻", ""]
-        
+
         news_list = data.get("news", [])
-        
+
         lines = [
             "## 📰 相关新闻",
             "",
             f"共 {len(news_list)} 条新闻",
             ""
         ]
-        
+
         for i, news in enumerate(news_list[:5], 1):
             title = news.get("title", "")
             tag = news.get("tag", "")
@@ -463,18 +459,18 @@ class WorkflowEngine:
             if time:
                 lines.append(f"   - 时间: {time}")
             lines.append("")
-        
+
         return lines
-    
+
     def _format_sector_section(self, data: Dict[str, Any]) -> List[str]:
         """Format sector data as Markdown"""
         if not data or data.get("error"):
             return ["## 🏭 板块数据", "", "暂无板块数据", ""]
-        
+
         sector = data.get("sector", "")
         stocks = data.get("stocks", [])
         change_pct = data.get("change_pct", 0)
-        
+
         lines = [
             f"## 🏭 板块分析: {sector}",
             "",
@@ -485,31 +481,31 @@ class WorkflowEngine:
             "| 代码 | 名称 | 涨跌幅 |",
             "|------|------|--------|"
         ]
-        
+
         for stock in stocks[:10]:
             sym = stock.get("symbol", "")
             name = stock.get("name", "")
             pct = stock.get("change_pct", 0)
             arrow = "▲" if pct >= 0 else "▼"
             lines.append(f"| {sym} | {name} | {arrow}{abs(pct):.2f}% |")
-        
+
         lines.append("")
         return lines
-    
+
     def _format_macro_section(self, data: Dict[str, Any]) -> List[str]:
         """Format macro data as Markdown"""
         if not data or data.get("error"):
             return ["## 🌏 宏观经济", "", "暂无宏观数据", ""]
-        
+
         indicator = data.get("indicator", "")
         name = data.get("name", "")
         latest = data.get("latest", {})
-        
+
         lines = [
             f"## 🌏 宏观经济: {name} ({indicator})",
             ""
         ]
-        
+
         if latest:
             lines.append("| 指标 | 数值 |")
             lines.append("|------|------|")
@@ -517,13 +513,13 @@ class WorkflowEngine:
                 if value is not None and not key.startswith("_"):
                     lines.append(f"| {key} | {value} |")
             lines.append("")
-        
+
         return lines
-    
+
     def get_workflow(self, workflow_id: str) -> Optional[Workflow]:
         """Get workflow by ID"""
         return self._workflows.get(workflow_id)
-    
+
     def list_workflows(self, limit: int = 20) -> List[Workflow]:
         """List recent workflows"""
         workflows = list(self._workflows.values())

@@ -4,7 +4,7 @@ Symbol-related endpoints extracted from market.py
 import logging
 import threading
 from datetime import datetime
-from fastapi import APIRouter, Request, Query, HTTPException
+from fastapi import APIRouter, Request, Query
 
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.error_decorator import handle_errors
@@ -161,8 +161,7 @@ def market_all_stocks(request: Request):
     分页: ?page=1&page_size=50
     """
     try:
-        from app.db.database import get_all_stocks, get_all_stocks_count
-        from fastapi import Query
+        from app.db.database import get_all_stocks
 
         # 获取参数 (从 Request 中提取)
         params = dict(request.query_params)

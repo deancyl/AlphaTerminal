@@ -5,12 +5,11 @@ Loads and manages Qlib ML models (LightGBM, HIST, GATE, etc.)
 with fallback to scikit-learn when Qlib is not available.
 """
 import logging
-import os
 import json
 import pickle
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -61,7 +60,7 @@ class ModelLoader:
         - Scikit-learn models: RandomForest, GradientBoosting
         - Custom models: Any pickle-serializable model
     """
-    
+
     MODEL_DIR = Path("backend/cache/ml_models")
     SUPPORTED_MODELS = {
         ModelType.LIGHTGBM: ["qlib", "lightgbm"],
@@ -73,13 +72,13 @@ class ModelLoader:
         ModelType.XGBOOST: ["xgboost"],
         ModelType.CATBOOST: ["catboost"],
     }
-    
+
     def __init__(self, model_dir: Optional[Path] = None):
         self.model_dir = model_dir or self.MODEL_DIR
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self._loaded_models: Dict[str, Any] = {}
         self._model_info: Dict[str, ModelInfo] = {}
-    
+
     def load_model(
         self,
         model_id: str,
@@ -99,17 +98,17 @@ class ModelLoader:
         """
         if model_id in self._loaded_models:
             return self._loaded_models[model_id]
-        
+
         model_path = self.model_dir / f"{model_id}.pkl"
-        
+
         if not model_path.exists():
             logger.warning(f"[ModelLoader] Model not found: {model_path}")
             return None
-        
+
         try:
             with open(model_path, "rb") as f:
                 model = pickle.load(f)
-            
+
             self._loaded_models[model_id] = model
             self._model_info[model_id] = ModelInfo(
                 model_id=model_id,
@@ -121,14 +120,14 @@ class ModelLoader:
                 path=str(model_path),
                 is_loaded=True,
             )
-            
+
             logger.info(f"[ModelLoader] Loaded model: {model_id}")
             return model
-            
+
         except Exception as e:
             logger.error(f"[ModelLoader] Failed to load model {model_id}: {e}", exc_info=True)
             return None
-    
+
     def save_model(
         self,
         model: Any,
@@ -155,11 +154,11 @@ class ModelLoader:
             True if saved successfully
         """
         model_path = self.model_dir / f"{model_id}.pkl"
-        
+
         try:
             with open(model_path, "wb") as f:
                 pickle.dump(model, f)
-            
+
             info = ModelInfo(
                 model_id=model_id,
                 model_type=model_type,
@@ -172,19 +171,19 @@ class ModelLoader:
                 path=str(model_path),
                 is_loaded=True,
             )
-            
+
             self._loaded_models[model_id] = model
             self._model_info[model_id] = info
-            
+
             self._save_model_metadata(model_id, info)
-            
+
             logger.info(f"[ModelLoader] Saved model: {model_id}")
             return True
-            
+
         except Exception as e:
             logger.error(f"[ModelLoader] Failed to save model {model_id}: {e}", exc_info=True)
             return False
-    
+
     def predict(
         self,
         model_id: str,
@@ -201,12 +200,12 @@ class ModelLoader:
             Prediction array or None if failed
         """
         model = self._loaded_models.get(model_id)
-        
+
         if model is None:
             model = self.load_model(model_id)
             if model is None:
                 return None
-        
+
         try:
             if hasattr(model, "predict"):
                 predictions = model.predict(features)
@@ -218,13 +217,13 @@ class ModelLoader:
             else:
                 logger.error(f"[ModelLoader] Model {model_id} has no predict method")
                 return None
-            
+
             return predictions
-            
+
         except Exception as e:
             logger.error(f"[ModelLoader] Prediction failed for {model_id}: {e}", exc_info=True)
             return None
-    
+
     def train_model(
         self,
         model_type: ModelType,
@@ -247,11 +246,11 @@ class ModelLoader:
             Trained model or None if failed
         """
         model_id = model_id or f"{model_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
         try:
             if model_type == ModelType.LIGHTGBM:
                 import lightgbm as lgb
-                
+
                 default_params = {
                     "objective": "regression",
                     "metric": "mse",
@@ -262,40 +261,40 @@ class ModelLoader:
                     "verbose": -1,
                 }
                 train_params = {**default_params, **(params or {})}
-                
+
                 train_data = lgb.Dataset(X_train, label=y_train)
                 model = lgb.train(train_params, train_data, num_boost_round=100)
-                
+
             elif model_type == ModelType.XGBOOST:
                 import xgboost as xgb
-                
+
                 default_params = {
                     "objective": "reg:squarederror",
                     "max_depth": 6,
                     "learning_rate": 0.05,
                 }
                 train_params = {**default_params, **(params or {})}
-                
+
                 model = xgb.XGBRegressor(**train_params)
                 model.fit(X_train, y_train)
-                
+
             elif model_type == ModelType.MLP:
                 from sklearn.neural_network import MLPRegressor
-                
+
                 default_params = {
                     "hidden_layer_sizes": (100, 50),
                     "activation": "relu",
                     "max_iter": 500,
                 }
                 train_params = {**default_params, **(params or {})}
-                
+
                 model = MLPRegressor(**train_params)
                 model.fit(X_train, y_train)
-                
+
             else:
                 logger.error(f"[ModelLoader] Training not implemented for {model_type}")
                 return None
-            
+
             self._loaded_models[model_id] = model
             self._model_info[model_id] = ModelInfo(
                 model_id=model_id,
@@ -307,18 +306,18 @@ class ModelLoader:
                 params=params or {},
                 is_loaded=True,
             )
-            
+
             logger.info(f"[ModelLoader] Trained model: {model_id}")
             return model
-            
+
         except Exception as e:
             logger.error(f"[ModelLoader] Training failed: {e}", exc_info=True)
             return None
-    
+
     def list_models(self) -> List[ModelInfo]:
         """List all available models."""
         models = []
-        
+
         for model_file in self.model_dir.glob("*.pkl"):
             model_id = model_file.stem
             if model_id not in self._model_info:
@@ -327,36 +326,36 @@ class ModelLoader:
                     self._model_info[model_id] = info
             if model_id in self._model_info:
                 models.append(self._model_info[model_id])
-        
+
         return models
-    
+
     def delete_model(self, model_id: str) -> bool:
         """Delete a model."""
         model_path = self.model_dir / f"{model_id}.pkl"
         meta_path = self.model_dir / f"{model_id}_meta.json"
-        
+
         try:
             if model_id in self._loaded_models:
                 del self._loaded_models[model_id]
             if model_id in self._model_info:
                 del self._model_info[model_id]
-            
+
             if model_path.exists():
                 model_path.unlink()
             if meta_path.exists():
                 meta_path.unlink()
-            
+
             logger.info(f"[ModelLoader] Deleted model: {model_id}")
             return True
-            
+
         except Exception as e:
             logger.error(f"[ModelLoader] Failed to delete model {model_id}: {e}", exc_info=True)
             return False
-    
+
     def _save_model_metadata(self, model_id: str, info: ModelInfo):
         """Save model metadata to JSON."""
         meta_path = self.model_dir / f"{model_id}_meta.json"
-        
+
         try:
             meta = {
                 "model_id": info.model_id,
@@ -368,24 +367,24 @@ class ModelLoader:
                 "metrics": info.metrics,
                 "params": info.params,
             }
-            
+
             with open(meta_path, "w") as f:
                 json.dump(meta, f, indent=2)
-                
+
         except Exception as e:
             logger.warning(f"[ModelLoader] Failed to save metadata: {e}", exc_info=True)
-    
+
     def _load_model_metadata(self, model_id: str) -> Optional[ModelInfo]:
         """Load model metadata from JSON."""
         meta_path = self.model_dir / f"{model_id}_meta.json"
-        
+
         if not meta_path.exists():
             return None
-        
+
         try:
             with open(meta_path, "r") as f:
                 meta = json.load(f)
-            
+
             return ModelInfo(
                 model_id=meta["model_id"],
                 model_type=ModelType(meta["model_type"]),
@@ -396,7 +395,7 @@ class ModelLoader:
                 metrics=meta.get("metrics", {}),
                 params=meta.get("params", {}),
             )
-            
+
         except Exception as e:
             logger.warning(f"[ModelLoader] Failed to load metadata: {e}", exc_info=True)
             return None

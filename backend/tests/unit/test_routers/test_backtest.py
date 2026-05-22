@@ -1,11 +1,8 @@
 """
 Tests for backtest router.
 """
-import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock, Mock
-import json
-from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
 
 from app.main import app
 
@@ -24,7 +21,7 @@ class TestBacktestValidation:
         for i in range(10):  # Exceed MAX_PARAMS_DEPTH of 5
             current["level"] = {}
             current = current["level"]
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -34,7 +31,7 @@ class TestBacktestValidation:
             "strategy_type": "ma_crossover",
             "params": nested_params
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         # Should reject due to depth limit
         assert response.status_code == 400 or response.status_code == 422
@@ -43,7 +40,7 @@ class TestBacktestValidation:
         """Test validation of params JSON size (DoS prevention)."""
         # Create large params
         large_params = {"key_" + str(i): "value_" * 100 for i in range(100)}
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -53,7 +50,7 @@ class TestBacktestValidation:
             "strategy_type": "ma_crossover",
             "params": large_params
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         # Should reject due to size limit
         assert response.status_code == 400 or response.status_code == 422
@@ -62,7 +59,7 @@ class TestBacktestValidation:
         """Test validation of params key count (DoS prevention)."""
         # Create params with too many keys
         many_keys_params = {f"key_{i}": i for i in range(100)}
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -72,7 +69,7 @@ class TestBacktestValidation:
             "strategy_type": "ma_crossover",
             "params": many_keys_params
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         # Should reject due to key count limit
         assert response.status_code == 400 or response.status_code == 422
@@ -87,7 +84,7 @@ class TestBacktestValidation:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         # FastAPI Pydantic validation returns 422 for invalid date format
         assert response.status_code == 422
@@ -102,7 +99,7 @@ class TestBacktestValidation:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
         assert response.status_code == 200
@@ -119,7 +116,7 @@ class TestBacktestValidation:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
         assert response.status_code == 200
@@ -136,7 +133,7 @@ class TestBacktestValidation:
             "initial_capital": 50,  # Below MIN_CAPITAL of 100
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
         assert response.status_code == 422
@@ -152,7 +149,7 @@ class TestBacktestValidation:
             "initial_capital": 1e10,  # Above MAX_CAPITAL of 1e9
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
         assert response.status_code == 422
@@ -168,7 +165,7 @@ class TestBacktestValidation:
             "initial_capital": "invalid",
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         # FastAPI validates type at request level, returns 422 for invalid type
         assert response.status_code in [200, 422]
@@ -190,7 +187,7 @@ class TestBacktestValidation:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh000001",  # With prefix
             "period": "daily",
@@ -199,7 +196,7 @@ class TestBacktestValidation:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         # Should accept and process correctly
         assert response.status_code in [200, 500]
@@ -222,7 +219,7 @@ class TestBacktestStrategies:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -235,7 +232,7 @@ class TestBacktestStrategies:
                 "slow_ma": 30
             }
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         assert response.status_code in [200, 500]
 
@@ -253,7 +250,7 @@ class TestBacktestStrategies:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -267,7 +264,7 @@ class TestBacktestStrategies:
                 "rsi_sell": 70
             }
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         assert response.status_code in [200, 500]
 
@@ -285,7 +282,7 @@ class TestBacktestStrategies:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -298,7 +295,7 @@ class TestBacktestStrategies:
                 "bb_std": 2
             }
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         assert response.status_code in [200, 500]
 
@@ -315,7 +312,7 @@ class TestBacktestStrategies:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -324,7 +321,7 @@ class TestBacktestStrategies:
             "initial_capital": 100000,
             "strategy_type": "unknown_strategy"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         assert response.status_code == 422
 
@@ -342,7 +339,7 @@ class TestBacktestEndpoints:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         response = client.get("/api/v1/backtest/strategies")
         assert response.status_code in [200, 500]
         if response.status_code == 200:
@@ -361,14 +358,14 @@ class TestBacktestEndpoints:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         strategy_data = {
             "name": "",  # Empty name - should be rejected
             "description": "Test strategy",
             "strategy_type": "ma_crossover",
             "params": {}
         }
-        
+
         response = client.post("/api/v1/backtest/strategies", json=strategy_data)
         assert response.status_code in [200, 400, 422, 500]
 
@@ -383,7 +380,7 @@ class TestBacktestEndpoints:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         strategy_data = {
             "name": "Test Strategy",
             "description": "A test strategy",
@@ -393,7 +390,7 @@ class TestBacktestEndpoints:
                 "slow_ma": 20
             }
         }
-        
+
         response = client.post("/api/v1/backtest/strategies", json=strategy_data)
         assert response.status_code in [200, 201, 500]
 
@@ -407,7 +404,7 @@ class TestBacktestEndpoints:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         response = client.get("/api/v1/backtest/results")
         assert response.status_code in [200, 500]
         if response.status_code == 200:
@@ -424,7 +421,7 @@ class TestBacktestEndpoints:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         response = client.get("/api/v1/backtest/results?limit=5")
         assert response.status_code in [200, 500]
 
@@ -446,7 +443,7 @@ class TestBacktestResponseFormat:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -455,10 +452,10 @@ class TestBacktestResponseFormat:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
-        
+
         # Check response structure regardless of success/error
         assert "code" in data
         if data.get("code") == 0:
@@ -484,10 +481,10 @@ class TestBacktestResponseFormat:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
-        
+
         assert response.status_code == 200  # API returns 200 with error code
         assert "code" in data
         assert data["code"] == 100  # ErrorCode.BAD_REQUEST
@@ -506,7 +503,7 @@ class TestBacktestDataRequirements:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh999999",
             "period": "daily",
@@ -515,10 +512,10 @@ class TestBacktestDataRequirements:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
-        
+
         assert response.status_code == 200
         # ValueError is caught by @handle_errors and converted to BAD_REQUEST (100)
         # The error message contains "无" or "数据" indicating insufficient data
@@ -539,7 +536,7 @@ class TestBacktestDataRequirements:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         # Request very short period with very slow MA
         request_data = {
             "symbol": "sh000001",
@@ -552,10 +549,10 @@ class TestBacktestDataRequirements:
                 "slow_ma": 100  # Requires 100 days of data
             }
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
-        
+
         # Should return error about insufficient data for calculation
         assert response.status_code == 200
         if data.get("code") == 1:
@@ -579,7 +576,7 @@ class TestBacktestPerformanceMetrics:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -588,10 +585,10 @@ class TestBacktestPerformanceMetrics:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
-        
+
         if data.get("code") == 0:
             result = data["data"]
             # Performance metrics
@@ -615,7 +612,7 @@ class TestBacktestPerformanceMetrics:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -624,10 +621,10 @@ class TestBacktestPerformanceMetrics:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
-        
+
         if data.get("code") == 0:
             result = data["data"]
             trades = result.get("trades", [])
@@ -659,7 +656,7 @@ class TestBacktestPerformanceMetrics:
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
-        
+
         request_data = {
             "symbol": "sh000001",
             "period": "daily",
@@ -668,10 +665,10 @@ class TestBacktestPerformanceMetrics:
             "initial_capital": 100000,
             "strategy_type": "ma_crossover"
         }
-        
+
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
-        
+
         if data.get("code") == 0:
             result = data["data"]
             equity_curve = result.get("equity_curve", [])

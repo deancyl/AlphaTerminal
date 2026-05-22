@@ -7,7 +7,6 @@ import asyncio
 import json
 import logging
 import time
-from collections import defaultdict
 from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
@@ -59,7 +58,7 @@ class WSConnection:
         - 估算错过的 pong 次数
         """
         elapsed = time.time() - self._last_pong
-        
+
         # 严格检查：如果超过 PONG_TIMEOUT，连接已死
         if elapsed >= PONG_TIMEOUT:
             missed_pongs = int(elapsed / PING_INTERVAL)
@@ -68,13 +67,13 @@ class WSConnection:
                 f"estimated missed pongs: {missed_pongs}"
             )
             return False
-        
+
         # 警告级别：接近超时但还未超时
         if elapsed >= PONG_TIMEOUT * 0.8:
             logger.debug(
                 f"[WS] Connection approaching pong timeout: {elapsed:.1f}s / {PONG_TIMEOUT}s"
             )
-        
+
         return True
 
     def check_connection_health(self) -> dict:
@@ -204,7 +203,7 @@ class ConnectionManager:
                         dead.append(conn)
 
             for conn in dead:
-                logger.warning(f"[WS] removing dead connection (pong timeout)")
+                logger.warning("[WS] removing dead connection (pong timeout)")
                 await self.disconnect(conn)
 
     async def _batch_loop(self):
@@ -238,7 +237,7 @@ class ConnectionManager:
             dead = []
             for conn in subscribers:
                 if not conn._check_rate_limit():
-                    logger.warning(f"[WS] rate limit exceeded for connection, dropping message")
+                    logger.warning("[WS] rate limit exceeded for connection, dropping message")
                     continue
                 try:
                     await conn.ws.send_text(data)
@@ -354,7 +353,7 @@ class ConnectionManager:
             latencies = [c.latency for c in self._conns if c.latency is not None]
         async with self._batch_lock:
             batch_queue_size = len(self._batch_queue)
-        
+
         metrics = {
             "active_connections": len(self._conns),
             "max_connections": MAX_CONNECTIONS,
@@ -366,18 +365,18 @@ class ConnectionManager:
             "max_subscriptions": MAX_SUBSCRIPTIONS,
             "max_msg_per_second": MAX_MSG_PER_SECOND,
         }
-        
+
         if self._streaming_manager:
             metrics["streaming"] = self._streaming_manager.get_status()
-        
+
         return metrics
-    
+
     def register_streaming_manager(self, streaming_manager):
         """注册流式数据管理器，实现实时 tick 推送"""
         self._streaming_manager = streaming_manager
         streaming_manager.set_ws_manager(self)
         logger.info("[WS] Streaming manager registered")
-    
+
     async def get_subscribed_symbols(self) -> set[str]:
         """获取所有已订阅的 symbols（供 streaming manager 使用）"""
         async with self._map_lock:

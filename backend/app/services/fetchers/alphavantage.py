@@ -26,7 +26,7 @@ from typing import Optional, List
 from .base import BaseMarketFetcher
 from ..http_client import ValidatedHTTPClient
 from ..circuit_breaker import CircuitBreaker
-from ..data_validator import QuoteData, KlineData, MarketType, DataType
+from ..data_validator import QuoteData, MarketType, DataType
 
 logger = logging.getLogger(__name__)
 

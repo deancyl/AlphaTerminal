@@ -94,13 +94,13 @@ def validate_timeout(value: float, name: str, min_val: float = 1.0, max_val: flo
     """
     if value < 0:
         raise ValueError(f"{name} cannot be negative: {value}")
-    
+
     # Clamp to acceptable range
     clamped = max(min_val, min(max_val, value))
-    
+
     if clamped != value:
         import logging
         logger = logging.getLogger(__name__)
         logger.warning(f"{name} clamped from {value} to {clamped}")
-    
+
     return clamped

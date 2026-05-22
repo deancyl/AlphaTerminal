@@ -7,13 +7,11 @@ Verifies:
 - Provider context is added correctly
 - Full errors are logged (not exposed to users)
 """
-import pytest
 import logging
 from app.utils.error_sanitizer import (
     sanitize_error,
     sanitize_error_message,
     _redact_sensitive,
-    SENSITIVE_PATTERNS,
     ERROR_MAP,
     PROVIDER_CONTEXT,
 )
@@ -219,7 +217,7 @@ class TestIntegration:
         with caplog.at_level(logging.ERROR):
             e = Exception("Full error with sensitive key sk-1234567890")
             result = sanitize_error(e, provider="openai", log_full_error=True)
-            
+
             assert any("sk-1234567890" in record.message for record in caplog.records)
             assert "sk-1234567890" not in result
 

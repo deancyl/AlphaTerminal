@@ -17,40 +17,22 @@ Caching:
 """
 import logging
 import random
-import math
 import asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query
 from typing import Optional, List, Dict
-from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
 
 from app.utils.errors import success_response, error_response, ErrorCode
-from app.config.timeout import AKSHARE_TIMEOUT
 from app.config.settings import get_settings
-from app.services.fetchers.forex_fetcher import ForexFetcher, clean_value, forex_fetcher, get_circuit_breaker_status
+from app.services.fetchers.forex_fetcher import forex_fetcher, get_circuit_breaker_status
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
 from app.routers.forex_schemas import (
-    ForexSpotQuote,
-    ForexSpotQuoteList,
-    ForexCFETSQuote,
-    ForexCFETSQuoteList,
-    ForexOfficialRate,
-    ForexOfficialRateList,
-    ForexKline,
-    ForexHistoryResponse,
     CrossRateCell,
     CrossRateRow,
-    CrossRateMatrix,
     CrossRateRequest,
-    CrossRateResponse,
-    CurrencyConvertRequest,
-    CurrencyConvertResponse,
-    ForexQuote,
-    ForexQuotesResponse,
-    OHLCData,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,17 +54,16 @@ def _generate_bounded_random_walk(base_rate: float, days: int, volatility: float
     Returns:
         List of OHLC dictionaries
     """
-    import math
-    
+
     mock_history = []
     current_rate = base_rate
-    
+
     # Mean reversion strength (0.05 = 5% pull toward base each day)
     mean_reversion = 0.05
-    
+
     # Maximum deviation from base rate (10%)
     max_deviation = base_rate * 0.10
-    
+
     # Historical volatility bounds (use realistic forex volatility)
     # Major pairs: 0.3-0.7% daily, Minor pairs: 0.5-1.5% daily
     if base_rate > 100:  # JPY pairs
@@ -94,46 +75,46 @@ def _generate_bounded_random_walk(base_rate: float, days: int, volatility: float
     else:  # Minor pairs (rates < 1)
         daily_vol = volatility * 2
         decimals = 6
-    
+
     for i in range(days):
         date = datetime.now() - timedelta(days=days - i - 1)
-        
+
         # Mean reversion: pull toward base rate
         deviation = current_rate - base_rate
         reversion_trend = -deviation * mean_reversion
-        
+
         # Random component with bounded volatility
         # Use triangular distribution for more realistic tails
         random_trend = random.gauss(0, daily_vol * current_rate)
-        
+
         # Combine mean reversion and random trend
         trend = reversion_trend + random_trend
-        
+
         # Bound the trend to prevent unrealistic moves
         max_daily_move = current_rate * 0.02  # Max 2% daily move
         trend = max(-max_daily_move, min(max_daily_move, trend))
-        
+
         open_rate = current_rate + trend
-        
+
         # Bound open_rate to max deviation from base
         open_rate = max(base_rate - max_deviation, min(base_rate + max_deviation, open_rate))
-        
+
         # Generate realistic high/low with intraday volatility
         intraday_vol = daily_vol * current_rate * 0.5
         high_offset = abs(random.gauss(0, intraday_vol))
         low_offset = abs(random.gauss(0, intraday_vol))
-        
+
         high_rate = open_rate + high_offset
         low_rate = open_rate - low_offset
-        
+
         # Close rate with slight mean reversion
         close_trend = (base_rate - open_rate) * 0.1 + random.gauss(0, intraday_vol * 0.6)
         close_rate = open_rate + close_trend
-        
+
         # Ensure OHLC constraints
         high_rate = max(open_rate, high_rate, close_rate)
         low_rate = min(open_rate, low_rate, close_rate)
-        
+
         mock_history.append({
             "date": date.strftime("%Y-%m-%d"),
             "open": round(open_rate, decimals),
@@ -142,9 +123,9 @@ def _generate_bounded_random_walk(base_rate: float, days: int, volatility: float
             "low": round(low_rate, decimals),
             "amplitude": round((high_rate - low_rate) / open_rate * 100, 2) if open_rate > 0 else 0,
         })
-        
+
         current_rate = close_rate
-    
+
     return mock_history
 
 router = APIRouter(prefix="/forex", tags=["forex"])
@@ -218,13 +199,13 @@ async def get_spot_quotes():
         List[ForexSpotQuote]: 所有货币对的实时报价
     """
     cache = get_cache()
-    
+
     # Stale-While-Revalidate: fresh 60s, stale 600s (10min)
     data, is_stale = cache.get_with_stale("forex:spot_quotes", fresh_ttl=60, stale_ttl=600)
-    
+
     if data:
         response = success_response(data)
-        
+
         # If stale, trigger background refresh (non-blocking)
         if is_stale:
             asyncio.create_task(_fetch_forex_spot_background())
@@ -232,9 +213,9 @@ async def get_spot_quotes():
             response['data']['stale_age_seconds'] = int(
                 (datetime.now() - datetime.fromisoformat(data.get('last_update_time', datetime.now().isoformat()))).total_seconds()
             )
-        
+
         return response
-    
+
     # No data at all - wait for first fetch (with timeout)
     try:
         data = await asyncio.wait_for(
@@ -255,7 +236,7 @@ async def _fetch_forex_spot_background():
     try:
         quotes = await forex_fetcher.get_spot_quotes()
         source = "akshare"
-        
+
         # Fallback to CFETS if forex_spot_em returns empty
         if not quotes:
             logger.info("[Forex] forex_spot_em 返回空数据，使用 CFETS fallback")
@@ -263,7 +244,7 @@ async def _fetch_forex_spot_background():
                 forex_fetcher.get_cfets_spot(),
                 forex_fetcher.get_cfets_crosses()
             )
-            
+
             for q in cfets_quotes:
                 pair = q.get("pair", "")
                 if "/" in pair:
@@ -286,7 +267,7 @@ async def _fetch_forex_spot_background():
                     "source": "cfets",
                     "timestamp": q.get("timestamp"),
                 })
-            
+
             for q in cfets_crosses:
                 pair = q.get("pair", "")
                 if "/" in pair:
@@ -309,9 +290,9 @@ async def _fetch_forex_spot_background():
                     "source": "cfets",
                     "timestamp": q.get("timestamp"),
                 })
-            
+
             source = "cfets"
-        
+
         # Cache the result
         cache = get_cache()
         cache.set("forex:spot_quotes", {
@@ -324,9 +305,9 @@ async def _fetch_forex_spot_background():
             "update_time": datetime.now().isoformat(),
             "circuit_breaker": get_circuit_breaker_status()
         }, ttl=600)  # 10 minutes (stale_ttl)
-        
+
         logger.info(f"[Forex] Background fetch completed: {len(quotes)} quotes")
-        
+
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] failed: {e}", exc_info=True)
 
@@ -335,7 +316,7 @@ async def _fetch_forex_spot_foreground():
     """Foreground fetch for forex spot quotes (returns data directly)"""
     quotes = await forex_fetcher.get_spot_quotes()
     source = "akshare"
-    
+
     # Fallback to CFETS if forex_spot_em returns empty
     if not quotes:
         logger.info("[Forex] forex_spot_em 返回空数据，使用 CFETS fallback")
@@ -343,7 +324,7 @@ async def _fetch_forex_spot_foreground():
             forex_fetcher.get_cfets_spot(),
             forex_fetcher.get_cfets_crosses()
         )
-        
+
         for q in cfets_quotes:
             pair = q.get("pair", "")
             if "/" in pair:
@@ -366,7 +347,7 @@ async def _fetch_forex_spot_foreground():
                 "source": "cfets",
                 "timestamp": q.get("timestamp"),
             })
-        
+
         for q in cfets_crosses:
             pair = q.get("pair", "")
             if "/" in pair:
@@ -389,9 +370,9 @@ async def _fetch_forex_spot_foreground():
                 "source": "cfets",
                 "timestamp": q.get("timestamp"),
             })
-        
+
         source = "cfets"
-    
+
     # Cache the result
     cache = get_cache()
     result = {
@@ -405,9 +386,9 @@ async def _fetch_forex_spot_foreground():
         "circuit_breaker": get_circuit_breaker_status()
     }
     cache.set("forex:spot_quotes", result, ttl=600)  # 10 minutes (stale_ttl)
-    
+
     logger.info(f"[Forex] Foreground fetch completed: {len(quotes)} quotes")
-    
+
     return result
 
 
@@ -445,14 +426,14 @@ async def get_cfets_spot():
     """
     try:
         quotes = await forex_fetcher.get_cfets_spot()
-        
+
         return success_response({
             "rmb_pairs": quotes,
             "cross_pairs": [],
             "last_update": datetime.now().isoformat(),
             "source": "cfets"
         })
-        
+
     except Exception as e:
         logger.error(f"[Forex] 获取CFETS报价失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取CFETS报价失败: {str(e)}")
@@ -472,14 +453,14 @@ async def get_cfets_crosses():
     """
     try:
         quotes = await forex_fetcher.get_cfets_crosses()
-        
+
         return success_response({
             "rmb_pairs": [],
             "cross_pairs": quotes,
             "last_update": datetime.now().isoformat(),
             "source": "cfets"
         })
-        
+
     except Exception as e:
         logger.error(f"[Forex] 获取CFETS交叉汇率失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取CFETS交叉汇率失败: {str(e)}")
@@ -504,13 +485,13 @@ async def get_official_rates(
     """
     try:
         rates = await forex_fetcher.get_official_rates(days)
-        
+
         return success_response({
             "rates": rates,
             "total": len(rates),
             "source": "safe"
         })
-        
+
     except Exception as e:
         logger.error(f"[Forex] 获取官方中间价失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取官方中间价失败: {str(e)}")
@@ -541,20 +522,20 @@ async def get_forex_history_new(
     """
     cache = get_cache()
     cache_key = f"forex:history:{symbol}:{start_date}:{end_date}:{limit}"
-    
+
     cached = cache.get(cache_key)
     if cached:
         return success_response(cached)
-    
+
     # Try to fetch data with timeout (10 seconds)
     try:
         ak_symbol = symbol.upper().replace("CNY", "CNH")
-        
+
         history = await asyncio.wait_for(
             forex_fetcher.get_history(ak_symbol, start_date, end_date, limit),
             timeout=10.0
         )
-        
+
         if history:
             result = {
                 "symbol": symbol,
@@ -568,12 +549,12 @@ async def get_forex_history_new(
             }
             cache.set(cache_key, result, ttl=300)
             return success_response(result)
-        
+
     except asyncio.TimeoutError:
         logger.warning(f"[Forex] History fetch timeout for {symbol}", exc_info=True)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.warning(f"[HTTP] failed for {symbol}: {e}", exc_info=True)
-    
+
     # Check if mock data is allowed
     settings = get_settings()
     if not settings.FOREX_ALLOW_MOCK_DATA:
@@ -582,29 +563,29 @@ async def get_forex_history_new(
             "外汇历史数据暂不可用，请稍后重试",
             code=ErrorCode.SERVICE_UNAVAILABLE
         )
-    
+
     # Fallback: Generate mock data (only when explicitly allowed)
     logger.info(f"[Forex] Using mock data fallback for {symbol}")
-    
+
     # Try to get base rate from CFETS quotes
     cfets_quotes = await forex_fetcher.get_cfets_spot()
     base_rate = None
-    
+
     pair_to_check = symbol.upper().replace("CNH", "CNY")
     for q in cfets_quotes:
         pair = q.get("pair", "").replace("/", "")
         if pair == pair_to_check or pair == symbol.upper():
             base_rate = q.get("mid")
             break
-    
+
     if base_rate is None:
         base_rate = 7.25 if "CNY" in symbol.upper() or "CNH" in symbol.upper() else 1.0
-    
+
     # Use bounded random walk for more realistic mock data
     volatility = 0.003 if base_rate > 1 else 0.01
     days = min(limit, 100)
     mock_history = _generate_bounded_random_walk(base_rate, days, volatility)
-    
+
     result = {
         "symbol": symbol,
         "name": symbol,
@@ -617,7 +598,7 @@ async def get_forex_history_new(
         "last_update_time": datetime.now().isoformat()
     }
     cache.set(cache_key, result, ttl=300)
-    
+
     return success_response(result)
 
 
@@ -625,9 +606,9 @@ async def _fetch_forex_history_background(symbol: str, start_date: Optional[str]
     """Background fetch for forex history"""
     try:
         ak_symbol = symbol.upper().replace("CNY", "CNH")
-        
+
         history = await forex_fetcher.get_history(ak_symbol, start_date, end_date, limit)
-        
+
         if history:
             cache = get_cache()
             cache.set(f"forex:history:{symbol}:{start_date}:{end_date}:{limit}", {
@@ -642,27 +623,27 @@ async def _fetch_forex_history_background(symbol: str, start_date: Optional[str]
             }, ttl=300)
             logger.info(f"[Forex] History background fetch completed: {symbol}, {len(history)} bars")
             return
-        
+
         logger.info(f"[Forex] forex_hist_em 返回空数据，使用模拟数据 fallback: {symbol}")
-        
+
         cfets_quotes = await forex_fetcher.get_cfets_spot()
         base_rate = None
-        
+
         pair_to_check = symbol.upper().replace("CNH", "CNY")
         for q in cfets_quotes:
             pair = q.get("pair", "").replace("/", "")
             if pair == pair_to_check or pair == symbol.upper():
                 base_rate = q.get("mid")
                 break
-        
+
         if base_rate is None:
             base_rate = 7.25 if "CNY" in symbol.upper() or "CNH" in symbol.upper() else 1.0
-        
+
         # Use bounded random walk for more realistic mock data
         volatility = 0.003 if base_rate > 1 else 0.01
         days = min(limit, 100)
         mock_history = _generate_bounded_random_walk(base_rate, days, volatility)
-        
+
         cache = get_cache()
         cache.set(f"forex:history:{symbol}:{start_date}:{end_date}:{limit}", {
             "symbol": symbol,
@@ -674,9 +655,9 @@ async def _fetch_forex_history_background(symbol: str, start_date: Optional[str]
             "status": "ready",
             "last_update_time": datetime.now().isoformat()
         }, ttl=300)
-        
+
         logger.info(f"[Forex] History background fetch completed (mock): {symbol}, {len(mock_history)} bars")
-        
+
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] failed: {symbol} - {e}", exc_info=True)
 
@@ -707,16 +688,16 @@ async def get_cross_rate_matrix(
     """
     cache = get_cache()
     cache_key = f"forex:matrix:{currencies}"
-    
+
     # v0.6.70: Use Stale-While-Revalidate - return stale data if available
     cached, is_stale = cache.get_with_stale(cache_key, fresh_ttl=300, stale_ttl=86400)
     if cached:
         if is_stale:
             asyncio.create_task(_fetch_forex_matrix_background(currencies))
         return success_response(cached)
-    
+
     asyncio.create_task(_fetch_forex_matrix_background(currencies))
-    
+
     return error_response("交叉汇率矩阵暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
 
 
@@ -724,22 +705,22 @@ async def _fetch_forex_matrix_background(currencies: str):
     """Background fetch for cross-rate matrix (O(N) optimized)"""
     try:
         currency_list = [c.strip().upper() for c in currencies.split(",") if c.strip()]
-        
+
         if len(currency_list) < 2:
             return
-        
+
         # Step 1: Fetch all data sources in parallel (O(1) API calls)
         spot_quotes, cfets_rmb, cfets_cross = await asyncio.gather(
             forex_fetcher.get_spot_quotes(),
             forex_fetcher.get_cfets_spot(),
             forex_fetcher.get_cfets_crosses()
         )
-        
+
         # Step 2: Build separate bid/ask dictionaries for precision
         rates_dict: Dict[str, Decimal] = {}
         bid_rates: Dict[str, Decimal] = {}
         ask_rates: Dict[str, Decimal] = {}
-        
+
         for q in spot_quotes:
             symbol = q.get("symbol", "")
             latest = q.get("latest")
@@ -753,7 +734,7 @@ async def _fetch_forex_matrix_background(currencies: str):
                 # Use bid/ask if available, otherwise use mid price
                 bid_rates[key] = Decimal(str(bid)) if bid else Decimal(str(latest))
                 ask_rates[key] = Decimal(str(ask)) if ask else Decimal(str(latest))
-        
+
         for q in cfets_rmb:
             pair = q.get("pair", "")
             mid = q.get("mid")
@@ -763,7 +744,7 @@ async def _fetch_forex_matrix_background(currencies: str):
                 rates_dict[pair] = Decimal(str(mid))
                 bid_rates[pair] = Decimal(str(bid)) if bid else Decimal(str(mid))
                 ask_rates[pair] = Decimal(str(ask)) if ask else Decimal(str(mid))
-        
+
         for q in cfets_cross:
             pair = q.get("pair", "")
             mid = q.get("mid")
@@ -773,10 +754,10 @@ async def _fetch_forex_matrix_background(currencies: str):
                 rates_dict[pair] = Decimal(str(mid))
                 bid_rates[pair] = Decimal(str(bid)) if bid else Decimal(str(mid))
                 ask_rates[pair] = Decimal(str(ask)) if ask else Decimal(str(mid))
-        
+
         # Step 3: Pre-compute USD-based rates for all currencies (O(N))
         usd_rates: Dict[str, Decimal] = {}
-        
+
         for curr in currency_list:
             if curr == "USD":
                 usd_rates[curr] = Decimal('1.0')
@@ -784,7 +765,7 @@ async def _fetch_forex_matrix_background(currencies: str):
                 # Try direct USD rate
                 usd_curr = f"USD/{curr}"
                 curr_usd = f"{curr}/USD"
-                
+
                 if usd_curr in rates_dict:
                     usd_rates[curr] = rates_dict[usd_curr]
                 elif curr_usd in rates_dict:
@@ -794,18 +775,18 @@ async def _fetch_forex_matrix_background(currencies: str):
                     usd_cny = rates_dict.get("USD/CNY")
                     curr_cny = rates_dict.get(f"{curr}/CNY") or rates_dict.get(f"{curr}CNY")
                     cny_curr = rates_dict.get(f"CNY/{curr}")
-                    
+
                     if usd_cny and curr_cny:
                         usd_rates[curr] = usd_cny / curr_cny
                     elif usd_cny and cny_curr:
                         usd_rates[curr] = usd_cny * cny_curr
-        
+
         # Step 4: Calculate cross-rates in single pass (O(N²) but with O(1) lookups)
         matrix = []
         for base_curr in currency_list:
             row_rates = []
             base_usd = usd_rates.get(base_curr)
-            
+
             for quote_curr in currency_list:
                 if base_curr == quote_curr:
                     row_rates.append(CrossRateCell(
@@ -818,7 +799,7 @@ async def _fetch_forex_matrix_background(currencies: str):
                     # Try direct rate first
                     direct_key = f"{base_curr}/{quote_curr}"
                     inverse_key = f"{quote_curr}/{base_curr}"
-                    
+
                     if direct_key in rates_dict:
                         row_rates.append(CrossRateCell(
                             rate=float(rates_dict[direct_key]),
@@ -838,7 +819,7 @@ async def _fetch_forex_matrix_background(currencies: str):
                         cross_result = forex_fetcher.calculate_cross_rate_with_spread(
                             base_curr, quote_curr, bid_rates, ask_rates
                         )
-                        
+
                         if cross_result:
                             row_rates.append(CrossRateCell(
                                 rate=float(cross_result["mid"]),
@@ -867,12 +848,12 @@ async def _fetch_forex_matrix_background(currencies: str):
                                     is_base=False,
                                     is_calculated=False
                                 ))
-            
+
             matrix.append(CrossRateRow(
                 base_currency=base_curr,
                 rates=row_rates
             ))
-        
+
         cache = get_cache()
         cache.set(f"forex:matrix:{currencies}", {
             "currencies": currency_list,
@@ -881,9 +862,9 @@ async def _fetch_forex_matrix_background(currencies: str):
             "source": "akshare",
             "status": "ready"
         }, ttl=120)
-        
+
         logger.info(f"[Forex] Matrix background fetch completed: {len(currency_list)} currencies")
-        
+
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] failed: {e}", exc_info=True)
 
@@ -907,7 +888,7 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
         from_curr = request.from_currency.upper()
         to_curr = request.to_currency.upper()
         amount = request.amount
-        
+
         if from_curr == to_curr:
             return success_response({
                 "from_currency": from_curr,
@@ -919,15 +900,15 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
                 "rate_source": "same",
                 "timestamp": datetime.now().isoformat()
             })
-        
+
         spot_quotes, cfets_rmb, cfets_cross = await asyncio.gather(
             forex_fetcher.get_spot_quotes(),
             forex_fetcher.get_cfets_spot(),
             forex_fetcher.get_cfets_crosses()
         )
-        
+
         rates_dict: Dict[str, Decimal] = {}
-        
+
         for q in spot_quotes:
             symbol = q.get("symbol", "")
             latest = q.get("latest")
@@ -935,26 +916,26 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
                 from_c = symbol[:3]
                 to_c = symbol[3:]
                 rates_dict[f"{from_c}/{to_c}"] = Decimal(str(latest))
-        
+
         for q in cfets_rmb:
             pair = q.get("pair", "")
             mid = q.get("mid")
             if mid and "/" in pair:
                 rates_dict[pair] = Decimal(str(mid))
-        
+
         for q in cfets_cross:
             pair = q.get("pair", "")
             mid = q.get("mid")
             if mid and "/" in pair:
                 rates_dict[pair] = Decimal(str(mid))
-        
+
         direct_key = f"{from_curr}/{to_curr}"
         inverse_key = f"{to_curr}/{from_curr}"
-        
+
         rate = None
         path = [from_curr, to_curr]
         rate_source = "direct"
-        
+
         if direct_key in rates_dict:
             rate = rates_dict[direct_key]
         elif inverse_key in rates_dict:
@@ -965,12 +946,12 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
             if rate:
                 path = [from_curr, "USD", to_curr]
                 rate_source = "triangular"
-        
+
         if rate is None:
             return error_response(ErrorCode.NOT_FOUND, f"无法获取汇率: {from_curr}/{to_curr}")
-        
+
         result = float(Decimal(str(amount)) * rate)
-        
+
         return success_response({
             "from_currency": from_curr,
             "to_currency": to_curr,
@@ -981,7 +962,7 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
             "rate_source": rate_source,
             "timestamp": datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         logger.error(f"[Forex] 计算交叉汇率失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"计算交叉汇率失败: {str(e)}")
@@ -999,11 +980,11 @@ async def get_forex_quotes():
     """
     cache = get_cache()
     cache_key = "forex:quotes_legacy"
-    
+
     cached = cache.get(cache_key)
     if cached:
         return success_response(cached)
-    
+
     async def background_fetch():
         try:
             import concurrent.futures
@@ -1019,9 +1000,9 @@ async def get_forex_quotes():
                     logger.info(f"[Forex] 后台获取成功，{len(df)} 条数据")
         except Exception as e:
             logger.warning(f"[Forex] 后台获取失败: {e}", exc_info=True)
-    
+
     asyncio.create_task(background_fetch())
-    
+
     return success_response({
         "quotes": FALLBACK_FOREX_QUOTES,
         "total": len(FALLBACK_FOREX_QUOTES),
@@ -1034,13 +1015,13 @@ def _fetch_forex_sync():
     try:
         ak = _get_ak()
         df = ak.currency_boc_safe()
-        
+
         if df is not None and not df.empty:
             quotes = []
             for symbol, info in CURRENCY_PAIRS.items():
                 currency_name = info["ak_code"]
                 matching_rows = df[df['货币名称'].str.contains(currency_name, na=False)]
-                
+
                 if not matching_rows.empty:
                     row = matching_rows.iloc[0]
                     buy_rate = _safe_float(row.get('中行汇买价'))
@@ -1050,7 +1031,7 @@ def _fetch_forex_sync():
                     change_pct = None
                     if buy_rate and prev_buy and prev_buy > 0:
                         change_pct = round((buy_rate - prev_buy) / prev_buy * 100, 4)
-                    
+
                     quotes.append({
                         "symbol": symbol,
                         "name": info["name"],
@@ -1096,36 +1077,36 @@ async def get_forex_history(
     valid_days = [7, 30, 90, 365]
     if days not in valid_days:
         days = min(valid_days, key=lambda x: abs(x - days))
-    
+
     pair = pair.upper().replace("-", "/")
     if "/" not in pair:
         if pair.endswith("CNY"):
             pair = pair[:-3] + "/CNY"
         elif pair.startswith("CNY"):
             pair = "CNY/" + pair[3:]
-    
+
     cache = get_cache()
     cache_key = f"forex:history_legacy:{pair}:{days}"
-    
+
     cached = cache.get(cache_key)
     if cached:
         return success_response(cached)
-    
+
     try:
         quotes_res = await get_forex_quotes()
         base_rate = None
-        
+
         if quotes_res.get("code") == 0:
             for q in quotes_res.get("data", {}).get("quotes", []):
                 if q.get("symbol") == pair:
                     base_rate = q.get("middle_rate") or q.get("buy_rate")
                     break
-        
+
         if not base_rate:
             base_rate = DEFAULT_RATES.get(pair, 1.0)
-        
+
         history = _generate_realistic_ohlc(base_rate, days, pair)
-        
+
         result = {
             "symbol": pair,
             "history": history,
@@ -1136,7 +1117,7 @@ async def get_forex_history(
         }
         cache.set(cache_key, result, ttl=3600)
         return success_response(result)
-        
+
     except Exception as e:
         logger.error(f"获取外汇历史数据失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取外汇历史数据失败: {str(e)}")
@@ -1182,12 +1163,12 @@ async def convert_currency(
     """
     from_currency = from_currency.upper()
     to_currency = to_currency.upper()
-    
+
     if from_currency not in SUPPORTED_CURRENCIES:
         return error_response(ErrorCode.BAD_REQUEST, f"不支持的货币: {from_currency}，支持: {SUPPORTED_CURRENCIES}")
     if to_currency not in SUPPORTED_CURRENCIES:
         return error_response(ErrorCode.BAD_REQUEST, f"不支持的货币: {to_currency}，支持: {SUPPORTED_CURRENCIES}")
-    
+
     if from_currency == to_currency:
         return success_response({
             "from_currency": from_currency,
@@ -1198,20 +1179,20 @@ async def convert_currency(
             "rate_source": "same_currency",
             "timestamp": datetime.now().isoformat()
         })
-    
+
     rate = _calculate_cross_rate(from_currency, to_currency)
-    
+
     if rate is None:
         return error_response(ErrorCode.INTERNAL_ERROR, f"无法获取汇率: {from_currency}/{to_currency}")
-    
+
     result = round(amount * rate, 2)
-    
+
     rate_source = "cached_real"
     cache = get_cache()
     cached_quotes = cache.get("forex:quotes_legacy")
     if cached_quotes and cached_quotes.get("is_fallback", True):
         rate_source = "fallback"
-    
+
     return success_response({
         "from_currency": from_currency,
         "to_currency": to_currency,
@@ -1235,7 +1216,7 @@ def _safe_float(val):
 def _generate_realistic_ohlc(base_rate: float, days: int, pair: str) -> List[Dict]:
     history = []
     current_rate = base_rate
-    
+
     daily_volatility = {
         "USD/CNY": 0.003,
         "EUR/CNY": 0.004,
@@ -1245,29 +1226,29 @@ def _generate_realistic_ohlc(base_rate: float, days: int, pair: str) -> List[Dic
         "AUD/CNY": 0.006,
     }
     volatility = daily_volatility.get(pair, 0.004)
-    
+
     trend = 0
     trend_strength = random.uniform(0.0001, 0.0003)
     trend_duration = random.randint(5, 15)
     days_in_trend = 0
-    
+
     for i in range(days):
         date = datetime.now() - timedelta(days=days - i - 1)
-        
+
         days_in_trend += 1
         if days_in_trend >= trend_duration:
             trend = random.choice([-1, 0, 1])
             trend_strength = random.uniform(0.0001, 0.0003)
             trend_duration = random.randint(5, 15)
             days_in_trend = 0
-        
+
         trend_component = trend * trend_strength * current_rate
         noise = random.gauss(0, volatility * current_rate * 0.3)
         open_rate = current_rate + trend_component + noise
-        
+
         day_volatility = abs(random.gauss(0, volatility * current_rate))
         direction = random.choice([-1, 1])
-        
+
         if direction > 0:
             high_rate = open_rate + day_volatility * random.uniform(0.5, 1.0)
             low_rate = open_rate - day_volatility * random.uniform(0.2, 0.5)
@@ -1276,17 +1257,17 @@ def _generate_realistic_ohlc(base_rate: float, days: int, pair: str) -> List[Dic
             low_rate = open_rate - day_volatility * random.uniform(0.5, 1.0)
             high_rate = open_rate + day_volatility * random.uniform(0.2, 0.5)
             close_rate = low_rate + day_volatility * random.uniform(0.1, 0.4)
-        
+
         if pair == "JPY/CNY":
             decimals = 6
         else:
             decimals = 4
-        
+
         open_rate = round(open_rate, decimals)
         high_rate = round(max(open_rate, high_rate, low_rate, close_rate), decimals)
         low_rate = round(min(open_rate, high_rate, low_rate, close_rate), decimals)
         close_rate = round(close_rate, decimals)
-        
+
         history.append({
             "date": date.strftime("%Y-%m-%d"),
             "open": open_rate,
@@ -1294,9 +1275,9 @@ def _generate_realistic_ohlc(base_rate: float, days: int, pair: str) -> List[Dic
             "low": low_rate,
             "close": close_rate,
         })
-        
+
         current_rate = close_rate
-    
+
     return history
 
 
@@ -1304,24 +1285,24 @@ def _get_current_rate(currency: str) -> Optional[float]:
     """获取当前汇率（同步版本，用于内部计算）"""
     if currency == "CNY":
         return 1.0
-    
+
     pair = f"{currency}/CNY"
-    
+
     cache = get_cache()
     cached = cache.get("forex:quotes_legacy")
     if cached and not cached.get("is_fallback", True):
         for q in cached.get("quotes", []):
             if q.get("symbol") == pair:
                 return q.get("middle_rate") or q.get("buy_rate")
-    
+
     return DEFAULT_RATES.get(pair)
 
 
 def _calculate_cross_rate(from_curr: str, to_curr: str) -> Optional[float]:
     from_rate = _get_current_rate(from_curr)
     to_rate = _get_current_rate(to_curr)
-    
+
     if from_rate is None or to_rate is None:
         return None
-    
+
     return round(from_rate / to_rate, 6)

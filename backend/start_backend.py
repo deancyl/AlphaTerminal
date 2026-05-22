@@ -1,5 +1,4 @@
 import signal
-import sys
 import os
 
 # ── 优雅关停：捕获 SIGTERM 后通知 uvicorn 退出 ──────────────────────

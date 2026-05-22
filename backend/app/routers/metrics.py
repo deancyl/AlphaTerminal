@@ -21,7 +21,7 @@ async def get_metrics():
     """
     metrics = get_cache_metrics()
     prometheus_output = metrics.to_prometheus()
-    
+
     return Response(
         content=prometheus_output,
         media_type="text/plain; version=0.0.4; charset=utf-8"

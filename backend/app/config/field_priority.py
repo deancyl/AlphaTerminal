@@ -17,7 +17,7 @@ from typing import List
 
 class FieldPriority(BaseModel):
     """字段级数据源优先级配置"""
-    
+
     # ========== 价格相关字段 ==========
     # 优先mootdx（更实时），其次sina，最后tencent
     price: List[str] = ["mootdx", "sina", "tencent", "eastmoney"]
@@ -25,7 +25,7 @@ class FieldPriority(BaseModel):
     high: List[str] = ["mootdx", "sina", "tencent", "eastmoney"]
     low: List[str] = ["mootdx", "sina", "tencent", "eastmoney"]
     prev_close: List[str] = ["mootdx", "sina", "tencent", "eastmoney"]
-    
+
     # ========== 估值相关字段 ==========
     # 优先tencent（更准确），其次eastmoney
     pe_ttm: List[str] = ["tencent", "eastmoney", "mootdx"]
@@ -34,23 +34,23 @@ class FieldPriority(BaseModel):
     ps: List[str] = ["tencent", "eastmoney"]
     total_mv: List[str] = ["tencent", "eastmoney"]
     circ_mv: List[str] = ["tencent", "eastmoney"]
-    
+
     # ========== 成交量相关字段 ==========
     # 优先sina（更稳定）
     volume: List[str] = ["sina", "mootdx", "tencent", "eastmoney"]
     amount: List[str] = ["sina", "mootdx", "tencent", "eastmoney"]
     turnover: List[str] = ["sina", "tencent", "eastmoney"]
-    
+
     # ========== 涨跌幅字段 ==========
     # 优先eastmoney（更准确）
     change_pct: List[str] = ["eastmoney", "sina", "tencent", "mootdx"]
     chg: List[str] = ["eastmoney", "sina", "tencent", "mootdx"]
     chg_pct: List[str] = ["eastmoney", "sina", "tencent", "mootdx"]
-    
+
     # ========== 其他字段 ==========
     amplitude: List[str] = ["eastmoney", "sina", "tencent"]
     turnover_rate: List[str] = ["eastmoney", "sina", "tencent"]
-    
+
     def get_priority(self, field: str) -> List[str]:
         """
         获取指定字段的优先级列表
@@ -62,7 +62,7 @@ class FieldPriority(BaseModel):
             数据源优先级列表
         """
         return getattr(self, field, ["sina", "tencent", "eastmoney"])
-    
+
     def get_all_fields(self) -> List[str]:
         """获取所有已配置的字段名"""
         return [

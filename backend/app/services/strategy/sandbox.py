@@ -19,7 +19,7 @@ import logging
 import math
 import statistics
 from datetime import datetime, date, time, timedelta
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import pandas as pd
 import numpy as np
 
@@ -80,7 +80,7 @@ def create_safe_builtins() -> Dict[str, Any]:
         'round': round,
         'pow': pow,
         'divmod': divmod,
-        
+
         # Type conversions (safe)
         'int': int,
         'float': float,
@@ -91,13 +91,13 @@ def create_safe_builtins() -> Dict[str, Any]:
         'tuple': tuple,
         'set': set,
         'frozenset': frozenset,
-        
+
         # Comparison and logic
         'all': all,
         'any': any,
         'len': len,
         'isinstance': isinstance,
-        
+
         # Iteration (safe)
         'range': range,
         'enumerate': enumerate,
@@ -108,7 +108,7 @@ def create_safe_builtins() -> Dict[str, Any]:
         'reversed': reversed,
         'iter': iter,
         'next': next,
-        
+
         # String operations (safe)
         'chr': chr,
         'ord': ord,
@@ -117,7 +117,7 @@ def create_safe_builtins() -> Dict[str, Any]:
         'bin': bin,
         'repr': repr,
         'format': format,
-        
+
         # Constants
         'True': True,
         'False': False,
@@ -161,23 +161,23 @@ def create_sandbox_namespace(
         Restricted namespace dictionary
     """
     namespace = {'__builtins__': create_safe_builtins()}
-    
+
     if allow_pandas:
         namespace['pd'] = pd
-    
+
     if allow_numpy:
         namespace['np'] = np
-    
+
     namespace['math'] = math
     namespace['statistics'] = statistics
     namespace['datetime'] = datetime
     namespace['date'] = date
     namespace['time'] = time
     namespace['timedelta'] = timedelta
-    
+
     if ctx is not None:
         namespace['ctx'] = ctx
-    
+
     return namespace
 
 
@@ -188,10 +188,10 @@ class SecureExecutor:
     Combines AST validation with sandboxed execution to provide
     comprehensive security against code injection attacks.
     """
-    
+
     DEFAULT_TIMEOUT = 30.0
     MAX_MEMORY_MB = 512
-    
+
     def __init__(
         self,
         timeout: float = DEFAULT_TIMEOUT,
@@ -203,7 +203,7 @@ class SecureExecutor:
         self.max_memory_mb = max_memory_mb
         self.allow_pandas = allow_pandas
         self.allow_numpy = allow_numpy
-    
+
     def compile_code(self, code: str) -> Any:
         """
         Compile validated code to executable object.
@@ -219,20 +219,20 @@ class SecureExecutor:
             SyntaxError: If code has syntax errors
         """
         from .ast_validator import validate_strategy_ast
-        
+
         is_valid, errors = validate_strategy_ast(code)
         if not is_valid:
             raise StrategySecurityError(
                 f"Security validation failed: {errors}"
             )
-        
+
         try:
             return compile(code, '<strategy>', 'exec')
         except SyntaxError as e:
             raise StrategySecurityError(
                 f"Syntax error at line {e.lineno}: {e.msg}"
             )
-    
+
     def execute(
         self,
         code: str,
@@ -256,26 +256,26 @@ class SecureExecutor:
             Exception: Any exception from strategy code
         """
         compiled = self.compile_code(code)
-        
+
         namespace = create_sandbox_namespace(
             ctx=ctx,
             allow_pandas=self.allow_pandas,
             allow_numpy=self.allow_numpy,
         )
-        
+
         if additional_globals:
             for key, value in additional_globals.items():
                 if key not in namespace:
                     namespace[key] = value
-        
+
         try:
             exec(compiled, namespace)
         except Exception as e:
             logger.warning(f"[SecureExecutor] Execution error: {e}", exc_info=True)
             raise
-        
+
         return namespace
-    
+
     def execute_with_timeout(
         self,
         code: str,
@@ -300,10 +300,10 @@ class SecureExecutor:
             StrategySecurityError: If security validation fails
         """
         import asyncio
-        
+
         async def _execute_async():
             return self.execute(code, ctx, additional_globals)
-        
+
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
@@ -317,7 +317,7 @@ class SecureExecutor:
             raise StrategyTimeoutError(
                 f"Strategy execution exceeded {self.timeout}s timeout"
             )
-    
+
     def validate_only(self, code: str) -> tuple[bool, List[str]]:
         """
         Validate code without executing it.
@@ -370,30 +370,30 @@ if __name__ == "__main__":
     print("=" * 80)
     print("Sandbox Security Tests")
     print("=" * 80)
-    
+
     test_codes = [
         ("Valid code", """
 def on_bar(ctx, bar):
     if bar['close'] > bar['open']:
         ctx.buy(bar['close'], 100)
 """, True),
-        
+
         ("Try to import os", """
 def on_bar(ctx, bar):
     import os
     os.system('ls')
 """, False),
-        
+
         ("Try to use eval", """
 def on_bar(ctx, bar):
     eval("print('hello')")
 """, False),
-        
+
         ("Try __builtins__ access", """
 def on_bar(ctx, bar):
     __builtins__['eval']('1+1')
 """, False),
-        
+
         ("Pandas allowed", """
 import pandas as pd
 
@@ -401,9 +401,9 @@ def on_bar(ctx, bar):
     df = pd.DataFrame({'a': [1, 2, 3]})
 """, True),
     ]
-    
+
     executor = SecureExecutor()
-    
+
     for name, code, expected_safe in test_codes:
         print(f"\nTest: {name}")
         is_safe, errors = executor.validate_only(code)

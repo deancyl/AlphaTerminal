@@ -12,7 +12,6 @@
 - 可配置：通过 admin_config 表持久化开关状态
 - 自包含：watchdog 作为独立线程运行，不阻塞主服务
 """
-import asyncio
 import logging
 import os
 import signal
@@ -59,7 +58,7 @@ class WatchdogState:
         self.total_restarts: int = 0  # 总计重启次数
         self.errors: List[Dict[str, Any]] = []  # 最近错误记录（保留最近10条）
         self._lock = threading.Lock()
-    
+
     def to_dict(self) -> Dict[str, Any]:
         with self._lock:
             return {
@@ -71,7 +70,7 @@ class WatchdogState:
                 "total_restarts": self.total_restarts,
                 "recent_errors": self.errors[-5:],  # 最近5条
             }
-    
+
     def record_error(self, error: str):
         with self._lock:
             self.errors.append({
@@ -81,13 +80,13 @@ class WatchdogState:
             # 只保留最近10条
             if len(self.errors) > 10:
                 self.errors = self.errors[-10:]
-    
+
     def record_restart(self):
         with self._lock:
             self.last_restart = datetime.now()
             self.restart_count += 1
             self.total_restarts += 1
-    
+
     def reset_restart_count(self):
         with self._lock:
             self.restart_count = 0
@@ -124,10 +123,10 @@ def load_watchdog_config() -> bool:
         )
         row = cursor.fetchone()
         conn.close()
-        
+
         if row:
             return row[0].lower() == "true"
-        
+
         # 默认关闭
         return False
     except Exception as e:
@@ -146,7 +145,7 @@ def save_watchdog_config(enabled: bool) -> bool:
         )
         conn.commit()
         conn.close()
-        
+
         _watchdog_state.enabled = enabled
         logger.info(f"[Watchdog] 配置已保存: enabled={enabled}")
         return True
@@ -194,7 +193,7 @@ def _restart_backend() -> bool:
     """重启后端服务"""
     try:
         logger.warning("[Watchdog] 正在重启后端服务...")
-        
+
         # 1. 尝试优雅终止旧进程
         old_pid = _get_backend_pid()
         if old_pid and _is_process_running(old_pid):
@@ -217,7 +216,7 @@ def _restart_backend() -> bool:
                 logger.info(f"[Watchdog] 旧进程 {old_pid} 已退出")
             except Exception as e:
                 logger.warning(f"[Watchdog] 终止旧进程失败: {e}", exc_info=True)
-        
+
         # 2. 启动新进程
         backend_dir = Path(__file__).resolve().parent.parent.parent  # app/services/ → app/ → backend/
         proc = subprocess.Popen(
@@ -227,14 +226,14 @@ def _restart_backend() -> bool:
             stderr=subprocess.DEVNULL,
             start_new_session=True,  # 脱离终端
         )
-        
+
         # 3. 写入 PID 文件
         with open(BACKEND_PID_FILE, 'w') as f:
             f.write(str(proc.pid))
-        
+
         logger.info(f"[Watchdog] 后端已重启，新 PID: {proc.pid}")
         return True
-        
+
     except Exception as e:
         logger.error(f"[Watchdog] 重启后端失败: {e}", exc_info=True)
         _watchdog_state.record_error(f"重启失败: {e}")
@@ -248,21 +247,21 @@ def _restart_backend() -> bool:
 def _watchdog_loop():
     """Watchdog 主循环（在独立线程中运行）"""
     logger.info("[Watchdog] 监控线程已启动")
-    
+
     while not _watchdog_stop_event.is_set():
         try:
             # 检查是否启用
             if not _watchdog_state.enabled:
                 time.sleep(HEALTH_CHECK_INTERVAL)
                 continue
-            
+
             _watchdog_state.last_check = datetime.now()
-            
+
             # 健康检查
             if not _check_backend_health():
                 logger.warning("[Watchdog] 后端健康检查失败")
                 _watchdog_state.record_error("健康检查失败")
-                
+
                 # 检查连续重启次数
                 if _watchdog_state.restart_count >= MAX_RESTART_ATTEMPTS:
                     logger.error(f"[Watchdog] 连续重启 {_watchdog_state.restart_count} 次仍未恢复，进入冷却期")
@@ -270,7 +269,7 @@ def _watchdog_loop():
                     time.sleep(RESTART_COOLDOWN)
                     _watchdog_state.reset_restart_count()
                     continue
-                
+
                 # 执行重启
                 time.sleep(RESTART_DELAY)
                 if _restart_backend():
@@ -288,15 +287,15 @@ def _watchdog_loop():
                 # 健康检查通过，重置连续失败计数
                 if _watchdog_state.restart_count > 0:
                     _watchdog_state.reset_restart_count()
-            
+
             # 等待下次检查
             time.sleep(HEALTH_CHECK_INTERVAL)
-            
+
         except Exception as e:
             logger.error(f"[Watchdog] 监控循环异常: {e}", exc_info=True)
             _watchdog_state.record_error(f"监控循环异常: {e}")
             time.sleep(HEALTH_CHECK_INTERVAL)
-    
+
     logger.info("[Watchdog] 监控线程已停止")
 
 
@@ -307,30 +306,30 @@ def _watchdog_loop():
 def start_watchdog():
     """启动 watchdog 线程"""
     global _watchdog_thread
-    
+
     if _watchdog_thread and _watchdog_thread.is_alive():
         logger.info("[Watchdog] 已经在运行中")
         return
-    
+
     # 加载配置
     _watchdog_state.enabled = load_watchdog_config()
     _watchdog_state.running = True
     _watchdog_stop_event.clear()
-    
+
     # 启动线程
     _watchdog_thread = threading.Thread(target=_watchdog_loop, daemon=True)
     _watchdog_thread.start()
-    
+
     logger.info(f"[Watchdog] 已启动，当前状态: enabled={_watchdog_state.enabled}")
 
 
 def stop_watchdog():
     """停止 watchdog 线程"""
     global _watchdog_thread
-    
+
     if not _watchdog_thread or not _watchdog_thread.is_alive():
         return
-    
+
     _watchdog_state.running = False
     _watchdog_stop_event.set()
     _watchdog_thread.join(timeout=5)
@@ -342,15 +341,15 @@ def toggle_watchdog(enabled: bool) -> bool:
     # 保存配置
     if not save_watchdog_config(enabled):
         return False
-    
+
     # 更新运行时状态
     _watchdog_state.enabled = enabled
-    
+
     if enabled:
         logger.info("[Watchdog] 保活功能已启用")
     else:
         logger.info("[Watchdog] 保活功能已禁用")
-    
+
     return True
 
 

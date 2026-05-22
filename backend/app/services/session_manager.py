@@ -14,7 +14,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 from threading import RLock
 
@@ -39,10 +39,10 @@ class SessionState:
     message_count: int = 0
     total_tokens: int = 0
     total_cost_usd: float = 0.0
-    
+
     def is_expired(self) -> bool:
         return datetime.now() > datetime.fromisoformat(self.expires_at)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "session_id": self.session_id,
@@ -67,16 +67,16 @@ class SessionManager:
     - TTL enforcement with background cleanup
     - Usage tracking (tokens, cost)
     """
-    
+
     def __init__(self, ttl_minutes: int = DEFAULT_SESSION_TTL_MINUTES):
         self._lock = RLock()
         self._ttl_minutes = ttl_minutes
         self._cleanup_thread: Optional[threading.Thread] = None
         self._shutdown = False
-        
+
         self._start_cleanup_thread()
         logger.info(f"[SessionManager] Initialized with TTL={ttl_minutes}min")
-    
+
     def _start_cleanup_thread(self):
         """Start background cleanup thread (daemon)"""
         self._cleanup_thread = threading.Thread(
@@ -85,7 +85,7 @@ class SessionManager:
             name="SessionCleanup"
         )
         self._cleanup_thread.start()
-    
+
     def _cleanup_loop(self):
         """Background cleanup loop"""
         while not self._shutdown:
@@ -96,7 +96,7 @@ class SessionManager:
                     logger.debug(f"[SessionManager] Cleaned up {deleted} expired sessions")
             except Exception as e:
                 logger.error(f"[SessionManager] Cleanup error: {e}", exc_info=True)
-    
+
     def create_or_get_session(
         self,
         session_id: Optional[str] = None,
@@ -119,13 +119,13 @@ class SessionManager:
             if existing and not existing.is_expired():
                 self.touch_session(session_id)
                 return existing
-        
+
         session_data = session_db.create_session(
             user_id=user_id,
             config_version=config_version,
             ttl_hours=self._ttl_minutes // 60 or 1
         )
-        
+
         return SessionState(
             session_id=session_data["session_id"],
             user_id=session_data.get("user_id"),
@@ -138,7 +138,7 @@ class SessionManager:
             total_tokens=session_data.get("total_tokens", 0),
             total_cost_usd=session_data.get("total_cost_usd", 0.0)
         )
-    
+
     def get_session(self, session_id: str) -> Optional[SessionState]:
         """
         Get session by ID.
@@ -152,7 +152,7 @@ class SessionManager:
         data = session_db.get_session(session_id)
         if not data:
             return None
-        
+
         return SessionState(
             session_id=data["session_id"],
             user_id=data.get("user_id"),
@@ -165,7 +165,7 @@ class SessionManager:
             total_tokens=data.get("total_tokens", 0),
             total_cost_usd=data.get("total_cost_usd", 0.0)
         )
-    
+
     def get_bound_model(self, session_id: str, provider: str) -> Optional[str]:
         """
         Get the bound model for a provider in this session.
@@ -180,15 +180,15 @@ class SessionManager:
         session = self.get_session(session_id)
         if not session:
             return None
-        
+
         for binding in session.bound_models:
             if ":" in binding:
                 p, m = binding.split(":", 1)
                 if p == provider:
                     return m
-        
+
         return None
-    
+
     def bind_model(self, session_id: str, provider: str, model_id: str) -> bool:
         """
         Bind a model to the session.
@@ -204,23 +204,23 @@ class SessionManager:
         session = self.get_session(session_id)
         if not session:
             return False
-        
+
         binding = f"{provider}:{model_id}"
         bound_models = session.bound_models.copy()
-        
+
         existing_idx = None
         for i, b in enumerate(bound_models):
             if b.startswith(f"{provider}:"):
                 existing_idx = i
                 break
-        
+
         if existing_idx is not None:
             bound_models[existing_idx] = binding
         else:
             bound_models.append(binding)
-        
+
         return session_db.update_session_models(session_id, bound_models)
-    
+
     def update_session_usage(
         self,
         session_id: str,
@@ -243,7 +243,7 @@ class SessionManager:
             tokens_added=tokens,
             cost_added=cost_usd
         )
-    
+
     def touch_session(self, session_id: str) -> bool:
         """
         Update session last active time.
@@ -255,7 +255,7 @@ class SessionManager:
             Success status
         """
         return session_db.update_session_activity(session_id)
-    
+
     def extend_session(self, session_id: str, additional_minutes: int = 30) -> bool:
         """
         Extend session TTL.
@@ -271,7 +271,7 @@ class SessionManager:
             session_id,
             additional_hours=additional_minutes // 60 or 1
         )
-    
+
     def get_session_stats(self, session_id: str) -> Dict[str, Any]:
         """
         Get session statistics.
@@ -284,7 +284,7 @@ class SessionManager:
         """
         from app.db.token_usage_db import get_session_totals
         return get_session_totals(session_id) or {}
-    
+
     def get_active_sessions(self, limit: int = 100) -> List[SessionState]:
         """
         Get all active sessions.
@@ -311,7 +311,7 @@ class SessionManager:
             )
             for s in sessions
         ]
-    
+
     def get_user_sessions(self, user_id: str) -> List[SessionState]:
         """
         Get all sessions for a user.
@@ -338,7 +338,7 @@ class SessionManager:
             )
             for s in sessions
         ]
-    
+
     def delete_session(self, session_id: str) -> bool:
         """
         Delete a session.
@@ -350,7 +350,7 @@ class SessionManager:
             Success status
         """
         return session_db.delete_session(session_id)
-    
+
     def get_global_stats(self) -> Dict[str, Any]:
         """
         Get global session statistics.
@@ -359,7 +359,7 @@ class SessionManager:
             Stats dict
         """
         return session_db.get_session_stats()
-    
+
     def shutdown(self):
         """Shutdown cleanup thread"""
         self._shutdown = True

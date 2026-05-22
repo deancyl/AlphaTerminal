@@ -18,7 +18,6 @@ Version: 1.0
 import hashlib
 import json
 import logging
-import os
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -45,7 +44,7 @@ class AuditRecord:
     execution_time_ms: float = 0.0
     error_message: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -58,10 +57,10 @@ def compute_code_hash(code: str) -> str:
 def init_audit_db():
     """Initialize audit database."""
     AUDIT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    
+
     conn = sqlite3.connect(str(AUDIT_DB_PATH))
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS strategy_audit (
             record_id TEXT PRIMARY KEY,
@@ -78,19 +77,19 @@ def init_audit_db():
             metadata TEXT
         )
     """)
-    
+
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_user_id ON strategy_audit(user_id)
     """)
-    
+
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_timestamp ON strategy_audit(timestamp)
     """)
-    
+
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_code_hash ON strategy_audit(code_hash)
     """)
-    
+
     conn.commit()
     conn.close()
 
@@ -124,13 +123,13 @@ def log_strategy_execution(
         Record ID of the audit entry
     """
     import uuid
-    
+
     init_audit_db()
-    
+
     record_id = str(uuid.uuid4())
     code_hash = compute_code_hash(code)
     timestamp = datetime.now().isoformat()
-    
+
     record = AuditRecord(
         record_id=record_id,
         user_id=user_id,
@@ -145,10 +144,10 @@ def log_strategy_execution(
         error_message=error_message,
         metadata=metadata or {},
     )
-    
+
     conn = sqlite3.connect(str(AUDIT_DB_PATH))
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         INSERT INTO strategy_audit (
             record_id, user_id, code_hash, code_length, timestamp,
@@ -169,12 +168,12 @@ def log_strategy_execution(
         record.error_message,
         json.dumps(record.metadata),
     ))
-    
+
     conn.commit()
     conn.close()
-    
+
     logger.info(f"[Audit] Strategy execution logged: {record_id} by {user_id}")
-    
+
     return record_id
 
 
@@ -197,28 +196,28 @@ def get_audit_records(
         List of audit records
     """
     init_audit_db()
-    
+
     conn = sqlite3.connect(str(AUDIT_DB_PATH))
     cursor = conn.cursor()
-    
+
     query = "SELECT * FROM strategy_audit WHERE 1=1"
     params = []
-    
+
     if user_id:
         query += " AND user_id = ?"
         params.append(user_id)
-    
+
     if action:
         query += " AND action = ?"
         params.append(action)
-    
+
     query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
-    
+
     cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
-    
+
     records = []
     for row in rows:
         records.append({
@@ -235,7 +234,7 @@ def get_audit_records(
             "error_message": row[10],
             "metadata": json.loads(row[11]) if row[11] else {},
         })
-    
+
     return records
 
 
@@ -247,30 +246,30 @@ def get_audit_stats() -> Dict[str, Any]:
         Dictionary with audit statistics
     """
     init_audit_db()
-    
+
     conn = sqlite3.connect(str(AUDIT_DB_PATH))
     cursor = conn.cursor()
-    
+
     cursor.execute("SELECT COUNT(*) FROM strategy_audit")
     total_executions = cursor.fetchone()[0]
-    
+
     cursor.execute("SELECT COUNT(DISTINCT user_id) FROM strategy_audit")
     unique_users = cursor.fetchone()[0]
-    
+
     cursor.execute("SELECT COUNT(*) FROM strategy_audit WHERE execution_status = 'security_error'")
     security_errors = cursor.fetchone()[0]
-    
+
     cursor.execute("SELECT COUNT(*) FROM strategy_audit WHERE execution_status = 'timeout'")
     timeouts = cursor.fetchone()[0]
-    
+
     cursor.execute("SELECT COUNT(*) FROM strategy_audit WHERE is_validated = 0")
     validation_failures = cursor.fetchone()[0]
-    
+
     cursor.execute("SELECT AVG(execution_time_ms) FROM strategy_audit WHERE execution_status = 'success'")
     avg_execution_time = cursor.fetchone()[0] or 0
-    
+
     conn.close()
-    
+
     return {
         "total_executions": total_executions,
         "unique_users": unique_users,
@@ -293,45 +292,45 @@ def check_suspicious_activity(user_id: str, window_hours: int = 24) -> Dict[str,
         Dictionary with suspicious activity indicators
     """
     init_audit_db()
-    
+
     conn = sqlite3.connect(str(AUDIT_DB_PATH))
     cursor = conn.cursor()
-    
+
     cutoff = datetime.now().timestamp() - (window_hours * 3600)
     cutoff_str = datetime.fromtimestamp(cutoff).isoformat()
-    
+
     cursor.execute("""
         SELECT COUNT(*) FROM strategy_audit 
         WHERE user_id = ? AND timestamp >= ?
     """, (user_id, cutoff_str))
     recent_count = cursor.fetchone()[0]
-    
+
     cursor.execute("""
         SELECT COUNT(*) FROM strategy_audit 
         WHERE user_id = ? AND execution_status = 'security_error' AND timestamp >= ?
     """, (user_id, cutoff_str))
     security_error_count = cursor.fetchone()[0]
-    
+
     cursor.execute("""
         SELECT COUNT(*) FROM strategy_audit 
         WHERE user_id = ? AND execution_status = 'timeout' AND timestamp >= ?
     """, (user_id, cutoff_str))
     timeout_count = cursor.fetchone()[0]
-    
+
     cursor.execute("""
         SELECT COUNT(DISTINCT code_hash) FROM strategy_audit 
         WHERE user_id = ? AND timestamp >= ?
     """, (user_id, cutoff_str))
     unique_codes = cursor.fetchone()[0]
-    
+
     conn.close()
-    
+
     is_suspicious = (
         security_error_count > 3 or
         timeout_count > 5 or
         (recent_count > 50 and unique_codes < 5)
     )
-    
+
     return {
         "user_id": user_id,
         "window_hours": window_hours,
@@ -347,15 +346,15 @@ if __name__ == "__main__":
     print("=" * 80)
     print("Strategy Audit Trail Tests")
     print("=" * 80)
-    
+
     init_audit_db()
-    
+
     test_code = """
 def on_bar(ctx, bar):
     if bar['close'] > bar['open']:
         ctx.buy(bar['close'], 100)
 """
-    
+
     print("\nTest 1: Log successful execution")
     record_id = log_strategy_execution(
         user_id="test_user",
@@ -366,7 +365,7 @@ def on_bar(ctx, bar):
         execution_time_ms=123.45,
     )
     print(f"  Record ID: {record_id}")
-    
+
     print("\nTest 2: Log security error")
     record_id = log_strategy_execution(
         user_id="attacker",
@@ -377,16 +376,16 @@ def on_bar(ctx, bar):
         execution_status="security_error",
     )
     print(f"  Record ID: {record_id}")
-    
+
     print("\nTest 3: Get audit stats")
     stats = get_audit_stats()
     for key, value in stats.items():
         print(f"  {key}: {value}")
-    
+
     print("\nTest 4: Check suspicious activity")
     suspicious = check_suspicious_activity("attacker")
     print(f"  Is suspicious: {suspicious['is_suspicious']}")
     print(f"  Security errors: {suspicious['security_errors']}")
-    
+
     print("\n" + "=" * 80)
     print("Audit trail tests completed!")

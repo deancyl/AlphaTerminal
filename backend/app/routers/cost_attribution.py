@@ -8,16 +8,13 @@ with Sankey diagrams and prompt tree viewers.
 import asyncio
 import json
 import logging
-import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
-from fastapi import APIRouter, Query, HTTPException, Depends, Request, Header
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Query, HTTPException, Depends
 
 from app.routers.admin import verify_admin_key
-from app.db.database import _get_conn, _db_path
+from app.db.database import _get_conn
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
@@ -64,7 +61,7 @@ def _infer_workflow_type(metadata: str, session_id: str) -> str:
                 return "research"
         except (json.JSONDecodeError, TypeError):
             pass
-    
+
     # Infer from session_id pattern
     if session_id:
         sid_lower = session_id.lower()
@@ -78,7 +75,7 @@ def _infer_workflow_type(metadata: str, session_id: str) -> str:
             return "research"
         if "copilot" in sid_lower or "chat" in sid_lower:
             return "chat"
-    
+
     return "other"
 
 
@@ -94,43 +91,43 @@ def _get_sankey_data_sync(start_date: str, end_date: str) -> Dict[str, Any]:
             WHERE created_at >= ? AND created_at <= ?
             ORDER BY created_at DESC
         """, (start_date, end_date)).fetchall()
-        
+
         # Aggregate by workflow -> model
         workflow_totals: Dict[str, Dict[str, float]] = {}
         model_totals: Dict[str, float] = {}
         total_cost = 0.0
-        
+
         for row in rows:
             session_id = row[0] or ""
             model_id = row[1] or "unknown"
             cost = row[6] or 0.0
             metadata = row[7]
-            
+
             workflow = _infer_workflow_type(metadata, session_id)
-            
+
             # Aggregate workflow -> model
             if workflow not in workflow_totals:
                 workflow_totals[workflow] = {}
             if model_id not in workflow_totals[workflow]:
                 workflow_totals[workflow][model_id] = 0.0
             workflow_totals[workflow][model_id] += cost
-            
+
             # Aggregate model totals
             if model_id not in model_totals:
                 model_totals[model_id] = 0.0
             model_totals[model_id] += cost
-            
+
             total_cost += cost
-        
+
         # Build Sankey nodes and links
         nodes = []
         links = []
         node_index = {}
-        
+
         # Add "Total" node
         nodes.append({"name": "Total", "itemStyle": {"color": "#0F52BA"}})
         node_index["Total"] = 0
-        
+
         # Add workflow nodes
         workflow_colors = {
             "agentic": "#E63946",
@@ -140,7 +137,7 @@ def _get_sankey_data_sync(start_date: str, end_date: str) -> Dict[str, Any]:
             "research": "#3498DB",
             "other": "#95A5A6"
         }
-        
+
         for workflow, models in sorted(workflow_totals.items(), key=lambda x: sum(x[1].values()), reverse=True):
             workflow_cost = sum(models.values())
             if workflow_cost > 0:
@@ -156,14 +153,14 @@ def _get_sankey_data_sync(start_date: str, end_date: str) -> Dict[str, Any]:
                     "target": idx,
                     "value": round(workflow_cost, 6)
                 })
-        
+
         # Add model nodes and links
         for model_id, cost in sorted(model_totals.items(), key=lambda x: x[1], reverse=True):
             if cost > 0:
                 idx = len(nodes)
                 node_index[model_id] = idx
                 nodes.append({"name": model_id})
-        
+
         # Add links from workflow to model
         for workflow, models in workflow_totals.items():
             if workflow not in node_index:
@@ -176,7 +173,7 @@ def _get_sankey_data_sync(start_date: str, end_date: str) -> Dict[str, Any]:
                         "target": node_index[model_id],
                         "value": round(cost, 6)
                     })
-        
+
         return {
             "nodes": nodes,
             "links": links,
@@ -200,13 +197,13 @@ def _get_prompt_tree_sync(session_id: str) -> Dict[str, Any]:
             WHERE session_id = ?
             ORDER BY created_at ASC
         """, (session_id,)).fetchall()
-        
+
         if not rows:
             return {"session_id": session_id, "nodes": [], "total_cost": 0.0}
-        
+
         nodes = []
         total_cost = 0.0
-        
+
         for i, row in enumerate(rows):
             request_id = row[0]
             model_id = row[1]
@@ -217,7 +214,7 @@ def _get_prompt_tree_sync(session_id: str) -> Dict[str, Any]:
             duration_ms = row[6]
             metadata = row[7]
             created_at = row[8]
-            
+
             # Parse metadata for prompt preview
             prompt_preview = ""
             tool_calls = []
@@ -231,7 +228,7 @@ def _get_prompt_tree_sync(session_id: str) -> Dict[str, Any]:
                         tool_calls = meta["tool_calls"]
                 except (json.JSONDecodeError, TypeError):
                     pass
-            
+
             nodes.append({
                 "id": request_id,
                 "seq": i + 1,
@@ -246,9 +243,9 @@ def _get_prompt_tree_sync(session_id: str) -> Dict[str, Any]:
                 "created_at": created_at,
                 "children": []
             })
-            
+
             total_cost += cost
-        
+
         return {
             "session_id": session_id,
             "nodes": nodes,
@@ -271,7 +268,7 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
                 FROM token_usage_logs
                 WHERE created_at >= ? AND created_at <= ?
             """, (start_date, end_date)).fetchall()
-            
+
             workflow_data: Dict[str, Dict[str, Any]] = {}
             for row in rows:
                 session_id = row[0] or ""
@@ -283,7 +280,7 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
                 cost_usd = float(row[6] or 0.0)
                 metadata = row[7]
                 workflow = _infer_workflow_type(metadata, session_id)
-                
+
                 if workflow not in workflow_data:
                     workflow_data[workflow] = {
                         "name": workflow.capitalize(),
@@ -293,17 +290,17 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
                         "total_tokens": 0,
                         "cost_usd": 0.0
                     }
-                
+
                 workflow_data[workflow]["requests"] += 1
                 workflow_data[workflow]["prompt_tokens"] += prompt_tokens
                 workflow_data[workflow]["completion_tokens"] += completion_tokens
                 workflow_data[workflow]["total_tokens"] += total_tokens
                 workflow_data[workflow]["cost_usd"] += cost_usd
-            
+
             result = list(workflow_data.values())
             result.sort(key=lambda x: x["cost_usd"], reverse=True)
             return result
-        
+
         elif group_by == "model":
             rows = conn.execute("""
                 SELECT model_id, provider,
@@ -318,9 +315,9 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
                 GROUP BY model_id, provider
                 ORDER BY cost_usd DESC
             """, (start_date, end_date)).fetchall()
-            
+
             return [dict(row) for row in rows]
-        
+
         elif group_by == "session":
             rows = conn.execute("""
                 SELECT session_id,
@@ -338,9 +335,9 @@ def _get_cost_breakdown_sync(start_date: str, end_date: str, group_by: str) -> L
                 ORDER BY cost_usd DESC
                 LIMIT 100
             """, (start_date, end_date)).fetchall()
-            
+
             return [dict(row) for row in rows]
-        
+
         else:
             raise HTTPException(status_code=400, detail=f"Invalid group_by: {group_by}")
     finally:
@@ -365,7 +362,7 @@ def _get_sessions_list_sync(start_date: str, end_date: str, limit: int) -> List[
             ORDER BY cost_usd DESC
             LIMIT ?
         """, (start_date, end_date, limit)).fetchall()
-        
+
         return [dict(row) for row in rows]
     finally:
         conn.close()
@@ -387,7 +384,7 @@ async def get_sankey_data(
     Returns nodes and links for visualizing cost flow from Total -> Workflow -> Model.
     """
     loop = asyncio.get_event_loop()
-    
+
     try:
         result = await loop.run_in_executor(
             _executor,
@@ -412,7 +409,7 @@ async def get_prompt_tree(
     Returns hierarchical tree of prompts with token counts and costs.
     """
     loop = asyncio.get_event_loop()
-    
+
     try:
         result = await loop.run_in_executor(
             _executor,
@@ -440,7 +437,7 @@ async def get_cost_breakdown(
     - session: Group by session_id
     """
     loop = asyncio.get_event_loop()
-    
+
     try:
         result = await loop.run_in_executor(
             _executor,
@@ -466,7 +463,7 @@ async def get_sessions_list(
     Get list of sessions with token usage for the prompt tree selector.
     """
     loop = asyncio.get_event_loop()
-    
+
     try:
         result = await loop.run_in_executor(
             _executor,

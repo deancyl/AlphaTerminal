@@ -1,8 +1,6 @@
 """Tests for market router."""
-import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock, Mock
-import json
+from unittest.mock import patch
 
 from app.main import app
 
@@ -25,10 +23,10 @@ class TestMarketOverview:
             {'symbol': 'HSI', 'name': '恒生指数', 'price': 25000.0, 'change_pct': 1.2, 'volume': 5000000, 'market': 'HK'},
             {'symbol': 'IXIC', 'name': '纳斯达克', 'price': 15000.0, 'change_pct': 3.0, 'volume': 8000000, 'market': 'US'},
         ]
-        
+
         response = client.get("/api/v1/market/overview")
         assert response.status_code in [200, 500]
-        
+
         if response.status_code == 200:
             data = response.json()
             assert "code" in data
@@ -47,9 +45,9 @@ class TestMarketOverview:
             {'symbol': 'HSI', 'name': '恒生指数', 'price': 25000.0, 'change_pct': 1.2, 'volume': 5000000, 'market': 'HK'},
             {'symbol': 'IXIC', 'name': '纳斯达克', 'price': 15000.0, 'change_pct': 3.0, 'volume': 8000000, 'market': 'US'},
         ]
-        
+
         response = client.get("/api/v1/market/overview")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -71,9 +69,9 @@ class TestMarketOverview:
             {'symbol': 'HSI', 'name': '恒生指数', 'price': 25000.0, 'change_pct': 1.2, 'volume': 5000000, 'market': 'HK'},
             {'symbol': 'IXIC', 'name': '纳斯达克', 'price': 15000.0, 'change_pct': 3.0, 'volume': 8000000, 'market': 'US'},
         ]
-        
+
         response = client.get("/api/v1/market/overview")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -94,9 +92,9 @@ class TestMarketOverview:
             {'symbol': 'HSI', 'name': '恒生指数', 'price': 25000.0, 'change_pct': 1.2, 'volume': 5000000, 'market': 'HK'},
             {'symbol': 'IXIC', 'name': '纳斯达克', 'price': 15000.0, 'change_pct': 3.0, 'volume': 8000000, 'market': 'US'},
         ]
-        
+
         response = client.get("/api/v1/market/overview")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -237,10 +235,10 @@ class TestMarketQuote:
             {'symbol': '000001', 'close': 3000.0, 'volume': 1000000, 'timestamp': '2024-01-01'},
             {'symbol': '000001', 'close': 2980.0, 'volume': 900000, 'timestamp': '2023-12-31'},
         ]
-        
+
         response = client.get("/api/v1/market/quote/sh000001")
         assert response.status_code in [200, 500]
-        
+
         if response.status_code == 200:
             data = response.json()
             assert "code" in data
@@ -254,9 +252,9 @@ class TestMarketQuote:
             {'symbol': '000001', 'close': 3000.0, 'volume': 1000000, 'timestamp': '2024-01-01'},
             {'symbol': '000001', 'close': 2980.0, 'volume': 900000, 'timestamp': '2023-12-31'},
         ]
-        
+
         response = client.get("/api/v1/market/quote/sh000001")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -324,10 +322,10 @@ class TestMarketHistory:
             {'date': '2024-01-01', 'open': 3000, 'high': 3050, 'low': 2980, 'close': 3020, 'volume': 1000000},
             {'date': '2023-12-31', 'open': 2980, 'high': 3000, 'low': 2950, 'close': 2990, 'volume': 900000},
         ]
-        
+
         response = client.get("/api/v1/market/history/sh000001?period=daily&limit=30")
         assert response.status_code in [200, 500]
-        
+
         if response.status_code == 200:
             data = response.json()
             assert "code" in data
@@ -337,10 +335,10 @@ class TestMarketHistory:
     def test_market_history_weekly(self, mock_get_daily_history):
         """Test GET /market/history endpoint with weekly period."""
         mock_get_daily_history.return_value = []
-        
+
         response = client.get("/api/v1/market/history/sh000001?period=weekly&limit=30")
         assert response.status_code in [200, 500]
-        
+
         if response.status_code == 200:
             data = response.json()
             assert "code" in data
@@ -349,10 +347,10 @@ class TestMarketHistory:
     def test_market_history_monthly(self, mock_get_daily_history):
         """Test GET /market/history endpoint with monthly period."""
         mock_get_daily_history.return_value = []
-        
+
         response = client.get("/api/v1/market/history/sh000001?period=monthly&limit=30")
         assert response.status_code in [200, 500]
-        
+
         if response.status_code == 200:
             data = response.json()
             assert "code" in data
@@ -363,9 +361,9 @@ class TestMarketHistory:
         mock_get_daily_history.return_value = [
             {'date': '2024-01-01', 'open': 3000, 'high': 3050, 'low': 2980, 'close': 3020, 'volume': 1000000},
         ]
-        
+
         response = client.get("/api/v1/market/history/sh000001?period=daily&limit=10")
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:
@@ -379,10 +377,10 @@ class TestMarketHistory:
     def test_market_history_pagination(self, mock_get_daily_history):
         """Test that history endpoint supports pagination."""
         mock_get_daily_history.return_value = []
-        
+
         response = client.get("/api/v1/market/history/sh000001?period=daily&limit=10&offset=10")
         assert response.status_code in [200, 500]
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("code") == 0:

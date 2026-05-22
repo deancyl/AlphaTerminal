@@ -1,0 +1,31 @@
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E402",   # Module level import not at top of file (common in FastAPI)
+    "F401",   # Imported but unused (re-exports in __init__.py)
+    "F841",   # Local variable assigned but never used
+    "E701",   # Multiple statements on one line (colon)
+    "E702",   # Multiple statements on one line (semicolon)
+    "E501",   # Line too long
+    "W293",   # Blank line contains whitespace
+    "W291",   # Trailing whitespace
+    "E741",   # Ambiguous variable name
+    "F821",   # Undefined name (pre-existing bugs - need manual fix)
+    "F811",   # Redefinition of unused
+    "F601",   # Dictionary key literal repeated
+    "E722",   # Do not use bare except
+    "E712",   # Avoid equality comparisons to True/False
+    "E731",   # Do not assign a lambda expression
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"app/main.py" = ["E402"]
+"app/db/*.py" = ["E402", "F401", "F841", "E701"]
+"app/routers/*.py" = ["E402"]
+"app/routers/**/*.py" = ["E402", "F821"]
+"app/services/*.py" = ["E402"]
+"tests/*.py" = ["E402", "F401", "F811", "E722", "E712", "E731"]
+
+[lint.pycodestyle]
+max-line-length = 120

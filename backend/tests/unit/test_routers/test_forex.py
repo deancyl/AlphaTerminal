@@ -6,7 +6,6 @@
 - P1: 错误消息、加载状态、键盘导航、熔断器状态、金额验证
 - P2: ARIA、货币对切换防抖
 """
-import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -187,7 +186,7 @@ class TestForexCircuitBreaker:
         response = client.get("/api/v1/forex/spot")
         assert response.status_code == 200
         data = response.json()
-        
+
         # Circuit breaker info is in the top-level response or in data
         cb = data.get("circuit_breaker", {})
         if not cb and data.get("data") is not None:

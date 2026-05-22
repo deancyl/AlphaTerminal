@@ -171,16 +171,16 @@ async def fetch_by_priority(
     """
     priority = priority or get_fetcher_priority()
     sources = priority.get_sources(data_type)
-    
+
     last_error = None
     successful_source = None
-    
+
     for src in sources:
         cb = get_circuit_breaker(src)
         if not cb.is_available():
             logger.debug(f"[fetch_by_priority] {src}: 熔断器开启，跳过")
             continue
-        
+
         try:
             fetch_fn = fetch_fn_factory(src)
             with CircuitContext(cb, src) as ctx:
@@ -195,7 +195,7 @@ async def fetch_by_priority(
             last_error = e
             logger.warning(f"[fetch_by_priority] {src} 失败: {e}，尝试下一个数据源", exc_info=True)
             continue
-    
+
     if last_error:
         logger.error(f"[fetch_by_priority] {data_type} 所有数据源均失败")
         raise last_error

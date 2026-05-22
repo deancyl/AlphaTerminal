@@ -105,7 +105,7 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
     if not _SINA_HQ_CB.is_available():
         logger.warning("[SinaHQ] Circuit breaker OPEN, skipping batch fetch")
         return []
-    
+
     if not codes:
         return []
 
@@ -210,7 +210,7 @@ def fetch_sina_industry_board() -> list[dict]:
     if not _SINA_HQ_CB.is_available():
         logger.warning("[SinaIndustry] Circuit breaker OPEN, skipping industry fetch")
         return []
-    
+
     try:
         r = httpx.get(
             "https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php?param=class2",

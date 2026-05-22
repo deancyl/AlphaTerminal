@@ -98,15 +98,15 @@ def execute_sell(
     external_conn = conn is not None
     if conn is None:
         conn = _get_lots_conn()
-    
+
     # 标记是否由本函数管理事务（外部连接时由调用方管理）
     manage_transaction = not external_conn
-    
+
     try:
         # ── 并发安全：BEGIN IMMEDIATE 在读取前获取写锁 ──
         if manage_transaction:
             conn.execute("BEGIN IMMEDIATE TRANSACTION")
-        
+
         # 按 buy_date 升序（老批次优先）
         open_lots = conn.execute(
             """
@@ -171,7 +171,7 @@ def execute_sell(
         if manage_transaction:
             conn.commit()
             upsert_position_summary(portfolio_id, symbol, conn=conn)
-            
+
             # Log audit event with hash chain
             try:
                 log_sell(
@@ -228,15 +228,15 @@ def execute_buy(
     external_conn = conn is not None
     if conn is None:
         conn = _get_lots_conn()
-    
+
     # 标记是否由本函数管理事务（外部连接时由调用方管理）
     manage_transaction = not external_conn
-    
+
     try:
         # ── 并发安全：BEGIN IMMEDIATE 在写入前获取写锁 ──
         if manage_transaction:
             conn.execute("BEGIN IMMEDIATE TRANSACTION")
-        
+
         cur = conn.execute(
             """
             INSERT INTO position_lots
@@ -247,11 +247,11 @@ def execute_buy(
             (portfolio_id, symbol, shares, buy_price, buy_date_str, order_id, now_str),
         )
         new_id = cur.lastrowid
-        
+
         if manage_transaction:
             conn.commit()
             upsert_position_summary(portfolio_id, symbol, conn=conn)
-            
+
             # Log audit event with hash chain
             try:
                 log_buy(

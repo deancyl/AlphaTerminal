@@ -3,16 +3,13 @@
 测试数据标准化逻辑
 """
 import sys
-import os
-import time
-from datetime import datetime, timedelta
 
 # 添加项目路径
 sys.path.append('/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend')
 
 def test_normalization():
     """测试数据标准化逻辑"""
-    
+
     # 模拟 Alpha Vantage 返回的数据
     mock_alpha_vantage_data = {
         "usixic": [
@@ -23,7 +20,7 @@ def test_normalization():
             {"date": "2026-04-03", "1. open": 21827.83, "2. high": 21917.94, "3. low": 21824.72, "4. close": 21879.18, "5. volume": 914192},
         ]
     }
-    
+
     # 指数标准化因子
     normalization_factors = {
         "000001": 1.0,      # 上证指数 (基准)
@@ -39,41 +36,41 @@ def test_normalization():
         "dji":    0.01,     # 道琼斯 (35000 → 350)
         "usdji":  0.01,     # 道琼斯 (35000 → 350)
     }
-    
+
     symbol_name = {
         "ixic": "纳斯达克", "usixic": "纳斯达克",
         "ndx": "纳指100", "usndx": "纳指100",
         "spx": "标普500", "usspx": "标普500",
         "dji": "道指", "usdji": "道指",
     }
-    
+
     print("=== 数据标准化测试 ===")
-    
+
     for symbol, data in mock_alpha_vantage_data.items():
         norm_factor = normalization_factors.get(symbol.lower(), 1.0)
         name = symbol_name.get(symbol.lower(), symbol.upper())
-        
+
         print(f"\n{symbol} - {name} (标准化因子: {norm_factor})")
         print("原始数据 vs 标准化数据:")
-        
+
         for i, day in enumerate(data):
             open_ = float(day["1. open"])
             high = float(day["2. high"])
             low = float(day["3. low"])
             close = float(day["4. close"])
             vol = float(day["5. volume"])
-            
+
             # 应用标准化因子
             norm_open = open_ * norm_factor
             norm_high = high * norm_factor
             norm_low = low * norm_factor
             norm_close = close * norm_factor
             norm_vol = vol / norm_factor if norm_factor > 1 else vol
-            
+
             print(f"  {i+1}. {day['date']}")
             print(f"     原始: O={open_:.2f} H={high:.2f} L={low:.2f} C={close:.2f} V={vol:.0f}")
             print(f"     标准化: O={norm_open:.2f} H={norm_high:.2f} L={norm_low:.2f} C={norm_close:.2f} V={norm_vol:.0f}")
-    
+
     print("\n=== 上证指数对比 ===")
     # 获取上证指数数据
     try:

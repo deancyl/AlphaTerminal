@@ -17,7 +17,7 @@ NewsDataFetcher - Copilot 新闻数据获取器
 import logging
 import threading
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -37,7 +37,7 @@ class NewsDataResult:
     sentiment: Optional[str] = None  # 整体情感（bullish/bearish/neutral）
     error: Optional[str] = None
     fetched_at: Optional[datetime] = None
-    
+
     def __post_init__(self):
         if self.fetched_at is None:
             self.fetched_at = datetime.now()
@@ -57,21 +57,21 @@ class NewsFetcher:
     - 支持股票代码特定新闻
     - 情感分类
     """
-    
+
     CACHE_TTL = 300  # 5 分钟缓存
     DEFAULT_TIMEOUT = 10.0  # 默认超时时间
-    
+
     # 情感关键词
-    BULLISH_KEYWORDS = ["利好", "上涨", "突破", "新高", "增长", "盈利", 
+    BULLISH_KEYWORDS = ["利好", "上涨", "突破", "新高", "增长", "盈利",
                         "增持", "回购", "中标", "签约", "涨停", "大涨"]
     BEARISH_KEYWORDS = ["利空", "下跌", "暴跌", "亏损", "减持", "质押",
                         "违约", "诉讼", "调查", "处罚", "跌停", "暴跌"]
-    
+
     def __init__(self):
         """初始化获取器"""
         self._cache = get_cache()
         logger.info("[NewsFetcher] 初始化完成")
-    
+
     async def fetch(
         self,
         symbol: Optional[str] = None,  # 股票代码特定新闻
@@ -92,11 +92,11 @@ class NewsFetcher:
             NewsDataResult 对象
         """
         timeout = timeout or self.DEFAULT_TIMEOUT
-        
+
         try:
             # 构建缓存键
             cache_key = f"copilot:news:{symbol or 'general'}:{days}:{limit}"
-            
+
             # 检查缓存
             cached = self._cache.get(cache_key)
             if cached:
@@ -106,13 +106,13 @@ class NewsFetcher:
                     sentiment=cached.get('sentiment'),
                     fetched_at=datetime.now()
                 )
-            
+
             # 获取新闻数据
             if symbol:
                 result = await self._fetch_symbol_news(symbol, days, limit, timeout)
             else:
                 result = await self._fetch_general_news(limit, timeout)
-            
+
             # 缓存结果
             if not result.error:
                 cache_data = {
@@ -120,9 +120,9 @@ class NewsFetcher:
                     'sentiment': result.sentiment,
                 }
                 self._cache.set(cache_key, cache_data, ttl=self.CACHE_TTL)
-            
+
             return result
-            
+
         except asyncio.TimeoutError:
             logger.error(f"[NewsFetcher] 获取超时 ({timeout}s)", exc_info=True)
             return NewsDataResult(
@@ -135,7 +135,7 @@ class NewsFetcher:
                 news_items=[],
                 error=f"新闻获取失败: {str(e)}"
             )
-    
+
     async def _fetch_general_news(
         self,
         limit: int,
@@ -148,7 +148,7 @@ class NewsFetcher:
         """
         try:
             from app.services.news_engine import get_cached_news, is_cache_ready
-            
+
             # 检查缓存是否就绪
             if not is_cache_ready():
                 logger.warning("[NewsFetcher] 新闻缓存未就绪")
@@ -157,40 +157,40 @@ class NewsFetcher:
                     sentiment="neutral",
                     error="新闻缓存未就绪"
                 )
-            
+
             # 在线程池中执行同步函数
             loop = asyncio.get_event_loop()
             news = await asyncio.wait_for(
                 loop.run_in_executor(None, lambda: get_cached_news(limit=limit)),
                 timeout=timeout
             )
-            
+
             if not news:
                 return NewsDataResult(
                     news_items=[],
                     sentiment="neutral"
                 )
-            
+
             # 计算整体情感
             sentiment = self._calculate_sentiment(news)
-            
+
             # 格式化新闻数据
             formatted_news = self._format_news_items(news)
-            
+
             logger.info(f"[NewsFetcher] 获取通用新闻成功: {len(formatted_news)} 条")
-            
+
             return NewsDataResult(
                 news_items=formatted_news,
                 sentiment=sentiment,
                 fetched_at=datetime.now()
             )
-            
+
         except asyncio.TimeoutError:
             raise
         except Exception as e:
             logger.error(f"[NewsFetcher] 通用新闻获取失败: {e}", exc_info=True)
             raise
-    
+
     async def _fetch_symbol_news(
         self,
         symbol: str,
@@ -206,17 +206,17 @@ class NewsFetcher:
         try:
             # 清理股票代码（去除前缀）
             clean_symbol = symbol.replace("sh", "").replace("sz", "").replace("hk", "").replace("us", "")
-            
+
             # 直接调用路由函数
             from app.routers import news as news_router
-            
+
             # 在线程池中执行同步路由函数（如果路由是同步的）
             # 注意: news_events_for_symbol 是 async 函数，直接调用
             response = await asyncio.wait_for(
                 news_router.news_events_for_symbol(symbol, limit=limit),
                 timeout=timeout
             )
-            
+
             # 解析响应
             data = response
             if hasattr(response, 'body'):
@@ -224,15 +224,15 @@ class NewsFetcher:
                 data = json.loads(response.body.decode())  # type: ignore
             elif isinstance(response, dict):
                 data = response
-            
+
             # 提取事件数据
             events = data.get('data', {}).get('events', [])
-            
+
             if not events:
                 # 如果没有特定新闻，返回通用新闻
                 logger.info(f"[NewsFetcher] {symbol} 无特定新闻，返回通用新闻")
                 return await self._fetch_general_news(limit, timeout)
-            
+
             # 过滤最近 N 天的新闻
             cutoff_date = datetime.now() - timedelta(days=days)
             filtered_events = []
@@ -245,29 +245,29 @@ class NewsFetcher:
                 except ValueError:
                     # 无法解析日期，保留该条
                     filtered_events.append(event)
-            
+
             # 计算整体情感
             sentiment = self._calculate_sentiment_from_events(filtered_events)
-            
+
             # 格式化新闻数据
             formatted_news = self._format_events(filtered_events)
-            
+
             logger.info(f"[NewsFetcher] 获取 {symbol} 新闻成功: {len(formatted_news)} 条")
-            
+
             return NewsDataResult(
                 news_items=formatted_news,
                 sentiment=sentiment,
                 fetched_at=datetime.now()
             )
-            
+
         except asyncio.TimeoutError:
             raise
         except Exception as e:
             logger.error(f"[NewsFetcher] {symbol} 新闻获取失败: {e}", exc_info=True)
             # 降级到通用新闻
-            logger.info(f"[NewsFetcher] 降级到通用新闻")
+            logger.info("[NewsFetcher] 降级到通用新闻")
             return await self._fetch_general_news(limit, timeout)
-    
+
     def _calculate_sentiment(self, news: List[Dict]) -> str:
         """
         计算新闻整体情感
@@ -280,40 +280,40 @@ class NewsFetcher:
         """
         bullish_count = 0
         bearish_count = 0
-        
+
         for item in news:
             title = item.get('title', '')
             tag = item.get('tag', '')
-            
+
             # 检查标题中的关键词
             for keyword in self.BULLISH_KEYWORDS:
                 if keyword in title:
                     bullish_count += 1
                     break
-            
+
             for keyword in self.BEARISH_KEYWORDS:
                 if keyword in title:
                     bearish_count += 1
                     break
-            
+
             # 检查标签（如 "🔴 突发" 可能是负面）
             if "暴跌" in tag or "大跌" in tag:
                 bearish_count += 1
-        
+
         # 计算情感倾向
         total = bullish_count + bearish_count
         if total == 0:
             return "neutral"
-        
+
         bullish_ratio = bullish_count / total
-        
+
         if bullish_ratio > 0.6:
             return "bullish"
         elif bullish_ratio < 0.4:
             return "bearish"
         else:
             return "neutral"
-    
+
     def _calculate_sentiment_from_events(self, events: List[Dict]) -> str:
         """
         从事件类型计算情感
@@ -326,20 +326,20 @@ class NewsFetcher:
         """
         bullish_count = sum(1 for e in events if e.get('type') == 'bullish')
         bearish_count = sum(1 for e in events if e.get('type') == 'bearish')
-        
+
         total = bullish_count + bearish_count
         if total == 0:
             return "neutral"
-        
+
         bullish_ratio = bullish_count / total
-        
+
         if bullish_ratio > 0.6:
             return "bullish"
         elif bullish_ratio < 0.4:
             return "bearish"
         else:
             return "neutral"
-    
+
     def _format_news_items(self, news: List[Dict]) -> List[Dict[str, Any]]:
         """
         格式化新闻数据为统一格式
@@ -361,7 +361,7 @@ class NewsFetcher:
                 'type': self._classify_single_news(item.get('title', '')),
             })
         return formatted
-    
+
     def _format_events(self, events: List[Dict]) -> List[Dict[str, Any]]:
         """
         格式化事件数据为统一格式
@@ -383,7 +383,7 @@ class NewsFetcher:
                 'type': event.get('type', 'neutral'),
             })
         return formatted
-    
+
     def _classify_single_news(self, title: str) -> str:
         """
         分类单条新闻
@@ -397,13 +397,13 @@ class NewsFetcher:
         for keyword in self.BULLISH_KEYWORDS:
             if keyword in title:
                 return "bullish"
-        
+
         for keyword in self.BEARISH_KEYWORDS:
             if keyword in title:
                 return "bearish"
-        
+
         return "neutral"
-    
+
     def _get_tag_from_type(self, type: str) -> str:
         """
         根据类型生成标签
@@ -420,7 +420,7 @@ class NewsFetcher:
             return "📉 利空"
         else:
             return "📰 中性"
-    
+
     def clear_cache(self):
         """清空缓存"""
         # 清空通用新闻缓存
@@ -447,10 +447,10 @@ def get_news_fetcher() -> NewsFetcher:
     使用双重检查锁定模式确保线程安全
     """
     global _news_fetcher_instance
-    
+
     if _news_fetcher_instance is None:
         with _news_fetcher_lock:
             if _news_fetcher_instance is None:
                 _news_fetcher_instance = NewsFetcher()
-    
+
     return _news_fetcher_instance

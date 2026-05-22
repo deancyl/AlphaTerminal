@@ -13,17 +13,15 @@ API endpoints for order management:
 
 import asyncio
 import logging
-from typing import Optional, List
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field, field_validator
 
-from app.utils.errors import success_response, error_response
-from app.middleware import require_api_key
+from app.utils.errors import success_response
 from app.services.oms import (
     OrderExecutionEngine,
     OrderStatus,
-    Order,
     is_valid_transition,
 )
 from app.services.oms.order_status import get_allowed_transitions
@@ -48,7 +46,7 @@ class OrderCreate(BaseModel):
     quantity: int = Field(..., gt=0)
     price: Optional[float] = Field(default=None, ge=0)
     order_type: str = Field(default="limit", pattern="^(market|limit|stop)$")
-    
+
     @field_validator('order_type')
     @classmethod
     def validate_order_type(cls, v: str, info) -> str:
@@ -82,7 +80,7 @@ async def create_order(
             order_type=order_data.order_type,
         )
         return success_response(order.to_dict())
-    
+
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
 
@@ -97,7 +95,7 @@ async def get_order(
         if order is None:
             raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
         return success_response(order.to_dict())
-    
+
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
 
@@ -111,7 +109,7 @@ async def get_order_status(
         status = oms.get_order_status(order_id)
         if status is None:
             raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
-        
+
         order = oms.get_order(order_id)
         return success_response({
             "order_id": order_id,
@@ -121,7 +119,7 @@ async def get_order_status(
             "remaining_quantity": (order.quantity - order.filled_quantity) if order else 0,
             "allowed_transitions": [s.value for s in get_allowed_transitions(status)],
         })
-    
+
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
 
@@ -135,20 +133,20 @@ async def submit_order(
         order = oms.get_order(order_id)
         if order is None:
             raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
-        
+
         if not is_valid_transition(order.status, OrderStatus.SUBMITTED):
             allowed = [s.value for s in get_allowed_transitions(order.status)]
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot submit order in {order.status.value} state. Allowed: {allowed}"
             )
-        
+
         try:
             updated_order = oms.submit_order(order)
             return success_response(updated_order.to_dict())
         except InvalidStateTransitionError as e:
             raise HTTPException(status_code=400, detail=str(e))
-    
+
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
 
@@ -167,7 +165,7 @@ async def cancel_order(
             raise HTTPException(status_code=404, detail=str(e))
         except InvalidStateTransitionError as e:
             raise HTTPException(status_code=400, detail=str(e))
-    
+
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
 
@@ -192,7 +190,7 @@ async def process_fill(
             raise HTTPException(status_code=400, detail=str(e))
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-    
+
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
 
@@ -213,7 +211,7 @@ async def list_portfolio_orders(
             limit=limit,
             offset=offset,
         )
-        
+
         return success_response({
             "orders": [o.to_dict() for o in orders],
             "pagination": {
@@ -224,7 +222,7 @@ async def list_portfolio_orders(
                 "count": len(orders),
             }
         })
-    
+
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
 
@@ -240,7 +238,7 @@ async def list_open_orders(
             "orders": [o.to_dict() for o in orders],
             "count": len(orders),
         })
-    
+
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
 

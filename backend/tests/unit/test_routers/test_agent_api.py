@@ -14,12 +14,9 @@ Tests cover:
 """
 import pytest
 import os
-import time
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
-from fastapi import FastAPI, Request
+from unittest.mock import Mock, patch
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from fastapi import HTTPException, status
 
 # Set environment before importing
 os.environ["AGENT_API_DEBUG"] = "true"
@@ -27,21 +24,12 @@ os.environ["TOKEN_DEBUG"] = "true"
 
 from app.routers.agent import (
     router,
-    get_token_service,
-    HealthResponse,
-    WhoamiResponse,
-    MarketsResponse,
-    SymbolsResponse,
-    KlinesRequest,
-    KlinesResponse,
 )
 from app.services.agent.token_service import (
-    AgentToken,
     TokenScope,
-    Market,
     AgentTokenService,
 )
-from app.middleware.agent_auth import verify_agent_token, require_scope
+from app.middleware.agent_auth import verify_agent_token
 
 
 # ============================================================================
@@ -65,17 +53,15 @@ def client(app):
 @pytest.fixture
 def auth_client(app, sample_agent_token):
     """Create test client with authentication override."""
-    from app.middleware.agent_auth import verify_agent_token, require_scope
-    from app.services.agent.token_service import TokenScope
-    
+
     async def override_verify():
         return sample_agent_token
-    
+
     def override_require_scope(scope: TokenScope):
         async def dependency():
             return sample_agent_token
         return dependency
-    
+
     app.dependency_overrides[verify_agent_token] = override_verify
     client = TestClient(app, raise_server_exceptions=False)
     yield client
@@ -85,11 +71,10 @@ def auth_client(app, sample_agent_token):
 @pytest.fixture
 def restricted_auth_client(app, restricted_agent_token):
     """Create test client with restricted token override."""
-    from app.middleware.agent_auth import verify_agent_token
-    
+
     async def override_verify():
         return restricted_agent_token
-    
+
     app.dependency_overrides[verify_agent_token] = override_verify
     client = TestClient(app, raise_server_exceptions=False)
     yield client
@@ -127,7 +112,7 @@ class TestHealthEndpoint:
     def test_health_check_success(self, client):
         """Test successful health check."""
         response = client.get("/api/agent/v1/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
@@ -143,7 +128,7 @@ class TestHealthEndpoint:
         """Test health check response format."""
         response = client.get("/api/agent/v1/health")
         data = response.json()
-        
+
         assert "status" in data
         assert "timestamp" in data
         assert "version" in data
@@ -159,19 +144,18 @@ class TestWhoamiEndpoint:
 
     def test_whoami_success(self, client, sample_token):
         """Test successful whoami request."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         response = client.get(
             "/api/agent/v1/whoami",
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == sample_token.id
@@ -180,7 +164,7 @@ class TestWhoamiEndpoint:
         assert data["markets"] == ["*"]
         assert data["paper_only"] is True
         assert data["rate_limit"] == 120
-        
+
         app.dependency_overrides.clear()
 
     def test_whoami_missing_auth(self, client):
@@ -206,86 +190,83 @@ class TestMarketsEndpoint:
 
     def test_list_markets_success(self, client, sample_token):
         """Test successful market listing."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
-            
+
             response = client.get(
                 "/api/agent/v1/markets",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert "markets" in data
             assert len(data["markets"]) == 6
             assert "ASTOCK" in data["markets"]
             assert "HKSTOCK" in data["markets"]
-        
+
         app.dependency_overrides.clear()
 
     def test_list_markets_with_wildcard_access(self, client, sample_token):
         """Test market listing with wildcard access."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         sample_token.markets = ["*"]
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
-            
+
             response = client.get(
                 "/api/agent/v1/markets",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert len(data["markets"]) == 6
-        
+
         app.dependency_overrides.clear()
 
     def test_list_markets_with_restricted_access(self, client, restricted_token):
         """Test market listing with restricted access."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return restricted_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
-            
+
             response = client.get(
                 "/api/agent/v1/markets",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert len(data["markets"]) == 1
             assert data["markets"][0] == "ASTOCK"
-        
+
         app.dependency_overrides.clear()
 
 
@@ -298,20 +279,19 @@ class TestSymbolsEndpoint:
 
     def test_search_symbols_success(self, client, sample_token):
         """Test successful symbol search."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.routers.stocks.search_stocks") as mock_search:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
-            
+
             mock_search.return_value = {
                 "data": {
                     "stocks": [
@@ -320,56 +300,54 @@ class TestSymbolsEndpoint:
                     ]
                 }
             }
-            
+
             response = client.get(
                 "/api/agent/v1/markets/AStock/symbols?keyword=茅台&limit=10",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert "symbols" in data
-        
+
         app.dependency_overrides.clear()
 
     def test_search_symbols_market_access_denied(self, client, restricted_token):
         """Test symbol search with market access denied."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         restricted_token.markets = ["HKSTOCK"]
-        
+
         async def override_verify():
             return restricted_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         response = client.get(
             "/api/agent/v1/markets/AStock/symbols",
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 403
         assert "not allowed" in response.json()["detail"]
-        
+
         app.dependency_overrides.clear()
 
     def test_search_symbols_with_limit(self, client, sample_token):
         """Test symbol search with limit parameter."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.routers.stocks.search_stocks") as mock_search:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
-            
+
             mock_search.return_value = {
                 "data": {
                     "stocks": [
@@ -378,16 +356,16 @@ class TestSymbolsEndpoint:
                     ]
                 }
             }
-            
+
             response = client.get(
                 "/api/agent/v1/markets/AStock/symbols?limit=1",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert len(data["symbols"]) <= 1
-        
+
         app.dependency_overrides.clear()
 
 
@@ -400,20 +378,19 @@ class TestKlinesEndpoint:
 
     def test_get_klines_success(self, client, sample_token):
         """Test successful k-line retrieval."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.get_periodic_history") as mock_get_history:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
-            
+
             mock_get_history.return_value = [
                 {
                     "trade_date": "2024-01-01",
@@ -432,7 +409,7 @@ class TestKlinesEndpoint:
                     "volume": 1200000,
                 }
             ]
-            
+
             response = client.post(
                 "/api/agent/v1/klines",
                 json={
@@ -443,28 +420,27 @@ class TestKlinesEndpoint:
                 },
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert data["market"] == "AStock"
             assert data["symbol"] == "600519"
             assert data["timeframe"] == "1D"
             assert "data" in data
-        
+
         app.dependency_overrides.clear()
 
     def test_get_klines_market_access_denied(self, client, restricted_token):
         """Test k-line retrieval with market access denied."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         restricted_token.markets = ["HKSTOCK"]
-        
+
         async def override_verify():
             return restricted_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         response = client.post(
             "/api/agent/v1/klines",
             json={
@@ -475,30 +451,29 @@ class TestKlinesEndpoint:
             },
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 403
-        
+
         app.dependency_overrides.clear()
 
     def test_get_klines_with_timeframe_mapping(self, client, sample_token):
         """Test k-line retrieval with different timeframes."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.get_periodic_history") as mock_get_history:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
             mock_get_history.return_value = []
-            
+
             timeframes = ["1m", "5m", "15m", "1H", "4H", "1D", "1W"]
-            
+
             for tf in timeframes:
                 response = client.post(
                     "/api/agent/v1/klines",
@@ -510,9 +485,9 @@ class TestKlinesEndpoint:
                     },
                     headers={"Authorization": "Bearer AGT1_test_token"}
                 )
-            
+
             assert response.status_code == 200
-        
+
         app.dependency_overrides.clear()
 
 
@@ -525,18 +500,17 @@ class TestStrategyEndpoints:
 
     def test_list_strategies_success(self, client, sample_token):
         """Test successful strategy listing with pagination."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.list_strategies") as mock_list, \
              patch("app.db.strategy_db.count_strategies") as mock_count:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -573,23 +547,22 @@ class TestStrategyEndpoints:
             assert data["limit"] == 20
             assert data["offset"] == 0
             assert len(data["strategies"]) == 2
-        
+
         app.dependency_overrides.clear()
 
     def test_list_strategies_with_market_filter(self, client, sample_token):
         """Test strategy listing with market filter."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.list_strategies") as mock_list, \
              patch("app.db.strategy_db.count_strategies") as mock_count:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -615,18 +588,17 @@ class TestStrategyEndpoints:
             data = response.json()
             assert len(data["strategies"]) == 1
             mock_list.assert_called_once()
-        
+
         app.dependency_overrides.clear()
 
     def test_list_strategies_market_access_denied(self, client, restricted_token):
         """Test strategy listing with market access denied."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         restricted_token.markets = ["HKSTOCK"]
-        
+
         async def override_verify():
             return restricted_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
 
@@ -637,23 +609,22 @@ class TestStrategyEndpoints:
 
         assert response.status_code == 403
         assert "not allowed" in response.json()["detail"]
-        
+
         app.dependency_overrides.clear()
 
     def test_list_strategies_pagination(self, client, sample_token):
         """Test strategy listing pagination."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.list_strategies") as mock_list, \
              patch("app.db.strategy_db.count_strategies") as mock_count:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -671,22 +642,21 @@ class TestStrategyEndpoints:
             assert data["limit"] == 10
             assert data["offset"] == 20
             assert data["has_more"] is True
-        
+
         app.dependency_overrides.clear()
 
     def test_get_strategy_success(self, client, sample_token):
         """Test successful strategy retrieval."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.get_strategy") as mock_get:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -715,22 +685,21 @@ class TestStrategyEndpoints:
             assert data["name"] == "MA Cross"
             assert data["code"] == "ma_cross(5, 20)"
             assert data["market"] == "AStock"
-        
+
         app.dependency_overrides.clear()
 
     def test_get_strategy_not_found(self, client, sample_token):
         """Test strategy not found."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.get_strategy") as mock_get:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -743,18 +712,17 @@ class TestStrategyEndpoints:
             )
 
             assert response.status_code == 404
-        
+
         app.dependency_overrides.clear()
 
     def test_get_strategy_market_access_denied(self, client, restricted_token):
         """Test strategy retrieval with market access denied."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         restricted_token.markets = ["HKSTOCK"]
-        
+
         async def override_verify():
             return restricted_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
 
@@ -771,23 +739,22 @@ class TestStrategyEndpoints:
             )
 
             assert response.status_code == 403
-        
+
         app.dependency_overrides.clear()
 
     def test_create_strategy_success(self, client, sample_token):
         """Test successful strategy creation."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.services.strategy.StrategyValidator.validate") as mock_validate, \
              patch("app.db.strategy_db.create_strategy") as mock_create:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -816,22 +783,21 @@ class TestStrategyEndpoints:
             data = response.json()
             assert data["code"] == 0
             assert "id" in data["data"]
-        
+
         app.dependency_overrides.clear()
 
     def test_create_strategy_validation_failed(self, client, sample_token):
         """Test strategy creation with validation failure."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.services.strategy.StrategyValidator.validate") as mock_validate:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -850,18 +816,17 @@ class TestStrategyEndpoints:
 
             assert response.status_code == 400
             assert "validation failed" in response.json()["detail"]
-        
+
         app.dependency_overrides.clear()
 
     def test_create_strategy_market_access_denied(self, client, restricted_token):
         """Test strategy creation with market access denied."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         restricted_token.markets = ["HKSTOCK"]
-        
+
         async def override_verify():
             return restricted_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
 
@@ -876,24 +841,23 @@ class TestStrategyEndpoints:
         )
 
         assert response.status_code == 403
-        
+
         app.dependency_overrides.clear()
 
     def test_update_strategy_success(self, client, sample_token):
         """Test successful strategy update."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.services.strategy.StrategyValidator.validate") as mock_validate, \
              patch("app.db.strategy_db.get_strategy") as mock_get, \
              patch("app.db.strategy_db.update_strategy") as mock_update:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -922,22 +886,21 @@ class TestStrategyEndpoints:
             assert response.status_code == 200
             data = response.json()
             assert data["code"] == 0
-        
+
         app.dependency_overrides.clear()
 
     def test_update_strategy_not_found(self, client, sample_token):
         """Test strategy update with non-existent strategy."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.get_strategy") as mock_get:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -951,23 +914,22 @@ class TestStrategyEndpoints:
             )
 
             assert response.status_code == 404
-        
+
         app.dependency_overrides.clear()
 
     def test_delete_strategy_success(self, client, sample_token):
         """Test successful strategy deletion (soft delete)."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.get_strategy") as mock_get, \
              patch("app.db.strategy_db.delete_strategy") as mock_delete:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -989,23 +951,22 @@ class TestStrategyEndpoints:
             assert data["code"] == 0
             assert data["data"]["deleted"] is True
             assert data["data"]["hard_delete"] is False
-        
+
         app.dependency_overrides.clear()
 
     def test_delete_strategy_hard_delete(self, client, sample_token):
         """Test hard delete strategy."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.get_strategy") as mock_get, \
              patch("app.db.strategy_db.delete_strategy") as mock_delete:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -1025,22 +986,21 @@ class TestStrategyEndpoints:
             assert response.status_code == 200
             data = response.json()
             assert data["data"]["hard_delete"] is True
-        
+
         app.dependency_overrides.clear()
 
     def test_delete_strategy_not_found(self, client, sample_token):
         """Test strategy deletion with non-existent strategy."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.get_strategy") as mock_get:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -1053,7 +1013,7 @@ class TestStrategyEndpoints:
             )
 
             assert response.status_code == 404
-        
+
         app.dependency_overrides.clear()
 
 
@@ -1112,19 +1072,18 @@ class TestStrategyDebugLogging:
 
     def test_list_strategies_logging(self, client, sample_token):
         """Test that list strategies logs appropriately."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.list_strategies") as mock_list, \
              patch("app.db.strategy_db.count_strategies") as mock_count, \
              patch("app.routers.agent.logger") as mock_logger:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -1139,23 +1098,22 @@ class TestStrategyDebugLogging:
             assert response.status_code == 200
             mock_logger.info.assert_called()
             mock_logger.debug.assert_called()
-        
+
         app.dependency_overrides.clear()
 
     def test_get_strategy_logging(self, client, sample_token):
         """Test that get strategy logs appropriately."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.strategy_db.get_strategy") as mock_get, \
              patch("app.routers.agent.logger") as mock_logger:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -1174,24 +1132,23 @@ class TestStrategyDebugLogging:
             assert response.status_code == 200
             mock_logger.info.assert_called()
             mock_logger.debug.assert_called()
-        
+
         app.dependency_overrides.clear()
 
     def test_create_strategy_logging(self, client, sample_token):
         """Test that create strategy logs appropriately."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.services.strategy.StrategyValidator.validate") as mock_validate, \
              patch("app.db.strategy_db.create_strategy") as mock_create, \
              patch("app.routers.agent.logger") as mock_logger:
-            
+
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
@@ -1211,7 +1168,7 @@ class TestStrategyDebugLogging:
             assert response.status_code == 200
             mock_logger.info.assert_called()
             mock_logger.debug.assert_called()
-        
+
         app.dependency_overrides.clear()
 
 
@@ -1224,20 +1181,19 @@ class TestPriceEndpoint:
 
     def test_get_price_success(self, client, sample_token):
         """Test successful price retrieval."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.routers.market.quotes.market_quote") as mock_quote:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
-            
+
             mock_quote.return_value = {
                 "data": {
                     "price": 1800.0,
@@ -1246,12 +1202,12 @@ class TestPriceEndpoint:
                     "volume": 5000000,
                 }
             }
-            
+
             response = client.get(
                 "/api/agent/v1/price?market=AStock&symbol=600519",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert data["market"] == "AStock"
@@ -1259,78 +1215,75 @@ class TestPriceEndpoint:
             assert "price" in data
             assert "change" in data
             assert "change_pct" in data
-        
+
         app.dependency_overrides.clear()
 
     def test_get_price_market_access_denied(self, client, restricted_token):
         """Test price retrieval with market access denied."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         restricted_token.markets = ["HKSTOCK"]
-        
+
         async def override_verify():
             return restricted_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         response = client.get(
             "/api/agent/v1/price?market=AStock&symbol=600519",
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 403
-        
+
         app.dependency_overrides.clear()
 
     def test_get_price_instrument_access_denied(self, client, restricted_token):
         """Test price retrieval with instrument access denied."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         restricted_token.instruments = ["000001"]
-        
+
         async def override_verify():
             return restricted_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         response = client.get(
             "/api/agent/v1/price?market=AStock&symbol=600519",
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 403
-        
+
         app.dependency_overrides.clear()
 
     def test_get_price_fallback_on_error(self, client, sample_token):
         """Test price retrieval fallback on error."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.routers.market.quotes.market_quote") as mock_quote:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
-            
+
             mock_quote.side_effect = Exception("API error")
-            
+
             response = client.get(
                 "/api/agent/v1/price?market=AStock&symbol=600519",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert "error" in data
-        
+
         app.dependency_overrides.clear()
 
 
@@ -1347,7 +1300,7 @@ class TestScopeEnforcement:
             "/api/agent/v1/markets",
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 401
 
     def test_read_scope_required_for_symbols(self, client):
@@ -1356,7 +1309,7 @@ class TestScopeEnforcement:
             "/api/agent/v1/markets/AStock/symbols",
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 401
 
     def test_read_scope_required_for_klines(self, client):
@@ -1371,7 +1324,7 @@ class TestScopeEnforcement:
             },
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 401
 
     def test_read_scope_required_for_price(self, client):
@@ -1380,7 +1333,7 @@ class TestScopeEnforcement:
             "/api/agent/v1/price?market=AStock&symbol=600519",
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 401
 
 
@@ -1397,7 +1350,7 @@ class TestRateLimiting:
             "/api/agent/v1/whoami",
             headers={"Authorization": "Bearer AGT1_test_token"}
         )
-        
+
         assert response.status_code == 401
 
 
@@ -1408,57 +1361,55 @@ class TestDebugLogging:
     def test_health_check_logging(self, mock_logger, client):
         """Test that health check logs appropriately."""
         response = client.get("/api/agent/v1/health")
-        
+
         assert response.status_code == 200
         mock_logger.info.assert_called()
 
     def test_whoami_logging(self, client, sample_token):
         """Test that whoami logs token details."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.logger") as mock_logger:
             response = client.get(
                 "/api/agent/v1/whoami",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             mock_logger.info.assert_called()
             mock_logger.debug.assert_called()
-        
+
         app.dependency_overrides.clear()
 
     def test_markets_logging(self, client, sample_token):
         """Test that markets endpoint logs appropriately."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.routers.agent.logger") as mock_logger:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
-            
+
             response = client.get(
                 "/api/agent/v1/markets",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
-            
+
             assert response.status_code == 200
             mock_logger.info.assert_called()
             mock_logger.debug.assert_called()
-        
+
         app.dependency_overrides.clear()
 
 
@@ -1467,39 +1418,38 @@ class TestIntegration:
 
     def test_full_workflow(self, client, sample_token):
         """Test full workflow: health -> whoami -> markets -> klines."""
-        from app.middleware.agent_auth import verify_agent_token
-        
+
         async def override_verify():
             return sample_token
-        
+
         app = client.app
         app.dependency_overrides[verify_agent_token] = override_verify
-        
+
         with patch("app.routers.agent.get_token_service") as mock_get_service, \
              patch("app.db.get_periodic_history") as mock_get_history:
             mock_service = Mock()
             mock_service.log_audit = Mock()
             mock_get_service.return_value = mock_service
             mock_get_history.return_value = []
-            
+
             # Step 1: Health check (no auth required)
             response = client.get("/api/agent/v1/health")
             assert response.status_code == 200
-            
+
             # Step 2: Whoami
             response = client.get(
                 "/api/agent/v1/whoami",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
             assert response.status_code == 200
-            
+
             # Step 3: Markets
             response = client.get(
                 "/api/agent/v1/markets",
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
             assert response.status_code == 200
-            
+
             # Step 4: Klines
             response = client.post(
                 "/api/agent/v1/klines",
@@ -1512,5 +1462,5 @@ class TestIntegration:
                 headers={"Authorization": "Bearer AGT1_test_token"}
             )
             assert response.status_code == 200
-        
+
         app.dependency_overrides.clear()

@@ -32,7 +32,7 @@ class SecurityViolation:
     line: int
     column: int
     severity: str = "error"  # error, warning
-    
+
     def __str__(self):
         return f"[Line {self.line}:{self.column}] {self.node_type}: {self.message}"
 
@@ -43,16 +43,16 @@ class ValidationResult:
     is_valid: bool
     violations: List[SecurityViolation] = field(default_factory=list)
     warnings: List[SecurityViolation] = field(default_factory=list)
-    
+
     def add_violation(self, violation: SecurityViolation):
         """Add a security violation."""
         self.violations.append(violation)
         self.is_valid = False
-    
+
     def add_warning(self, warning: SecurityViolation):
         """Add a security warning."""
         self.warnings.append(warning)
-    
+
     def get_error_messages(self) -> List[str]:
         """Get all error messages."""
         return [str(v) for v in self.violations]
@@ -65,21 +65,21 @@ class InfiniteLoopDetector(ast.NodeVisitor):
     Uses a stack-based approach to track nested loops and checks for break/return
     statements anywhere in the loop body tree (including nested control structures).
     """
-    
+
     def __init__(self):
         self.loop_stack: List[ast.AST] = []
         self.infinite_loops: List[SecurityViolation] = []
         self.empty_ranges: List[SecurityViolation] = []
-    
+
     def visit_While(self, node: ast.While):
         """Check while loops for potential infinite loops."""
         # Check if condition is True (infinite loop candidate)
         is_while_true = self._is_constant_true(node.test)
-        
+
         if is_while_true:
             # Check for break/return anywhere in the body tree
             has_exit = self._has_exit_statement(node.body)
-            
+
             if not has_exit:
                 self.infinite_loops.append(SecurityViolation(
                     node_type="While",
@@ -87,16 +87,16 @@ class InfiniteLoopDetector(ast.NodeVisitor):
                     line=node.lineno,
                     column=node.col_offset,
                 ))
-        
+
         # Continue visiting nested structures
         self.generic_visit(node)
-    
+
     def visit_For(self, node: ast.For):
         """Check for loops for potential issues like range(0) or range(-1)."""
         # Check for range with potentially empty iterations
         if isinstance(node.iter, ast.Call):
             func_name = self._get_func_name(node.iter)
-            
+
             if func_name == 'range':
                 # Check for range(0), range(-1), range(N, N), range(N, M) where M < N
                 range_issue = self._check_range_issue(node.iter)
@@ -108,10 +108,10 @@ class InfiniteLoopDetector(ast.NodeVisitor):
                         column=node.col_offset,
                         severity="warning",
                     ))
-        
+
         # Continue visiting nested structures
         self.generic_visit(node)
-    
+
     def _is_constant_true(self, node: ast.AST) -> bool:
         """Check if a node represents the constant True."""
         if isinstance(node, ast.Constant):
@@ -119,7 +119,7 @@ class InfiniteLoopDetector(ast.NodeVisitor):
         elif isinstance(node, ast.NameConstant):  # Python 3.7 compatibility
             return node.value is True
         return False
-    
+
     def _has_exit_statement(self, body: List[ast.stmt], in_nested_loop: bool = False) -> bool:
         """
         Check if body contains a break or return statement anywhere in the tree.
@@ -149,36 +149,36 @@ class InfiniteLoopDetector(ast.NodeVisitor):
                     return True
                 # If in nested loop, break only breaks the inner loop, not outer
                 continue
-            
+
             # Return statement always exits the function (regardless of nested loop)
             if isinstance(stmt, ast.Return):
                 return True
-            
+
             # Check if statement
             if isinstance(stmt, ast.If):
-                if (self._has_exit_statement(stmt.body, in_nested_loop) or 
+                if (self._has_exit_statement(stmt.body, in_nested_loop) or
                     self._has_exit_statement(stmt.orelse, in_nested_loop)):
                     return True
-            
+
             # Check try/except/finally
             if isinstance(stmt, ast.Try):
-                if (self._has_exit_statement(stmt.body, in_nested_loop) or 
+                if (self._has_exit_statement(stmt.body, in_nested_loop) or
                     any(self._has_exit_statement(handler.body, in_nested_loop) for handler in stmt.handlers) or
                     self._has_exit_statement(stmt.orelse, in_nested_loop) or
                     self._has_exit_statement(stmt.finalbody, in_nested_loop)):
                     return True
-            
+
             # Check with statement
             if isinstance(stmt, ast.With):
                 if self._has_exit_statement(stmt.body, in_nested_loop):
                     return True
-            
+
             # Check match statement (Python 3.10+)
             if hasattr(ast, 'Match') and isinstance(stmt, ast.Match):
                 for case in stmt.cases:
                     if self._has_exit_statement(case.body, in_nested_loop):
                         return True
-            
+
             # Check nested for/while loops
             # break in nested loop doesn't break outer loop, but return does
             if isinstance(stmt, (ast.For, ast.AsyncFor)):
@@ -188,7 +188,7 @@ class InfiniteLoopDetector(ast.NodeVisitor):
                 if self._has_return_statement(stmt.orelse):
                     return True
                 # Note: break in nested for doesn't break outer while
-            
+
             if isinstance(stmt, ast.While):
                 # Check for return statements in nested while loop
                 if self._has_return_statement(stmt.body):
@@ -196,9 +196,9 @@ class InfiniteLoopDetector(ast.NodeVisitor):
                 if self._has_return_statement(stmt.orelse):
                     return True
                 # Note: break in nested while doesn't break outer while
-        
+
         return False
-    
+
     def _has_return_statement(self, body: List[ast.stmt]) -> bool:
         """
         Check if body contains a return statement anywhere in the tree.
@@ -210,34 +210,34 @@ class InfiniteLoopDetector(ast.NodeVisitor):
         for stmt in body:
             if isinstance(stmt, ast.Return):
                 return True
-            
+
             if isinstance(stmt, ast.If):
                 if self._has_return_statement(stmt.body) or self._has_return_statement(stmt.orelse):
                     return True
-            
+
             if isinstance(stmt, ast.Try):
-                if (self._has_return_statement(stmt.body) or 
+                if (self._has_return_statement(stmt.body) or
                     any(self._has_return_statement(handler.body) for handler in stmt.handlers) or
                     self._has_return_statement(stmt.orelse) or
                     self._has_return_statement(stmt.finalbody)):
                     return True
-            
+
             if isinstance(stmt, ast.With):
                 if self._has_return_statement(stmt.body):
                     return True
-            
+
             if hasattr(ast, 'Match') and isinstance(stmt, ast.Match):
                 for case in stmt.cases:
                     if self._has_return_statement(case.body):
                         return True
-            
+
             # Recursively check nested loops for return
             if isinstance(stmt, (ast.For, ast.AsyncFor, ast.While)):
                 if self._has_return_statement(stmt.body) or self._has_return_statement(stmt.orelse):
                     return True
-        
+
         return False
-    
+
     def _get_func_name(self, node: ast.AST) -> str:
         """Extract function name from a Call node."""
         if isinstance(node, ast.Name):
@@ -247,7 +247,7 @@ class InfiniteLoopDetector(ast.NodeVisitor):
         elif isinstance(node, ast.Call):
             return self._get_func_name(node.func)
         return ""
-    
+
     def _check_range_issue(self, call_node: ast.Call) -> Optional[str]:
         """
         Check if range() call will produce empty or potentially problematic iterations.
@@ -255,20 +255,20 @@ class InfiniteLoopDetector(ast.NodeVisitor):
         Returns error message if issue found, None otherwise.
         """
         args = call_node.args
-        
+
         if len(args) == 1:
             # range(stop) - check if stop <= 0
             stop = self._get_constant_value(args[0])
             if stop is not None:
                 if stop <= 0:
                     return f"range({stop}) will produce no iterations"
-        
+
         elif len(args) >= 2:
             # range(start, stop) or range(start, stop, step)
             start = self._get_constant_value(args[0])
             stop = self._get_constant_value(args[1])
             step = self._get_constant_value(args[2]) if len(args) > 2 else 1
-            
+
             if start is not None and stop is not None:
                 if step is not None:
                     # Check if range will produce no iterations
@@ -276,9 +276,9 @@ class InfiniteLoopDetector(ast.NodeVisitor):
                         return f"range({start}, {stop}) will produce no iterations"
                     elif step < 0 and stop >= start:
                         return f"range({start}, {stop}, {step}) will produce no iterations"
-        
+
         return None
-    
+
     def _get_constant_value(self, node: ast.AST) -> Optional[int]:
         """Extract constant integer value from AST node if possible."""
         if isinstance(node, ast.Constant):
@@ -314,7 +314,7 @@ class ASTSecurityValidator(ast.NodeVisitor):
     - Resource exhaustion patterns
     - Infinite loops
     """
-    
+
     FORBIDDEN_MODULES = {
         'os', 'sys', 'subprocess', 'multiprocessing', 'threading',
         'socket', 'urllib', 'http', 'requests', 'httplib', 'ftplib',
@@ -324,35 +324,35 @@ class ASTSecurityValidator(ast.NodeVisitor):
         'commands', 'popen2', 'pty', 'fcntl', 'pipes', 'posixpath',
         'builtins', '__builtin__', '__builtins__',
     }
-    
+
     FORBIDDEN_FUNCTIONS = {
         'eval', 'exec', 'compile', '__import__', 'open', 'input',
         'getattr', 'setattr', 'delattr', 'hasattr', 'globals', 'locals',
         'vars', 'dir', 'memoryview', 'property', 'super', 'type',
         'classmethod', 'staticmethod', 'breakpoint',
     }
-    
+
     FORBIDDEN_ATTRIBUTES = {
         '__class__', '__base__', '__bases__', '__subclasses__', '__mro__',
         '__builtins__', '__builtin__', '__globals__', '__locals__',
         '__code__', '__dict__', '__doc__', '__module__',
         '__import__', '__name__', '__qualname__',
     }
-    
+
     ALLOWED_MODULES = {
         'pandas', 'pd', 'numpy', 'np', 'math', 'statistics',
         'datetime', 'date', 'time', 'timedelta',
     }
-    
+
     MAX_LIST_SIZE = 10**7  # Maximum allowed list size
     MAX_STRING_MULTIPLICATION = 10**6  # Maximum string multiplication
-    
+
     def __init__(self):
         self.result = ValidationResult(is_valid=True)
         self._current_function = None
         self._imported_modules: Set[str] = set()
         self._defined_functions: Set[str] = set()
-    
+
     def validate(self, code: str) -> ValidationResult:
         """
         Validate code by parsing AST and checking for violations.
@@ -366,22 +366,22 @@ class ASTSecurityValidator(ast.NodeVisitor):
         self.result = ValidationResult(is_valid=True)
         self._imported_modules = set()
         self._defined_functions = set()
-        
+
         try:
             tree = ast.parse(code)
-            
+
             # Run infinite loop detector
             loop_detector = InfiniteLoopDetector()
             loop_detector.visit(tree)
-            
+
             # Add infinite loop violations
             for violation in loop_detector.infinite_loops:
                 self.result.add_violation(violation)
-            
+
             # Add empty range warnings
             for warning in loop_detector.empty_ranges:
                 self.result.add_warning(warning)
-            
+
             # Run security validator
             self.visit(tree)
         except SyntaxError as e:
@@ -398,15 +398,15 @@ class ASTSecurityValidator(ast.NodeVisitor):
                 line=0,
                 column=0,
             ))
-        
+
         return self.result
-    
+
     def visit_Import(self, node: ast.Import):
         """Check import statements."""
         for alias in node.names:
             module_name = alias.name.split('.')[0]
             self._imported_modules.add(module_name)
-            
+
             if module_name in self.FORBIDDEN_MODULES:
                 self.result.add_violation(SecurityViolation(
                     node_type="Import",
@@ -422,15 +422,15 @@ class ASTSecurityValidator(ast.NodeVisitor):
                     column=node.col_offset,
                     severity="warning",
                 ))
-        
+
         self.generic_visit(node)
-    
+
     def visit_ImportFrom(self, node: ast.ImportFrom):
         """Check from ... import statements."""
         if node.module:
             module_name = node.module.split('.')[0]
             self._imported_modules.add(module_name)
-            
+
             if module_name in self.FORBIDDEN_MODULES:
                 self.result.add_violation(SecurityViolation(
                     node_type="ImportFrom",
@@ -446,13 +446,13 @@ class ASTSecurityValidator(ast.NodeVisitor):
                     column=node.col_offset,
                     severity="warning",
                 ))
-        
+
         self.generic_visit(node)
-    
+
     def visit_Call(self, node: ast.Call):
         """Check function calls for forbidden functions."""
         func_name = self._get_func_name(node)
-        
+
         if func_name in self.FORBIDDEN_FUNCTIONS:
             self.result.add_violation(SecurityViolation(
                 node_type="Call",
@@ -460,7 +460,7 @@ class ASTSecurityValidator(ast.NodeVisitor):
                 line=node.lineno,
                 column=node.col_offset,
             ))
-        
+
         # Check for __import__ calls
         if func_name == '__import__':
             self.result.add_violation(SecurityViolation(
@@ -469,7 +469,7 @@ class ASTSecurityValidator(ast.NodeVisitor):
                 line=node.lineno,
                 column=node.col_offset,
             ))
-        
+
         # Check for method calls on forbidden attributes
         if isinstance(node.func, ast.Attribute):
             if node.func.attr in self.FORBIDDEN_ATTRIBUTES:
@@ -479,9 +479,9 @@ class ASTSecurityValidator(ast.NodeVisitor):
                     line=node.lineno,
                     column=node.col_offset,
                 ))
-        
+
         self.generic_visit(node)
-    
+
     def visit_Attribute(self, node: ast.Attribute):
         """Check attribute access for forbidden attributes."""
         if node.attr in self.FORBIDDEN_ATTRIBUTES:
@@ -491,7 +491,7 @@ class ASTSecurityValidator(ast.NodeVisitor):
                 line=node.lineno,
                 column=node.col_offset,
             ))
-        
+
         # Check for dunder methods
         if node.attr.startswith('__') and node.attr.endswith('__'):
             if node.attr not in {'__init__', '__str__', '__repr__', '__len__'}:
@@ -502,9 +502,9 @@ class ASTSecurityValidator(ast.NodeVisitor):
                     column=node.col_offset,
                     severity="warning",
                 ))
-        
+
         self.generic_visit(node)
-    
+
     def visit_Name(self, node: ast.Name):
         """Check name references for forbidden builtins."""
         if node.id in self.FORBIDDEN_FUNCTIONS:
@@ -514,26 +514,26 @@ class ASTSecurityValidator(ast.NodeVisitor):
                 line=node.lineno,
                 column=node.col_offset,
             ))
-        
+
         self.generic_visit(node)
-    
+
     def visit_BinOp(self, node: ast.BinOp):
         """Check binary operations for resource exhaustion."""
         # Check for large list/string multiplication
         if isinstance(node.op, ast.Mult):
             left_size = self._estimate_size(node.left)
             right_size = self._estimate_size(node.right)
-            
+
             if left_size > self.MAX_LIST_SIZE or right_size > self.MAX_LIST_SIZE:
                 self.result.add_violation(SecurityViolation(
                     node_type="BinOp",
-                    message=f"Potential memory bomb: large multiplication detected",
+                    message="Potential memory bomb: large multiplication detected",
                     line=node.lineno,
                     column=node.col_offset,
                 ))
-        
+
         self.generic_visit(node)
-    
+
     def visit_List(self, node: ast.List):
         """Check list creation for large lists."""
         # Check for list comprehension that might create large lists
@@ -545,9 +545,9 @@ class ASTSecurityValidator(ast.NodeVisitor):
                 column=node.col_offset,
                 severity="warning",
             ))
-        
+
         self.generic_visit(node)
-    
+
     def visit_ListComp(self, node: ast.ListComp):
         """Check list comprehensions for potential issues."""
         # Warn about nested comprehensions
@@ -559,29 +559,29 @@ class ASTSecurityValidator(ast.NodeVisitor):
                 column=node.col_offset,
                 severity="warning",
             ))
-        
+
         self.generic_visit(node)
-    
+
     def visit_FunctionDef(self, node: ast.FunctionDef):
         """Track function definitions."""
         self._defined_functions.add(node.name)
         old_function = self._current_function
         self._current_function = node.name
-        
+
         self.generic_visit(node)
-        
+
         self._current_function = old_function
-    
+
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         """Track async function definitions."""
         self._defined_functions.add(node.name)
         old_function = self._current_function
         self._current_function = node.name
-        
+
         self.generic_visit(node)
-        
+
         self._current_function = old_function
-    
+
     def _get_func_name(self, node: ast.AST) -> str:
         """Extract function name from a Call node."""
         if isinstance(node, ast.Name):
@@ -593,7 +593,7 @@ class ASTSecurityValidator(ast.NodeVisitor):
         elif isinstance(node, ast.Subscript):
             return self._get_func_name(node.value)
         return ""
-    
+
     def _estimate_size(self, node: ast.AST) -> int:
         """Estimate the size of a value from AST node."""
         if isinstance(node, ast.Constant):
@@ -624,7 +624,7 @@ def validate_strategy_ast(code: str) -> Tuple[bool, List[str]]:
     """
     validator = ASTSecurityValidator()
     result = validator.validate(code)
-    
+
     return result.is_valid, result.get_error_messages()
 
 
@@ -653,7 +653,7 @@ def on_bar(ctx, bar):
     if bar['close'] > bar['open']:
         ctx.buy(bar['close'], 100)
 """, True, "Valid pandas import"),
-        
+
         # Test 2: Forbidden import
         ("""
 import os
@@ -661,37 +661,37 @@ import os
 def on_bar(ctx, bar):
     os.system('ls')
 """, False, "Forbidden os import"),
-        
+
         # Test 3: Eval attack
         ("""
 def on_bar(ctx, bar):
     eval("print('hello')")
 """, False, "Forbidden eval call"),
-        
+
         # Test 4: Class introspection
         ("""
 def on_bar(ctx, bar):
     x = ''.__class__.__base__.__subclasses__()
 """, False, "Forbidden attribute access"),
-        
+
         # Test 5: Infinite loop
         ("""
 def on_bar(ctx, bar):
     while True:
         pass
 """, False, "Infinite loop detection"),
-        
+
         # Test 6: Memory bomb
         ("""
 def on_bar(ctx, bar):
     x = [0] * 10**10
 """, False, "Memory bomb detection"),
     ]
-    
+
     print("=" * 80)
     print("AST Security Validator Tests")
     print("=" * 80)
-    
+
     for code, expected_valid, description in test_codes:
         print(f"\nTest: {description}")
         is_valid, errors = validate_strategy_ast(code)

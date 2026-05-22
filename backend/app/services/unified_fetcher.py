@@ -61,7 +61,7 @@ class FetchResult:
     latency_ms: float
     from_cache: bool
     error: Optional[str] = None
-    
+
     @property
     def is_success(self) -> bool:
         """是否成功获取数据"""
@@ -80,12 +80,12 @@ class UnifiedFetcher:
     - 降级切换: 主数据源失败时自动切换到降级数据源
     - 延迟统计: 记录每次请求的延迟，用于监控
     """
-    
+
     def __init__(self):
         self.cache = get_cache()
         self.metrics = get_cache_metrics()
         self.breakers: Dict[str, CircuitBreaker] = {}
-    
+
     def get_breaker(self, source: DataSource) -> CircuitBreaker:
         """
         获取或创建数据源熔断器
@@ -105,7 +105,7 @@ class UnifiedFetcher:
                 )
             )
         return self.breakers[source.value]
-    
+
     async def fetch(
         self,
         key: str,
@@ -134,7 +134,7 @@ class UnifiedFetcher:
             FetchResult 对象
         """
         start_time = time.time()
-        
+
         # 1. 尝试缓存
         cached = self.cache.get(key)
         if cached is not None:
@@ -146,23 +146,23 @@ class UnifiedFetcher:
                 latency_ms=latency_ms,
                 from_cache=True
             )
-        
+
         self.metrics.record_miss()
-        
+
         # 2. 尝试主数据源（带熔断器）
         breaker = self.get_breaker(source)
-        
+
         try:
             if breaker.is_available():
                 with breaker:
                     data = await self._execute_fetch(fetch_fn)
-                    
+
                     # 写入缓存
                     self.cache.set(key, data, ttl)
-                    
+
                     latency_ms = (time.time() - start_time) * 1000
                     self.metrics.record_latency(source.value, latency_ms / 1000)
-                    
+
                     return FetchResult(
                         data=data,
                         source=source,
@@ -174,25 +174,25 @@ class UnifiedFetcher:
         except Exception as e:
             logger.error(f"[UnifiedFetcher] 主数据源失败: {source.value}, {e}", exc_info=True)
             self.metrics.record_error(source.value)
-        
+
         # 3. 尝试降级数据源
         if fallback_fn is not None:
             fallback_source = self._get_fallback_source(source)
             fallback_breaker = self.get_breaker(fallback_source)
-            
+
             try:
                 if fallback_breaker.is_available():
                     with fallback_breaker:
                         data = await self._execute_fetch(fallback_fn)
-                        
+
                         # 写入缓存
                         self.cache.set(key, data, ttl)
-                        
+
                         latency_ms = (time.time() - start_time) * 1000
                         self.metrics.record_latency(fallback_source.value, latency_ms / 1000)
-                        
+
                         logger.info(f"[UnifiedFetcher] 降级数据源成功: {fallback_source.value}")
-                        
+
                         return FetchResult(
                             data=data,
                             source=fallback_source,
@@ -204,7 +204,7 @@ class UnifiedFetcher:
             except Exception as e:
                 logger.error(f"[UnifiedFetcher] 降级数据源失败: {fallback_source.value}, {e}", exc_info=True)
                 self.metrics.record_error(fallback_source.value)
-        
+
         # 4. 所有数据源都失败
         latency_ms = (time.time() - start_time) * 1000
         return FetchResult(
@@ -214,9 +214,9 @@ class UnifiedFetcher:
             from_cache=False,
             error="所有数据源均不可用"
         )
-    
+
     async def _execute_fetch(
-        self, 
+        self,
         fetch_fn: Union[Callable[[], Any], Callable[[], Awaitable[Any]]]
     ) -> Any:
         """
@@ -234,7 +234,7 @@ class UnifiedFetcher:
             # 同步函数在线程池中执行
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, fetch_fn)
-    
+
     def _get_fallback_source(self, primary: DataSource) -> DataSource:
         """
         获取降级数据源
@@ -253,7 +253,7 @@ class UnifiedFetcher:
             DataSource.QLIB: DataSource.AKSHARE,
         }
         return fallback_map.get(primary, DataSource.CUSTOM)
-    
+
     def fetch_sync(
         self,
         key: str,
@@ -276,7 +276,7 @@ class UnifiedFetcher:
             FetchResult 对象
         """
         start_time = time.time()
-        
+
         # 1. 尝试缓存
         cached = self.cache.get(key)
         if cached is not None:
@@ -288,23 +288,23 @@ class UnifiedFetcher:
                 latency_ms=latency_ms,
                 from_cache=True
             )
-        
+
         self.metrics.record_miss()
-        
+
         # 2. 尝试主数据源（带熔断器）
         breaker = self.get_breaker(source)
-        
+
         try:
             if breaker.is_available():
                 with breaker:
                     data = fetch_fn()
-                    
+
                     # 写入缓存
                     self.cache.set(key, data, ttl)
-                    
+
                     latency_ms = (time.time() - start_time) * 1000
                     self.metrics.record_latency(source.value, latency_ms / 1000)
-                    
+
                     return FetchResult(
                         data=data,
                         source=source,
@@ -316,25 +316,25 @@ class UnifiedFetcher:
         except Exception as e:
             logger.error(f"[UnifiedFetcher] 主数据源失败: {source.value}, {e}", exc_info=True)
             self.metrics.record_error(source.value)
-        
+
         # 3. 尝试降级数据源
         if fallback_fn is not None:
             fallback_source = self._get_fallback_source(source)
             fallback_breaker = self.get_breaker(fallback_source)
-            
+
             try:
                 if fallback_breaker.is_available():
                     with fallback_breaker:
                         data = fallback_fn()
-                        
+
                         # 写入缓存
                         self.cache.set(key, data, ttl)
-                        
+
                         latency_ms = (time.time() - start_time) * 1000
                         self.metrics.record_latency(fallback_source.value, latency_ms / 1000)
-                        
+
                         logger.info(f"[UnifiedFetcher] 降级数据源成功: {fallback_source.value}")
-                        
+
                         return FetchResult(
                             data=data,
                             source=fallback_source,
@@ -346,7 +346,7 @@ class UnifiedFetcher:
             except Exception as e:
                 logger.error(f"[UnifiedFetcher] 降级数据源失败: {fallback_source.value}, {e}", exc_info=True)
                 self.metrics.record_error(fallback_source.value)
-        
+
         # 4. 所有数据源都失败
         latency_ms = (time.time() - start_time) * 1000
         return FetchResult(
@@ -356,7 +356,7 @@ class UnifiedFetcher:
             from_cache=False,
             error="所有数据源均不可用"
         )
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """
         获取统计信息
@@ -372,7 +372,7 @@ class UnifiedFetcher:
                 "sources": {}
             }
         }
-        
+
         for name, breaker in self.breakers.items():
             stats["breakers"][name] = breaker.get_stats()
             stats["metrics"]["sources"][name] = {
@@ -380,9 +380,9 @@ class UnifiedFetcher:
                 "p95_latency": self.metrics.get_p95_latency(name),
                 "error_rate": self.metrics.get_error_rate(name)
             }
-        
+
         return stats
-    
+
     def reset_breaker(self, source: DataSource) -> bool:
         """
         重置指定数据源的熔断器
@@ -398,7 +398,7 @@ class UnifiedFetcher:
             logger.info(f"[UnifiedFetcher] 熔断器已重置: {source.value}")
             return True
         return False
-    
+
     def reset_all_breakers(self) -> int:
         """
         重置所有熔断器

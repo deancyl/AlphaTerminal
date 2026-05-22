@@ -27,12 +27,12 @@ def _generate_csv(data: List[Dict[str, Any]], filename: str) -> StreamingRespons
     """生成CSV响应"""
     if not data:
         raise HTTPException(status_code=404, detail="No data to export")
-    
+
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=data[0].keys())
     writer.writeheader()
     writer.writerows(data)
-    
+
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -45,14 +45,14 @@ def _generate_excel(data: List[Dict[str, Any]], filename: str) -> StreamingRespo
     """生成Excel响应"""
     if not data:
         raise HTTPException(status_code=404, detail="No data to export")
-    
+
     import pandas as pd
     df = pd.DataFrame(data)
     output = io.BytesIO()
-    
+
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Data')
-    
+
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -65,10 +65,10 @@ def _generate_json(data: List[Dict[str, Any]], filename: str) -> StreamingRespon
     """生成JSON响应"""
     if not data:
         raise HTTPException(status_code=404, detail="No data to export")
-    
+
     output = io.StringIO()
     json.dump(data, output, ensure_ascii=False, indent=2, default=str)
-    
+
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -92,17 +92,17 @@ async def export_portfolio(
     - **include_history**: 是否包含历史净值快照
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_export():
         with get_conn() as conn:
             portfolio = conn.execute(
                 "SELECT * FROM portfolios WHERE id = ?",
                 (portfolio_id,)
             ).fetchone()
-            
+
             if not portfolio:
                 raise HTTPException(status_code=404, detail="Portfolio not found")
-            
+
             positions = conn.execute(
                 """SELECT 
                     p.symbol,
@@ -117,7 +117,7 @@ async def export_portfolio(
                 ORDER BY p.shares * p.avg_cost DESC""",
                 (portfolio_id,)
             ).fetchall()
-            
+
             data = []
             for pos in positions:
                 shares = pos[1] or 0
@@ -127,7 +127,7 @@ async def export_portfolio(
                 cost_basis = shares * avg_cost
                 unrealized_pnl = market_value - cost_basis if shares > 0 else 0
                 unrealized_pnl_pct = (unrealized_pnl / cost_basis) if cost_basis > 0 else 0
-                
+
                 data.append({
                     "组合ID": portfolio_id,
                     "组合名称": portfolio[1],
@@ -141,7 +141,7 @@ async def export_portfolio(
                     "盈亏比例(%)": round(unrealized_pnl_pct * 100, 2),
                     "导出时间": datetime.now().isoformat()
                 })
-            
+
             if data:
                 total_value = sum(item["市值"] for item in data)
                 total_pnl = sum(item["浮动盈亏"] for item in data)
@@ -159,21 +159,21 @@ async def export_portfolio(
                     "盈亏比例(%)": round(total_pnl / total_cost * 100, 2) if total_cost > 0 else 0,
                     "导出时间": datetime.now().isoformat()
                 })
-            
+
             return data, portfolio
-    
+
     try:
         data, portfolio = await loop.run_in_executor(_executor, _sync_export)
-        
+
         filename = f"portfolio_{portfolio_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
         if format == "csv":
             return _generate_csv(data, filename)
         elif format == "excel":
             return _generate_excel(data, filename)
         else:
             return _generate_json(data, filename)
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -199,13 +199,13 @@ async def export_backtest_result(
         symbol = request.get("symbol", "")
         start_date = request.get("start_date", "")
         end_date = request.get("end_date", "")
-        
+
         if not result:
             raise HTTPException(status_code=400, detail="No backtest result data provided")
-        
+
         # 构建数据
         data = []
-        
+
         # 添加回测概览
         data.append({
             "类型": "回测概览",
@@ -223,7 +223,7 @@ async def export_backtest_result(
             "基准收益率(%)": round(result.get("benchmark_return_pct", 0) * 100, 2) if result.get("benchmark_return_pct") else 0,
             "导出时间": datetime.now().isoformat()
         })
-        
+
         # 添加交易记录
         trades = result.get("trades", [])
         if trades:
@@ -240,16 +240,16 @@ async def export_backtest_result(
                     "盈亏": trade.get("pnl", 0) if trade.get("pnl") else 0,
                     "导出时间": datetime.now().isoformat()
                 })
-        
+
         filename = f"backtest_{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
         if format == "csv":
             return _generate_csv(data, filename)
         elif format == "excel":
             return _generate_excel(data, filename)
         else:
             return _generate_json(data, filename)
-            
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
@@ -269,17 +269,17 @@ async def export_backtest(
     - **include_trades**: 是否包含详细交易记录
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_export():
         with get_conn() as conn:
             backtest = conn.execute(
                 "SELECT * FROM backtest_results WHERE id = ?",
                 (backtest_id,)
             ).fetchone()
-            
+
             if not backtest:
                 raise HTTPException(status_code=404, detail="Backtest not found")
-            
+
             trades = conn.execute(
                 """SELECT 
                     date,
@@ -293,9 +293,9 @@ async def export_backtest(
                 ORDER BY date""",
                 (backtest_id,)
             ).fetchall()
-            
+
             data = []
-            
+
             data.append({
                 "类型": "回测概览",
                 "回测ID": backtest_id,
@@ -312,7 +312,7 @@ async def export_backtest(
                 "交易次数": backtest[12],
                 "导出时间": datetime.now().isoformat()
             })
-            
+
             if include_trades and trades:
                 for trade in trades:
                     data.append({
@@ -327,21 +327,21 @@ async def export_backtest(
                         "盈亏": trade[5] if trade[5] else 0,
                         "导出时间": datetime.now().isoformat()
                     })
-            
+
             return data, backtest
-    
+
     try:
         data, backtest = await loop.run_in_executor(_executor, _sync_export)
-        
+
         filename = f"backtest_{backtest_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
         if format == "csv":
             return _generate_csv(data, filename)
         elif format == "excel":
             return _generate_excel(data, filename)
         else:
             return _generate_json(data, filename)
-                
+
     except HTTPException:
         raise
     except Exception as e:
@@ -365,19 +365,19 @@ async def export_screener(
         # 这里应该调用筛选逻辑，暂时使用模拟数据
         # 实际实现时需要从market_all_stocks表查询
         data = []
-        
+
         # 示例：根据筛选条件查询
         # 实际实现时需要根据filters构建SQL查询
-        
+
         filename = f"screener_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
         if format == "csv":
             return _generate_csv(data, filename)
         elif format == "excel":
             return _generate_excel(data, filename)
         else:
             return _generate_json(data, filename)
-            
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
@@ -402,7 +402,7 @@ async def export_market_history(
     - **end_date**: 结束日期
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_export():
         with get_conn() as conn:
             table_map = {
@@ -411,7 +411,7 @@ async def export_market_history(
                 "monthly": "market_data_monthly"
             }
             table = table_map.get(period, "market_data_daily")
-            
+
             query = f"""SELECT 
                 date,
                 open,
@@ -422,24 +422,24 @@ async def export_market_history(
                 amount
             FROM {table}
             WHERE symbol = ?"""
-            
+
             params = [symbol]
-            
+
             if start_date:
                 query += " AND date >= ?"
                 params.append(start_date)
-            
+
             if end_date:
                 query += " AND date <= ?"
                 params.append(end_date)
-            
+
             query += " ORDER BY date"
-            
+
             rows = conn.execute(query, params).fetchall()
-            
+
             if not rows:
                 raise HTTPException(status_code=404, detail="No historical data found")
-            
+
             data = []
             for row in rows:
                 data.append({
@@ -453,21 +453,21 @@ async def export_market_history(
                     "成交额": row[6],
                     "导出时间": datetime.now().isoformat()
                 })
-            
+
             return data
-    
+
     try:
         data = await loop.run_in_executor(_executor, _sync_export)
-        
+
         filename = f"history_{symbol}_{period}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
         if format == "csv":
             return _generate_csv(data, filename)
         elif format == "excel":
             return _generate_excel(data, filename)
         else:
             return _generate_json(data, filename)
-                
+
     except HTTPException:
         raise
     except Exception as e:

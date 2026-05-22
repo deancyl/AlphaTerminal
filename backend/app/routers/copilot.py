@@ -18,7 +18,7 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import AsyncGenerator, Optional, List, Dict, Any
+from typing import AsyncGenerator, Optional, List
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
@@ -68,7 +68,7 @@ def _get_llm_config(provider: str, model_id: Optional[str] = None) -> dict:
     """
     model_svc = get_model_config_service()
     model = model_svc.get_model(provider, model_id)
-    
+
     if model and model.api_key:
         return {
             "api_key": model.api_key,
@@ -76,7 +76,7 @@ def _get_llm_config(provider: str, model_id: Optional[str] = None) -> dict:
             "model": model.model_id,
             "max_concurrent": model.max_concurrent,
         }
-    
+
     defaults = {
         "deepseek": {"api_key": os.getenv("DEEPSEEK_API_KEY",""), "base_url": os.getenv("DEEPSEEK_API_BASE","https://api.deepseek.com"), "model": os.getenv("DEEPSEEK_MODEL","deepseek-chat")},
         "qianwen":  {"api_key": os.getenv("QIANWEN_API_KEY",""),  "base_url": os.getenv("QIANWEN_API_BASE","https://dashscope.aliyuncs.com/compatible-mode/v1"), "model": os.getenv("QIANWEN_MODEL","qwen-plus")},
@@ -176,7 +176,7 @@ def _format_valuation(valuation_data: dict) -> List[str]:
     ret_ytd = valuation_data.get("returns_ytd")
     pe_pct = valuation_data.get("pe_percentile")
     pb_pct = valuation_data.get("pb_percentile")
-    
+
     if pe_ttm is not None:
         pe_str = f"{pe_ttm:.2f}" + (f"（历史分位：{pe_pct:.1f}%）" if pe_pct else "")
         parts.append(f"【市场估值】当前 PE_TTM：{pe_str}")
@@ -196,14 +196,14 @@ def _format_portfolio(portfolio_data: dict) -> List[str]:
     total_value = portfolio_data.get("total_value", 0)
     total_pnl = portfolio_data.get("total_pnl", 0)
     positions = portfolio_data.get("positions", [])
-    
+
     parts.append(f"【投资组合】{portfolio_name}")
     parts.append(f"  总市值：¥{total_value:,.2f}")
     if total_pnl >= 0:
         parts.append(f"  总盈亏：+¥{total_pnl:,.2f}（盈利）")
     else:
         parts.append(f"  总盈亏：-¥{abs(total_pnl):,.2f}（亏损）")
-    
+
     if positions:
         parts.append(f"  持仓明细（共{len(positions)}只）：")
         for pos in positions[:10]:
@@ -225,36 +225,36 @@ def _format_historical(historical_data: dict) -> List[str]:
     data_points = historical_data.get("data", [])
     if not data_points or len(data_points) < 5:
         return parts
-    
+
     symbol_hist = historical_data.get("symbol", "")
     period = historical_data.get("period", "daily")
     parts.append(f"【历史行情】{symbol_hist} ({period})")
-    
+
     latest = data_points[-1]
     latest_close = latest.get("close", 0)
-    
+
     # MA5
     ma5 = sum(d.get("close", 0) for d in data_points[-5:]) / 5
     parts.append(f"  MA5: ¥{ma5:.2f} (当前{'高于' if latest_close > ma5 else '低于'}MA5)")
-    
+
     # MA20
     if len(data_points) >= 20:
         ma20 = sum(d.get("close", 0) for d in data_points[-20:]) / 20
         parts.append(f"  MA20: ¥{ma20:.2f} (当前{'高于' if latest_close > ma20 else '低于'}MA20)")
-    
+
     # 最新涨跌
     prev_close = data_points[-2].get("close", 0)
     if prev_close > 0:
         change_pct = (latest_close - prev_close) / prev_close * 100
         arrow = "▲" if change_pct >= 0 else "▼"
         parts.append(f"  最新涨跌: {arrow}{abs(change_pct):.2f}%")
-    
+
     # 近期最高最低价
     recent_high = max(d.get("high", 0) for d in data_points[-20:])
     recent_low = min(d.get("low", float('inf')) for d in data_points[-20:])
     if recent_low < float('inf'):
         parts.append(f"  20日最高: ¥{recent_high:.2f}, 最低: ¥{recent_low:.2f}")
-    
+
     return parts
 
 
@@ -269,32 +269,32 @@ def _format_news(news_items: list) -> List[str]:
     return parts
 
 
-def _build_context_block(symbol: Optional[str], price_info: dict, news_items: list, valuation_data: dict, 
+def _build_context_block(symbol: Optional[str], price_info: dict, news_items: list, valuation_data: dict,
                          portfolio_data: Optional[dict] = None, historical_data: Optional[dict] = None) -> str:
     """构建注入给 LLM 的上下文数据块"""
     parts = []
-    
+
     if symbol:
         parts.append(f"【当前标的】{symbol}")
-    
+
     if price_info:
         parts.extend(_format_price_info(price_info, symbol))
-    
+
     if valuation_data:
         parts.extend(_format_valuation(valuation_data))
-    
+
     if portfolio_data:
         parts.extend(_format_portfolio(portfolio_data))
-    
+
     if historical_data:
         parts.extend(_format_historical(historical_data))
-    
+
     if news_items:
         parts.extend(_format_news(news_items))
-    
+
     if not parts:
         return ""
-    
+
     return "\n\n" + "\n".join(parts)
 
 
@@ -769,9 +769,9 @@ async def _fetch_price_context(symbol: Optional[str]) -> dict:
     """查询标的的实时价格信息"""
     if not symbol:
         return {}
-    
+
     loop = asyncio.get_event_loop()
-    
+
     def _sync_query():
         try:
             from app.db.database import _get_conn
@@ -786,14 +786,14 @@ async def _fetch_price_context(symbol: Optional[str]) -> dict:
         except Exception as e:
             logger.warning(f"[Copilot] price lookup error: {e}", exc_info=True)
         return {}
-    
+
     return await loop.run_in_executor(_executor, _sync_query)
 
 
 async def _fetch_latest_news(limit: int = 5) -> list:
     """获取最新快讯"""
     loop = asyncio.get_event_loop()
-    
+
     def _sync_query():
         try:
             from app.db.database import _get_conn
@@ -807,7 +807,7 @@ async def _fetch_latest_news(limit: int = 5) -> list:
         except Exception as e:
             logger.warning(f"[Copilot] news lookup error: {e}", exc_info=True)
         return []
-    
+
     return await loop.run_in_executor(_executor, _sync_query)
 
 
@@ -850,23 +850,23 @@ async def _fetch_portfolio_data(portfolio_id: Optional[int]) -> dict:
     """获取投资组合数据（持仓、盈亏等）"""
     if not portfolio_id:
         return {}
-    
+
     loop = asyncio.get_event_loop()
-    
+
     def _sync_query():
         try:
             from app.db.database import _get_conn
             conn = _get_conn()
-            
+
             portfolio = conn.execute(
                 "SELECT id, name FROM portfolios WHERE id = ?",
                 (portfolio_id,)
             ).fetchone()
-            
+
             if not portfolio:
                 conn.close()
                 return {}
-            
+
             positions = conn.execute(
                 """SELECT 
                     p.symbol,
@@ -879,23 +879,23 @@ async def _fetch_portfolio_data(portfolio_id: Optional[int]) -> dict:
                 WHERE p.portfolio_id = ? AND p.shares > 0""",
                 (portfolio_id,)
             ).fetchall()
-            
+
             positions_list = []
             total_value = 0
             total_cost = 0
-            
+
             for pos in positions:
                 symbol = pos[0]
                 shares = pos[1] or 0
                 avg_cost = pos[2] or 0
                 name = pos[3] or ""
                 current_price = pos[4] or 0
-                
+
                 market_value = shares * current_price
                 cost_basis = shares * avg_cost
                 unrealized_pnl = market_value - cost_basis
                 unrealized_pnl_pct = (unrealized_pnl / cost_basis * 100) if cost_basis > 0 else 0
-                
+
                 positions_list.append({
                     "symbol": symbol,
                     "name": name,
@@ -906,14 +906,14 @@ async def _fetch_portfolio_data(portfolio_id: Optional[int]) -> dict:
                     "unrealized_pnl": unrealized_pnl,
                     "unrealized_pnl_pct": unrealized_pnl_pct
                 })
-                
+
                 total_value += market_value
                 total_cost += cost_basis
-            
+
             total_pnl = total_value - total_cost
-            
+
             conn.close()
-            
+
             return {
                 "id": portfolio_id,
                 "name": portfolio[1],
@@ -926,7 +926,7 @@ async def _fetch_portfolio_data(portfolio_id: Optional[int]) -> dict:
         except Exception as e:
             logger.warning(f"[Copilot] portfolio lookup error: {e}", exc_info=True)
         return {}
-    
+
     return await loop.run_in_executor(_executor, _sync_query)
 
 
@@ -934,21 +934,21 @@ async def _fetch_historical_data(symbol: str, period: str = "daily", limit: int 
     """获取历史K线数据"""
     if not symbol:
         return {}
-    
+
     loop = asyncio.get_event_loop()
-    
+
     def _sync_query():
         try:
             from app.db.database import _get_conn
             conn = _get_conn()
-            
+
             table_map = {
                 "daily": "market_data_daily",
-                "weekly": "market_data_weekly", 
+                "weekly": "market_data_weekly",
                 "monthly": "market_data_monthly"
             }
             table = table_map.get(period, "market_data_daily")
-            
+
             rows = conn.execute(
                 f"""SELECT date, open, high, low, close, volume
                 FROM {table}
@@ -957,12 +957,12 @@ async def _fetch_historical_data(symbol: str, period: str = "daily", limit: int 
                 LIMIT ?""",
                 (symbol, limit)
             ).fetchall()
-            
+
             conn.close()
-            
+
             if not rows:
                 return {}
-            
+
             data = []
             for row in reversed(rows):
                 data.append({
@@ -973,7 +973,7 @@ async def _fetch_historical_data(symbol: str, period: str = "daily", limit: int 
                     "close": row[4],
                     "volume": row[5]
                 })
-            
+
             return {
                 "symbol": symbol,
                 "period": period,
@@ -983,7 +983,7 @@ async def _fetch_historical_data(symbol: str, period: str = "daily", limit: int 
         except Exception as e:
             logger.warning(f"[Copilot] historical data lookup error: {e}", exc_info=True)
         return {}
-    
+
     return await loop.run_in_executor(_executor, _sync_query)
 
 
@@ -993,7 +993,7 @@ async def _fetch_historical_data(symbol: str, period: str = "daily", limit: int 
 async def _init_conversations_table():
     """确保 conversations 表存在"""
     loop = asyncio.get_event_loop()
-    
+
     def _sync_init():
         try:
             from app.db.database import _get_conn
@@ -1011,13 +1011,13 @@ async def _init_conversations_table():
             conn.close()
         except Exception as e:
             logger.warning(f"[Copilot] conversations table init error: {e}", exc_info=True)
-    
+
     await loop.run_in_executor(_executor, _sync_init)
 
 async def _save_message(session_id: str, role: str, content: str):
     """保存单条消息到历史"""
     loop = asyncio.get_event_loop()
-    
+
     def _sync_save():
         try:
             from app.db.database import _get_conn
@@ -1032,7 +1032,7 @@ async def _save_message(session_id: str, role: str, content: str):
             conn.close()
         except Exception as e:
             logger.warning(f"[Copilot] save message error: {e}", exc_info=True)
-    
+
     await loop.run_in_executor(_executor, _sync_save)
 
 async def _load_conversation(session_id: str, limit: int = 20, context_length: int = 4096) -> List[dict]:
@@ -1047,12 +1047,12 @@ async def _load_conversation(session_id: str, limit: int = 20, context_length: i
         消息列表，token 总数不超过 context_length
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_load():
         try:
             from app.db.database import _get_conn
             from app.utils.token_counter import count_messages_tokens
-            
+
             conn = _get_conn()
             # 加载更多消息用于滑动窗口裁剪
             rows = conn.execute(
@@ -1060,10 +1060,10 @@ async def _load_conversation(session_id: str, limit: int = 20, context_length: i
                 (session_id, limit * 2)  # 加载 2 倍数量用于 token 裁剪
             ).fetchall()
             conn.close()
-            
+
             # 反转顺序（从旧到新）
             messages = [{"role": r[0], "content": r[1]} for r in reversed(rows)]
-            
+
             # Token 滑动窗口：从最新消息开始保留
             if messages:
                 total_tokens = count_messages_tokens(messages)
@@ -1072,12 +1072,12 @@ async def _load_conversation(session_id: str, limit: int = 20, context_length: i
                     while messages and count_messages_tokens(messages) > context_length:
                         messages.pop(0)  # 移除最旧的消息
                     logger.info(f"[Copilot] Sliding window: {len(messages)} messages, {count_messages_tokens(messages)} tokens")
-            
+
             return messages
         except Exception as e:
             logger.warning(f"[Copilot] load conversation error: {e}", exc_info=True)
         return []
-    
+
     return await loop.run_in_executor(_executor, _sync_load)
 
 # SSE 流式对话端点
@@ -1123,7 +1123,7 @@ async def copilot_chat(request: Request):
 
     provider = provider_override if provider_override else _detect_provider()
     cfg = _get_llm_config(provider, model_override)
-    
+
     if provider != "mock" and not cfg.get("api_key"):
         logger.warning(f"[Copilot] provider={provider} API Key 为空，降级为 Mock")
         provider = "mock"
@@ -1136,7 +1136,7 @@ async def copilot_chat(request: Request):
         user_id=user_id,
         config_version=1
     )
-    
+
     bound_model = session_mgr.get_bound_model(session_id, provider)
     if bound_model and not model_override:
         model_id = bound_model
@@ -1153,7 +1153,7 @@ async def copilot_chat(request: Request):
         )
 
     frontend_context = (body.get("context") or "").strip()
-    
+
     # Use ContextAssembler for intelligent context injection
     context_assembler = get_context_assembler()
     try:
@@ -1175,25 +1175,25 @@ async def copilot_chat(request: Request):
         price_info = _fetch_price_context(symbol)
         news_items = _fetch_latest_news(limit=5)
         valuation_data = _fetch_valuation_data(symbol)
-        
+
         portfolio_data = None
         historical_data = None
-        
+
         portfolio_id = body.get("portfolio_id")
         if portfolio_id:
             portfolio_data = _fetch_portfolio_data(int(portfolio_id))
-        
+
         hist_symbol = body.get("hist_symbol") or symbol
         hist_period = body.get("hist_period", "daily")
         hist_limit = body.get("hist_limit", 60)
         if hist_symbol and body.get("include_historical"):
             historical_data = _fetch_historical_data(hist_symbol, hist_period, hist_limit)
-        
+
         context_block = _build_context_block(
-            symbol, price_info, news_items, valuation_data, 
+            symbol, price_info, news_items, valuation_data,
             portfolio_data, historical_data
         )
-    
+
     if frontend_context:
         context_block = f"{frontend_context}\n{context_block}"
 
@@ -1222,7 +1222,7 @@ async def copilot_chat(request: Request):
     )
 
     start_time = time.time()
-    
+
     tracking_svc = get_token_tracking_service()
     prompt_tokens = sum(count_tokens(m.get("content", ""), model_id) for m in messages)
     completion_tokens = 0
@@ -1238,7 +1238,7 @@ async def copilot_chat(request: Request):
                     logger.warning(f"[Copilot] Stream timeout after {max_duration_seconds}s")
                     yield _sse({"error": "请求超时，请稍后重试", "done": True})
                     return
-                
+
                 data = chunk.replace("data: ", "").strip()
                 if data:
                     try:
@@ -1250,9 +1250,9 @@ async def copilot_chat(request: Request):
                 yield chunk
         finally:
             limiter.release(provider, model_id)
-            
+
             duration_ms = int((time.time() - start_time) * 1000)
-            
+
             record = tracking_svc.track_usage(
                 model_id=model_id,
                 provider=provider,
@@ -1262,13 +1262,13 @@ async def copilot_chat(request: Request):
                 user_id=user_id,
                 duration_ms=duration_ms
             )
-            
+
             session_mgr.update_session_usage(
                 session_id,
                 tokens=record.total_tokens,
                 cost_usd=record.cost_usd
             )
-            
+
             logger.debug(
                 f"[Copilot] Tracked: {record.total_tokens} tokens, ${record.cost_usd:.6f}, "
                 f"{duration_ms}ms"
@@ -1296,13 +1296,13 @@ async def analyze_walkforward(request: Request):
     """
     body = await request.json()
     wfa_result = body.get("result", {})
-    
+
     if not wfa_result:
         return StreamingResponse(
             iter([_sse({"error": "Missing result data"})]),
             media_type="text/event-stream",
         )
-    
+
     context = f"""
 【Walk-Forward 分析结果】
 股票: {wfa_result.get('symbol', 'N/A')}
@@ -1322,7 +1322,7 @@ async def analyze_walkforward(request: Request):
 【系统建议】
 {wfa_result.get('recommendation', 'N/A')}
 """
-    
+
     prompt = f"""请分析以上Walk-Forward分析结果，提供：
 
 1. **策略表现解读**（2-3句话，用通俗语言解释）
@@ -1334,13 +1334,13 @@ async def analyze_walkforward(request: Request):
 
 {context}
 """
-    
+
     provider = _detect_provider()
     messages = [
         {"role": "system", "content": "你是一位专业的量化投资分析师，擅长用通俗语言解释复杂的策略分析结果。"},
         {"role": "user", "content": prompt}
     ]
-    
+
     return StreamingResponse(
         _llm_stream(provider, messages),
         media_type="text/event-stream",
@@ -1384,8 +1384,7 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
     Returns:
         JSON response with chart data
     """
-    import re
-    
+
     days = 30
     if period:
         match = re.match(r"(\d+)([dy])", period.lower())
@@ -1393,16 +1392,16 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
             num = int(match.group(1))
             unit = match.group(2)
             days = num * 365 if unit == "y" else num
-    
+
     loop = asyncio.get_event_loop()
-    
+
     def _fetch_kline_data():
         try:
             from app.db.database import _get_conn
             conn = _get_conn()
-            
+
             sym_clean = symbol.lower().replace("sh", "").replace("sz", "")
-            
+
             rows = conn.execute(
                 """SELECT date, open, high, low, close, volume
                 FROM market_data_daily
@@ -1411,9 +1410,9 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
                 LIMIT ?""",
                 (sym_clean, f"sh{sym_clean}", f"sz{sym_clean}", days)
             ).fetchall()
-            
+
             conn.close()
-            
+
             data = []
             for row in reversed(rows):
                 data.append({
@@ -1425,19 +1424,19 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
                     "volume": int(row[5] or 0),
                     "value": float(row[4] or 0)
                 })
-            
+
             return data
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.warning(f"[HTTP] error: {e}", exc_info=True)
             return []
-    
+
     def _fetch_financial_data():
         try:
             from app.db.database import _get_conn
             conn = _get_conn()
-            
+
             sym_clean = symbol.lower().replace("sh", "").replace("sz", "")
-            
+
             rows = conn.execute(
                 """SELECT date, pe_ttm, pb, turnover_rate
                 FROM market_quote_detail
@@ -1446,9 +1445,9 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
                 LIMIT ?""",
                 (sym_clean, f"sh{sym_clean}", f"sz{sym_clean}", days)
             ).fetchall()
-            
+
             conn.close()
-            
+
             data = []
             for row in reversed(rows):
                 if row[1]:
@@ -1457,12 +1456,12 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
                         "value": float(row[1]),
                         "label": "PE_TTM"
                     })
-            
+
             return data
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.warning(f"[HTTP] error: {e}", exc_info=True)
             return []
-    
+
     try:
         if data_type == "kline":
             data = await loop.run_in_executor(_executor, _fetch_kline_data)
@@ -1472,7 +1471,7 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
             data = await loop.run_in_executor(_executor, _fetch_kline_data)
         else:
             data = await loop.run_in_executor(_executor, _fetch_kline_data)
-        
+
         return {
             "success": True,
             "data": data,

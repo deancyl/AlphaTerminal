@@ -32,7 +32,7 @@ class DegradationLevel:
 
 class DegradationChain:
     """降级链管理器"""
-    
+
     # 各数据类型的降级链配置
     CHAINS: Dict[DataType, List[str]] = {
         DataType.KLINE: ["akshare", "eastmoney", "sina", "cache"],
@@ -42,44 +42,44 @@ class DegradationChain:
         DataType.MACRO: ["akshare", "eastmoney", "cache"],
         DataType.SECTOR: ["eastmoney", "sina", "cache"],
     }
-    
+
     # Fallback数据标记
     FALLBACK_SOURCES = {"static", "cache"}
-    
+
     def __init__(self):
         self._current_level: Dict[DataType, int] = {}
-    
+
     def get_sources(self, data_type: DataType) -> List[str]:
         """获取降级链"""
         return self.CHAINS.get(data_type, [])
-    
+
     def get_current_source(self, data_type: DataType) -> str:
         """获取当前使用的数据源"""
         level = self._current_level.get(data_type, 0)
         sources = self.get_sources(data_type)
         return sources[level] if level < len(sources) else sources[-1]
-    
+
     def degrade(self, data_type: DataType) -> Optional[str]:
         """降级到下一级"""
         sources = self.get_sources(data_type)
         current = self._current_level.get(data_type, 0)
-        
+
         if current < len(sources) - 1:
             self._current_level[data_type] = current + 1
             new_source = sources[current + 1]
             logger.warning(f"[DegradationChain] {data_type.value} 降级: {sources[current]} → {new_source}")
             return new_source
         return None
-    
+
     def recover(self, data_type: DataType):
         """恢复到主数据源"""
         self._current_level[data_type] = 0
         logger.info(f"[DegradationChain] {data_type.value} 恢复到主数据源")
-    
+
     def is_fallback(self, source: str) -> bool:
         """判断是否为fallback数据"""
         return source in self.FALLBACK_SOURCES
-    
+
     def get_status(self) -> Dict[str, Any]:
         """获取当前状态"""
         return {

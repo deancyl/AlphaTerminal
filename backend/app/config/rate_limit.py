@@ -51,15 +51,15 @@ class RateLimitConfig:
     global_period: int = 60
     enabled: bool = True
     storage_uri: Optional[str] = None
-    
+
     def __post_init__(self):
         if self.enabled is None:
             self.enabled = os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
-        
+
         env_limit = os.environ.get("RATE_LIMIT_GLOBAL")
         if env_limit:
             self.global_limit = int(env_limit)
-        
+
         env_period = os.environ.get("RATE_LIMIT_PERIOD")
         if env_period:
             self.global_period = int(env_period)

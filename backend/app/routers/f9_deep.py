@@ -9,12 +9,11 @@ Timeout Behavior:
 """
 import logging
 import asyncio
-import time
 import httpx
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
-from typing import Any, Dict, Optional
+from fastapi import APIRouter
+from typing import Any, Optional
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.input_validation import validate_stock_symbol, validate_pagination
 from app.services.circuit_breaker import CircuitBreakerOpen
@@ -45,18 +44,18 @@ def normalize_f9_symbol(symbol: str) -> str:
     """
     if not symbol:
         return symbol
-    
+
     # 转小写用于匹配
     symbol_lower = symbol.lower()
-    
+
     # 常见前缀列表
     prefixes = ['sh', 'sz', 'hk', 'us']
-    
+
     for prefix in prefixes:
         if symbol_lower.startswith(prefix):
             # 返回去除前缀后的原始大小写（保留数字部分）
             return symbol[len(prefix):]
-    
+
     # 无前缀，直接返回
     return symbol
 
@@ -118,16 +117,16 @@ async def get_shareholder_data(symbol: str):
     if cached:
         logger.info(f"[shareholder] Cache hit for {symbol}")
         return success_response(cached)
-    
+
     if not check_akshare_circuit():
         return error_response("数据源暂时不可用，请稍后重试", code=503)
-    
+
     try:
         import akshare as ak
         from datetime import datetime, timedelta
-        
+
         loop = asyncio.get_event_loop()
-        
+
         # 1. 获取流通股东 Top 10
         async def fetch_circulate_holders():
             def _fetch():
@@ -151,7 +150,7 @@ async def get_shareholder_data(symbol: str):
                     logger.warning(f"[HTTP] circulate holders: {e}", exc_info=True)
                     return None
             return await loop.run_in_executor(_executor, _fetch)
-        
+
         # 2. 获取股本变动记录（最近365天）
         async def fetch_share_changes():
             def _fetch():
@@ -160,7 +159,7 @@ async def get_shareholder_data(symbol: str):
                     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
                     with akshare_breaker:
                         df = ak.stock_share_change_cninfo(symbol=symbol, start_date=start_date, end_date=end_date)
-                    
+
                     changes = []
                     for _, row in df.iterrows():
                         change = {
@@ -171,7 +170,7 @@ async def get_shareholder_data(symbol: str):
                             'restrictedShares': float(row.get('流通受限股份', 0)) if pd.notna(row.get('流通受限股份')) else 0,
                         }
                         changes.append(change)
-                    
+
                     return changes
                 except CircuitBreakerOpen as e:
                     logger.warning(f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True)
@@ -186,7 +185,7 @@ async def get_shareholder_data(symbol: str):
                     logger.warning(f"[shareholder] Unexpected error in share changes: {e}", exc_info=True)
                     return []
             return await loop.run_in_executor(_executor, _fetch)
-        
+
         # 3. 获取股东变动记录
         async def fetch_holder_changes():
             def _fetch():
@@ -219,7 +218,7 @@ async def get_shareholder_data(symbol: str):
                     logger.warning(f"[shareholder] Unexpected error in holder changes: {e}", exc_info=True)
                     return []
             return await loop.run_in_executor(_executor, _fetch)
-        
+
         # 并行获取数据（带超时保护）
         import pandas as pd
         circulate_holders, share_changes, holder_changes = await asyncio.wait_for(
@@ -230,17 +229,17 @@ async def get_shareholder_data(symbol: str):
             ),
             timeout=AKSHARE_TIMEOUT
         )
-        
+
         result = {
             'circulateHolders': circulate_holders,
             'shareChanges': share_changes,
             'holderChanges': holder_changes
         }
-        
+
         await set_cached(cache_key, result)
         logger.info(f"[shareholder] Successfully fetched data for {symbol}")
         return success_response(result)
-        
+
     except asyncio.TimeoutError:
         logger.warning(f"[shareholder] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
@@ -505,55 +504,55 @@ async def get_profit_forecast(symbol: str):
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"forecast_{symbol}"
-    
+
     # 检查缓存
     cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[F9] Cache hit for forecast: {symbol}")
         return success_response(cached)
-    
+
     if not check_akshare_circuit():
         return error_response("数据源暂时不可用，请稍后重试", code=503)
-    
+
     try:
         import akshare as ak
-        
+
         # 在线程池中执行同步调用
         loop = asyncio.get_event_loop()
-        
+
         def fetch_eps():
             with akshare_breaker:
                 return ak.stock_profit_forecast_ths(symbol=symbol, indicator="预测年报每股收益")
-        
+
         def fetch_institutions():
             with akshare_breaker:
                 return ak.stock_profit_forecast_ths(symbol=symbol, indicator="业绩预测详表-机构")
-        
+
         eps_task = loop.run_in_executor(_executor, fetch_eps)
         institution_task = loop.run_in_executor(_executor, fetch_institutions)
         eps_df, institution_df = await asyncio.wait_for(
             asyncio.gather(eps_task, institution_task),
             timeout=AKSHARE_TIMEOUT
         )
-        
+
         eps_forecast = []
         if eps_df is not None and not eps_df.empty:
             eps_forecast = eps_df.to_dict('records')
-        
+
         institutions = []
         if institution_df is not None and not institution_df.empty:
             institutions = institution_df.to_dict('records')
-        
+
         result = {
             "eps_forecast": eps_forecast,
             "institutions": institutions
         }
-        
+
         await set_cached(cache_key, result)
         logger.info(f"[F9] Fetched forecast data for {symbol}: {len(eps_forecast)} EPS records, {len(institutions)} institution records")
-        
+
         return success_response(result)
-        
+
     except asyncio.TimeoutError:
         logger.warning(f"[F9] Timeout for forecast {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
@@ -597,19 +596,19 @@ async def get_institution_holdings(symbol: str):
     if cached:
         logger.info(f"[Institution] Cache hit for {symbol}")
         return success_response(cached)
-    
+
     if not check_akshare_circuit():
         return error_response("数据源暂时不可用，请稍后重试", code=503)
-    
+
     try:
         import akshare as ak
-        
+
         # 计算当前季度
         now = datetime.now()
         current_year = now.year
         current_quarter = (now.month - 1) // 3 + 1
         current_quarter_str = f"{current_year}{current_quarter}"
-        
+
 # 获取当前季度数据（尝试最近4个季度）
         def fetch_current():
             for q_offset in range(4):
@@ -619,7 +618,7 @@ async def get_institution_holdings(symbol: str):
                     q += 4
                     y -= 1
                 quarter_str = f"{y}{q}"
-                
+
                 try:
                     with akshare_breaker:
                         df = ak.stock_institute_hold_detail(stock=symbol, quarter=quarter_str)
@@ -635,10 +634,10 @@ async def get_institution_holdings(symbol: str):
                 except Exception as e:
                     logger.debug(f"[Institution] No data for {quarter_str}: {e}")
                     continue
-            
+
             logger.warning(f"[Institution] No current data found for {symbol}")
             return [], current_quarter_str
-        
+
         # 获取历史趋势（最近8个季度）
         def fetch_trend():
             trend_data = []
@@ -649,7 +648,7 @@ async def get_institution_holdings(symbol: str):
                     q += 4
                     y -= 1
                 quarter_str = f"{y}{q}"
-                
+
                 try:
                     with akshare_breaker:
                         df = ak.stock_institute_hold_detail(stock=symbol, quarter=quarter_str)
@@ -660,11 +659,11 @@ async def get_institution_holdings(symbol: str):
                             if '持股比例' in col or '占比' in col:
                                 pct_col = col
                                 break
-                        
+
                         total_pct = 0
                         if pct_col:
                             total_pct = df[pct_col].sum()
-                        
+
                         trend_data.append({
                             "quarter": quarter_str,
                             "year": y,
@@ -681,31 +680,31 @@ async def get_institution_holdings(symbol: str):
                 except Exception as e:
                     logger.debug(f"[Institution] No data for {quarter_str}: {e}")
                     continue
-            
+
             # 按时间正序排列
             trend_data.reverse()
             return trend_data
-        
+
         loop = asyncio.get_event_loop()
         current_task = loop.run_in_executor(_executor, fetch_current)
         trend_task = loop.run_in_executor(_executor, fetch_trend)
-        
+
         current_result, trend_data = await asyncio.wait_for(
             asyncio.gather(current_task, trend_task),
             timeout=AKSHARE_TIMEOUT
         )
         current_data, actual_quarter = current_result
-        
+
         result = {
             "current": current_data,
             "trend": trend_data,
             "quarter": actual_quarter
         }
-        
+
         await set_cached(cache_key, result)
         logger.info(f"[Institution] Successfully fetched data for {symbol}")
         return success_response(result)
-        
+
     except asyncio.TimeoutError:
         logger.warning(f"[Institution] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
@@ -759,19 +758,19 @@ async def get_peer_comparison(symbol: str):
     if cached:
         logger.info(f"[Peers] Cache hit for {symbol}")
         return success_response(cached)
-    
+
     if not check_akshare_circuit():
         return error_response("数据源暂时不可用，请稍后重试", code=503)
-    
+
     try:
         import akshare as ak
         import pandas as pd
-        
+
         loop = asyncio.get_event_loop()
-        
+
         def fetch_stock_info():
             info_dict = {}
-            
+
             try:
                 with akshare_breaker:
                     df = ak.stock_profile_cninfo(symbol=symbol)
@@ -785,7 +784,7 @@ async def get_peer_comparison(symbol: str):
                 logger.debug(f"[Peers] Data processing error in stock_profile_cninfo: {e}")
             except Exception as e:
                 logger.debug(f"[Peers] stock_profile_cninfo failed: {e}")
-            
+
             if not info_dict.get('行业'):
                 try:
                     with akshare_breaker:
@@ -800,39 +799,39 @@ async def get_peer_comparison(symbol: str):
                     logger.warning(f"[Peers] Data processing error in stock_individual_info_em: {e}", exc_info=True)
                 except Exception as e:
                     logger.warning(f"[Peers] stock_individual_info_em failed: {e}", exc_info=True)
-            
+
             return info_dict
-        
+
         def fetch_industry_stocks(symbol_code):
             try:
                 import baostock as bs
                 import pandas as pd
-                
+
                 lg = bs.login()
                 if lg.error_code != '0':
                     logger.warning(f"[Peers] BaoStock login failed: {lg.error_msg}")
                     return []
-                
+
                 rs = bs.query_stock_industry()
                 data_list = []
                 while (rs.error_code == '0') & rs.next():
                     data_list.append(rs.get_row_data())
-                
+
                 df = pd.DataFrame(data_list, columns=rs.fields)
                 bs.logout()
-                
+
                 baostock_code = f"sh.{symbol_code}" if symbol_code.startswith('6') else f"sz.{symbol_code}"
                 row = df[df['code'] == baostock_code]
-                
+
                 if len(row) == 0:
                     logger.warning(f"[Peers] Stock {symbol_code} not found in BaoStock")
                     return []
-                
+
                 industry = row.iloc[0]['industry']
                 logger.info(f"[Peers] Found industry for {symbol_code}: {industry}")
-                
+
                 peers_df = df[df['industry'] == industry]
-                
+
                 result = []
                 for _, peer_row in peers_df.iterrows():
                     code = peer_row['code']
@@ -843,17 +842,17 @@ async def get_peer_comparison(symbol: str):
                         '名称': peer_row['code_name'],
                         '股票名称': peer_row['code_name']
                     })
-                
+
                 logger.info(f"[Peers] Found {len(result)} stocks in industry {industry}")
                 return result
-                
+
             except (KeyError, ValueError, TypeError, AttributeError) as e:
                 logger.warning(f"[Peers] Data processing error in BaoStock: {e}", exc_info=True)
                 return []
             except Exception as e:
                 logger.warning(f"[Peers] BaoStock failed: {e}", exc_info=True)
                 return []
-        
+
         def fetch_financial_indicator(stock_symbol):
             try:
                 with akshare_breaker:
@@ -876,28 +875,28 @@ async def get_peer_comparison(symbol: str):
             except Exception as e:
                 logger.debug(f"[Peers] Failed to fetch financial for {stock_symbol}: {e}")
                 return None
-        
+
         stock_info = await asyncio.wait_for(
             loop.run_in_executor(_executor, fetch_stock_info),
             timeout=AKSHARE_TIMEOUT
         )
-        
+
         industry_name = stock_info.get('行业') if stock_info else None
-        
+
         if not industry_name:
-            logger.info(f"[Peers] No industry from stock_info, using financial data fallback")
-            
+            logger.info("[Peers] No industry from stock_info, using financial data fallback")
+
             financial_result = await asyncio.wait_for(
                 loop.run_in_executor(_executor, lambda: fetch_financial_indicator(symbol)),
                 timeout=AKSHARE_TIMEOUT
             )
-            
+
             if not financial_result:
                 logger.warning(f"[Peers] No financial data for {symbol}")
                 return error_response("未找到股票数据")
-            
+
             logger.info(f"[Peers] Using demo data for {symbol} (network issue fallback)")
-            
+
             demo_peers = [
                 {
                     'symbol': symbol,
@@ -908,57 +907,57 @@ async def get_peer_comparison(symbol: str):
                     'revenue_growth': financial_result.get('revenue_growth')
                 }
             ]
-            
+
             for key in ['roe', 'pe', 'pb', 'revenue_growth']:
                 val = demo_peers[0][key]
                 if val is not None and pd.notna(val):
                     demo_peers[0][key] = round(float(val), 2) if isinstance(val, (int, float)) else val
                 else:
                     demo_peers[0][key] = None
-            
+
             result = {
                 'industry': '未知行业',
                 'peers': demo_peers
             }
-            
+
             await set_cached(cache_key, result)
             return success_response(result)
-        
+
         logger.info(f"[Peers] Fetching industry peers for {symbol}")
-        
+
         industry_stocks = await asyncio.wait_for(
             loop.run_in_executor(_executor, lambda: fetch_industry_stocks(symbol)),
             timeout=AKSHARE_TIMEOUT
         )
-        
+
         if not industry_stocks:
             logger.warning(f"[Peers] No industry stocks found for {industry_name}")
             return error_response(f"未找到 {industry_name} 行业的股票数据")
-        
+
         logger.info(f"[Peers] Found {len(industry_stocks)} stocks in {industry_name}")
-        
+
         peer_tasks = []
         peer_symbols = []
-        
+
         for stock in industry_stocks[:10]:
             peer_symbol = stock.get('代码', stock.get('股票代码'))
             peer_name = stock.get('名称', stock.get('股票名称'))
-            
+
             if peer_symbol:
                 peer_symbols.append((peer_symbol, peer_name))
                 peer_tasks.append(
                     loop.run_in_executor(_executor, lambda s=peer_symbol: fetch_financial_indicator(s))
                 )
-        
+
         financial_results = await asyncio.wait_for(
             asyncio.gather(*peer_tasks),
             timeout=AKSHARE_TIMEOUT
         )
-        
+
         peers = []
         for i, (peer_symbol, peer_name) in enumerate(peer_symbols):
             financial = financial_results[i]
-            
+
             peer_data = {
                 'symbol': peer_symbol,
                 'name': peer_name,
@@ -967,26 +966,26 @@ async def get_peer_comparison(symbol: str):
                 'pb': financial.get('pb') if financial else None,
                 'revenue_growth': financial.get('revenue_growth') if financial else None
             }
-            
+
             for key in ['roe', 'pe', 'pb', 'revenue_growth']:
                 val = peer_data[key]
                 if val is not None and pd.notna(val):
                     peer_data[key] = round(float(val), 2) if isinstance(val, (int, float)) else val
                 else:
                     peer_data[key] = None
-            
+
             peers.append(peer_data)
-        
+
         result = {
             'industry': industry_name,
             'peers': peers
         }
-        
+
         await set_cached(cache_key, result)
-        
+
         logger.info(f"[Peers] Successfully fetched {len(peers)} peer stocks for {symbol}")
         return success_response(result)
-        
+
     except asyncio.TimeoutError:
         logger.warning(f"[Peers] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
@@ -1013,33 +1012,32 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
     if not valid:
         return error_response(ErrorCode.BAD_REQUEST, error)
     symbol = normalized
-    
+
     valid, page, page_size, error = validate_pagination(page, page_size)
     if not valid:
         return error_response(ErrorCode.BAD_REQUEST, error)
-    
+
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"announcements_{symbol}_{page}"
     cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[Announcements] Cache hit for {symbol} page {page}")
         return success_response(cached)
-    
+
     if not check_akshare_circuit():
         return error_response("数据源暂时不可用，请稍后重试", code=503)
-    
+
     try:
         import akshare as ak
-        import pandas as pd
-        
+
         def fetch_announcements():
             try:
                 with akshare_breaker:
                     df = ak.stock_individual_notice_report(security=symbol)
-                
+
                 if df is None or df.empty:
                     return []
-                
+
                 all_announcements = []
                 for _, row in df.iterrows():
                     announcement = {
@@ -1051,7 +1049,7 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
                         "url": str(row.get("网址", "") or ""),
                     }
                     all_announcements.append(announcement)
-                
+
                 return all_announcements
             except CircuitBreakerOpen as e:
                 logger.warning(f"[Announcements] Circuit breaker OPEN: {e}", exc_info=True)
@@ -1062,30 +1060,30 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.warning(f"[HTTP] for {symbol}: {e}", exc_info=True)
                 return []
-        
+
         loop = asyncio.get_event_loop()
         all_data = await asyncio.wait_for(
             loop.run_in_executor(_executor, fetch_announcements),
             timeout=AKSHARE_TIMEOUT
         )
-        
+
         total = len(all_data)
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
         paginated_data = all_data[start_idx:end_idx]
-        
+
         result = {
             "announcements": paginated_data,
             "total": total,
             "page": page,
             "page_size": page_size
         }
-        
+
         await set_cached(cache_key, result)
-        
+
         logger.info(f"[Announcements] Successfully fetched {total} announcements for {symbol}, returning page {page}")
         return success_response(result)
-        
+
     except asyncio.TimeoutError:
         logger.warning(f"[Announcements] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
@@ -1108,8 +1106,7 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
 @handle_errors(module="f9_deep")
 async def get_circuit_breaker_status():
     """获取 akshare 熔断器状态"""
-    from app.services.circuit_breaker import CircuitState
-    
+
     stats = akshare_breaker.get_stats()
     return success_response({
         "name": "akshare",

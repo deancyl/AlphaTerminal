@@ -21,9 +21,9 @@ import json
 import logging
 import os
 import sqlite3
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -79,10 +79,10 @@ def compute_hash(prev_hash: str, fields: Dict[str, Any]) -> str:
     """
     # Canonicalize fields: sort keys, serialize to JSON
     canonical = json.dumps(fields, sort_keys=True, default=str, ensure_ascii=False)
-    
+
     # Concatenate prev_hash + canonical fields
     payload = prev_hash + canonical
-    
+
     # Compute HMAC-SHA256
     return hmac.new(
         AUDIT_HMAC_KEY.encode('utf-8'),
@@ -111,7 +111,7 @@ def get_prev_hash_and_index(conn: sqlite3.Connection) -> Tuple[str, int]:
         LIMIT 1
     """)
     row = cursor.fetchone()
-    
+
     if row is None:
         # First record in chain
         return GENESIS_HASH, 0
@@ -156,28 +156,27 @@ def log_audit_event(
     Returns:
         ID of the inserted audit record
     """
-    from app.db.database import _lock
-    
+
     now_str = datetime.now().isoformat()
     external_conn = conn is not None
-    
+
     if conn is None:
         conn = sqlite3.connect(str(AUDIT_DB_PATH), timeout=45.0)
         conn.row_factory = sqlite3.Row
         # v0.6.66: 添加 WAL 模式和 busy_timeout
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=45000")
-    
+
     manage_transaction = not external_conn
-    
+
     try:
         # Begin transaction with row lock
         if manage_transaction:
             conn.execute("BEGIN IMMEDIATE TRANSACTION")
-        
+
         # Get previous hash and chain index
         prev_hash, chain_index = get_prev_hash_and_index(conn)
-        
+
         # Build fields for hashing
         fields = {
             "timestamp": now_str,
@@ -189,10 +188,10 @@ def log_audit_event(
             "before_state": before_state,
             "after_state": after_state,
         }
-        
+
         # Compute record hash
         record_hash = compute_hash(prev_hash, fields)
-        
+
         # Insert audit record
         cursor = conn.execute("""
             INSERT INTO audit_logs (
@@ -217,16 +216,16 @@ def log_audit_event(
             record_hash,
             chain_index,
         ))
-        
+
         record_id = cursor.lastrowid
-        
+
         if manage_transaction:
             conn.commit()
-        
+
         logger.info(f"[AuditChain] Logged event: id={record_id}, action={action}, chain_index={chain_index}")
-        
+
         return record_id
-        
+
     except sqlite3.Error as e:
         if manage_transaction:
             try:
@@ -274,7 +273,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=45000")
-    
+
     try:
         # Build query
         query = """
@@ -284,18 +283,18 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
             WHERE 1=1
         """
         params = []
-        
+
         if from_id is not None:
             query += " AND id >= ?"
             params.append(from_id)
         if to_id is not None:
             query += " AND id <= ?"
             params.append(to_id)
-        
+
         query += " ORDER BY id ASC"
-        
+
         rows = conn.execute(query, params).fetchall()
-        
+
         if not rows:
             return {
                 "valid": True,
@@ -304,18 +303,18 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                 "error_type": None,
                 "message": "No records to verify"
             }
-        
+
         # Verify chain - check ALL records with hash fields
         pre_chain_count = 0  # Count of records with empty hash fields
         chain_records = []  # Records with hash chain fields
-        
+
         # Separate pre-chain and chain records
         for i, row in enumerate(rows):
             if not row["prev_hash"] and not row["record_hash"]:
                 pre_chain_count += 1
             else:
                 chain_records.append((i, row))
-        
+
         if not chain_records:
             return {
                 "valid": True,
@@ -325,10 +324,10 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                 "error_type": None,
                 "message": "No hash chain records found (all pre-chain)"
             }
-        
+
         # Build a map of record_hash by id for quick lookup
         record_hash_by_id = {rows[i]["id"]: rows[i]["record_hash"] for i, _ in chain_records if rows[i]["record_hash"]}
-        
+
         # Verify each chain record
         for idx, (orig_idx, row) in enumerate(chain_records):
             # For records with non-empty prev_hash, verify it's valid
@@ -354,7 +353,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                             if prev_row["record_hash"]:
                                 prev_record = prev_row
                                 break
-                    
+
                     if prev_record is None:
                         return {
                             "valid": False,
@@ -364,7 +363,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                             "error_type": "prev_hash_invalid",
                             "message": f"Record {row['id']}: no valid predecessor found for chain_index={row['chain_index']}"
                         }
-                    
+
                     if row["prev_hash"] != prev_record["record_hash"]:
                         return {
                             "valid": False,
@@ -374,7 +373,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                             "error_type": "prev_hash_mismatch",
                             "message": f"Record {row['id']}: prev_hash does not match predecessor's record_hash"
                         }
-            
+
             # For records with non-empty prev_hash but empty record_hash, that's also invalid
             if row["prev_hash"] and not row["record_hash"]:
                 return {
@@ -385,7 +384,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                     "error_type": "record_hash_missing",
                     "message": f"Record {row['id']}: has prev_hash but no record_hash"
                 }
-            
+
             # Verify the record_hash can be recomputed
             if row["record_hash"]:
                 try:
@@ -399,7 +398,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                         "error_type": "invalid_json",
                         "message": f"Record {row['id']}: failed to parse details JSON"
                     }
-                
+
                 fields = {
                     "timestamp": row["timestamp"],
                     "actor_id": row["agent_id"],
@@ -410,7 +409,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                     "before_state": details.get("before_state"),
                     "after_state": details.get("after_state"),
                 }
-                
+
                 computed_hash = compute_hash(row["prev_hash"] or GENESIS_HASH, fields)
                 if computed_hash != row["record_hash"]:
                     return {
@@ -421,7 +420,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
                         "error_type": "hash_mismatch",
                         "message": f"Record {row['id']}: computed hash does not match stored hash"
                     }
-        
+
         verified_count = len(chain_records)
         return {
             "valid": True,
@@ -431,7 +430,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
             "error_type": None,
             "message": f"Chain integrity verified successfully ({verified_count} records, {pre_chain_count} pre-chain skipped)"
         }
-        
+
     except Exception as e:
         logger.error(f"[AuditChain] Verification failed: {e}", exc_info=True)
         return {
@@ -456,17 +455,17 @@ def get_chain_stats() -> Dict[str, Any]:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=45000")
-    
+
     try:
         # Total records
         total = conn.execute("SELECT COUNT(*) as cnt FROM audit_logs").fetchone()["cnt"]
-        
+
         # Chain index range
         index_range = conn.execute("""
             SELECT MIN(chain_index) as min_idx, MAX(chain_index) as max_idx
             FROM audit_logs
         """).fetchone()
-        
+
         # First and last record
         first = conn.execute("""
             SELECT id, timestamp, prev_hash, record_hash, chain_index
@@ -474,14 +473,14 @@ def get_chain_stats() -> Dict[str, Any]:
             ORDER BY id ASC
             LIMIT 1
         """).fetchone()
-        
+
         last = conn.execute("""
             SELECT id, timestamp, prev_hash, record_hash, chain_index
             FROM audit_logs
             ORDER BY id DESC
             LIMIT 1
         """).fetchone()
-        
+
         return {
             "total_records": total,
             "chain_index_min": index_range["min_idx"] if index_range else None,
@@ -628,7 +627,7 @@ if __name__ == "__main__":
     print("=" * 80)
     print("Audit Chain Service Test")
     print("=" * 80)
-    
+
     # Test hash computation
     print("\n1. Test hash computation:")
     test_fields = {
@@ -642,18 +641,18 @@ if __name__ == "__main__":
     hash1 = compute_hash(GENESIS_HASH, test_fields)
     print(f"   Hash: {hash1}")
     print(f"   Length: {len(hash1)}")
-    
+
     # Test chain verification
     print("\n2. Test chain verification:")
     result = verify_chain()
     print(f"   Valid: {result['valid']}")
     print(f"   Checked records: {result['checked_records']}")
-    
+
     # Test chain stats
     print("\n3. Test chain stats:")
     stats = get_chain_stats()
     for key, value in stats.items():
         print(f"   {key}: {value}")
-    
+
     print("\n" + "=" * 80)
     print("Audit chain test completed!")

@@ -47,12 +47,12 @@ async def list_portfolios():
         return {"portfolios": _row2dict(rows, ["id", "name", "type", "parent_id", "created_at", "total_cost",
                                                 "cash_balance", "currency", "asset_class", "strategy", "benchmark",
                                                 "status", "initial_capital", "description"])}
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -107,12 +107,12 @@ async def create_portfolio(body: PortfolioIn, _: None = Depends(require_api_key)
                 "asset_class": body.asset_class, "strategy": body.strategy,
                 "benchmark": body.benchmark, "status": body.status,
                 "initial_capital": body.initial_capital, "description": body.description}
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -134,12 +134,12 @@ async def delete_portfolio(portfolio_id: int, _: None = Depends(require_api_key)
         if not deleted:
             raise HTTPException(404, "账户不存在")
         return {"ok": True}
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:

@@ -211,11 +211,11 @@ def fetch_shibor() -> list[dict]:
     返回最新可用日期的数据
     """
     rows = []
-    
+
     if not akshare_breaker.is_available():
-        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_shibor")
+        logger.warning("[AkShare] Circuit breaker OPEN, skipping fetch_shibor")
         return rows
-    
+
     try:
         import akshare as ak
         with akshare_breaker:
@@ -385,7 +385,8 @@ def fetch_industry_sectors() -> list[dict]:
     格式: hangye_XX,行业名,股票数,点位,涨跌额,涨跌幅%
     """
     try:
-        import re, json
+        import re
+        import json
         r = _run_async_or_sync(async_fetch(
             "https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php",
             params={"param": "class=hy", "type": "1"},
@@ -599,9 +600,10 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
     if not akshare_breaker.is_available():
         logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_china_index_history for {symbol}")
         return []
-    
+
     try:
-        import akshare as ak, pandas as pd
+        import akshare as ak
+        import pandas as pd
 
         ak_symbol_map = {
             "000001": "sh000001",
@@ -758,15 +760,15 @@ def fetch_index_minute_history(
     # Sina 支持的分钟数
     if frequency not in (1, 5, 15, 30, 60):
         frequency = 5
-    
+
     # 1 分钟数据 Sina 不支持，返回空（前端应降级处理）
     if frequency == 1:
         logger.warning(f"[Sina] {symbol} 1分钟数据暂不支持")
         return []
-    
+
     # 将 symbol 转换为 Sina 格式（带 sh/sz 前缀）
     symbol_clean = symbol.upper().replace('SH', '').replace('SZ', '')
-    
+
     # 指数代码前缀映射
     if symbol_clean in ('000001', '000300', '000688', '000016', '000905'):
         sina_symbol = f"sh{symbol_clean}"
@@ -778,7 +780,7 @@ def fetch_index_minute_history(
             sina_symbol = f"sh{symbol_clean}"
         else:
             sina_symbol = f"sz{symbol_clean}"
-    
+
     try:
         import httpx
         # Sina API: scale=分钟数, datalen=数据条数
@@ -790,10 +792,10 @@ def fetch_index_minute_history(
             f"&ma=no"
             f"&datalen={min(limit + offset, 1000)}"  # Sina 限制，最多 1000 条
         )
-        
+
         from app.services.proxy_config import get_proxies
         proxies = get_proxies()
-        
+
         # 重试逻辑
         data = None
         for use_proxy in [True, False]:
@@ -821,11 +823,11 @@ def fetch_index_minute_history(
                     time.sleep(0.5 * (attempt + 1))
             if data is not None:
                 break
-        
+
         if data is None or not isinstance(data, list):
             logger.warning(f"[Sina] {symbol} 无数据返回")
             return []
-        
+
         # 解析 Sina 数据格式
         rows = []
         for item in data:
@@ -846,7 +848,7 @@ def fetch_index_minute_history(
                 })
             except (ValueError, IndexError, OSError, TypeError):
                 continue
-        
+
         # 计算 change_pct
         prev_close = None
         for r in rows:
@@ -880,9 +882,10 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
     if not akshare_breaker.is_available():
         logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_stock_history for {symbol}")
         return []
-    
+
     try:
-        import akshare as ak, pandas as pd
+        import akshare as ak
+        import pandas as pd
         from datetime import datetime
 
         if end_date is None:
@@ -909,7 +912,7 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
                         if 'pct' in c.lower() or 'change' in c.lower() or c == '涨跌幅'), None)
         rows = []
         prev_close = None
-        
+
         # Safely get column names (AkShare may return different column names for ETFs)
         def get_col_val(row, possible_names, default=0.0):
             for name in possible_names:
@@ -919,7 +922,7 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
                     except (ValueError, TypeError):
                         pass
             return default
-        
+
         for i in range(len(df)):
             try:
                 dt    = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
@@ -1021,10 +1024,10 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
     if not akshare_breaker.is_available():
         logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_index_daily_history for {symbol}")
         return []
-    
+
     try:
-        import akshare as ak, pandas as pd
-        from datetime import datetime
+        import akshare as ak
+        import pandas as pd
 
         # symbol 可能是 "000001"（前端传入）或 "sh000001"（标准格式）
         # AkShare 指数接口需要带 sh/sz 前缀
@@ -1135,7 +1138,10 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
     API: TIME_SERIES_DAILY（25次/分钟，compact=最近100天，full=20年+）
     需要 ALPHA_VANTAGE_API_KEY 环境变量，若无则返回空列表。
     """
-    import os, json, time, urllib.request
+    import os
+    import json
+    import time
+    import urllib.request
 
     api_key = os.environ.get("ALPHA_VANTAGE_API_KEY", "").strip()
     if not api_key or api_key == "YOUR_KEY_HERE":
@@ -1240,7 +1246,8 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
     symbol: 'usIXIC', 'usNDX', 'usSPX', 'usDJI', 'hkHSI', 'jpN225'
     返回格式同 market_data_daily 单条记录。
     """
-    import re, time
+    import re
+    import time
 
     tencent_codes = {
         # 全球指数（key = clean_sym，即 lowercase 规范化后的 symbol）
@@ -1341,7 +1348,7 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
     def _fetch_with_timeout(target, args=(), timeout=20):
         """在后台线程执行目标函数，超时则中止（使用线程池限制并发）"""
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-        
+
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(target, *args)
             try:
@@ -1353,8 +1360,9 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
     # 策略 1: AkShare 港股指数 (对标恒生指数 HSI)
     if clean_sym in ("hsi", "hkhsi"):
         try:
-            import akshare as ak, pandas as pd
-            logger.info(f"[AkShare HK] 开始拉取恒生指数历史...")
+            import akshare as ak
+            import pandas as pd
+            logger.info("[AkShare HK] 开始拉取恒生指数历史...")
             df = _fetch_with_timeout(ak.stock_hk_index_daily_sina, args=("HSI",), timeout=25)
             if df is not None and not df.empty:
                 all_rows = []
@@ -1396,7 +1404,8 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
     lookup_sym = clean_sym.replace("us", "", 1) if clean_sym.startswith("us") else clean_sym
     if lookup_sym in ak_us_map:
         try:
-            import akshare as ak, pandas as pd
+            import akshare as ak
+            import pandas as pd
             ak_code = ak_us_map[lookup_sym]
             logger.info(f"[AkShare US] 开始拉取美股指数 {ak_code}...")
             df = _fetch_with_timeout(ak.index_us_stock_sina, args=(ak_code,), timeout=25)
@@ -1504,7 +1513,7 @@ def fetch_all_china_stocks(max_pages=60):
     """
     try:
         from app.utils.sina_stock_fetcher import fetch_all_stocks_sina
-        
+
         stocks = fetch_all_stocks_sina(
             page_size=100,
             max_pages=max_pages,
@@ -1512,7 +1521,7 @@ def fetch_all_china_stocks(max_pages=60):
             exclude_bj=True,
             delay=0.3
         )
-        
+
         rows = []
         for s in stocks:
             rows.append({
@@ -1532,10 +1541,10 @@ def fetch_all_china_stocks(max_pages=60):
                 'low': s['low'],
                 'open': s['pre_close'],
             })
-        
+
         logger.info(f"[DataFetcher] Fetched {len(rows)} stocks")
         return rows
-        
+
     except Exception as e:
         logger.error(f"[DataFetcher] Fetch failed: {e}", exc_info=True)
         return []
@@ -1585,7 +1594,7 @@ def fetch_today_daily_from_sina(symbol: str) -> dict:
             "timestamp": int(time.time()),
             "data_type": "daily",
         }
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -1637,7 +1646,7 @@ def fetch_today_kline_from_minute(symbol: str) -> dict:
             "timestamp": int(time.time()),
             "data_type": "daily",
         }
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -1754,7 +1763,7 @@ def fetch_period_klines_from_daily(symbol: str, period: str) -> list[dict]:
                 })
 
         return result
-    except Exception as e:
+    except Exception:
         return []
 
 

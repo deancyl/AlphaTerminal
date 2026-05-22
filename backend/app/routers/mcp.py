@@ -7,10 +7,10 @@ import logging
 import time
 import os
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Body
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter
+from pydantic import BaseModel, Field
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
@@ -219,11 +219,11 @@ _env_vars = {
 def get_mcp_status():
     """Get MCP server status"""
     global _mcp_status, _start_time
-    
+
     if _mcp_status.running and _start_time:
         _mcp_status.uptime = int(time.time() - _start_time)
         _mcp_status.last_heartbeat = datetime.now().isoformat()
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -247,7 +247,7 @@ def get_mcp_config():
 def update_mcp_config(config: MCPConfig):
     """Update MCP server configuration"""
     global _mcp_config
-    
+
     # Validate transport mode
     if config.transport_mode not in ["sse", "stdio", "websocket"]:
         return {
@@ -255,7 +255,7 @@ def update_mcp_config(config: MCPConfig):
             "message": "Invalid transport mode. Must be one of: sse, stdio, websocket",
             "data": None
         }
-    
+
     # Validate port
     if not (1 <= config.port <= 65535):
         return {
@@ -263,7 +263,7 @@ def update_mcp_config(config: MCPConfig):
             "message": "Port must be between 1 and 65535",
             "data": None
         }
-    
+
     # Validate timeout
     if not (1 <= config.timeout <= 300):
         return {
@@ -271,11 +271,11 @@ def update_mcp_config(config: MCPConfig):
             "message": "Timeout must be between 1 and 300 seconds",
             "data": None
         }
-    
+
     _mcp_config = config
-    
+
     logger.info(f"[MCP] Configuration updated: {config.model_dump()}")
-    
+
     return {
         "code": 0,
         "message": "Configuration updated successfully",
@@ -288,7 +288,7 @@ def update_mcp_config(config: MCPConfig):
 def list_mcp_tools():
     """List all registered MCP tools"""
     tools_data = [tool.model_dump() for tool in _mcp_tools]
-    
+
     return {
         "code": 0,
         "message": "success",
@@ -304,15 +304,15 @@ def list_mcp_tools():
 async def test_mcp_connection():
     """Test MCP server connection with latency measurement"""
     global _mcp_config, _mcp_status
-    
+
     start_time = time.time()
-    
+
     try:
         # Simulate connection test (mock)
         await asyncio.sleep(0.1)  # Simulate network latency
-        
+
         latency_ms = int((time.time() - start_time) * 1000)
-        
+
         # Mock response based on server status
         if _mcp_status.running:
             return {
@@ -335,11 +335,11 @@ async def test_mcp_connection():
                     "error": "MCP server is not running. Please start the server first."
                 }
             }
-    
+
     except asyncio.CancelledError:
         latency_ms = int((time.time() - start_time) * 1000)
-        logger.warning(f"[MCP] Connection test cancelled", exc_info=True)
-        
+        logger.warning("[MCP] Connection test cancelled", exc_info=True)
+
         return {
             "code": 1,
             "message": "Connection test cancelled",
@@ -349,11 +349,11 @@ async def test_mcp_connection():
                 "error": "Request was cancelled"
             }
         }
-    
+
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
         logger.error(f"[MCP] Connection test failed: {e}", exc_info=True)
-        
+
         return {
             "code": 1,
             "message": f"Connection failed: {str(e)}",
@@ -370,23 +370,23 @@ async def test_mcp_connection():
 def start_mcp_server():
     """Start MCP server (mock implementation)"""
     global _mcp_status, _start_time
-    
+
     if _mcp_status.running:
         return {
             "code": 0,
             "message": "Server is already running",
             "data": _mcp_status.model_dump()
         }
-    
+
     # Mock start
     _mcp_status.running = True
     _mcp_status.error = None
     _start_time = time.time()
     _mcp_status.uptime = 0
     _mcp_status.last_heartbeat = datetime.now().isoformat()
-    
+
     logger.info("[MCP] Server started (mock)")
-    
+
     return {
         "code": 0,
         "message": "MCP server started successfully",
@@ -399,22 +399,22 @@ def start_mcp_server():
 def stop_mcp_server():
     """Stop MCP server (mock implementation)"""
     global _mcp_status, _start_time
-    
+
     if not _mcp_status.running:
         return {
             "code": 0,
             "message": "Server is already stopped",
             "data": _mcp_status.model_dump()
         }
-    
+
     # Mock stop
     _mcp_status.running = False
     _mcp_status.uptime = None
     _mcp_status.last_heartbeat = None
     _start_time = None
-    
+
     logger.info("[MCP] Server stopped (mock)")
-    
+
     return {
         "code": 0,
         "message": "MCP server stopped successfully",

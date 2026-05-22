@@ -8,9 +8,8 @@ Phase B: 统一 API 响应格式
 """
 import asyncio
 import logging
-import time
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.error_decorator import handle_errors
 
@@ -49,7 +48,6 @@ async def news_force_refresh():
     同步执行真实网络抓取，等待完成后再返回最新数据。
     前端手动刷新时调用此接口，确保拿到此刻的外网最新数据。
     """
-    import asyncio
     from app.services.news_engine import get_cached_news, is_cache_ready, refresh_news_cache
 
     async def _do():
@@ -199,30 +197,30 @@ async def news_events_for_symbol(
     """
     try:
         clean_symbol = symbol.replace("sh", "").replace("sz", "").replace("hk", "").replace("us", "")
-        
+
         from app.services.news_engine import get_cached_news, is_cache_ready
-        
+
         if not is_cache_ready():
             return success_response({"events": [], "symbol": symbol, "total": 0})
-        
+
         all_news = get_cached_news(limit=500)
-        
+
         events = []
         for news in all_news:
             title = news.get("title", "")
             if clean_symbol in title or symbol in title:
                 bullish_keywords = ["利好", "上涨", "突破", "新高", "增长", "盈利", "增持", "回购", "中标", "签约"]
                 bearish_keywords = ["利空", "下跌", "暴跌", "亏损", "减持", "质押", "违约", "诉讼", "调查", "处罚"]
-                
+
                 type_ = "neutral"
                 if any(k in title for k in bullish_keywords):
                     type_ = "bullish"
                 elif any(k in title for k in bearish_keywords):
                     type_ = "bearish"
-                
+
                 time_str = news.get("time", "")
                 date = time_str.split(" ")[0] if " " in time_str else time_str[:10]
-                
+
                 if date and len(date) == 10:
                     events.append({
                         "date": date,
@@ -232,15 +230,15 @@ async def news_events_for_symbol(
                         "url": news.get("url", ""),
                         "source": news.get("source", ""),
                     })
-        
+
         events = events[:limit]
-        
+
         return success_response({
             "events": events,
             "symbol": symbol,
             "total": len(events)
         })
-        
+
     except Exception as e:
         logger.error(f"[News] news_events_for_symbol failed: {type(e).__name__}: {e}", exc_info=True)
         return error_response(

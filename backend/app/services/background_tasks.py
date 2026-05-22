@@ -3,7 +3,6 @@
 支持进度追踪和 WebSocket 广播
 """
 
-import asyncio
 import logging
 import secrets
 import threading
@@ -65,23 +64,23 @@ class BackgroundTaskManager:
     - 支持 WebSocket 广播进度更新
     - 任务状态查询
     """
-    
+
     _instance: Optional['BackgroundTaskManager'] = None
     _lock = threading.Lock()
-    
+
     def __init__(self):
         self._tasks: Dict[str, BackgroundTask] = {}
         self._ws_broadcast: Optional[Callable] = None
         self._cleanup_interval = 3600
         self._last_cleanup = time.time()
-    
+
     def __new__(cls) -> 'BackgroundTaskManager':
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def create_task(self, task_type: str) -> str:
         """
         创建新任务
@@ -102,11 +101,11 @@ class BackgroundTaskManager:
         self._tasks[task_id] = task
         logger.info(f"[BackgroundTask] Created task: {task_id}")
         return task_id
-    
+
     def get_task(self, task_id: str) -> Optional[BackgroundTask]:
         """获取任务状态"""
         return self._tasks.get(task_id)
-    
+
     def start_task(self, task_id: str) -> bool:
         """标记任务开始执行"""
         task = self._tasks.get(task_id)
@@ -118,7 +117,7 @@ class BackgroundTaskManager:
         self._broadcast_update(task)
         logger.info(f"[BackgroundTask] Started task: {task_id}")
         return True
-    
+
     def update_progress(self, task_id: str, progress: int, message: str = "") -> bool:
         """
         更新任务进度
@@ -134,64 +133,64 @@ class BackgroundTaskManager:
         task = self._tasks.get(task_id)
         if not task:
             return False
-        
+
         task.progress = max(0, min(100, progress))
         if message:
             task.message = message
-        
+
         self._broadcast_update(task)
         logger.debug(f"[BackgroundTask] Progress update: {task_id} - {progress}% - {message}")
         return True
-    
+
     def complete_task(self, task_id: str, result: Optional[Dict[str, Any]] = None) -> bool:
         """标记任务完成"""
         task = self._tasks.get(task_id)
         if not task:
             return False
-        
+
         task.status = TaskStatus.COMPLETED
         task.progress = 100
         task.result = result
         task.completed_at = datetime.now()
         task.message = "任务完成"
-        
+
         self._broadcast_update(task)
         logger.info(f"[BackgroundTask] Completed task: {task_id}")
         return True
-    
+
     def fail_task(self, task_id: str, error: str) -> bool:
         """标记任务失败"""
         task = self._tasks.get(task_id)
         if not task:
             return False
-        
+
         task.status = TaskStatus.FAILED
         task.error = error
         task.completed_at = datetime.now()
         task.message = f"任务失败: {error}"
-        
+
         self._broadcast_update(task)
         logger.error(f"[BackgroundTask] Failed task: {task_id} - {error}")
         return True
-    
+
     def cancel_task(self, task_id: str) -> bool:
         """取消任务"""
         task = self._tasks.get(task_id)
         if not task:
             return False
-        
+
         if task.status == TaskStatus.RUNNING:
             logger.warning(f"[BackgroundTask] Cannot cancel running task: {task_id}")
             return False
-        
+
         task.status = TaskStatus.CANCELLED
         task.completed_at = datetime.now()
         task.message = "任务已取消"
-        
+
         self._broadcast_update(task)
         logger.info(f"[BackgroundTask] Cancelled task: {task_id}")
         return True
-    
+
     def set_ws_broadcast(self, callback: Callable[[Dict[str, Any]], None]) -> None:
         """
         设置 WebSocket 广播回调
@@ -201,7 +200,7 @@ class BackgroundTaskManager:
         """
         self._ws_broadcast = callback
         logger.info("[BackgroundTask] WebSocket broadcast callback set")
-    
+
     def _broadcast_update(self, task: BackgroundTask) -> None:
         """广播任务更新"""
         if self._ws_broadcast:
@@ -212,7 +211,7 @@ class BackgroundTaskManager:
                 })
             except Exception as e:
                 logger.error(f"[BackgroundTask] Broadcast failed: {e}", exc_info=True)
-    
+
     def cleanup_completed_tasks(self, max_age_hours: int = 24) -> int:
         """
         清理已完成的旧任务
@@ -225,21 +224,21 @@ class BackgroundTaskManager:
         """
         now = datetime.now()
         cutoff = now.timestamp() - (max_age_hours * 3600)
-        
+
         to_remove = []
         for task_id, task in self._tasks.items():
             if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
                 if task.completed_at and task.completed_at.timestamp() < cutoff:
                     to_remove.append(task_id)
-        
+
         for task_id in to_remove:
             del self._tasks[task_id]
-        
+
         if to_remove:
             logger.info(f"[BackgroundTask] Cleaned up {len(to_remove)} old tasks")
-        
+
         return len(to_remove)
-    
+
     def get_all_tasks(self, task_type: Optional[str] = None) -> list[BackgroundTask]:
         """
         获取所有任务

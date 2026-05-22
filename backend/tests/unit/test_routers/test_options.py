@@ -13,7 +13,6 @@
 - 输入验证
 - 超时处理
 """
-import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -165,13 +164,13 @@ class TestOptionsCircuitBreaker:
         assert response.status_code == 200
         data = response.json()
         health_data = data["data"]
-        
+
         # 验证熔断器字段
         assert "circuit_breaker" in health_data
         cb = health_data["circuit_breaker"]
         assert "is_open" in cb
         assert "is_available" in cb
-        
+
         # is_open和is_available应该是一致的
         # 如果is_open为True，则is_available应为False
         if cb["is_open"]:
@@ -183,10 +182,10 @@ class TestOptionsCircuitBreaker:
         assert response.status_code == 200
         data = response.json()
         health_data = data["data"]
-        
+
         healthy = health_data["healthy"]
         cb = health_data["circuit_breaker"]
-        
+
         # healthy应该与is_available一致
         assert healthy == cb["is_available"]
 
@@ -195,7 +194,7 @@ class TestOptionsCircuitBreaker:
         # 先检查健康状态
         health_response = client.get("/api/v1/options/health")
         health_data = health_response.json()["data"]
-        
+
         if health_data["healthy"]:
             # 如果健康，期权链应该返回数据
             response = client.get("/api/v1/options/cffex/chain")
@@ -214,7 +213,7 @@ class TestOptionsDataStructure:
         assert response.status_code == 200
         data = response.json()
         result = data["data"]
-        
+
         if result["calls"]:
             call = result["calls"][0]
             # 验证看涨期权字段
@@ -229,7 +228,7 @@ class TestOptionsDataStructure:
         assert response.status_code == 200
         data = response.json()
         result = data["data"]
-        
+
         if result["puts"]:
             put = result["puts"][0]
             # 验证看跌期权字段
@@ -244,7 +243,7 @@ class TestOptionsDataStructure:
         assert response.status_code == 200
         data = response.json()
         result = data["data"]
-        
+
         # 如果有数据，验证数值字段类型
         if result.get("delta") is not None:
             assert isinstance(result["delta"], (int, float))
@@ -263,7 +262,7 @@ class TestOptionsDataStructure:
         assert response.status_code == 200
         data = response.json()
         result = data["data"]
-        
+
         if result["contracts"]:
             contract = result["contracts"][0]
             assert "code" in contract
@@ -277,7 +276,7 @@ class TestOptionsDataStructure:
         assert response.status_code == 200
         data = response.json()
         result = data["data"]
-        
+
         if result["contracts"]:
             contract = result["contracts"][0]
             assert "code" in contract
@@ -291,7 +290,7 @@ class TestOptionsDataStructure:
         assert response.status_code == 200
         data = response.json()
         result = data["data"]
-        
+
         # source字段指示数据来源
         assert "source" in result
         # 可能的值: akshare, empty, unknown
@@ -303,7 +302,7 @@ class TestOptionsDataStructure:
         assert response.status_code == 200
         data = response.json()
         result = data["data"]
-        
+
         # update_time应该是HH:MM:SS格式
         update_time = result["update_time"]
         assert isinstance(update_time, str)

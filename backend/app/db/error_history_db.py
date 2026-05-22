@@ -8,7 +8,6 @@ v0.6.64: 异常历史持久化存储
 """
 import sqlite3
 import json
-import time
 import os
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
@@ -103,23 +102,23 @@ def get_error_history(
     with get_connection() as conn:
         query = "SELECT * FROM error_history WHERE 1=1"
         params = []
-        
+
         if module:
             query += " AND module = ?"
             params.append(module)
-        
+
         if resolved is not None:
             query += " AND resolved = ?"
             params.append(resolved)
-        
+
         if since_hours:
             cutoff = datetime.now() - timedelta(hours=since_hours)
             query += " AND timestamp >= ?"
             params.append(cutoff.isoformat())
-        
+
         query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
-        
+
         rows = conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
 
@@ -127,12 +126,12 @@ def get_error_history(
 def get_error_stats(since_hours: int = 24) -> Dict[str, Any]:
     with get_connection() as conn:
         cutoff = datetime.now() - timedelta(hours=since_hours)
-        
+
         total = conn.execute(
             "SELECT COUNT(*) FROM error_history WHERE timestamp >= ?",
             (cutoff.isoformat(),)
         ).fetchone()[0]
-        
+
         by_module = conn.execute(
             """
             SELECT module, COUNT(*) as count 
@@ -144,7 +143,7 @@ def get_error_stats(since_hours: int = 24) -> Dict[str, Any]:
             """,
             (cutoff.isoformat(),)
         ).fetchall()
-        
+
         by_type = conn.execute(
             """
             SELECT error_type, COUNT(*) as count 
@@ -156,7 +155,7 @@ def get_error_stats(since_hours: int = 24) -> Dict[str, Any]:
             """,
             (cutoff.isoformat(),)
         ).fetchall()
-        
+
         unresolved = conn.execute(
             """
             SELECT COUNT(*) FROM error_history 
@@ -164,7 +163,7 @@ def get_error_stats(since_hours: int = 24) -> Dict[str, Any]:
             """,
             (cutoff.isoformat(),)
         ).fetchone()[0]
-        
+
         return {
             "total": total,
             "unresolved": unresolved,

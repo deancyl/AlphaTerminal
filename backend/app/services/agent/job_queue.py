@@ -14,8 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
-import queue
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +191,7 @@ class JobQueue:
 
     def _run_optimize_job(self, job: Job) -> Dict:
         params = job.params
-        from app.services.strategy import create_indicator_strategy, quick_optimize, OptimizationMethod
+        from app.services.strategy import create_indicator_strategy, quick_optimize
 
         code = params.get("code", "")
         symbol = params.get("symbol", "")

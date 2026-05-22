@@ -7,13 +7,12 @@ Provides endpoints for:
 - Audit log queries
 """
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query
 from typing import Optional
 
 from app.services.audit_chain import (
     verify_chain,
     get_chain_stats,
-    log_audit_event,
 )
 from app.db.audit_db import get_audit_logs, get_audit_logs_keyset, count_audit_logs
 from app.utils.error_decorator import handle_errors
@@ -110,13 +109,13 @@ async def query_audit_logs(
             limit=limit,
             offset=offset,
         )
-    
+
     total = count_audit_logs(agent_id=agent_id, action=action)
     has_more = len(logs) == limit
-    
+
     next_after_timestamp = logs[-1]["timestamp"] if logs else None
     next_after_id = logs[-1]["id"] if logs else None
-    
+
     return {
         "logs": logs,
         "has_more": has_more,

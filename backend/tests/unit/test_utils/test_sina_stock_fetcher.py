@@ -2,7 +2,6 @@
 Unit tests for Sina stock fetcher utility.
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 import json
 

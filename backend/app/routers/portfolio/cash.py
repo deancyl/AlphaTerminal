@@ -71,11 +71,11 @@ async def transfer_direct(body: TransferIn, _: None = Depends(require_api_key)):
             body.amount,
             body.note,
         )
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_portfolio_executor, _sync_work)
-    
+
     try:
         result = await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
         return success_response(result)
@@ -112,12 +112,12 @@ async def get_cash(portfolio_id: int):
         if not row:
             raise HTTPException(404, "账户不存在")
         return {"portfolio_id": row[0], "name": row[1], "cash_balance": row[2]}
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -154,12 +154,12 @@ async def cash_deposit(portfolio_id: int, body: CashOpIn, _: None = Depends(requ
                 return {"portfolio_id": portfolio_id, "cash_balance": new_balance}
             finally:
                 conn.close()
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -199,12 +199,12 @@ async def cash_withdraw(portfolio_id: int, body: CashOpIn, _: None = Depends(req
                 return {"portfolio_id": portfolio_id, "cash_balance": new_balance}
             finally:
                 conn.close()
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -237,12 +237,12 @@ async def list_transactions(
         finally:
             conn.close()
         return {"transactions": _row2dict(rows, cols), "total": len(rows)}
-    
+
     async def _inner():
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_portfolio_executor, _sync_work)
         return success_response(data)
-    
+
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:

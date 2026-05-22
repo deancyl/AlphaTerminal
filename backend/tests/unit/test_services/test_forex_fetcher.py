@@ -14,7 +14,7 @@ import sys
 import os
 import pandas as pd
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock, Mock
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))

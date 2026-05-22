@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import sys
 import pandas as pd
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from .ast_validator import validate_strategy_ast, get_security_report
+from .ast_validator import validate_strategy_ast
 from .sandbox import (
     create_sandbox_namespace,
-    SecureExecutor,
     StrategyTimeoutError,
     StrategySecurityError,
 )
-from .audit import log_strategy_execution, compute_code_hash
+from .audit import log_strategy_execution
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +26,11 @@ class InstructionLimitExceeded(RuntimeError):
 
 class InstructionCounter:
     """Count executed instructions to detect runaway code."""
-    
+
     def __init__(self, limit: int = 1_000_000):
         self.limit = limit
         self.count = 0
-    
+
     def __call__(self, frame, event, arg):
         if event == 'line':
             self.count += 1
@@ -120,11 +118,11 @@ class StrategyContext:
 
 class ScriptStrategy:
     DEFAULT_TIMEOUT = 30.0
-    
+
     def __init__(
-        self, 
-        code: str, 
-        initial_capital: float = 100000.0, 
+        self,
+        code: str,
+        initial_capital: float = 100000.0,
         commission: float = 0.001,
         timeout: float = DEFAULT_TIMEOUT,
         validate_security: bool = True,
@@ -135,37 +133,37 @@ class ScriptStrategy:
         self.timeout = timeout
         self.validate_security = validate_security
         self._namespace: Dict[str, Any] = {}
-        
+
         if not validate_security:
             logger.warning(
                 "[ScriptStrategy] Security validation DISABLED - this should only be used in tests!"
             )
-        
+
         self._compile()
 
     def _compile(self):
         if not self.code or not self.code.strip():
             raise ValueError("Strategy code cannot be empty")
-        
+
         if self.validate_security:
             is_valid, errors = validate_strategy_ast(self.code)
             if not is_valid:
                 raise StrategySecurityError(
                     f"Security validation failed: {'; '.join(errors)}"
                 )
-        
+
         if self.validate_security:
             self._namespace = create_sandbox_namespace(ctx=None)
         else:
             self._namespace = {"pd": pd}
-        
+
         self._namespace["OrderSide"] = OrderSide
         self._namespace["OrderType"] = OrderType
         self._namespace["buy"] = self._buy
         self._namespace["sell"] = self._sell
         self._namespace["close_position"] = self._close_position
         self._namespace["log"] = self._log
-        
+
         try:
             counter = InstructionCounter(limit=1_000_000)
             old_trace = sys.gettrace()
@@ -181,7 +179,7 @@ class ScriptStrategy:
         except Exception as e:
             logger.warning(f"[ScriptStrategy] Compilation error: {e}", exc_info=True)
             raise ValueError(f"Strategy compilation failed: {e}")
-    
+
     def _create_context(self, df: pd.DataFrame) -> StrategyContext:
         ctx = StrategyContext(df=df, balance=self.initial_capital, equity=self.initial_capital)
         self._namespace["ctx"] = ctx
@@ -296,7 +294,7 @@ class ScriptStrategy:
                 )
             except Exception as e:
                 logger.warning(f"[Audit] Failed to log execution: {e}", exc_info=True)
-    
+
     def _execute_strategy(self, df: pd.DataFrame) -> Dict[str, Any]:
         ctx = self._create_context(df)
 

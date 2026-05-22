@@ -10,8 +10,7 @@ WebSocket Heartbeat 测试套件
 import asyncio
 import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi import WebSocket
+from unittest.mock import AsyncMock
 
 from app.services.ws_manager import ConnectionManager, WSConnection, ws_manager
 

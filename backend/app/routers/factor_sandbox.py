@@ -15,12 +15,11 @@ import threading
 import uuid
 import json
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple, AsyncGenerator
 
 import numpy as np
-import pandas as pd
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sse_starlette.sse import EventSourceResponse
 
@@ -87,7 +86,7 @@ class ThreadSafeFactorCache:
     - Automatic cleanup of expired entries
     - Max entries limit to prevent memory bloat
     """
-    
+
     def __init__(self, ttl: int = 300, max_entries: int = 10000):
         self._cache: Dict[str, Tuple[float, Any]] = {}
         self._async_lock = asyncio.Lock()
@@ -96,7 +95,7 @@ class ThreadSafeFactorCache:
         self._max_entries = max_entries
         self._last_cleanup = time.time()
         self._cleanup_interval = 60  # Cleanup every 60 seconds
-    
+
     def get(self, key: str) -> Optional[Any]:
         """Get cached value (sync, used in executor)"""
         with self._sync_lock:
@@ -108,41 +107,41 @@ class ThreadSafeFactorCache:
                     # Remove expired entry
                     del self._cache[key]
             return None
-    
+
     def set(self, key: str, value: Any) -> None:
         """Set cached value (sync, used in executor)"""
         with self._sync_lock:
             # Cleanup if needed
             self._cleanup_if_needed()
-            
+
             # Enforce max entries limit
             if len(self._cache) >= self._max_entries:
                 self._cleanup_expired()
                 if len(self._cache) >= self._max_entries:
                     # Remove oldest entries
-                    oldest_keys = sorted(self._cache.keys(), 
+                    oldest_keys = sorted(self._cache.keys(),
                                          key=lambda k: self._cache[k][0])[:100]
                     for k in oldest_keys:
                         del self._cache[k]
-            
+
             self._cache[key] = (time.time(), value)
-    
+
     async def get_async(self, key: str) -> Optional[Any]:
         """Get cached value (async)"""
         async with self._async_lock:
             return self.get(key)
-    
+
     async def set_async(self, key: str, value: Any) -> None:
         """Set cached value (async)"""
         async with self._async_lock:
             self.set(key, value)
-    
+
     def _cleanup_if_needed(self) -> None:
         """Cleanup expired entries if interval elapsed"""
         if time.time() - self._last_cleanup > self._cleanup_interval:
             self._cleanup_expired()
             self._last_cleanup = time.time()
-    
+
     def _cleanup_expired(self) -> None:
         """Remove all expired entries"""
         now = time.time()
@@ -152,12 +151,12 @@ class ThreadSafeFactorCache:
         ]
         for k in expired_keys:
             del self._cache[k]
-    
+
     def clear(self) -> None:
         """Clear all cached entries"""
         with self._sync_lock:
             self._cache.clear()
-    
+
     def stats(self) -> Dict[str, Any]:
         """Get cache statistics"""
         with self._sync_lock:
@@ -193,7 +192,7 @@ class ScreenRequest(BaseModel):
     factors: List[FactorParam] = Field(..., min_length=1, max_length=20, description="Factor filters")
     universe: str = Field(default="hs300", description="Stock universe: all, hs300, zz500, cyb50")
     limit: int = Field(default=50, ge=1, le=500, description="Max results to return")
-    
+
     @field_validator('universe')
     @classmethod
     def validate_universe(cls, v: str) -> str:
@@ -209,12 +208,12 @@ class BacktestPreviewRequest(BaseModel):
     start_date: str = Field(..., description="Start date YYYY-MM-DD")
     end_date: str = Field(..., description="End date YYYY-MM-DD")
     initial_capital: float = Field(default=100000, ge=10000, le=1e9, description="Initial capital")
-    
+
     @field_validator('symbols')
     @classmethod
     def validate_symbols(cls, v: List[str]) -> List[str]:
         return [s.strip().lower() for s in v if s.strip()]
-    
+
     @field_validator('start_date', 'end_date')
     @classmethod
     def validate_date_format(cls, v: str) -> str:
@@ -223,7 +222,7 @@ class BacktestPreviewRequest(BaseModel):
         except ValueError:
             raise ValueError(f'Invalid date format: {v}, expected YYYY-MM-DD')
         return v
-    
+
     @model_validator(mode='after')
     def validate_dates(self):
         if self.start_date > self.end_date:
@@ -241,7 +240,7 @@ async def health_check():
     """Health check endpoint"""
     registry = get_factor_registry()
     screener = get_stock_screener()
-    
+
     return success_response({
         "status": "healthy",
         "factors_registered": len(registry.list_factors()),
@@ -262,21 +261,21 @@ async def list_factors(
     Returns factors from both attribution and screening categories
     """
     registry = get_factor_registry()
-    
+
     cat_filter = None
     if category:
         try:
             cat_filter = FactorCategory(category.lower())
         except ValueError:
             pass
-    
+
     factors = registry.list_factors(cat_filter)
-    
+
     # Filter for screening-only if requested
     if screening_only:
         screening_factor_ids = [
             "macd_golden_cross",
-            "rsi_oversold", 
+            "rsi_oversold",
             "breakout_ma",
             "foreign_inflow",
             # TODO: Integrate with copilot API for real sentiment analysis
@@ -286,7 +285,7 @@ async def list_factors(
             "new_high",
         ]
         factors = [f for f in factors if f.id in screening_factor_ids]
-    
+
     return success_response({
         "factors": [f.to_dict() for f in factors],
         "total": len(factors),
@@ -302,7 +301,7 @@ async def list_screening_factors():
     These factors are designed for stock screening with real-time data
     """
     registry = get_factor_registry()
-    
+
     screening_factor_ids = [
         "macd_golden_cross",
         "rsi_oversold",
@@ -314,13 +313,13 @@ async def list_screening_factors():
         "institution_research",
         "new_high",
     ]
-    
+
     factors = []
     for fid in screening_factor_ids:
         factor = registry.get_factor(fid)
         if factor:
             factors.append(factor)
-    
+
     return success_response({
         "factors": [f.to_dict() for f in factors],
         "total": len(factors),
@@ -341,11 +340,11 @@ async def screen_stocks(req: ScreenRequest):
     Returns stocks that match all factor criteria, sorted by composite score
     """
     start_time = time.time()
-    
+
     try:
         # Run screening with timeout protection
         screener = get_stock_screener()
-        
+
         # Convert request to screening factors
         screening_factors = []
         for fp in req.factors:
@@ -353,7 +352,7 @@ async def screen_stocks(req: ScreenRequest):
                 id=fp.id,
                 params=fp.params,
             ))
-        
+
         result = await asyncio.wait_for(
             screener.screen_stocks(
                 factors=screening_factors,
@@ -362,9 +361,9 @@ async def screen_stocks(req: ScreenRequest):
             ),
             timeout=120.0,
         )
-        
+
         execution_time_ms = int((time.time() - start_time) * 1000)
-        
+
         return success_response({
             "stocks": result["stocks"],
             "total": result["total"],
@@ -372,9 +371,9 @@ async def screen_stocks(req: ScreenRequest):
             "universe": req.universe,
             "factors_applied": len(req.factors),
         })
-        
+
     except asyncio.TimeoutError:
-        logger.error(f"[FactorSandbox] Screening timeout after 30s", exc_info=True)
+        logger.error("[FactorSandbox] Screening timeout after 30s", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "筛选超时，请尝试减少因子数量或缩小股票范围")
     except Exception as e:
         logger.error(f"[FactorSandbox] Screening error: {e}", exc_info=True)
@@ -392,15 +391,15 @@ async def backtest_preview(req: BacktestPreviewRequest):
     Runs a simple buy-and-hold backtest to show potential performance
     """
     loop = asyncio.get_event_loop()
-    
+
     def _sync_backtest():
         from app.db.database import _get_conn
-        
+
         results = []
-        
+
         for symbol in req.symbols:
             db_symbol = symbol.replace("sh", "").replace("sz", "")
-            
+
             conn = _get_conn()
             try:
                 rows = conn.execute("""
@@ -409,17 +408,17 @@ async def backtest_preview(req: BacktestPreviewRequest):
                     WHERE symbol = ? AND date >= ? AND date <= ?
                     ORDER BY date ASC
                 """, (db_symbol, req.start_date, req.end_date)).fetchall()
-                
+
                 if len(rows) < 10:
                     continue
-                
+
                 closes = np.array([r[1] for r in rows])
-                
+
                 # Simple buy-and-hold return
                 start_price = closes[0]
                 end_price = closes[-1]
                 total_return = (end_price - start_price) / start_price * 100
-                
+
                 # Calculate max drawdown
                 peak = closes[0]
                 max_dd = 0
@@ -429,11 +428,11 @@ async def backtest_preview(req: BacktestPreviewRequest):
                     dd = (peak - c) / peak * 100
                     if dd > max_dd:
                         max_dd = dd
-                
+
                 # Calculate volatility (annualized)
                 returns = np.diff(np.log(closes + 1e-10))
                 volatility = np.std(returns) * np.sqrt(252) * 100
-                
+
                 results.append({
                     "symbol": symbol,
                     "start_price": float(start_price),
@@ -443,24 +442,24 @@ async def backtest_preview(req: BacktestPreviewRequest):
                     "volatility_pct": round(volatility, 2),
                     "trading_days": len(closes),
                 })
-                
+
             finally:
                 conn.close()
-        
+
         return results
-    
+
     try:
         results = await asyncio.wait_for(
             loop.run_in_executor(_executor, _sync_backtest),
             timeout=30.0,
         )
-        
+
         if not results:
             return error_response(ErrorCode.NOT_FOUND, "No valid data found for specified stocks")
-        
+
         # Sort by total return
         results.sort(key=lambda x: x["total_return_pct"], reverse=True)
-        
+
         return success_response({
             "results": results,
             "total": len(results),
@@ -470,9 +469,9 @@ async def backtest_preview(req: BacktestPreviewRequest):
             },
             "initial_capital": req.initial_capital,
         })
-        
+
     except asyncio.TimeoutError:
-        logger.error(f"[FactorSandbox] Backtest preview timeout", exc_info=True)
+        logger.error("[FactorSandbox] Backtest preview timeout", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "回测预览超时，请稍后重试")
     except Exception as e:
         logger.error(f"[FactorSandbox] Backtest preview error: {e}", exc_info=True)
@@ -505,7 +504,7 @@ class ScreenStreamRequest(BaseModel):
     factors: List[FactorParam] = Field(..., min_length=1, max_length=20)
     universe: str = Field(default="hs300")
     limit: int = Field(default=50, ge=1, le=500)
-    
+
     @field_validator('universe')
     @classmethod
     def validate_universe(cls, v: str) -> str:
@@ -547,7 +546,7 @@ async def start_streaming_screen(req: ScreenStreamRequest):
     Use GET /screen/{task_id}/stream to receive progress updates.
     """
     task_id = str(uuid.uuid4())
-    
+
     _update_progress(
         task_id,
         status="pending",
@@ -556,14 +555,14 @@ async def start_streaming_screen(req: ScreenStreamRequest):
         matches=[],
         error=None,
     )
-    
+
     asyncio.create_task(_run_screening_task(
         task_id=task_id,
         factors=req.factors,
         universe=req.universe,
         limit=req.limit,
     ))
-    
+
     return success_response({
         "task_id": task_id,
         "stream_url": f"/api/v1/factor_sandbox/screen/{task_id}/stream",
@@ -579,14 +578,14 @@ async def _run_screening_task(
     """Background task to run screening with progress updates"""
     try:
         screener = get_stock_screener()
-        
+
         screening_factors = [
             ScreeningFactor(id=fp.id, params=fp.params)
             for fp in factors
         ]
-        
+
         _update_progress(task_id, status="running")
-        
+
         result = await screener.screen_stocks_with_progress(
             factors=screening_factors,
             universe=Universe(universe),
@@ -598,7 +597,7 @@ async def _run_screening_task(
                 matches=matches[:limit],
             ),
         )
-        
+
         _update_progress(
             task_id,
             status="complete",
@@ -606,7 +605,7 @@ async def _run_screening_task(
             total_stocks=result["progress"]["total_stocks"],
             matches=result["stocks"][:limit],
         )
-        
+
     except asyncio.CancelledError:
         _update_progress(task_id, status="cancelled", error="Task cancelled")
     except Exception as e:
@@ -630,10 +629,10 @@ async def stream_screening_progress(task_id: str):
         last_screened = 0
         retry_count = 0
         max_retries = 10  # Wait up to 3 seconds for task to appear
-        
+
         while True:
             progress = _get_progress(task_id)
-            
+
             if progress is None:
                 retry_count += 1
                 if retry_count > max_retries:
@@ -645,10 +644,10 @@ async def stream_screening_progress(task_id: str):
                 # Wait for task to be created (race condition protection)
                 await asyncio.sleep(0.3)
                 continue
-            
+
             retry_count = 0  # Reset retry counter once task is found
             status = progress.get("status")
-            
+
             if status == "pending":
                 yield {
                     "event": "progress",
@@ -707,9 +706,9 @@ async def stream_screening_progress(task_id: str):
                 }
                 _clear_progress(task_id)
                 break
-            
+
             await asyncio.sleep(0.3)
-    
+
     return EventSourceResponse(
         event_generator(),
         headers={
@@ -727,9 +726,9 @@ async def cancel_screening_task(task_id: str):
     progress = _get_progress(task_id)
     if progress is None:
         return error_response(ErrorCode.NOT_FOUND, "Task not found")
-    
+
     if progress.get("status") in ["complete", "error", "cancelled"]:
         return error_response(ErrorCode.BAD_REQUEST, "Task already finished")
-    
+
     _update_progress(task_id, status="cancelled", error="Cancelled by user")
     return success_response({"message": "Task cancelled"})

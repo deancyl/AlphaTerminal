@@ -13,9 +13,8 @@ Covers the following endpoints:
 - GET /fund/open/full/{code} - 并发完整数据
 - GET /fund/money/rank - 货币基金排行
 """
-import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 
 from app.main import app
 

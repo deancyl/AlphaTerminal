@@ -2,7 +2,6 @@
 P0 Integration Tests for Futures Real Data
 Tests critical paths for real data API and historical endpoint.
 """
-import pytest
 import time
 from fastapi.testclient import TestClient
 
