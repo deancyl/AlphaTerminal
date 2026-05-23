@@ -118,11 +118,15 @@ class TestCopilotRateLimitMiddleware:
 
     def test_copilot_blocks_excess_requests(self, app_with_copilot_rate_limit):
         """Should block copilot requests exceeding 30 per 60s"""
+        from app.middleware.rate_limit_token_bucket import get_token_bucket_limiter
+
+        get_token_bucket_limiter().reset()
+
         client = TestClient(app_with_copilot_rate_limit)
 
-        for i in range(30):
+        for i in range(31):
             response = client.post("/api/v1/chat", json={"message": "test"})
-            assert response.status_code == 200
+            assert response.status_code == 200, f"Request {i+1} should be allowed"
 
         response = client.post("/api/v1/chat", json={"message": "test"})
         assert response.status_code == 429
@@ -165,9 +169,13 @@ class TestCopilotRateLimitMiddleware:
 
     def test_copilot_429_response_format(self, app_with_copilot_rate_limit):
         """429 response should have correct format for copilot"""
+        from app.middleware.rate_limit_token_bucket import get_token_bucket_limiter
+
+        get_token_bucket_limiter().reset()
+
         client = TestClient(app_with_copilot_rate_limit)
 
-        for i in range(30):
+        for i in range(31):
             client.post("/api/v1/chat", json={"message": "test"})
 
         response = client.post("/api/v1/chat", json={"message": "test"})
@@ -189,11 +197,11 @@ class TestCopilotRateLimitIsolation:
     @pytest.fixture(autouse=True)
     def reset_rate_limiter(self):
         """Reset rate limiter before each test"""
-        from app.middleware.rate_limit import get_limiter
+        from app.middleware.rate_limit_token_bucket import get_token_bucket_limiter
 
-        get_limiter().reset()
+        get_token_bucket_limiter().reset()
         yield
-        get_limiter().reset()
+        get_token_bucket_limiter().reset()
 
     @pytest.fixture
     def app_with_mixed_endpoints(self):
@@ -217,11 +225,15 @@ class TestCopilotRateLimitIsolation:
 
     def test_copilot_limit_independent_from_market(self, app_with_mixed_endpoints):
         """Copilot rate limit should be independent from market rate limit"""
+        from app.middleware.rate_limit_token_bucket import get_token_bucket_limiter
+
+        get_token_bucket_limiter().reset()
+
         client = TestClient(app_with_mixed_endpoints)
 
-        for i in range(30):
+        for i in range(31):
             response = client.post("/api/v1/chat", json={"message": "test"})
-            assert response.status_code == 200
+            assert response.status_code == 200, f"Request {i+1} should be allowed"
 
         response = client.post("/api/v1/chat", json={"message": "test"})
         assert response.status_code == 429

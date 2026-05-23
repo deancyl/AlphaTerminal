@@ -250,7 +250,8 @@ class ConnectionManager:
                     continue
                 try:
                     await conn.ws.send_text(data)
-                except (RuntimeError, ValueError, AttributeError):
+                except Exception:
+                    # Catch all exceptions - any error means the connection is dead
                     dead.append(conn)
 
             if dead:

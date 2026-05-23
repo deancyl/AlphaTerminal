@@ -176,7 +176,8 @@ class TestForexValidation:
         data = response.json()
         # When circuit breaker is open, code is 503
         # When validation fails, code is 100 (BAD_REQUEST)
-        assert data.get("code") in [100, 503]
+        # When matrix unavailable, code is 340 (MATRIX_UNAVAILABLE)
+        assert data.get("code") in [100, 340, 503]
 
 
 class TestForexCircuitBreaker:

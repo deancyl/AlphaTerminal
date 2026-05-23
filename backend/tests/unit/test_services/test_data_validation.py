@@ -496,7 +496,7 @@ def test_alphavantage_fetcher_init():
     reload(av_module)
 
     try:
-        fetcher = AlphavantageFetcher(proxy="http://192.168.1.50:7897")
+        fetcher = av_module.AlphavantageFetcher(proxy="http://192.168.1.50:7897")
         assert fetcher.name == "alphavantage"
         assert fetcher.display_name == "Alphavantage (US/FX)"
         assert fetcher.api_key == "4M3YTMFEMBOPM1W2"

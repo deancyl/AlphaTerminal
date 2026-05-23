@@ -1267,7 +1267,7 @@ async def copilot_chat(request: Request):
     if not session_id:
         session_id = str(uuid.uuid4())
 
-    _init_conversations_table()
+    await _init_conversations_table()
 
     if not prompt:
         return StreamingResponse(
@@ -1365,7 +1365,7 @@ async def copilot_chat(request: Request):
         context_block=context_block,
     )
 
-    history = _load_conversation(session_id) if session_id else []
+    history = await _load_conversation(session_id) if session_id else []
 
     messages = [
         {"role": "system", "content": system_msg},
@@ -1375,7 +1375,7 @@ async def copilot_chat(request: Request):
     messages.append({"role": "user", "content": prompt})
 
     if session_id:
-        _save_message(session_id, "user", prompt)
+        await _save_message(session_id, "user", prompt)
 
     logger.info(
         f"[Copilot] provider={provider} model={model_id} session={session_id[:8]}... "

@@ -453,7 +453,8 @@ class TestMarketQuote:
 
     def test_market_quote_nonexistent_symbol(self):
         response = client.get("/api/v1/market/quote/nonexistent123")
-        assert response.status_code in [200, 404, 500]
+        # 400 for invalid symbol format, 404 for symbol not found
+        assert response.status_code in [200, 400, 404, 500]
 
 
 class TestMarketStocks:

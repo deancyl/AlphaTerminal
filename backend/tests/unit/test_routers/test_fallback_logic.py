@@ -96,7 +96,7 @@ class TestForexFallback:
         """Test minimal static fallback"""
         quotes = forex_fetcher._get_minimal_static_fallback()
 
-        assert len(quotes) == 6  # 6 major pairs
+        assert len(quotes) == 10  # 6 CNY-based + 4 USD-based for triangular arbitrage
         assert all(q["source"] == "static" for q in quotes)
         assert all(q["is_demo"] == True for q in quotes)
 
