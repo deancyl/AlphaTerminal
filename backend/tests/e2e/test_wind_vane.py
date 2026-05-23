@@ -8,7 +8,28 @@ Tests the complete user flow for the wind vane widget:
 - Mobile layout visibility
 """
 
+import pytest
+from fastapi.testclient import TestClient
+from app.main import app
 
+# Check if database table exists
+try:
+    from app.db.database import get_db_connection
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='market_data_realtime'")
+        HAS_MARKET_DATA_TABLE = cursor.fetchone() is not None
+except Exception:
+    HAS_MARKET_DATA_TABLE = False
+
+
+@pytest.fixture
+def client():
+    """Create a test client for the FastAPI app."""
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.mark.skipif(not HAS_MARKET_DATA_TABLE, reason="market_data_realtime table not found in database")
 class TestWindVaneDisplay:
     """Test wind vane display functionality."""
 
@@ -48,6 +69,7 @@ class TestWindVaneDisplay:
                     assert "market" in item
 
 
+@pytest.mark.skipif(not HAS_MARKET_DATA_TABLE, reason="market_data_realtime table not found in database")
 class TestWindVaneInteraction:
     """Test wind vane click interaction."""
 
@@ -82,6 +104,7 @@ class TestWindVaneErrorHandling:
         assert response.status_code in [200, 500]
 
 
+@pytest.mark.skipif(not HAS_MARKET_DATA_TABLE, reason="market_data_realtime table not found in database")
 class TestWindVaneMobileLayout:
     """Test wind vane mobile layout."""
 
@@ -116,6 +139,7 @@ class TestWindVaneDataFreshness:
 
         assert _MACRO_CACHE_TTL == 60
 
+    @pytest.mark.skipif(not HAS_MARKET_DATA_TABLE, reason="market_data_realtime table not found in database")
     def test_market_overview_has_timestamp(self, client):
         """Test that market overview includes timestamp."""
         response = client.get("/api/v1/market/overview")
