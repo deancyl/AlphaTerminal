@@ -16,7 +16,7 @@ import akshare as ak
 client = TestClient(app)
 
 # Check if stock_individual_notice_report exists in akshare
-HAS_STOCK_INDIVIDUAL_NOTICE_REPORT = hasattr(ak, 'stock_individual_notice_report')
+HAS_STOCK_INDIVIDUAL_NOTICE_REPORT = hasattr(ak, "stock_individual_notice_report")
 HAS_BAOSTOCK = True
 try:
     import baostock
@@ -378,8 +378,10 @@ class TestF9MarginEndpoint:
 class TestF9AnnouncementsEndpoint:
     """Tests for /api/v1/f9/{symbol}/announcements endpoint"""
 
-    @pytest.mark.skipif(not HAS_STOCK_INDIVIDUAL_NOTICE_REPORT, 
-                        reason="stock_individual_notice_report not available in this akshare version")
+    @pytest.mark.skipif(
+        not HAS_STOCK_INDIVIDUAL_NOTICE_REPORT,
+        reason="stock_individual_notice_report not available in this akshare version",
+    )
     def test_announcements_endpoint_success(self, mock_announcements_df):
         """Test announcements endpoint returns data successfully"""
         with patch("app.routers.f9_deep.akshare_breaker") as mock_breaker:
@@ -400,8 +402,10 @@ class TestF9AnnouncementsEndpoint:
                 assert "page" in data["data"]
                 assert "page_size" in data["data"]
 
-    @pytest.mark.skipif(not HAS_STOCK_INDIVIDUAL_NOTICE_REPORT, 
-                        reason="stock_individual_notice_report not available in this akshare version")
+    @pytest.mark.skipif(
+        not HAS_STOCK_INDIVIDUAL_NOTICE_REPORT,
+        reason="stock_individual_notice_report not available in this akshare version",
+    )
     def test_announcements_endpoint_pagination(self, mock_announcements_df):
         """Test announcements endpoint pagination"""
         f9_deep._cache.clear()  # Clear cache to avoid stale data
@@ -423,8 +427,10 @@ class TestF9AnnouncementsEndpoint:
                 assert data["data"]["page"] == 1
                 assert data["data"]["page_size"] == 10
 
-    @pytest.mark.skipif(not HAS_STOCK_INDIVIDUAL_NOTICE_REPORT, 
-                        reason="stock_individual_notice_report not available in this akshare version")
+    @pytest.mark.skipif(
+        not HAS_STOCK_INDIVIDUAL_NOTICE_REPORT,
+        reason="stock_individual_notice_report not available in this akshare version",
+    )
     def test_announcements_endpoint_page_2(self, mock_announcements_df):
         """Test announcements endpoint page 2"""
         with patch("app.routers.f9_deep.akshare_breaker") as mock_breaker:
@@ -450,8 +456,7 @@ class TestF9AnnouncementsEndpoint:
 class TestF9PeersEndpoint:
     """Tests for /api/v1/f9/{symbol}/peers endpoint"""
 
-    @pytest.mark.skipif(not HAS_BAOSTOCK, 
-                        reason="baostock module not installed")
+    @pytest.mark.skipif(not HAS_BAOSTOCK, reason="baostock module not installed")
     def test_peers_endpoint_success(self, mock_stock_info_df, mock_financial_df):
         """Test peers endpoint returns data successfully"""
         with patch("app.routers.f9_deep.akshare_breaker") as mock_breaker:
@@ -548,8 +553,10 @@ class TestF9InputValidation:
         response = client.get("/api/v1/f9/600519/announcements?page_size=101")
         assert response.status_code == 200
 
-    @pytest.mark.skipif(not HAS_STOCK_INDIVIDUAL_NOTICE_REPORT, 
-                        reason="stock_individual_notice_report not available in this akshare version")
+    @pytest.mark.skipif(
+        not HAS_STOCK_INDIVIDUAL_NOTICE_REPORT,
+        reason="stock_individual_notice_report not available in this akshare version",
+    )
     def test_announcements_valid_pagination(self, mock_announcements_df):
         """Test announcements valid pagination parameters"""
         with patch("app.routers.f9_deep.akshare_breaker") as mock_breaker:
