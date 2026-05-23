@@ -214,7 +214,9 @@ class TestForexFetcherSpot:
         assert "EURCNY" in symbols
         assert "GBPCNY" in symbols
 
-    @pytest.mark.skip(reason="Mock doesn't work due to global cache and _get_akshare() direct call")
+    @pytest.mark.skip(
+        reason="Mock doesn't work due to global cache and _get_akshare() direct call"
+    )
     @pytest.mark.asyncio
     async def test_fetch_spot_with_cross_pairs(self, sample_spot_dataframe):
         """Test that cross pairs can be processed."""
@@ -455,7 +457,9 @@ class TestForexFetcherFallback:
 class TestForexFetcherCircuitBreaker:
     """Tests for circuit breaker integration."""
 
-    @pytest.mark.skip(reason="Fallback uses _get_akshare() directly, bypassing mocked self.ak")
+    @pytest.mark.skip(
+        reason="Fallback uses _get_akshare() directly, bypassing mocked self.ak"
+    )
     @pytest.mark.asyncio
     async def test_circuit_breaker_blocks_on_failures(self):
         """Test that circuit breaker blocks requests after failures."""

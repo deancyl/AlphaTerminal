@@ -223,7 +223,9 @@ class TestRateLimitMiddleware:
 
         for i in range(60):
             response = client.get("/api/v1/market/test")
-            assert response.status_code == 200, f"Request {i+1} failed with {response.status_code}"
+            assert (
+                response.status_code == 200
+            ), f"Request {i+1} failed with {response.status_code}"
 
     def test_rate_limit_blocks_excess_requests(self, app_with_rate_limit):
         """Should block requests exceeding limit"""

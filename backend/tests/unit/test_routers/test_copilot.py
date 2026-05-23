@@ -367,7 +367,9 @@ class TestCopilotAsyncSSE:
                         )
                     )
 
-                    response = await async_client.post("/api/v1/chat", json={"prompt": "test"})
+                    response = await async_client.post(
+                        "/api/v1/chat", json={"prompt": "test"}
+                    )
                     assert response.status_code == 200
                     body = response.json()
                     assert body.get("code") is not None
@@ -550,7 +552,9 @@ class TestCopilotServiceLayerFailures:
         assert response.status_code == 200
         assert "text/event-stream" in response.headers.get("content-type", "")
 
-    @pytest.mark.skip(reason="Mock configuration issue: 'coroutine' object is not iterable")
+    @pytest.mark.skip(
+        reason="Mock configuration issue: 'coroutine' object is not iterable"
+    )
     def test_context_assembler_exception_handled(self):
         """Context assembler exception should fall back to basic context"""
         with patch("app.routers.copilot.get_context_assembler") as mock_ca:
@@ -706,7 +710,9 @@ class TestCopilotServiceLayerFailures:
         response = client.get("/api/v1/chat")
         assert response.status_code in [404, 405]
 
-    @pytest.mark.skip(reason="Mock configuration issue: X-Session-Id header not present in error response")
+    @pytest.mark.skip(
+        reason="Mock configuration issue: X-Session-Id header not present in error response"
+    )
     def test_none_provider_with_no_api_keys(self):
         """When no API keys are configured, should use mock"""
         with patch("app.routers.copilot.get_context_assembler") as mock_ca:
@@ -1740,7 +1746,9 @@ class TestCopilotLLMProviders:
 class TestCopilotTokenTracking:
     """Tests for token tracking accuracy and cost calculation"""
 
-    @pytest.mark.skip(reason="Mock configuration issue: 'coroutine' object is not iterable")
+    @pytest.mark.skip(
+        reason="Mock configuration issue: 'coroutine' object is not iterable"
+    )
     def test_token_tracking_service_called(self):
         """Verify token tracking service is called during chat"""
         with patch("app.routers.copilot.get_context_assembler") as mock_ca:
@@ -1829,7 +1837,9 @@ class TestCopilotTokenTracking:
                                 )
                                 assert response.status_code == 200
 
-    @pytest.mark.skip(reason="Mock configuration issue: 'coroutine' object is not iterable")
+    @pytest.mark.skip(
+        reason="Mock configuration issue: 'coroutine' object is not iterable"
+    )
     def test_session_usage_updated(self):
         """Verify session usage is updated after chat"""
         with patch("app.routers.copilot.get_context_assembler") as mock_ca:
