@@ -10,6 +10,9 @@ on:
     branches: [ master, main, develop ]
     paths:
       - 'frontend/**'
+  workflow_call:
+    secrets:
+      inherit
 
 jobs:
   test:
