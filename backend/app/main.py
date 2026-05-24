@@ -100,11 +100,15 @@ async def lifespan(app: FastAPI):
                 await asyncio.wait_for(run_initial_data_fetch(), timeout=10.0)
                 logger.info("[Lifespan] Data pre-warming complete")
             except asyncio.TimeoutError:
-                logger.warning("[Lifespan] Data fetch timed out after 10s, continuing with empty cache")
+                logger.warning(
+                    "[Lifespan] Data fetch timed out after 10s, continuing with empty cache"
+                )
             except Exception as e:
                 logger.warning(f"[Lifespan] Data fetch failed: {e}", exc_info=True)
         else:
-            logger.info("[Lifespan] CI environment detected, skipping blocking data fetch")
+            logger.info(
+                "[Lifespan] CI environment detected, skipping blocking data fetch"
+            )
 
         # Warmup macro cache in background
         asyncio.create_task(warmup_macro_cache())

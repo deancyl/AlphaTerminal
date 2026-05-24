@@ -1,4 +1,5 @@
 """Unit tests for startup timeout and CI detection."""
+
 import asyncio
 import os
 import pytest
@@ -10,27 +11,35 @@ class TestCIDetection:
     def test_github_actions_detection(self, monkeypatch):
         """Test GITHUB_ACTIONS environment variable detection."""
         monkeypatch.setenv("GITHUB_ACTIONS", "true")
-        is_ci = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+        is_ci = (
+            os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+        )
         assert is_ci is True
 
     def test_ci_detection(self, monkeypatch):
         """Test CI environment variable detection."""
         monkeypatch.setenv("CI", "true")
-        is_ci = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+        is_ci = (
+            os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+        )
         assert is_ci is True
 
     def test_no_ci_environment(self, monkeypatch):
         """Test that CI detection returns False when not in CI."""
         monkeypatch.delenv("CI", raising=False)
         monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-        is_ci = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+        is_ci = (
+            os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+        )
         assert is_ci is False
 
     def test_ci_false_value(self, monkeypatch):
         """Test that CI detection returns False when CI is set to false."""
         monkeypatch.setenv("CI", "false")
         monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-        is_ci = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+        is_ci = (
+            os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+        )
         assert is_ci is False
 
 
@@ -40,6 +49,7 @@ class TestTimeoutWrapper:
     @pytest.mark.asyncio
     async def test_timeout_triggers(self):
         """Test that asyncio.wait_for raises TimeoutError on slow function."""
+
         async def slow_function():
             await asyncio.sleep(20)
             return "done"
@@ -50,6 +60,7 @@ class TestTimeoutWrapper:
     @pytest.mark.asyncio
     async def test_fast_function_completes(self):
         """Test that fast function completes before timeout."""
+
         async def fast_function():
             await asyncio.sleep(0.1)
             return "done"
@@ -60,6 +71,7 @@ class TestTimeoutWrapper:
     @pytest.mark.asyncio
     async def test_timeout_catches_exception(self):
         """Test that exception in wrapped function is raised."""
+
         async def failing_function():
             raise ValueError("test error")
 
