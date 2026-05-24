@@ -6072,3 +6072,96 @@ Changed from `class="w-full h-full"` to `class="absolute inset-0"`:
 
 `frontend/src/components/MarketRadar.vue`
 
+
+---
+
+## CI/CD Pipeline Fix (v0.6.102)
+
+### Overview
+
+Fixed critical issue where `ci-cd.yml` workflow failed immediately at 0s due to missing `workflow_call` trigger in reusable workflows.
+
+### Problem
+
+The `ci-cd.yml` workflow was trying to call `backend-ci.yml` and `frontend-ci.yml` as reusable workflows using the `uses:` syntax, but these workflows didn't have the required `workflow_call` trigger.
+
+**Error**: "This run likely failed because of a workflow file issue"
+
+### Solution
+
+#### 1. Add workflow_call Trigger
+
+**backend-ci.yml** and **frontend-ci.yml**:
+
+```yaml
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+  workflow_call:  # Added this line
+```
+
+#### 2. Fix Conditional Expressions
+
+**ci-cd.yml**:
+
+```yaml
+# Before (missing ${{ }})
+if: always() && (needs.backend.result != 'failure')
+
+# After (correct syntax)
+if: ${{ always() && (needs.backend.result != 'failure') }}
+```
+
+#### 3. Handle Skipped Dependencies
+
+**notify job**:
+
+```yaml
+# Treat skipped as success
+- name: Notify on success
+  if: ${{ (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') }}
+```
+
+### Commits
+
+| Commit | Description |
+|--------|-------------|
+| `c0afaa40` | Handle skipped dependencies in ci-cd.yml workflow |
+| `8aaf0e39` | Add missing expression wrapper in ci-cd.yml if conditions |
+| `64d066e9` | Add expression wrapper to notify job if condition |
+| `2e3fad97` | Add workflow_call trigger to backend-ci and frontend-ci |
+| `3dc32212` | Remove secrets from workflow_call (use simple trigger) |
+
+### CI Status After Fix
+
+| Workflow | Status |
+|----------|--------|
+| Backend CI | ✅ PASSED |
+| Frontend CI | ✅ PASSED |
+| CI/CD Pipeline | ✅ PASSED |
+| E2E Integration Tests | ✅ PASSED |
+
+### File Locations
+
+| File | Changes |
+|------|---------|
+| `.github/workflows/backend-ci.yml` | Added `workflow_call:` trigger |
+| `.github/workflows/frontend-ci.yml` | Added `workflow_call:` trigger |
+| `.github/workflows/ci-cd.yml` | Fixed conditional expressions |
+
+### Verification Commands
+
+```bash
+# Check workflow_call trigger
+grep "workflow_call:" .github/workflows/backend-ci.yml
+grep "workflow_call:" .github/workflows/frontend-ci.yml
+
+# View recent workflow runs
+gh run list --workflow=ci-cd.yml --limit=5
+
+# Check all workflows status
+gh run list --limit=10
+```
+

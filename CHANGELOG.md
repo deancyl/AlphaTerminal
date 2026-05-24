@@ -5,6 +5,63 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.102] - 2026-05-25
+
+### CI/CD Pipeline 修复 - Reusable Workflow 支持
+
+修复 `ci-cd.yml` 工作流无法调用 `backend-ci.yml` 和 `frontend-ci.yml` 的问题。
+
+#### 修复问题
+
+**P0-1: Workflow_call 触发器缺失**
+- `backend-ci.yml` 和 `frontend-ci.yml` 缺少 `workflow_call` 触发器
+- 导致 `ci-cd.yml` 使用 `uses:` 语法调用时失败
+- 错误信息: "This run likely failed because of a workflow file issue"
+
+**P0-2: 条件表达式语法错误**
+- `debug-checks` 和 `coverage` 任务的 `if:` 条件缺少 `${{ }}` 包装
+- 导致 GitHub Actions 无法正确解析表达式
+
+**P0-3: Notify 任务条件逻辑错误**
+- `notify` 任务将 `skipped` 状态视为失败
+- 修改为将 `skipped` 视为成功（因为路径过滤可能跳过任务）
+
+#### 文件修改
+
+| 文件 | 修改 |
+|------|------|
+| `.github/workflows/backend-ci.yml` | 添加 `workflow_call:` 触发器 |
+| `.github/workflows/frontend-ci.yml` | 添加 `workflow_call:` 触发器 |
+| `.github/workflows/ci-cd.yml` | 修复条件表达式，添加 `${{ }}` 包装 |
+
+#### 提交记录
+
+```
+3dc32212 - fix: Remove secrets from workflow_call (use simple trigger)
+2e3fad97 - fix: Add workflow_call trigger to backend-ci and frontend-ci
+64d066e9 - fix: Add expression wrapper to notify job if condition
+8aaf0e39 - fix: Add missing expression wrapper in ci-cd.yml if conditions
+c0afaa40 - fix: Handle skipped dependencies in ci-cd.yml workflow
+```
+
+#### 验证命令
+
+```bash
+# 查看 workflow 运行状态
+gh run list --workflow=ci-cd.yml --limit=5
+
+# 验证 workflow_call 触发器
+grep "workflow_call:" .github/workflows/backend-ci.yml
+grep "workflow_call:" .github/workflows/frontend-ci.yml
+```
+
+#### CI 状态
+
+- ✅ Backend CI: PASSED
+- ✅ Frontend CI: PASSED
+- ✅ CI/CD Pipeline: PASSED
+- ✅ E2E Integration Tests: PASSED
+
 ## [0.6.73] - 2026-05-22
 
 ### Market Module 优化 - 代码整合与测试修复
