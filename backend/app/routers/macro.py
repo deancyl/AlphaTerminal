@@ -7,7 +7,6 @@
 import logging
 import asyncio
 import httpx
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from fastapi import APIRouter, Query
 from typing import Optional
@@ -18,14 +17,10 @@ from app.config.macro_config import (
     MACRO_CACHE_DURATION,
     MACRO_FETCH_TIMEOUT,
 )
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/macro", tags=["macro"])
-
-# ── 线程池执行器（用于并行化 akshare 同步调用）────────────────────
-_executor = ThreadPoolExecutor(
-    max_workers=MACRO_THREAD_POOL_SIZE, thread_name_prefix="macro_"
-)
 
 # ── 延迟导入工具 ─────────────────────────────────────────────────────
 _akshare_module = None
@@ -149,7 +144,7 @@ async def get_gdp_data(
     try:
         loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
-            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
+            loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_gdp()),
             timeout=MACRO_TIMEOUT,
         )
 
@@ -245,7 +240,7 @@ async def get_cpi_data(
     try:
         loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
-            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
+            loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_cpi()),
             timeout=MACRO_TIMEOUT,
         )
 
@@ -339,7 +334,7 @@ async def get_ppi_data(
     try:
         loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
-            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi()),
+            loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_ppi()),
             timeout=MACRO_TIMEOUT,
         )
 
@@ -415,7 +410,7 @@ async def get_pmi_data(
     try:
         loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
-            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
+            loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_pmi()),
             timeout=MACRO_TIMEOUT,
         )
 
@@ -514,46 +509,46 @@ async def get_macro_overview():
 
         async def fetch_gdp():
             return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
+                loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_gdp()),
                 "GDP",
             )
 
         async def fetch_cpi():
             return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
+                loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_cpi()),
                 "CPI",
             )
 
         async def fetch_ppi():
             return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi()),
+                loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_ppi()),
                 "PPI",
             )
 
         async def fetch_pmi():
             return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
+                loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_pmi()),
                 "PMI",
             )
 
         async def fetch_m2():
             return await fetch_with_timeout(
                 loop.run_in_executor(
-                    _executor, lambda: _get_ak().macro_china_supply_of_money()
+                    get_executor(), lambda: _get_ak().macro_china_supply_of_money()
                 ),
                 "M2",
             )
 
         async def fetch_sf():
             return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_shrzgm()),
+                loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_shrzgm()),
                 "SocialFinancing",
             )
 
         async def fetch_ind():
             return await fetch_with_timeout(
                 loop.run_in_executor(
-                    _executor, lambda: _get_ak().macro_china_industrial_production_yoy()
+                    get_executor(), lambda: _get_ak().macro_china_industrial_production_yoy()
                 ),
                 "IndustrialProduction",
             )
@@ -561,7 +556,7 @@ async def get_macro_overview():
         async def fetch_unemp():
             return await fetch_with_timeout(
                 loop.run_in_executor(
-                    _executor, lambda: _get_ak().macro_china_urban_unemployment()
+                    get_executor(), lambda: _get_ak().macro_china_urban_unemployment()
                 ),
                 "Unemployment",
             )
@@ -1003,7 +998,7 @@ async def get_economic_calendar(
 
                 if fetch_func:
                     df = await asyncio.wait_for(
-                        loop.run_in_executor(_executor, fetch_func),
+                        loop.run_in_executor(get_executor(), fetch_func),
                         timeout=MACRO_TIMEOUT,
                     )
                     return (indicator_config, df)
@@ -1238,7 +1233,7 @@ async def get_m2_data(
         loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
             loop.run_in_executor(
-                _executor, lambda: _get_ak().macro_china_supply_of_money()
+                get_executor(), lambda: _get_ak().macro_china_supply_of_money()
             ),
             timeout=MACRO_TIMEOUT,
         )
@@ -1321,7 +1316,7 @@ async def get_social_financing_data(
     try:
         loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
-            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_shrzgm()),
+            loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_shrzgm()),
             timeout=MACRO_TIMEOUT,
         )
 
@@ -1397,7 +1392,7 @@ async def get_industrial_production_data(
         loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
             loop.run_in_executor(
-                _executor, lambda: _get_ak().macro_china_industrial_production_yoy()
+                get_executor(), lambda: _get_ak().macro_china_industrial_production_yoy()
             ),
             timeout=MACRO_TIMEOUT,
         )
@@ -1487,7 +1482,7 @@ async def get_unemployment_data(
         loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
             loop.run_in_executor(
-                _executor, lambda: _get_ak().macro_china_urban_unemployment()
+                get_executor(), lambda: _get_ak().macro_china_urban_unemployment()
             ),
             timeout=MACRO_TIMEOUT,
         )
@@ -1608,8 +1603,7 @@ async def get_macro_batch(
         async def fetch_gdp():
             try:
                 df = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        _executor, lambda: _get_ak().macro_china_gdp()
+                    loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_gdp()
                     ),
                     timeout=MACRO_TIMEOUT,
                 )
@@ -1635,8 +1629,7 @@ async def get_macro_batch(
         async def fetch_cpi():
             try:
                 df = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        _executor, lambda: _get_ak().macro_china_cpi()
+                    loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_cpi()
                     ),
                     timeout=MACRO_TIMEOUT,
                 )
@@ -1662,8 +1655,7 @@ async def get_macro_batch(
         async def fetch_ppi():
             try:
                 df = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        _executor, lambda: _get_ak().macro_china_ppi()
+                    loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_ppi()
                     ),
                     timeout=MACRO_TIMEOUT,
                 )
@@ -1689,8 +1681,7 @@ async def get_macro_batch(
         async def fetch_pmi():
             try:
                 df = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        _executor, lambda: _get_ak().macro_china_pmi()
+                    loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_pmi()
                     ),
                     timeout=MACRO_TIMEOUT,
                 )
@@ -1716,8 +1707,7 @@ async def get_macro_batch(
         async def fetch_m2():
             try:
                 df = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        _executor, lambda: _get_ak().macro_china_m2_yearly()
+                    loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_m2_yearly()
                     ),
                     timeout=MACRO_TIMEOUT,
                 )
@@ -1743,8 +1733,7 @@ async def get_macro_batch(
         async def fetch_social_financing():
             try:
                 df = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        _executor, lambda: _get_ak().macro_china_bank_financing()
+                    loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_bank_financing()
                     ),
                     timeout=MACRO_TIMEOUT,
                 )
@@ -1770,8 +1759,7 @@ async def get_macro_batch(
         async def fetch_industrial_production():
             try:
                 df = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        _executor, lambda: _get_ak().macro_china_gyzjz()
+                    loop.run_in_executor(get_executor(), lambda: _get_ak().macro_china_gyzjz()
                     ),
                     timeout=MACRO_TIMEOUT,
                 )
@@ -1798,7 +1786,7 @@ async def get_macro_batch(
             try:
                 df = await asyncio.wait_for(
                     loop.run_in_executor(
-                        _executor, lambda: _get_ak().macro_china_urban_unemployment()
+                        get_executor(), lambda: _get_ak().macro_china_urban_unemployment()
                     ),
                     timeout=MACRO_TIMEOUT,
                 )
@@ -1909,7 +1897,7 @@ async def get_macro_dashboard():
 
             try:
                 data = await asyncio.wait_for(
-                    loop.run_in_executor(_executor, fetch_func), timeout=MACRO_TIMEOUT
+                    loop.run_in_executor(get_executor(), fetch_func), timeout=MACRO_TIMEOUT
                 )
                 if data is not None:
                     cache.set(cache_key, data, ttl=MACRO_CACHE_DURATION)
@@ -2307,7 +2295,7 @@ async def warmup_macro_cache():
     async def warmup_indicator(name, cache_key, fetch_func):
         try:
             data = await asyncio.wait_for(
-                loop.run_in_executor(_executor, fetch_func), timeout=MACRO_TIMEOUT
+                loop.run_in_executor(get_executor(), fetch_func), timeout=MACRO_TIMEOUT
             )
             if data is not None:
                 cache.set(cache_key, data, ttl=MACRO_CACHE_DURATION)

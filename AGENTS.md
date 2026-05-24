@@ -6165,3 +6165,138 @@ gh run list --workflow=ci-cd.yml --limit=5
 gh run list --limit=10
 ```
 
+---
+
+## Architecture Refactoring (v0.6.103-v0.6.200)
+
+### Overview
+
+A comprehensive architecture refactoring based on external security audit, implementing single-process architecture with no external dependencies (Redis, Celery, Nginx).
+
+### Key Improvements
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| ThreadPoolExecutor Fragmentation | P0 | Centralized executor in `utils/executor.py` | ✅ Fixed |
+| CircuitBreaker Duplication | P0 | `_SOURCE_STATUS_MAP` in `unified_fetcher.py` | ✅ Fixed |
+| Event Loop Blocking | P0 | Wrapped blocking AkShare calls in `run_in_executor` | ✅ Fixed |
+| Execution Engine Missing | P1 | Created `execution_engine.py` with `_running_tasks` | ✅ Fixed |
+| Response Format Inconsistency | P1 | Removed legacy handlers from `main.py` | ✅ Fixed |
+| WebSocket Memory Leak | P1 | Added `asyncio.shield` to cleanup | ✅ Fixed |
+| Database Path for Tauri | P2 | Moved to `~/.config/alphaterminal/` | ✅ Fixed |
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `backend/app/utils/executor.py` | Centralized ThreadPoolExecutor (32 workers) |
+| `backend/app/services/execution_engine.py` | Async task tracking with `_running_tasks` |
+| `backend/app/db/execution_db.py` | Execution history SQLite persistence |
+
+### Centralized ThreadPoolExecutor
+
+**Before**: 43 separate executors across routers (460+ workers)
+**After**: Single executor with 32 workers + fast executor with 16 workers
+
+```python
+from app.utils.executor import get_executor
+
+# Main I/O executor (32 workers)
+executor = get_executor()
+
+# Fast executor for sub-second operations
+executor = get_executor(fast=True)
+
+# Usage
+result = await loop.run_in_executor(get_executor(), blocking_function)
+```
+
+### Centralized Circuit Breaker Registry
+
+**Before**: 72 separate CircuitBreaker instances (duplicate `_EASTMONEY_CB` in 2 files)
+**After**: Single registry per data source
+
+```python
+from app.services.unified_fetcher import get_source_breaker
+
+# Get shared circuit breaker for a data source
+cb = get_source_breaker("eastmoney")
+if cb.state == CircuitState.OPEN:
+    # Use fallback
+    pass
+```
+
+### Execution Engine
+
+```python
+from app.services.execution_engine import get_execution_engine
+
+engine = get_execution_engine()
+
+# Start execution with task handle
+execution_id = await engine.start_execution("abc123", my_async_function)
+
+# Cancel execution (proper task.cancel())
+await engine.cancel_execution("abc123")
+
+# Get status
+status = await engine.get_execution_status("abc123")
+```
+
+### Frontend ApiResponseError
+
+```javascript
+import { ApiResponseError } from '@/utils/api.js'
+
+try {
+  const data = await apiFetch('/api/v1/market/overview')
+} catch (error) {
+  if (error instanceof ApiResponseError) {
+    // Business error (code != 0) - does NOT trigger circuit breaker
+    console.log(`Business error: ${error.code} - ${error.message}`)
+  } else {
+    // Network error - triggers circuit breaker
+    console.log('Network error')
+  }
+}
+```
+
+### Verification Commands
+
+```bash
+# Check centralized executor
+python3 -c "from app.utils.executor import get_executor; e = get_executor(); assert e._max_workers >= 8"
+
+# Check source status map
+grep -c "_SOURCE_STATUS_MAP" backend/app/services/unified_fetcher.py  # Expected: 5+
+
+# Check execution engine
+python3 -c "from app.services.execution_engine import ExecutionEngine; assert hasattr(ExecutionEngine, '_running_tasks')"
+
+# Check legacy handlers removed
+grep -c "@app.exception_handler" backend/app/main.py  # Expected: 0
+
+# Check WebSocket cleanup
+grep -c "asyncio.shield" backend/app/services/ws_manager.py  # Expected: 2+
+
+# Check EASTMONEY_CB removed
+grep -c "_EASTMONEY_CB" backend/app/services/market_radar/*.py  # Expected: 0
+
+# Check router executors migrated
+grep -c "_executor = ThreadPoolExecutor" backend/app/routers/stocks.py backend/app/routers/macro.py  # Expected: 0
+
+# Check frontend ApiResponseError
+grep -c "ApiResponseError" frontend/src/utils/api.js  # Expected: 5+
+
+# Build verification
+cd frontend && npm run build  # Should succeed
+cd backend && python3 -m py_compile app/main.py app/utils/executor.py app/services/execution_engine.py
+```
+
+### Architecture Principles
+
+1. **Single-Process Architecture**: No Redis, Celery, or external services
+2. **User Permissions Only**: No root/sudo required
+3. **Tauri Compatible**: Database in `~/.config/alphaterminal/`, relative API paths
+4. **WAL Mode SQLite**: `journal_mode=WAL`, `synchronous=NORMAL`, `cache_size=-64000`
+

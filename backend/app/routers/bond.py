@@ -11,7 +11,6 @@ import asyncio
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter, Query
 from app.utils.errors import success_response, error_response, ErrorCode
@@ -19,8 +18,7 @@ from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.services.fetchers.bond_fetcher import get_bond_fetcher
 from app.utils.error_decorator import handle_errors
-
-_bond_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="bond_")
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -40,7 +38,7 @@ _bond_cb = CircuitBreaker(
     ),
 )
 
-_bond_fetcher = get_bond_fetcher(_bond_executor)
+_bond_fetcher = get_bond_fetcher(get_executor())
 
 
 _HISTORY_CACHE_KEY = f"{NAMESPACE}history_df"
@@ -198,7 +196,7 @@ async def _fetch_history_df_for_cache():
     try:
         loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
-            loop.run_in_executor(_bond_executor, ak.bond_china_yield), timeout=30.0
+            loop.run_in_executor(get_executor(), ak.bond_china_yield), timeout=30.0
         )
         return df
     except asyncio.TimeoutError:

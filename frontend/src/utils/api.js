@@ -16,6 +16,16 @@ import { isNetworkOnline } from '../composables/useNetworkStatus.js'
 import { dedupedFetch, abortPendingRequest, abortAllPendingRequests } from './requestDedup.js'
 import { TIMEOUTS } from './constants.js'
 
+// ── ApiResponseError: 业务错误专用异常类 ────────────────────────────────
+export class ApiResponseError extends Error {
+  constructor(code, message, data) {
+    super(message);
+    this.name = 'ApiResponseError';
+    this.code = code;
+    this.data = data;
+  }
+}
+
 // ── API 基础 URL ─────────────────────────────────────────────────
 // 始终使用相对路径，让前端代理（Vite proxy）转发到后端
 // 这样可以确保所有环境（开发/生产）都通过前端服务器访问API
@@ -98,15 +108,16 @@ function _onSuccess() {
  * 从 API 响应中提取 data 字段
  * 兼容：新格式 {code:0, data: {...}} → 返回 data
  *       旧格式 {...} → 直接返回（向后兼容）
+ * @throws {ApiResponseError} 当 code !== 0 时抛出业务错误
  */
 export function extractData(response) {
   if (response && typeof response.code === 'number' && 'data' in response) {
     if (response.code !== 0) {
-      logger.warn('[API] 非0响应码:', response.code, response.message)
+      throw new ApiResponseError(response.code, response.message, response.data);
     }
-    return response.data
+    return response.data;
   }
-  return response
+  return response;
 }
 
 /**
@@ -242,6 +253,9 @@ export async function apiFetch(url, options = {}) {
     } catch (e) {
       clearTimeout(timer)
       lastError = e
+      
+      // Business errors (ApiResponseError) should NOT trigger circuit breaker
+      const isBusinessError = e.name === 'ApiResponseError'
       const isAbortError = e.name === 'AbortError'
       const isUserAbort = isAbortError && externalSignal?.aborted
       const isNetworkError = e.name === 'TypeError' || e.message?.includes('fetch') || e.message?.includes('Failed to fetch')
@@ -261,7 +275,10 @@ export async function apiFetch(url, options = {}) {
         await sleep(backoffMs)
         continue
       }
-      const shouldTriggerFailure = !isClientError && !isUserAbort
+      
+      // Only count network/server errors towards circuit breaker
+      // Exclude: business errors (ApiResponseError), client errors (4xx), user aborts
+      const shouldTriggerFailure = !isClientError && !isUserAbort && !isBusinessError
       if (shouldTriggerFailure) {
         _onFailure(url, e.message)
       }

@@ -23,7 +23,6 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from fastapi import APIRouter, Query
 from typing import Optional, List, Dict
-from concurrent.futures import ThreadPoolExecutor
 
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.config.settings import get_settings
@@ -38,6 +37,7 @@ from app.routers.forex_schemas import (
     CrossRateRow,
     CrossRateRequest,
 )
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 
@@ -147,15 +147,6 @@ def _generate_bounded_random_walk(
 
 
 router = APIRouter(prefix="/forex", tags=["forex"])
-
-# Separate thread pools for different operation types
-# Fast operations (spot quotes, matrix) - high priority, quick response
-_spot_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forex_spot_")
-
-# Slow operations (history, detailed quotes) - can block, longer running
-_history_executor = ThreadPoolExecutor(
-    max_workers=4, thread_name_prefix="forex_history_"
-)
 
 _akshare_module = None
 

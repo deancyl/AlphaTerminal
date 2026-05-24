@@ -17,11 +17,8 @@ from typing import Dict, List, Any
 from datetime import datetime
 from http.client import RemoteDisconnected
 
-from app.services.circuit_breaker import (
-    CircuitBreaker,
-    CircuitBreakerConfig,
-    CircuitState,
-)
+from app.services.circuit_breaker import CircuitState
+from app.services.unified_fetcher import get_source_breaker
 from app.services.market_radar.sina_fallback import (
     fetch_all_stocks_sina,
     fetch_sectors_sina,
@@ -31,11 +28,6 @@ logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="treemap_")
 
-# Module-level CircuitBreaker for Eastmoney API
-_EASTMONEY_CB = CircuitBreaker(
-    "eastmoney_treemap", CircuitBreakerConfig(failure_threshold=5, timeout=60.0)
-)
-
 DATA_SOURCE_AKSHARE = "akshare"
 DATA_SOURCE_SINA = "sina"
 DATA_SOURCE_CACHE = "cache"
@@ -44,7 +36,8 @@ DATA_SOURCE_FALLBACK = "fallback"
 
 def _fetch_sectors_sync() -> List[Dict]:
     """Fetch all sector names from akshare."""
-    if _EASTMONEY_CB.state == CircuitState.OPEN:
+    cb = get_source_breaker("eastmoney")
+    if cb.state == CircuitState.OPEN:
         logger.info("[Treemap] CB OPEN, using static sector fallback")
         from app.services.market_radar.sina_fallback import fetch_sectors_sina_sync
 
@@ -62,7 +55,7 @@ def _fetch_sectors_sync() -> List[Dict]:
                     "code": row["板块代码"],
                 }
             )
-        _EASTMONEY_CB.record_success()
+        cb.record_success()
         return sectors
     except (
         httpx.HTTPError,
@@ -72,7 +65,7 @@ def _fetch_sectors_sync() -> List[Dict]:
         RemoteDisconnected,
     ) as e:
         logger.error(f"[HTTP] sectors: {type(e).__name__}: {e}", exc_info=True)
-        _EASTMONEY_CB.record_failure()
+        cb.record_failure()
         from app.services.market_radar.sina_fallback import fetch_sectors_sina_sync
 
         return fetch_sectors_sina_sync()
@@ -113,7 +106,8 @@ def _fetch_sector_stocks_sync(sector_name: str) -> tuple:
 
 def _fetch_all_stocks_sync() -> List[Dict]:
     """Fetch all A-share stocks with market data."""
-    if _EASTMONEY_CB.state == CircuitState.OPEN:
+    cb = get_source_breaker("eastmoney")
+    if cb.state == CircuitState.OPEN:
         logger.info("[Treemap] CB OPEN, using Sina fallback")
         from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
 
@@ -142,7 +136,7 @@ def _fetch_all_stocks_sync() -> List[Dict]:
                 )
             except (ValueError, TypeError):
                 continue
-        _EASTMONEY_CB.record_success()
+        cb.record_success()
         return stocks
     except (
         httpx.HTTPError,
@@ -152,7 +146,7 @@ def _fetch_all_stocks_sync() -> List[Dict]:
         RemoteDisconnected,
     ) as e:
         logger.error(f"[HTTP] all stocks: {type(e).__name__}: {e}", exc_info=True)
-        _EASTMONEY_CB.record_failure()
+        cb.record_failure()
         from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
 
         return fetch_all_stocks_sina_sync()
@@ -453,7 +447,6 @@ async def _build_stock_treemap() -> Dict[str, Any]:
         "source_detail": source_detail,
     }
 
-
 def get_circuit_breaker():
     """Export CircuitBreaker for router access."""
-    return _EASTMONEY_CB
+    return get_source_breaker("eastmoney")

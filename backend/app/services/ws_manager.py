@@ -293,7 +293,17 @@ class ConnectionManager:
         return conn
 
     async def disconnect(self, conn: WSConnection):
-        """注销连接"""
+        """注销连接（带 asyncio.shield 保护清理操作）"""
+        try:
+            # Shield cleanup from cancellation to prevent memory leaks
+            await asyncio.shield(self._cleanup_connection(conn))
+        except asyncio.CancelledError:
+            # Still attempt cleanup even if cancelled
+            await self._cleanup_connection(conn)
+            raise
+
+    async def _cleanup_connection(self, conn: WSConnection):
+        """内部清理逻辑 - 始终完成（即使被取消）"""
         symbols = await conn.get_symbols()
 
         async with self._conn_lock:
@@ -306,6 +316,12 @@ class ConnectionManager:
                     self._symbol_map[sym].discard(conn)
                     if not self._symbol_map[sym]:
                         del self._symbol_map[sym]
+
+        # Explicitly close WebSocket
+        try:
+            await conn.ws.close()
+        except Exception:
+            pass  # Ignore close errors, cleanup must complete
 
         logger.info(f"[WS] client disconnected, total={len(self._conns)}")
         if not self._conns:

@@ -3,15 +3,41 @@ import threading
 import json
 import logging
 import os
+from pathlib import Path
 from datetime import datetime
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
-# 使用工作区根目录的 database.db（包含示例数据）
-_db_path = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "database.db",
-)
+
+
+def get_db_path() -> str:
+    """
+    Get database path in user config directory.
+
+    Priority:
+    1. APP_DATA environment variable (Tauri/EXE packaging)
+    2. ~/.config/alphaterminal/ (standard user config)
+
+    Returns:
+        str: Full path to database.db
+    """
+    # Check for Tauri/EXE environment variable
+    app_data = os.environ.get("APP_DATA")
+
+    if app_data:
+        db_dir = Path(app_data)
+    else:
+        # Standard user config directory
+        db_dir = Path.home() / ".config" / "alphaterminal"
+
+    # Ensure directory exists
+    db_dir.mkdir(parents=True, exist_ok=True)
+
+    return str(db_dir / "database.db")
+
+
+# Database path (user config directory for Tauri compatibility)
+_db_path = get_db_path()
 _lock = threading.RLock()
 
 # ── 环境变量强制启用 WAL 模式 ────────────────────────────────────────

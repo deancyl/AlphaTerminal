@@ -9,7 +9,6 @@ Phase B: 统一 API 响应格式
 import logging
 import asyncio
 import re
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
 import httpx
@@ -17,9 +16,7 @@ from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.utils.error_decorator import handle_errors
-
-# Dedicated thread pool for futures data fetching
-_futures_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="futures_")
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -116,7 +113,7 @@ async def _fetch_index_futures_realtime():
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
                 loop.run_in_executor(
-                    _futures_executor,
+                    get_executor(),
                     lambda: ak.futures_zh_realtime(symbol=ak_symbol_name),
                 ),
                 timeout=15.0,
@@ -345,7 +342,7 @@ async def futures_index_history(
             # 日线数据
             df = await asyncio.wait_for(
                 loop.run_in_executor(
-                    _futures_executor,
+                    get_executor(),
                     lambda: ak.futures_zh_daily_sina(symbol=contract_symbol),
                 ),
                 timeout=10.0,
@@ -354,7 +351,7 @@ async def futures_index_history(
             # 分钟数据
             df = await asyncio.wait_for(
                 loop.run_in_executor(
-                    _futures_executor,
+                    get_executor(),
                     lambda: ak.futures_zh_minute_sina(symbol=contract_symbol),
                 ),
                 timeout=10.0,
@@ -523,7 +520,7 @@ async def futures_term_structure(symbol: str = "RB"):
         try:
             df = await asyncio.wait_for(
                 loop.run_in_executor(
-                    _futures_executor, lambda: ak.futures_zh_realtime(symbol=zh_name)
+                    get_executor(), lambda: ak.futures_zh_realtime(symbol=zh_name)
                 ),
                 timeout=10.0,
             )

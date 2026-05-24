@@ -10,8 +10,6 @@ Timeout Behavior:
 
 import asyncio
 import logging
-import os
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter, Query
 import httpx
@@ -20,14 +18,10 @@ from app.utils.errors import success_response, error_response, ErrorCode
 from app.config.timeout import SEARCH_TIMEOUT, QUOTE_TIMEOUT
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-CPU_COUNT = os.cpu_count() or 4
-_executor = ThreadPoolExecutor(
-    max_workers=min(8, CPU_COUNT * 2), thread_name_prefix="stocks_api_"
-)
 
 # Use DataCache singleton
 _cache = get_cache()
@@ -124,7 +118,7 @@ async def get_limit_up():
     loop = asyncio.get_event_loop()
     try:
         data = await asyncio.wait_for(
-            loop.run_in_executor(_executor, lambda: _cache_or_fetch("limit_up", fetch)),
+            loop.run_in_executor(get_executor(), lambda: _cache_or_fetch("limit_up", fetch)),
             timeout=QUOTE_TIMEOUT,
         )
         return success_response({"limit_up": data, "count": len(data)})
@@ -199,7 +193,7 @@ async def get_limit_down():
     try:
         data = await asyncio.wait_for(
             loop.run_in_executor(
-                _executor, lambda: _cache_or_fetch("limit_down", fetch)
+                get_executor(), lambda: _cache_or_fetch("limit_down", fetch)
             ),
             timeout=QUOTE_TIMEOUT,
         )
@@ -269,7 +263,7 @@ async def get_unusual():
     loop = asyncio.get_event_loop()
     try:
         data = await asyncio.wait_for(
-            loop.run_in_executor(_executor, lambda: _cache_or_fetch("unusual", fetch)),
+            loop.run_in_executor(get_executor(), lambda: _cache_or_fetch("unusual", fetch)),
             timeout=QUOTE_TIMEOUT,
         )
         return success_response({"unusual": data, "count": len(data)})
@@ -400,7 +394,7 @@ async def search_stocks(q: str = ""):
     loop = asyncio.get_event_loop()
     try:
         results = await asyncio.wait_for(
-            loop.run_in_executor(_executor, _search_stocks_local, q),
+            loop.run_in_executor(get_executor(), _search_stocks_local, q),
             timeout=SEARCH_TIMEOUT,
         )
         logger.info(f"[Stocks] search returned {len(results)} results")
@@ -711,7 +705,7 @@ async def get_quote(symbol: str):
     try:
         data = await asyncio.wait_for(
             asyncio.get_event_loop().run_in_executor(
-                _executor, lambda: _cache_or_fetch(f"quote_{symbol}", fetch, ttl=10)
+                get_executor(), lambda: _cache_or_fetch(f"quote_{symbol}", fetch, ttl=10)
             ),
             timeout=QUOTE_TIMEOUT,
         )
@@ -800,7 +794,7 @@ async def get_limit_summary():
     try:
         data = await asyncio.wait_for(
             loop.run_in_executor(
-                _executor, lambda: _cache_or_fetch("limit_summary", fetch)
+                get_executor(), lambda: _cache_or_fetch("limit_summary", fetch)
             ),
             timeout=QUOTE_TIMEOUT,
         )

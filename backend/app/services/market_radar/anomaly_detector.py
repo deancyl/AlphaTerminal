@@ -21,20 +21,12 @@ from enum import Enum
 from dataclasses import dataclass
 from http.client import RemoteDisconnected
 
-from app.services.circuit_breaker import (
-    CircuitBreaker,
-    CircuitBreakerConfig,
-    CircuitState,
-)
+from app.services.circuit_breaker import CircuitState
+from app.services.unified_fetcher import get_source_breaker
 
 logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="anomaly_")
-
-# Module-level CircuitBreaker for Eastmoney API
-_EASTMONEY_CB = CircuitBreaker(
-    "eastmoney_anomaly", CircuitBreakerConfig(failure_threshold=5, timeout=60.0)
-)
 
 
 class AnomalyType(str, Enum):
@@ -62,8 +54,9 @@ class AnomalyResult:
 
 def _fetch_all_stocks_sync() -> List[Dict]:
     """Fetch all A-share stocks with market data."""
+    cb = get_source_breaker("eastmoney")
     # Check if CB is OPEN - use Sina fallback directly
-    if _EASTMONEY_CB.state == CircuitState.OPEN:
+    if cb.state == CircuitState.OPEN:
         logger.info("[Anomaly] CB OPEN, using Sina fallback")
         from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
 
@@ -91,7 +84,7 @@ def _fetch_all_stocks_sync() -> List[Dict]:
                 )
             except (ValueError, TypeError):
                 continue
-        _EASTMONEY_CB.record_success()
+        cb.record_success()
         return stocks
     except (
         httpx.HTTPError,
@@ -102,7 +95,7 @@ def _fetch_all_stocks_sync() -> List[Dict]:
         MaxRetryError,
     ) as e:
         logger.error(f"[HTTP] all stocks: {type(e).__name__}: {e}", exc_info=True)
-        _EASTMONEY_CB.record_failure()
+        cb.record_failure()
         # Try Sina fallback
         from app.services.market_radar.sina_fallback import fetch_all_stocks_sina_sync
 
@@ -111,8 +104,9 @@ def _fetch_all_stocks_sync() -> List[Dict]:
 
 def _fetch_capital_flow_sync() -> List[Dict]:
     """Fetch individual stock capital flow data."""
+    cb = get_source_breaker("eastmoney")
     # Check if CB is OPEN - return empty list
-    if _EASTMONEY_CB.state == CircuitState.OPEN:
+    if cb.state == CircuitState.OPEN:
         logger.info("[Anomaly] CB OPEN, skipping capital flow")
         return []
 
@@ -135,7 +129,7 @@ def _fetch_capital_flow_sync() -> List[Dict]:
                 )
             except (ValueError, TypeError):
                 continue
-        _EASTMONEY_CB.record_success()
+        cb.record_success()
         return flows
     except (
         httpx.HTTPError,
@@ -148,14 +142,15 @@ def _fetch_capital_flow_sync() -> List[Dict]:
         KeyError,
     ) as e:
         logger.warning(f"[HTTP] capital flow: {type(e).__name__}: {e}", exc_info=True)
-        _EASTMONEY_CB.record_failure()
+        cb.record_failure()
         return []
 
 
 def _fetch_institution_research_sync() -> List[Dict]:
     """Fetch institution research statistics."""
+    cb = get_source_breaker("eastmoney")
     # Check if CB is OPEN - return empty list
-    if _EASTMONEY_CB.state == CircuitState.OPEN:
+    if cb.state == CircuitState.OPEN:
         logger.info("[Anomaly] CB OPEN, skipping institution research")
         return []
 
@@ -177,7 +172,7 @@ def _fetch_institution_research_sync() -> List[Dict]:
                 )
             except (ValueError, TypeError):
                 continue
-        _EASTMONEY_CB.record_success()
+        cb.record_success()
         return research
     except (
         httpx.HTTPError,
@@ -192,7 +187,7 @@ def _fetch_institution_research_sync() -> List[Dict]:
         logger.warning(
             f"[HTTP] institution research: {type(e).__name__}: {e}", exc_info=True
         )
-        _EASTMONEY_CB.record_failure()
+        cb.record_failure()
         return []
 
 
@@ -598,6 +593,7 @@ async def _detect_anomalies_internal(
     """Internal anomaly detection logic."""
     results = []
     using_fallback = False
+    cb = get_source_breaker("eastmoney")
 
     if anomaly_type in (
         None,
@@ -608,7 +604,7 @@ async def _detect_anomalies_internal(
         stocks = await _fetch_all_stocks()
 
         # Check if we're using fallback data
-        if _EASTMONEY_CB.state == CircuitState.OPEN:
+        if cb.state == CircuitState.OPEN:
             using_fallback = True
 
         if stocks:
@@ -687,7 +683,6 @@ async def _detect_anomalies_internal(
         "data_source": "sina" if using_fallback else "akshare",
     }
 
-
 # Export for router
 def get_circuit_breaker():
-    return _EASTMONEY_CB
+    return get_source_breaker("eastmoney")

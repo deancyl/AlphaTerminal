@@ -47,6 +47,51 @@ from app.services.cache_metrics import get_cache_metrics
 logger = logging.getLogger(__name__)
 
 
+# Source Status Map - centralized circuit breaker registry (v0.6.108)
+_SOURCE_STATUS_MAP: Dict[str, 'CircuitBreaker'] = {}
+
+def get_source_breaker(source_name: str) -> 'CircuitBreaker':
+    """
+    Get or create circuit breaker for a data source.
+    
+    This ensures all modules using the same data source share the same
+    circuit breaker instance, eliminating duplicate CB bugs like the
+    _EASTMONEY_CB duplication between anomaly_detector.py and treemap_builder.py.
+    
+    Args:
+        source_name: Name of the data source (e.g., "eastmoney", "akshare", "sina")
+    
+    Returns:
+        CircuitBreaker instance for the source
+    """
+    from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+    
+    if source_name not in _SOURCE_STATUS_MAP:
+        config = CircuitBreakerConfig(
+            failure_threshold=5,
+            timeout=60.0
+        )
+        _SOURCE_STATUS_MAP[source_name] = CircuitBreaker(source_name, config)
+    
+    return _SOURCE_STATUS_MAP[source_name]
+
+
+def get_all_source_status() -> Dict[str, Dict[str, Any]]:
+    """
+    Get status of all data sources.
+    
+    Returns:
+        Dict mapping source names to their circuit breaker status
+    """
+    return {
+        name: {
+            "state": cb.state.value if hasattr(cb.state, 'value') else str(cb.state),
+            "failure_count": cb.failure_count,
+        }
+        for name, cb in _SOURCE_STATUS_MAP.items()
+    }
+
+
 class DataSource(Enum):
     """数据源枚举"""
 
