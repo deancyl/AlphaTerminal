@@ -87,14 +87,24 @@ async def lifespan(app: FastAPI):
     import os
 
     is_testing = os.environ.get("PYTEST_RUNNING") == "true"
+    is_ci = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
 
     if not is_testing:
         start_writer()
         init_watchdog()
 
-        logger.info("[Lifespan] Starting blocking data pre-warming...")
-        await run_initial_data_fetch()
-        logger.info("[Lifespan] Data pre-warming complete, starting HTTP server")
+        # Skip blocking data fetch in CI for fast startup (< 5s)
+        if not is_ci:
+            logger.info("[Lifespan] Starting blocking data pre-warming...")
+            try:
+                await asyncio.wait_for(run_initial_data_fetch(), timeout=10.0)
+                logger.info("[Lifespan] Data pre-warming complete")
+            except asyncio.TimeoutError:
+                logger.warning("[Lifespan] Data fetch timed out after 10s, continuing with empty cache")
+            except Exception as e:
+                logger.warning(f"[Lifespan] Data fetch failed: {e}", exc_info=True)
+        else:
+            logger.info("[Lifespan] CI environment detected, skipping blocking data fetch")
 
         # Warmup macro cache in background
         asyncio.create_task(warmup_macro_cache())

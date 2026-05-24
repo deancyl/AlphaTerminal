@@ -57,7 +57,7 @@ jobs:
         nohup python start_backend.py > /tmp/backend.log 2>&1 &
         echo "Backend PID: $!"
         # 等待后端启动
-        for i in {1..30}; do
+        for i in {1..60}; do
           if curl -s http://localhost:8002/health > /dev/null; then
             echo "✅ Backend is ready"
             break
@@ -150,7 +150,7 @@ jobs:
         BACKEND_PID=$!
         
         # 等待启动
-        for i in {1..30}; do
+        for i in {1..60}; do
           if curl -s http://localhost:8002/health > /dev/null; then
             echo "✅ Backend started successfully"
             break
