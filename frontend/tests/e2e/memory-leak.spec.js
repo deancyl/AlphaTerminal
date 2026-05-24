@@ -1,11 +1,9 @@
 import { test, expect } from '@playwright/test';
 
-const FRONTEND = process.env.FRONTEND_URL || 'http://192.168.1.50:60100';
-
 test.describe('内存泄漏检测', () => {
   
   test('ECharts 实例释放验证', async ({ page }) => {
-    await page.goto(FRONTEND);
+    await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     // Wait for initial data to load (app has continuous polling)
     await page.waitForTimeout(2000);
@@ -37,7 +35,7 @@ test.describe('内存泄漏检测', () => {
   });
   
   test('DOM 节点泄漏检测', async ({ page }) => {
-    await page.goto(FRONTEND);
+    await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
     
@@ -68,7 +66,7 @@ test.describe('内存泄漏检测', () => {
   });
   
   test('事件监听器泄漏检测', async ({ page }) => {
-    await page.goto(FRONTEND);
+    await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
     
@@ -107,7 +105,7 @@ test.describe('内存泄漏检测', () => {
       }
     });
     
-    await page.goto(FRONTEND);
+    await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
     
