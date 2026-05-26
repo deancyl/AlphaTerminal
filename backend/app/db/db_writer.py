@@ -72,6 +72,7 @@ def _get_conn():
 
         if _FORCE_WAL:
             _WAL_MODE_OK = True
+            _WAL_MODE_CHECKED = True
             logger.info("[DBWriter] WAL mode forced via ALPHATERMINAL_FORCE_WAL=1")
         else:
             network_path_prefixes = ["/vol3/", "/nas/", "/mnt/nfs", "/mnt/smb", "/net/"]
@@ -86,16 +87,23 @@ def _get_conn():
                         _WAL_MODE_OK = True
                     else:
                         _use_delete_mode = True
-                except (sqlite3.OperationalError, OSError, IOError):
-                    _use_delete_mode = True
+                except (sqlite3.OperationalError, OSError, IOError) as e:
+                    # Database might already be in WAL mode from another connection
+                    logger.warning(f"[DBWriter] WAL mode check failed: {e}, assuming WAL mode is OK")
+                    _WAL_MODE_OK = True
 
-        if _use_delete_mode:
-            conn.execute("PRAGMA journal_mode=DELETE")
-            conn.commit()
-            _WAL_MODE_OK = False
-            logger.warning("[DBWriter] WAL mode unavailable, using DELETE mode")
+            if _use_delete_mode:
+                try:
+                    conn.execute("PRAGMA journal_mode=DELETE")
+                    conn.commit()
+                    _WAL_MODE_OK = False
+                    logger.warning("[DBWriter] WAL mode unavailable, using DELETE mode")
+                except sqlite3.OperationalError as e:
+                    # Database locked - WAL mode already set by another connection
+                    logger.warning(f"[DBWriter] Cannot change journal mode (locked): {e}, assuming WAL mode")
+                    _WAL_MODE_OK = True
 
-        _WAL_MODE_CHECKED = True
+            _WAL_MODE_CHECKED = True
     else:
         if _WAL_MODE_OK:
             conn.execute("PRAGMA journal_mode=WAL")
