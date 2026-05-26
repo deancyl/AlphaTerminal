@@ -513,3 +513,66 @@ async def screener_statistics():
         "data": stats,
         "timestamp": int(time.time() * 1000),
     }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 基金对比 (Wave 2 - PRD Chapter 5.2)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@router.post("/compare")
+@handle_errors(module="fund")
+async def fund_compare(
+    codes: str = Query(..., description="基金代码列表，逗号分隔（最多15只）"),
+    include_nav: bool = Query(True, description="是否包含净值历史"),
+    nav_period: str = Query("1y", description="净值历史周期：1m/3m/6m/1y/3y"),
+):
+    """
+    多基金对比
+    
+    支持 2-15 只基金对比
+    返回：收益对比表、风险对比表、雷达图数据、净值历史
+    
+    PRD Chapter 5.2: 基金对比（扩展至 15 只）
+    """
+    from app.services.fund_comparison import get_comparison_service
+    
+    # 解析代码列表
+    fund_codes = [c.strip() for c in codes.split(",") if c.strip()]
+    
+    if len(fund_codes) < 2:
+        raise HTTPException(400, "至少需要 2 只基金进行对比")
+    
+    if len(fund_codes) > 15:
+        raise HTTPException(400, "最多支持 15 只基金对比")
+    
+    logger.info(f"[Compare] 对比请求 codes={fund_codes}")
+    start = time.time()
+    
+    service = get_comparison_service()
+    result = await service.compare_funds(fund_codes, include_nav, nav_period)
+    
+    elapsed = time.time() - start
+    logger.info(
+        f"[Compare] 对比完成 funds={result['total']} elapsed={elapsed:.3f}s"
+    )
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": result,
+        "timestamp": int(time.time() * 1000),
+        "_perf": {"elapsed_s": round(elapsed, 3)},
+    }
+
+
+@router.get("/compare/max")
+@handle_errors(module="fund")
+async def compare_max_limit():
+    """获取对比上限（15只）"""
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {"max_funds": 15},
+        "timestamp": int(time.time() * 1000),
+    }

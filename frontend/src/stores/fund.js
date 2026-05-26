@@ -3,6 +3,9 @@ import { ref, computed } from 'vue'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 
+// PRD: 支持最多 15 只基金对比
+export const MAX_COMPARE_FUNDS = 15
+
 export const FUND_QUICK_LIST = {
   etf: [
     { code: '510300', name: '沪深 300ETF' },
@@ -161,8 +164,8 @@ export const useFundStore = defineStore('fund', () => {
   }
 
   function addCompareFund(fund) {
-    if (compareFunds.value.length >= 3) {
-      return { success: false, message: '最多只能对比 3 只基金' }
+    if (compareFunds.value.length >= MAX_COMPARE_FUNDS) {
+      return { success: false, message: `最多只能对比 ${MAX_COMPARE_FUNDS} 只基金` }
     }
     if (compareFunds.value.some(f => f.code === fund.code)) {
       return { success: false, message: '该基金已在对比列表中' }
