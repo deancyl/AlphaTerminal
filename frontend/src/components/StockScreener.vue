@@ -239,6 +239,7 @@ function handleClickOutside(event) {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  fetchStocks() // 初始化加载股票数据
 })
 
 onUnmounted(() => {

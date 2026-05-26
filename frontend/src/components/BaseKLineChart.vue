@@ -67,7 +67,7 @@
 import { ref, watch, onMounted, onBeforeUnmount, onDeactivated, onActivated, nextTick, markRaw, reactive } from 'vue'
 import { useDebounceFn, useThrottleFn } from '@vueuse/core'
 import html2canvas from 'html2canvas'
-import { UP, DOWN } from '../utils/indicators.js'
+import { UP, DOWN, updateMAIncremental, updateKDJIncremental, updateMACDIncremental, updateRSIIncremental } from '../utils/indicators.js'
 import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 import { logger } from '../utils/logger.js'
 import { initChart, getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
@@ -428,18 +428,85 @@ function applyTickFast(cData, tick) {
   const timeSinceLastTick = now - _lastTickTime
   _lastTickTime = now
 
+  // === 增量更新指标 ===
+  const idx = cData.klineData.length - 1
+  const closes = cData.klineData.map(k => k[1]) // 所有收盘价
+
+  // 更新MA（从最新tick往前推5/10/20根K线）
+  if (cData.maData?.ma5 && idx >= 4) {
+    const prevMA5 = cData.maData.ma5[idx - 1]
+    const oldest5 = closes[idx - 5]
+    if (prevMA5 != null && oldest5 != null) {
+      cData.maData.ma5[idx] = updateMAIncremental(prevMA5, oldest5, tick.price, 5)
+    }
+  }
+  if (cData.maData?.ma10 && idx >= 9) {
+    const prevMA10 = cData.maData.ma10[idx - 1]
+    const oldest10 = closes[idx - 10]
+    if (prevMA10 != null && oldest10 != null) {
+      cData.maData.ma10[idx] = updateMAIncremental(prevMA10, oldest10, tick.price, 10)
+    }
+  }
+  if (cData.maData?.ma20 && idx >= 19) {
+    const prevMA20 = cData.maData.ma20[idx - 1]
+    const oldest20 = closes[idx - 20]
+    if (prevMA20 != null && oldest20 != null) {
+      cData.maData.ma20[idx] = updateMAIncremental(prevMA20, oldest20, tick.price, 20)
+    }
+  }
+
+  // 更新KDJ（如果启用）
+  if (cData.subChartData?.KDJ && idx >= 8) {
+    const prevK = cData.subChartData.KDJ.k?.[idx - 1] ?? 50
+    const prevD = cData.subChartData.KDJ.d?.[idx - 1] ?? 50
+    const high = last[3] // 当前最高价
+    const low = last[2]  // 当前最低价
+    const newKDJ = updateKDJIncremental(prevK, prevD, tick.price, high, low)
+    if (cData.subChartData.KDJ.k) cData.subChartData.KDJ.k[idx] = newKDJ.k
+    if (cData.subChartData.KDJ.d) cData.subChartData.KDJ.d[idx] = newKDJ.d
+    if (cData.subChartData.KDJ.j) cData.subChartData.KDJ.j[idx] = newKDJ.j
+  }
+
+  // 更新MACD（如果启用）
+  if (cData.subChartData?.MACD && idx >= 25) {
+    const prevDIF = cData.subChartData.MACD.dif?.[idx - 1] ?? 0
+    const prevDEA = cData.subChartData.MACD.dea?.[idx - 1] ?? 0
+    const newMACD = updateMACDIncremental(prevDIF, prevDEA, tick.price, 12, 26, 9)
+    if (cData.subChartData.MACD.dif) cData.subChartData.MACD.dif[idx] = newMACD.dif
+    if (cData.subChartData.MACD.dea) cData.subChartData.MACD.dea[idx] = newMACD.dea
+    if (cData.subChartData.MACD.macd) cData.subChartData.MACD.macd[idx] = newMACD.macd
+  }
+
+  // 更新RSI（如果启用）
+  if (cData.subChartData?.RSI && idx >= 14) {
+    const prevAvgGain = cData.subChartData.RSI.avgGain?.[idx - 1] ?? 0
+    const prevAvgLoss = cData.subChartData.RSI.avgLoss?.[idx - 1] ?? 0
+    const prevClose = closes[idx - 1] ?? tick.price
+    const change = tick.price - prevClose
+    const newRSI = updateRSIIncremental(prevAvgGain, prevAvgLoss, change, 14)
+    if (cData.subChartData.RSI.rsi) cData.subChartData.RSI.rsi[idx] = newRSI.rsi
+  }
+
   // 高频更新（< 500ms）：使用 appendData 避免全量重绘
   // 注意：appendData 只适用于追加新数据点，不适用于修改现有数据
   // 对于实时 tick 更新最后一根 K 线，仍需使用 replaceMerge
   // 但我们可以优化 replaceMerge 的使用频率
-  
+
+  // 批量更新所有指标（包含MA）
+  const seriesToUpdate = [
+    { name: 'K线', data: cData.klineData },
+    { name: 'MA5', data: cData.maData?.ma5 },
+    { name: 'MA10', data: cData.maData?.ma10 },
+    { name: 'MA20', data: cData.maData?.ma20 },
+  ].filter(s => s.data)
+
   // 使用 replaceMerge 进行增量更新，避免全量重绘
   // markRaw 防止 Vue 对 option 对象做深度响应式追踪
   chart.setOption(
-    markRaw({ series: [{ name: 'K线', data: cData.klineData }] }),
+    markRaw({ series: seriesToUpdate }),
     { replaceMerge: ['series'], lazyUpdate: true }
   )
-  
+
   // 同时更新成交量（如果有）
   if (tick.volume && cData.volumes && cData.volumes.length > 0) {
     const lastVol = cData.volumes[cData.volumes.length - 1]

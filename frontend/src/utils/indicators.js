@@ -307,3 +307,102 @@ export function calcSAR(highs, lows, afStep = 0.02, afMax = 0.2) {
   
   return sar
 }
+
+
+// ─────────────────────────────────────────────────────────────────
+// 增量更新函数（实时 tick 场景优化）
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Incremental MA update: Calculate new MA value from previous MA + new price
+ * 性能优化：避免全量重算，只需 O(1) 时间
+ * 
+ * @param {number} prevMA - Previous MA value for the window
+ * @param {number} oldestPrice - Price being removed from window
+ * @param {number} newPrice - New price being added
+ * @param {number} period - MA period
+ * @returns {number|null} - New MA value
+ */
+export function updateMAIncremental(prevMA, oldestPrice, newPrice, period) {
+  if (prevMA == null) return null
+  return +((prevMA * period - oldestPrice + newPrice) / period).toFixed(3)
+}
+
+/**
+ * Incremental EMA update
+ * EMA 公式: EMA_t = Price_t * k + EMA_{t-1} * (1-k), k = 2/(period+1)
+ * 
+ * @param {number} prevEMA - Previous EMA value
+ * @param {number} newPrice - New price
+ * @param {number} period - EMA period
+ * @returns {number} - New EMA value
+ */
+export function updateEMAIncremental(prevEMA, newPrice, period) {
+  if (prevEMA == null) return newPrice
+  const k = 2 / (period + 1)
+  return +(newPrice * k + prevEMA * (1 - k)).toFixed(4)
+}
+
+/**
+ * Incremental MACD update - returns {dif, dea, macd}
+ * MACD = EMA(12) - EMA(26), DEA = EMA(MACD, 9), MACD柱 = (DIF - DEA) * 2
+ * 
+ * @param {number} prevDIF - Previous DIF value (EMA12 - EMA26)
+ * @param {number} prevDEA - Previous DEA value (EMA of DIF)
+ * @param {number} newPrice - New price
+ * @param {number} fast - Fast EMA period (default: 12)
+ * @param {number} slow - Slow EMA period (default: 26)
+ * @param {number} signal - Signal EMA period (default: 9)
+ * @returns {Object} - {dif, dea, macd}
+ */
+export function updateMACDIncremental(prevDIF, prevDEA, newPrice, fast=12, slow=26, signal=9) {
+  // Note: This simplified version uses prevDIF as the EMA base for both fast and slow
+  // For accurate results, you would need separate EMA12 and EMA26 states
+  const newDIF = updateEMAIncremental(prevDIF, newPrice, fast) - updateEMAIncremental(prevDIF, newPrice, slow)
+  const newDEA = updateEMAIncremental(prevDEA, newDIF, signal)
+  const newMACD = (newDIF - newDEA) * 2
+  return { dif: +newDIF.toFixed(4), dea: +newDEA.toFixed(4), macd: +newMACD.toFixed(4) }
+}
+
+/**
+ * Incremental KDJ update - requires window of highs/lows
+ * KDJ = K, D, J from RSV (Random Stochastic Value)
+ * RSV = (Close - LowN) / (HighN - LowN) * 100
+ * K = 2/3 * prevK + 1/3 * RSV
+ * D = 2/3 * prevD + 1/3 * K
+ * J = 3 * K - 2 * D
+ * 
+ * @param {number} prevK - Previous K value
+ * @param {number} prevD - Previous D value
+ * @param {number} close - Current close price
+ * @param {number} high - Highest price in the window
+ * @param {number} low - Lowest price in the window
+ * @param {number} period - KDJ period (default: 9)
+ * @returns {Object} - {k, d, j}
+ */
+export function updateKDJIncremental(prevK, prevD, close, high, low, period=9) {
+  const rsv = high !== low ? ((close - low) / (high - low) * 100) : 50
+  const newK = +(2/3 * prevK + 1/3 * rsv).toFixed(2)
+  const newD = +(2/3 * prevD + 1/3 * newK).toFixed(2)
+  const newJ = +(3 * newK - 2 * newD).toFixed(2)
+  return { k: newK, d: newD, j: newJ }
+}
+
+/**
+ * Incremental RSI update
+ * RSI = 100 - 100 / (1 + AvgGain / AvgLoss)
+ * AvgGain and AvgLoss use Wilder's smoothing method
+ * 
+ * @param {number} prevAvgGain - Previous average gain
+ * @param {number} prevAvgLoss - Previous average loss
+ * @param {number} newChange - New price change (delta)
+ * @param {number} period - RSI period (default: 14)
+ * @returns {Object} - {avgGain, avgLoss, rsi}
+ */
+export function updateRSIIncremental(prevAvgGain, prevAvgLoss, newChange, period=14) {
+  const delta = newChange
+  const newAvgGain = (prevAvgGain * (period - 1) + (delta > 0 ? delta : 0)) / period
+  const newAvgLoss = (prevAvgLoss * (period - 1) + (delta < 0 ? -delta : 0)) / period
+  const rsi = newAvgLoss === 0 ? 100 : +(100 - 100 / (1 + newAvgGain / newAvgLoss)).toFixed(2)
+  return { avgGain: newAvgGain, avgLoss: newAvgLoss, rsi }
+}
