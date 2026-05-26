@@ -11,7 +11,6 @@ import asyncio
 import json
 import logging
 import sqlite3
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -20,10 +19,9 @@ from pydantic import BaseModel, Field
 from app.services.audit_chain import verify_chain, get_chain_stats, GENESIS_HASH
 from app.db.database import _get_conn
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
-
-_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="audit_playback_")
 
 router = APIRouter(prefix="/audit_playback", tags=["audit_playback"])
 

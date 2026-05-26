@@ -7,7 +7,6 @@ import asyncio
 import io
 import csv
 import json
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
@@ -17,11 +16,9 @@ from fastapi.responses import StreamingResponse
 from ..db.database import get_conn
 from ..middleware import require_api_key
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 router = APIRouter(prefix="/export", tags=["export"])
-
-# ── 线程池执行器（用于异步化 SQLite 同步调用）────────────────────
-_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="export_")
 
 
 def _generate_csv(data: List[Dict[str, Any]], filename: str) -> StreamingResponse:
@@ -178,7 +175,7 @@ async def export_portfolio(
             return data, portfolio
 
     try:
-        data, portfolio = await loop.run_in_executor(_executor, _sync_export)
+        data, portfolio = await loop.run_in_executor(get_executor(), _sync_export)
 
         filename = (
             f"portfolio_{portfolio_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -377,7 +374,7 @@ async def export_backtest(
             return data, backtest
 
     try:
-        data, backtest = await loop.run_in_executor(_executor, _sync_export)
+        data, backtest = await loop.run_in_executor(get_executor(), _sync_export)
 
         filename = f"backtest_{backtest_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -505,7 +502,7 @@ async def export_market_history(
             return data
 
     try:
-        data = await loop.run_in_executor(_executor, _sync_export)
+        data = await loop.run_in_executor(get_executor(), _sync_export)
 
         filename = (
             f"history_{symbol}_{period}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"

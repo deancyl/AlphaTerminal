@@ -12,7 +12,6 @@ import sqlite3
 import hashlib
 import secrets
 import jwt
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -37,13 +36,12 @@ from app.config.settings import get_settings
 from app.utils.ip_validation import get_client_ip_safe
 from app.db import session_db
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 _DEFAULT_LOG_DIR = BASE_DIR / "logs"
 
 logger = logging.getLogger(__name__)
-
-_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="admin_")
 
 
 ADMIN_SESSION_EXPIRY_HOURS = 24
@@ -865,7 +863,7 @@ async def get_sources_status():
         except sqlite3.OperationalError:
             return {}
 
-    db_states = await loop.run_in_executor(_executor, _sync_fetch_states)
+    db_states = await loop.run_in_executor(get_executor(), _sync_fetch_states)
 
     merged = {}
     for source, status in real_time.items():
@@ -955,7 +953,7 @@ async def get_balance_config():
         finally:
             conn.close()
 
-    row = await loop.run_in_executor(_executor, _sync_get)
+    row = await loop.run_in_executor(get_executor(), _sync_get)
     if row:
         import json
 
@@ -988,7 +986,7 @@ async def set_balance_config(config: SourceBalanceConfig):
         finally:
             conn.close()
 
-    await loop.run_in_executor(_executor, _sync_set)
+    await loop.run_in_executor(get_executor(), _sync_set)
     return {"message": "负载均衡配置已更新", "config": config.dict()}
 
 
@@ -1134,7 +1132,7 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
             except Exception as e:
                 task_manager.fail_task(task_id, str(e))
 
-        loop.run_in_executor(_executor, _run_vacuum)
+        loop.run_in_executor(get_executor(), _run_vacuum)
 
         return {"code": 0, "message": "VACUUM 已在后台启动", "task_id": task_id}
 
@@ -1150,7 +1148,7 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
             finally:
                 conn.close()
 
-        result = await loop.run_in_executor(_executor, _sync_checkpoint)
+        result = await loop.run_in_executor(get_executor(), _sync_checkpoint)
         return {"code": 0, **result}
 
     def _sync_maintenance():
@@ -1171,7 +1169,7 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
         finally:
             conn.close()
 
-    return await loop.run_in_executor(_executor, _sync_maintenance)
+    return await loop.run_in_executor(get_executor(), _sync_maintenance)
 
 
 @router.get("/database/maintenance/{task_id}")
@@ -1246,7 +1244,7 @@ async def get_database_stats():
         finally:
             conn.close()
 
-    return await loop.run_in_executor(_executor, _sync_get_stats)
+    return await loop.run_in_executor(get_executor(), _sync_get_stats)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -2272,7 +2270,7 @@ async def get_source_config():
         finally:
             conn.close()
 
-    row = await loop.run_in_executor(_executor, _sync_get)
+    row = await loop.run_in_executor(get_executor(), _sync_get)
 
     if row:
         config = json.loads(row[0])
@@ -2311,7 +2309,7 @@ async def update_source_config(config: SourceBalanceConfig):
         finally:
             conn.close()
 
-    await loop.run_in_executor(_executor, _sync_set)
+    await loop.run_in_executor(get_executor(), _sync_set)
 
     logger.info(f"[Admin] Updated source config: strategy={config.strategy}")
 

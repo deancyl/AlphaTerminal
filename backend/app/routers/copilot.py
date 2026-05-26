@@ -17,7 +17,6 @@ import re
 import uuid
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import AsyncGenerator, Optional, List
 from fastapi import APIRouter, Request
@@ -32,6 +31,7 @@ from app.utils.error_sanitizer import sanitize_error
 from app.utils.token_counter import count_tokens
 from app.config.settings import get_settings
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
@@ -47,9 +47,6 @@ if not logger.handlers:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 router = APIRouter()
-
-# ── 线程池执行器（用于异步化 SQLite 同步调用）────────────────────
-_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="copilot_")
 
 
 def _mask_key(key: str) -> str:
@@ -908,7 +905,7 @@ async def _fetch_price_context(symbol: Optional[str]) -> dict:
             logger.warning(f"[Copilot] price lookup error: {e}", exc_info=True)
         return {}
 
-    return await loop.run_in_executor(_executor, _sync_query)
+    return await loop.run_in_executor(get_executor(), _sync_query)
 
 
 async def _fetch_latest_news(limit: int = 5) -> list:
@@ -930,7 +927,7 @@ async def _fetch_latest_news(limit: int = 5) -> list:
             logger.warning(f"[Copilot] news lookup error: {e}", exc_info=True)
         return []
 
-    return await loop.run_in_executor(_executor, _sync_query)
+    return await loop.run_in_executor(get_executor(), _sync_query)
 
 
 def _fetch_valuation_data(symbol: Optional[str]) -> dict:
@@ -1061,7 +1058,7 @@ async def _fetch_portfolio_data(portfolio_id: Optional[int]) -> dict:
             logger.warning(f"[Copilot] portfolio lookup error: {e}", exc_info=True)
         return {}
 
-    return await loop.run_in_executor(_executor, _sync_query)
+    return await loop.run_in_executor(get_executor(), _sync_query)
 
 
 async def _fetch_historical_data(
@@ -1125,7 +1122,7 @@ async def _fetch_historical_data(
             )
         return {}
 
-    return await loop.run_in_executor(_executor, _sync_query)
+    return await loop.run_in_executor(get_executor(), _sync_query)
 
 
 # 对话历史持久化
@@ -1157,7 +1154,7 @@ async def _init_conversations_table():
                 f"[Copilot] conversations table init error: {e}", exc_info=True
             )
 
-    await loop.run_in_executor(_executor, _sync_init)
+    await loop.run_in_executor(get_executor(), _sync_init)
 
 
 async def _save_message(session_id: str, role: str, content: str):
@@ -1180,7 +1177,7 @@ async def _save_message(session_id: str, role: str, content: str):
         except Exception as e:
             logger.warning(f"[Copilot] save message error: {e}", exc_info=True)
 
-    await loop.run_in_executor(_executor, _sync_save)
+    await loop.run_in_executor(get_executor(), _sync_save)
 
 
 async def _load_conversation(
@@ -1230,7 +1227,7 @@ async def _load_conversation(
             logger.warning(f"[Copilot] load conversation error: {e}", exc_info=True)
         return []
 
-    return await loop.run_in_executor(_executor, _sync_load)
+    return await loop.run_in_executor(get_executor(), _sync_load)
 
 
 # SSE 流式对话端点
@@ -1634,13 +1631,13 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
 
     try:
         if data_type == "kline":
-            data = await loop.run_in_executor(_executor, _fetch_kline_data)
+            data = await loop.run_in_executor(get_executor(), _fetch_kline_data)
         elif data_type == "financial":
-            data = await loop.run_in_executor(_executor, _fetch_financial_data)
+            data = await loop.run_in_executor(get_executor(), _fetch_financial_data)
         elif data_type == "compare":
-            data = await loop.run_in_executor(_executor, _fetch_kline_data)
+            data = await loop.run_in_executor(get_executor(), _fetch_kline_data)
         else:
-            data = await loop.run_in_executor(_executor, _fetch_kline_data)
+            data = await loop.run_in_executor(get_executor(), _fetch_kline_data)
 
         return {
             "success": True,

@@ -9,7 +9,6 @@ Provides endpoints for:
 
 import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Optional, List
 
@@ -20,10 +19,9 @@ from app.db.database import _get_conn, _db_path
 from app.utils.errors import success_response
 from app.routers.admin import verify_admin_key
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
-
-_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="data_gaps_")
 
 router = APIRouter(prefix="/data_gaps", tags=["data_gaps"])
 
@@ -494,7 +492,7 @@ async def scan_data_gaps(
         # Run scan in thread pool
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
-            _executor, _scan_kline_gaps_sync, symbol, start_date, end_date
+            get_executor(), _scan_kline_gaps_sync, symbol, start_date, end_date
         )
 
         return success_response(result)
@@ -538,7 +536,7 @@ async def backfill_data_gaps(
         # Run backfill in thread pool
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
-            _executor, _backfill_kline_sync, request.symbol, request.dates
+            get_executor(), _backfill_kline_sync, request.symbol, request.dates
         )
 
         return success_response(result)
@@ -566,7 +564,7 @@ async def get_data_gaps_calendar(
         # Run calendar query in thread pool
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
-            _executor, _get_calendar_data_sync, year, month
+            get_executor(), _get_calendar_data_sync, year, month
         )
 
         return success_response(result)

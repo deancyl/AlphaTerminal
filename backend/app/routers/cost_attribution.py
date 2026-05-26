@@ -8,7 +8,6 @@ with Sankey diagrams and prompt tree viewers.
 import asyncio
 import json
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List
 
 from fastapi import APIRouter, Query, HTTPException, Depends
@@ -16,10 +15,9 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 from app.routers.admin import verify_admin_key
 from app.db.database import _get_conn
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
-
-_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="cost_attribution_")
 
 router = APIRouter(
     prefix="/cost_attribution",
@@ -421,7 +419,7 @@ async def get_sankey_data(
 
     try:
         result = await loop.run_in_executor(
-            _executor, _get_sankey_data_sync, start_date, end_date
+            get_executor(), _get_sankey_data_sync, start_date, end_date
         )
         return {"code": 0, "data": result}
     except Exception as e:
@@ -443,7 +441,7 @@ async def get_prompt_tree(
 
     try:
         result = await loop.run_in_executor(
-            _executor, _get_prompt_tree_sync, session_id
+            get_executor(), _get_prompt_tree_sync, session_id
         )
         return {"code": 0, "data": result}
     except Exception as e:
@@ -469,7 +467,7 @@ async def get_cost_breakdown(
 
     try:
         result = await loop.run_in_executor(
-            _executor, _get_cost_breakdown_sync, start_date, end_date, group_by
+            get_executor(), _get_cost_breakdown_sync, start_date, end_date, group_by
         )
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:
@@ -491,7 +489,7 @@ async def get_sessions_list(
 
     try:
         result = await loop.run_in_executor(
-            _executor, _get_sessions_list_sync, start_date, end_date, limit
+            get_executor(), _get_sessions_list_sync, start_date, end_date, limit
         )
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:

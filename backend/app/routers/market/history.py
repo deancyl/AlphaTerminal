@@ -6,9 +6,10 @@ Price history and futures data endpoints extracted from market.py.
 
 import asyncio
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
+
+from app.utils.executor import get_executor
 
 from app.utils.errors import success_response
 from app.config.timeout import AKSHARE_TIMEOUT
@@ -24,12 +25,6 @@ from .dependencies import (
     FUTURES_FREQ_MAP,
     logger,
 )
-
-# Thread pool for futures history blocking calls
-_futures_executor = ThreadPoolExecutor(
-    max_workers=16, thread_name_prefix="futures_hist_"
-)
-
 
 router = APIRouter()
 

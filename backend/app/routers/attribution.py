@@ -9,7 +9,6 @@ Provides endpoints for:
 
 import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
 import numpy as np
@@ -25,12 +24,11 @@ from app.services.attribution import (
     FactorCategory,
 )
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/attribution", tags=["attribution"])
-
-_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="attribution_")
 
 
 class SandboxRequest(BaseModel):
@@ -183,7 +181,7 @@ async def run_sandbox(req: SandboxRequest):
 
         return all_results
 
-    results = await loop.run_in_executor(_executor, _sync_run)
+    results = await loop.run_in_executor(get_executor(), _sync_run)
 
     if not results:
         return error_response(ErrorCode.NOT_FOUND, "未找到有效数据")
@@ -268,7 +266,7 @@ async def run_realtime(req: RealtimeRequest):
         finally:
             conn.close()
 
-    result = await loop.run_in_executor(_executor, _sync_run)
+    result = await loop.run_in_executor(get_executor(), _sync_run)
 
     if result is None:
         return error_response(ErrorCode.NOT_FOUND, "未找到有效数据")

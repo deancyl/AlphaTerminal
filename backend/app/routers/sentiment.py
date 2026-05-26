@@ -12,7 +12,6 @@ import logging
 import time
 import asyncio
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Query
 from app.services.sentiment_engine import (
     get_histogram,
@@ -26,12 +25,11 @@ from app.services.sentiment_engine import (
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sentiment_")
 
 _akshare_module = None
 
@@ -242,7 +240,7 @@ async def market_fund_flow():
             try:
                 return await asyncio.wait_for(
                     loop.run_in_executor(
-                        _executor, lambda: _get_ak().stock_market_fund_flow()
+                        get_executor(), lambda: _get_ak().stock_market_fund_flow()
                     ),
                     timeout=FETCH_TIMEOUT,
                 )
@@ -309,7 +307,7 @@ async def industry_fund_flow():
             try:
                 return await asyncio.wait_for(
                     loop.run_in_executor(
-                        _executor,
+                        get_executor(),
                         lambda: _get_ak().stock_sector_fund_flow_summary(
                             indicator="今日"
                         ),

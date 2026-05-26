@@ -11,7 +11,7 @@ Timeout Behavior:
 import logging
 import asyncio
 import httpx
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.executor import get_executor
 from datetime import datetime
 from fastapi import APIRouter
 from typing import Any, Optional
@@ -26,7 +26,7 @@ from app.utils.error_decorator import handle_errors
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/f9", tags=["f9_deep_data"])
 
-_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="f9_")
+executor = get_executor()
 
 _cache = get_cache()
 NAMESPACE = "f9:"
@@ -159,7 +159,7 @@ async def get_shareholder_data(symbol: str):
                     logger.warning(f"[HTTP] circulate holders: {e}", exc_info=True)
                     return None
 
-            return await loop.run_in_executor(_executor, _fetch)
+            return await loop.run_in_executor(executor, _fetch)
 
         # 2. 获取股本变动记录（最近365天）
         async def fetch_share_changes():
@@ -219,7 +219,7 @@ async def get_shareholder_data(symbol: str):
                     )
                     return []
 
-            return await loop.run_in_executor(_executor, _fetch)
+            return await loop.run_in_executor(executor, _fetch)
 
         # 3. 获取股东变动记录
         async def fetch_holder_changes():
@@ -261,7 +261,7 @@ async def get_shareholder_data(symbol: str):
                     )
                     return []
 
-            return await loop.run_in_executor(_executor, _fetch)
+            return await loop.run_in_executor(executor, _fetch)
 
         # 并行获取数据（带超时保护）
         import pandas as pd
@@ -392,7 +392,7 @@ async def get_margin_data(symbol: str):
     try:
         loop = asyncio.get_event_loop()
         trend_data = await asyncio.wait_for(
-            loop.run_in_executor(_executor, fetch_margin_data), timeout=AKSHARE_TIMEOUT
+            loop.run_in_executor(executor, fetch_margin_data), timeout=AKSHARE_TIMEOUT
         )
 
         if not trend_data:
@@ -502,7 +502,7 @@ async def get_financial_data(symbol: str):
             return {"indicators": indicators, "latest": latest, "trend": trend_data}
 
         result = await asyncio.wait_for(
-            loop.run_in_executor(_executor, fetch_financial), timeout=AKSHARE_TIMEOUT
+            loop.run_in_executor(executor, fetch_financial), timeout=AKSHARE_TIMEOUT
         )
 
         if not result:
@@ -576,8 +576,8 @@ async def get_profit_forecast(symbol: str):
                     symbol=symbol, indicator="业绩预测详表-机构"
                 )
 
-        eps_task = loop.run_in_executor(_executor, fetch_eps)
-        institution_task = loop.run_in_executor(_executor, fetch_institutions)
+        eps_task = loop.run_in_executor(executor, fetch_eps)
+        institution_task = loop.run_in_executor(executor, fetch_institutions)
         eps_df, institution_df = await asyncio.wait_for(
             asyncio.gather(eps_task, institution_task), timeout=AKSHARE_TIMEOUT
         )
@@ -752,8 +752,8 @@ async def get_institution_holdings(symbol: str):
             return trend_data
 
         loop = asyncio.get_event_loop()
-        current_task = loop.run_in_executor(_executor, fetch_current)
-        trend_task = loop.run_in_executor(_executor, fetch_trend)
+        current_task = loop.run_in_executor(executor, fetch_current)
+        trend_task = loop.run_in_executor(executor, fetch_trend)
 
         current_result, trend_data = await asyncio.wait_for(
             asyncio.gather(current_task, trend_task), timeout=AKSHARE_TIMEOUT
@@ -975,7 +975,7 @@ async def get_peer_comparison(symbol: str):
                 return None
 
         stock_info = await asyncio.wait_for(
-            loop.run_in_executor(_executor, fetch_stock_info), timeout=AKSHARE_TIMEOUT
+            loop.run_in_executor(executor, fetch_stock_info), timeout=AKSHARE_TIMEOUT
         )
 
         industry_name = stock_info.get("行业") if stock_info else None
@@ -1028,7 +1028,7 @@ async def get_peer_comparison(symbol: str):
         logger.info(f"[Peers] Fetching industry peers for {symbol}")
 
         industry_stocks = await asyncio.wait_for(
-            loop.run_in_executor(_executor, lambda: fetch_industry_stocks(symbol)),
+            loop.run_in_executor(executor, lambda: fetch_industry_stocks(symbol)),
             timeout=AKSHARE_TIMEOUT,
         )
 
@@ -1176,7 +1176,7 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
 
         loop = asyncio.get_event_loop()
         all_data = await asyncio.wait_for(
-            loop.run_in_executor(_executor, fetch_announcements),
+            loop.run_in_executor(executor, fetch_announcements),
             timeout=AKSHARE_TIMEOUT,
         )
 

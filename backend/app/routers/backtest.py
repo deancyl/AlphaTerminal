@@ -5,7 +5,6 @@
 import json
 import logging
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, field_validator
@@ -15,13 +14,11 @@ from app.utils.errors import success_response, error_response, ErrorCode
 from app.middleware import require_api_key
 from app.services.backtest_worker_registry import get_backtest_registry
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ── 线程池执行器（用于异步化 SQLite 同步调用）────────────────────
-_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="backtest_")
 
 # ── 安全限制 ─────────────────────────────────────────────────────────
 MAX_PARAMS_DEPTH = 5  # JSON 最大嵌套深度
@@ -557,7 +554,7 @@ async def get_strategies():
             logger.error(f"[Backtest] 获取策略列表失败: {e}", exc_info=True)
             return []
 
-    strategies = await loop.run_in_executor(_executor, _sync_query)
+    strategies = await loop.run_in_executor(get_executor(), _sync_query)
     return success_response({"strategies": strategies})
 
 
@@ -598,7 +595,7 @@ async def create_strategy(
         finally:
             conn.close()
 
-    strategy_id = await loop.run_in_executor(_executor, _sync_insert)
+    strategy_id = await loop.run_in_executor(get_executor(), _sync_insert)
     return success_response({"id": strategy_id, "message": "Strategy created"})
 
 
@@ -648,7 +645,7 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
             finally:
                 conn.close()
 
-        rows = await loop.run_in_executor(_executor, _sync_fetch_data)
+        rows = await loop.run_in_executor(get_executor(), _sync_fetch_data)
 
         if len(rows) == 0:
             raise ValueError(f"本地数据库无 {req.symbol} 在此时段的日K数据")
@@ -728,7 +725,7 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
                 conn.close()
                 logger.warning(f"[Backtest] 保存结果到数据库失败: {e}", exc_info=True)
 
-        await loop.run_in_executor(_executor, _sync_save_result)
+        await loop.run_in_executor(get_executor(), _sync_save_result)
 
         return {
             "symbol": req.symbol,
@@ -814,7 +811,7 @@ async def get_backtest_results(limit: int = 10):
         finally:
             conn.close()
 
-    results = await loop.run_in_executor(_executor, _sync_query)
+    results = await loop.run_in_executor(get_executor(), _sync_query)
     return success_response({"results": results})
 
 
@@ -878,7 +875,7 @@ async def walkforward_analyze(
         finally:
             conn.close()
 
-    rows = await loop.run_in_executor(_executor, _sync_fetch_data)
+    rows = await loop.run_in_executor(get_executor(), _sync_fetch_data)
 
     if len(rows) < 126:
         return error_response(
@@ -1012,7 +1009,7 @@ async def get_smart_params(req: SmartParamsRequest, _: None = Depends(require_ap
             conn.close()
             return 0
 
-    available_days = await loop.run_in_executor(_executor, _sync_count_days)
+    available_days = await loop.run_in_executor(get_executor(), _sync_count_days)
 
     strategy_config = {
         "ma_crossover": {

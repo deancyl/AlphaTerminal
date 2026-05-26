@@ -6,7 +6,6 @@ Provides endpoints for model registration, training, and prediction.
 
 import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, Depends
@@ -14,13 +13,11 @@ from pydantic import BaseModel, Field
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.error_decorator import handle_errors
 from app.middleware import require_api_key
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ── 线程池执行器（用于异步化 SQLite 同步调用）────────────────────
-_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="ml_")
 
 
 class ModelCreateRequest(BaseModel):
@@ -203,7 +200,7 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
         finally:
             conn.close()
 
-    rows = await loop.run_in_executor(_executor, _sync_fetch_data)
+    rows = await loop.run_in_executor(get_executor(), _sync_fetch_data)
 
     if len(rows) < 100:
         return error_response(
@@ -325,7 +322,7 @@ async def predict_model(req: ModelPredictRequest, _: None = Depends(require_api_
         finally:
             conn.close()
 
-    rows = await loop.run_in_executor(_executor, _sync_fetch_data)
+    rows = await loop.run_in_executor(get_executor(), _sync_fetch_data)
 
     if len(rows) == 0:
         return error_response(
@@ -526,7 +523,7 @@ async def _run_portfolio_optimization(req: PortfolioOptimizeRequest) -> Dict:
         finally:
             conn.close()
 
-    all_data = await loop.run_in_executor(_executor, _sync_fetch_all_data)
+    all_data = await loop.run_in_executor(get_executor(), _sync_fetch_all_data)
 
     prices = pd.DataFrame(all_data)
 
@@ -737,7 +734,7 @@ async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:
         finally:
             conn.close()
 
-    rows = await loop.run_in_executor(_executor, _sync_fetch_data)
+    rows = await loop.run_in_executor(get_executor(), _sync_fetch_data)
 
     if len(rows) < 60:
         raise ValueError(f"Insufficient data for factor analysis: {len(rows)} rows")
