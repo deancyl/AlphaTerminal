@@ -10,7 +10,7 @@ trading.py — Phase 2: 持仓批次追踪与 FIFO 平仓引擎
 import sqlite3
 import logging
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.executor import get_executor
 from datetime import datetime
 from typing import Optional, NamedTuple
 from app.utils.safe_math import safe_divide, safe_percent, safe_round, precise_pnl
@@ -18,8 +18,6 @@ from app.services.audit_chain import log_buy, log_sell
 
 logger = logging.getLogger(__name__)
 
-# ── 异步执行器（用于包装阻塞 SQLite 操作）──────────────────────────────
-_trading_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="trading_")
 
 
 # ── 持仓批次（Lot）数据结构 ──────────────────────────────────────────────
@@ -676,7 +674,7 @@ async def async_execute_sell(
 ) -> SellResult:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
-        _trading_executor,
+        get_executor(),
         lambda: execute_sell(portfolio_id, symbol, shares, sell_price, order_id, conn),
     )
 
@@ -692,7 +690,7 @@ async def async_execute_buy(
 ) -> LotRecord:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
-        _trading_executor,
+        get_executor(),
         lambda: execute_buy(
             portfolio_id, symbol, shares, buy_price, buy_date, order_id, conn
         ),
@@ -708,6 +706,6 @@ async def async_get_open_lots(
 ) -> list[LotRecord]:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
-        _trading_executor,
+        get_executor(),
         lambda: get_open_lots(portfolio_id, symbol, include_children, limit, offset),
     )

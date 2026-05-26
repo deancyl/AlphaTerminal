@@ -293,6 +293,47 @@ def start_scheduler():
     threading.Thread(target=_start_streaming, daemon=True).start()
     logger.info("[Scheduler] WebSocket streaming task triggered (background)")
 
+    # 立即初始化市场风向标数据（启动时执行一次）
+    def _init_wind_vane_data():
+        """启动时立即填充风向标数据"""
+        try:
+            import sqlite3
+            import time
+            from app.services.data_fetcher import fetch_china_indices, fetch_global_indices
+            from app.db.database import get_db_path
+
+            china = fetch_china_indices()
+            global_idx = fetch_global_indices()
+            all_indices = china + global_idx
+
+            if all_indices:
+                db_path = get_db_path()
+                conn = sqlite3.connect(db_path, timeout=30)
+                cursor = conn.cursor()
+                timestamp = int(time.time())
+
+                for item in all_indices:
+                    symbol = item.get('symbol')
+                    name = item.get('name')
+                    price = item.get('price', 0)
+                    change_pct = item.get('change_pct', 0)
+                    volume = item.get('volume', 0)
+                    market = item.get('market', 'AShare')
+
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO market_data_realtime
+                        (symbol, name, price, change_pct, volume, market, data_type, timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?, "index", ?)
+                    ''', (symbol, name, price, change_pct, volume, market, timestamp))
+
+                conn.commit()
+                conn.close()
+                logger.info(f"[Scheduler] 风向标数据初始化完成: {len(all_indices)} 条")
+        except Exception as e:
+            logger.error(f"[Scheduler] 风向标数据初始化失败: {e}", exc_info=True)
+
+    threading.Thread(target=_init_wind_vane_data, daemon=True).start()
+
     # 每 30 秒拉取一次实时数据（akshare 有频率限制）
     from app.services.data_fetcher import fetch_all_and_buffer
 

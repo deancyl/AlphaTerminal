@@ -72,12 +72,13 @@ def fetch_all_stocks_sina(
     timeout: int = 15,
     exclude_bj: bool = True,
     delay: float = 0.3,
+    nodes: List[str] = ["hs_a"],
 ) -> List[Dict]:
     """
     Fetch all A-share stocks from Sina Finance API.
 
-    Fetches from both Shanghai (sh_a) and Shenzhen (sz_a) markets.
-    Note: hs_a node returns Beijing Stock Exchange stocks, not A-shares.
+    Default uses hs_a node which contains all A-share stocks (Shanghai + Shenzhen + Beijing).
+    This is more efficient than fetching from sh_a and sz_a separately.
 
     Args:
         page_size: Number of stocks per page (default 500)
@@ -85,6 +86,7 @@ def fetch_all_stocks_sina(
         timeout: Request timeout in seconds
         exclude_bj: Exclude Beijing Stock Exchange stocks (bj prefix)
         delay: Delay between pages in seconds (rate limiting)
+        nodes: API nodes to fetch from (default ["hs_a"] for all A-shares)
 
     Returns:
         List of stock dicts with symbol, code, name, price, change_pct, etc.
@@ -95,7 +97,6 @@ def fetch_all_stocks_sina(
 
     all_stocks = []
     proxies = _get_proxies()
-    nodes = ["sh_a", "sz_a"]
 
     for node in nodes:
         for page in range(1, max_pages + 1):
