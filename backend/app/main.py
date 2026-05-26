@@ -50,6 +50,7 @@ from app.routers import (
     market_radar,
     factor_sandbox,
     timemachine,
+    market_indicators,
 )
 from app.routers.macro import warmup_macro_cache
 from app.routers.market_radar import warmup_market_radar_cache
@@ -273,6 +274,7 @@ app.include_router(
 )
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(forex.router, prefix="/api/v1", tags=["forex"])
+app.include_router(market_indicators.router, prefix="/api/v1", tags=["market_indicators"])
 app.include_router(options.router, prefix="/api/v1", tags=["options"])
 app.include_router(audit.router, tags=["audit"])
 app.include_router(research.router, tags=["research"])
