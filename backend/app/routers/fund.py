@@ -5,20 +5,32 @@ fund.py — 基金数据路由（Phase 6.2 性能优化版）
 - 异步端点（async def）
 - 性能日志（耗时统计）
 - 并发数据组装
+
+Wave 1 新增:
+- 基金筛选 (screener) 端点
+- 多条件过滤、排序、分页
 """
 
 import logging
 import time
 import asyncio
+from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 
 from app.services.fund_fetcher import get_fetcher
+from app.services.fund_screener import (
+    get_fund_screener,
+    FundFilterCriteria,
+    FundSortCriteria,
+    FundPagination,
+)
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fund", tags=["fund"])
 
 fetcher = get_fetcher()
+screener = get_fund_screener()
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -350,3 +362,154 @@ async def money_fund_rank(limit: int = Query(50, description="返回数量")):
             "data": [],
             "timestamp": int(time.time() * 1000),
         }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 基金筛选 (Wave 1 - PRD Chapter 5.1)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@router.get("/screener/screen")
+@handle_errors(module="fund")
+async def screener_screen(
+    # 基金类型
+    fund_type: Optional[str] = Query(None, description="基金类型：股票型/混合型/债券型/指数型/QDII"),
+    # 规模范围
+    scale_min: Optional[float] = Query(None, description="最小规模（亿元）"),
+    scale_max: Optional[float] = Query(None, description="最大规模（亿元）"),
+    # 收益率范围
+    return_1y_min: Optional[float] = Query(None, description="最小1年收益率（%）"),
+    return_1y_max: Optional[float] = Query(None, description="最大1年收益率（%）"),
+    return_3y_min: Optional[float] = Query(None, description="最小3年收益率（%）"),
+    return_3y_max: Optional[float] = Query(None, description="最大3年收益率（%）"),
+    return_5y_min: Optional[float] = Query(None, description="最小5年收益率（%）"),
+    return_5y_max: Optional[float] = Query(None, description="最大5年收益率（%）"),
+    # 风险指标
+    max_drawdown_1y_max: Optional[float] = Query(None, description="最大回撤上限（%）"),
+    volatility_1y_max: Optional[float] = Query(None, description="波动率上限（%）"),
+    # 风险调整收益
+    sharpe_1y_min: Optional[float] = Query(None, description="最小夏普比率"),
+    sortino_1y_min: Optional[float] = Query(None, description="最小索提诺比率"),
+    # 基金经理/公司
+    manager: Optional[str] = Query(None, description="基金经理（模糊匹配）"),
+    company_name: Optional[str] = Query(None, description="基金公司（模糊匹配）"),
+    # 评级
+    rating_morningstar_min: Optional[float] = Query(None, description="最小晨星评级"),
+    rating_3y_min: Optional[float] = Query(None, description="最小3年评级"),
+    # 成立年限
+    setup_years_min: Optional[int] = Query(None, description="最小成立年限"),
+    # 申购状态
+    subscription_status: Optional[str] = Query(None, description="申购状态：开放申购/暂停申购"),
+    # 排序
+    sort_field: str = Query("return_1y", description="排序字段：return_1y/return_3y/sharpe_1y/scale"),
+    sort_order: str = Query("desc", description="排序方向：asc/desc"),
+    # 分页
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+):
+    """
+    基金漏斗筛选
+    
+    支持多条件过滤、排序、分页
+    PRD Chapter 5.1: 基金漏斗筛选
+    """
+    logger.info(f"[Screener] 筛选请求 type={fund_type} page={page}")
+    start = time.time()
+    
+    # 构建筛选条件
+    criteria = FundFilterCriteria(
+        fund_type=fund_type,
+        scale_min=scale_min,
+        scale_max=scale_max,
+        return_1y_min=return_1y_min,
+        return_1y_max=return_1y_max,
+        return_3y_min=return_3y_min,
+        return_3y_max=return_3y_max,
+        return_5y_min=return_5y_min,
+        return_5y_max=return_5y_max,
+        max_drawdown_1y_max=max_drawdown_1y_max,
+        volatility_1y_max=volatility_1y_max,
+        sharpe_1y_min=sharpe_1y_min,
+        sortino_1y_min=sortino_1y_min,
+        manager=manager,
+        company_name=company_name,
+        rating_morningstar_min=rating_morningstar_min,
+        rating_3y_min=rating_3y_min,
+        setup_years_min=setup_years_min,
+        subscription_status=subscription_status,
+    )
+    
+    # 构建排序条件
+    sort = FundSortCriteria(field=sort_field, order=sort_order)
+    
+    # 构建分页条件
+    pagination = FundPagination(page=page, page_size=page_size)
+    
+    # 执行筛选
+    result = screener.screen(criteria, sort, pagination)
+    
+    elapsed = time.time() - start
+    logger.info(
+        f"[Screener] 筛选完成 total={result['total']} "
+        f"page={page}/{result['total_pages']} elapsed={elapsed:.3f}s"
+    )
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": result,
+        "timestamp": int(time.time() * 1000),
+        "_perf": {"elapsed_s": round(elapsed, 3)},
+    }
+
+
+@router.get("/screener/types")
+@handle_errors(module="fund")
+async def screener_types():
+    """获取所有基金类型（用于筛选下拉框）"""
+    types = screener.get_fund_types()
+    return {
+        "code": 0,
+        "message": "success",
+        "data": types,
+        "timestamp": int(time.time() * 1000),
+    }
+
+
+@router.get("/screener/companies")
+@handle_errors(module="fund")
+async def screener_companies():
+    """获取所有基金公司（用于筛选下拉框）"""
+    companies = screener.get_companies()
+    return {
+        "code": 0,
+        "message": "success",
+        "data": companies,
+        "timestamp": int(time.time() * 1000),
+    }
+
+
+@router.get("/screener/managers")
+@handle_errors(module="fund")
+async def screener_managers():
+    """获取所有基金经理（用于筛选下拉框）"""
+    managers = screener.get_managers()
+    return {
+        "code": 0,
+        "message": "success",
+        "data": managers,
+        "timestamp": int(time.time() * 1000),
+    }
+
+
+@router.get("/screener/statistics")
+@handle_errors(module="fund")
+async def screener_statistics():
+    """获取基金统计数据"""
+    stats = screener.get_statistics()
+    return {
+        "code": 0,
+        "message": "success",
+        "data": stats,
+        "timestamp": int(time.time() * 1000),
+    }
