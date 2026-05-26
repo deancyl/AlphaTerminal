@@ -601,7 +601,7 @@
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">🔀 基金对比</span>
-            <span class="text-xs text-theme-tertiary">最多选择 3 只基金</span>
+            <span class="text-xs text-theme-tertiary">最多选择 {{ MAX_COMPARE_FUNDS }} 只基金</span>
           </div>
           <div class="flex flex-wrap gap-2 mb-3" role="group" aria-label="已选择的基金">
             <div v-for="(fund, idx) in compareFunds" :key="fund.code"
@@ -700,7 +700,7 @@ import { storeToRefs } from 'pinia'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { formatVol, formatAmount } from '../utils/formatters.js'
-import { useFundStore, FUND_QUICK_LIST } from '../stores/fund.js'
+import { useFundStore, FUND_QUICK_LIST, MAX_COMPARE_FUNDS } from '../stores/fund.js'
 import { dedupedFetch, abortPendingRequest, abortAllPendingRequests, isRequestPending } from '../utils/requestDedup.js'
 import { getFreshness } from '../utils/freshness.js'
 import { debounce } from '../utils/cache.js'
