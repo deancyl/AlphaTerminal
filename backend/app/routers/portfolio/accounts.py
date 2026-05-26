@@ -3,7 +3,7 @@ Portfolio Account CRUD endpoints.
 """
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.executor import get_executor
 from datetime import datetime
 import logging
 import sqlite3
@@ -25,10 +25,7 @@ router = APIRouter(tags=["portfolio"])
 # Timeout constant for all portfolio endpoints
 PORTFOLIO_TIMEOUT = 30  # seconds
 
-# Shared thread pool for non-blocking SQLite operations
-_portfolio_executor = ThreadPoolExecutor(
-    max_workers=20, thread_name_prefix="portfolio_"
-)
+# Use centralized executor from utils/executor.py
 
 
 # ── 账户 CRUD ─────────────────────────────────────────────────
@@ -73,7 +70,7 @@ async def list_portfolios():
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -169,7 +166,7 @@ async def create_portfolio(body: PortfolioIn, _: None = Depends(require_api_key)
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -201,7 +198,7 @@ async def delete_portfolio(portfolio_id: int, _: None = Depends(require_api_key)
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:

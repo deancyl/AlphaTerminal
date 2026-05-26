@@ -19,7 +19,7 @@ Dependencies:
 import asyncio
 import logging
 import sqlite3
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.executor import get_executor
 from datetime import datetime, date
 from typing import Optional
 
@@ -38,10 +38,7 @@ from app.utils.error_decorator import handle_errors
 # Timeout constant for all portfolio endpoints
 PORTFOLIO_TIMEOUT = 30  # seconds
 
-# Shared thread pool for non-blocking SQLite operations
-_portfolio_executor = ThreadPoolExecutor(
-    max_workers=20, thread_name_prefix="portfolio_"
-)
+
 
 # ── Helper Functions ─────────────────────────────────────────────
 
@@ -207,7 +204,7 @@ async def list_positions(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return await loop.run_in_executor(get_executor(), _sync_work)
 
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -261,7 +258,7 @@ async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return await loop.run_in_executor(get_executor(), _sync_work)
 
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -306,7 +303,7 @@ async def delete_position(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return await loop.run_in_executor(get_executor(), _sync_work)
 
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -665,7 +662,7 @@ async def portfolio_pnl(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -734,7 +731,7 @@ async def get_snapshots(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -758,7 +755,7 @@ async def save_snapshot(portfolio_id: int, _: None = Depends(require_api_key)):
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return await loop.run_in_executor(get_executor(), _sync_work)
 
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -891,7 +888,7 @@ async def daily_pnl_only(portfolio_id: int):
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:

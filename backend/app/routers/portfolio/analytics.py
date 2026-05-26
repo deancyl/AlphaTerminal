@@ -12,7 +12,7 @@ import asyncio
 import math
 import sqlite3
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.executor import get_executor
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -29,10 +29,6 @@ router = APIRouter(tags=["portfolio-analytics"])
 # Timeout constant for all portfolio endpoints
 PORTFOLIO_TIMEOUT = 30  # seconds
 
-# Shared thread pool for non-blocking SQLite operations
-_portfolio_executor = ThreadPoolExecutor(
-    max_workers=20, thread_name_prefix="portfolio_"
-)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -430,7 +426,7 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -625,7 +621,7 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -769,7 +765,7 @@ async def get_risk_metrics(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -1019,7 +1015,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:

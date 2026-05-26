@@ -15,7 +15,7 @@ Extracted from portfolio.py for better code organization.
 import asyncio
 import sqlite3
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.executor import get_executor
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -39,10 +39,6 @@ router = APIRouter(tags=["portfolio"])
 # Timeout constant for all portfolio endpoints
 PORTFOLIO_TIMEOUT = 30  # seconds
 
-# Shared thread pool for non-blocking SQLite operations
-_portfolio_executor = ThreadPoolExecutor(
-    max_workers=20, thread_name_prefix="portfolio_"
-)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -124,7 +120,7 @@ async def get_cash(portfolio_id: int):
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -177,7 +173,7 @@ async def cash_deposit(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -235,7 +231,7 @@ async def cash_withdraw(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -289,7 +285,7 @@ async def list_transactions(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:

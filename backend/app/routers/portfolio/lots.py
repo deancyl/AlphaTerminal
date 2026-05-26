@@ -10,7 +10,7 @@ Extracted from portfolio.py for better code organization.
 import asyncio
 import logging
 import sqlite3
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.executor import get_executor
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -42,10 +42,7 @@ router = APIRouter(tags=["portfolio"])
 # Timeout constant for all portfolio endpoints
 PORTFOLIO_TIMEOUT = 30  # seconds
 
-# Shared thread pool for non-blocking SQLite operations
-_portfolio_executor = ThreadPoolExecutor(
-    max_workers=20, thread_name_prefix="portfolio_"
-)
+
 
 
 # ── Buy (BUY) - Add new lot ────────────────────────────────────────────
@@ -253,7 +250,7 @@ async def list_lots(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -291,7 +288,7 @@ async def unrealized_pnl(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -446,7 +443,7 @@ async def check_conservation(portfolio_id: int):
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -572,7 +569,7 @@ async def get_portfolio_tree(portfolio_id: int):
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -646,7 +643,7 @@ async def list_lots_with_summary(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -692,7 +689,7 @@ async def lots_summary(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -731,7 +728,7 @@ async def refresh_market_value(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
@@ -794,7 +791,7 @@ async def lots_echarts_data(
 
     async def _inner():
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        data = await loop.run_in_executor(get_executor(), _sync_work)
         return success_response(data)
 
     try:
