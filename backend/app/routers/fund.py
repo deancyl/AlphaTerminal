@@ -576,3 +576,126 @@ async def compare_max_limit():
         "data": {"max_funds": 15},
         "timestamp": int(time.time() * 1000),
     }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 基金相似度 (Wave 3 - PRD Chapter 5.3)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@router.get("/similarity/{code1}/{code2}")
+@handle_errors(module="fund")
+async def calculate_similarity(
+    code1: str,
+    code2: str,
+    method: str = Query("cosine", description="相似度计算方法：cosine/euclidean/manhattan"),
+):
+    """
+    计算两只基金的相似度
+    
+    返回: 相似度分数 (0-1, 1表示完全相同)
+    
+    PRD Chapter 5.3: 基金相似度计算器
+    """
+    from app.services.fund_similarity import get_similarity_service
+    
+    logger.info(f"[Similarity] 计算相似度 {code1} vs {code2}")
+    start = time.time()
+    
+    service = get_similarity_service()
+    similarity = service.calculate_similarity(code1, code2, method)
+    
+    if similarity is None:
+        raise HTTPException(400, f"无法计算基金 {code1} 和 {code2} 的相似度")
+    
+    elapsed = time.time() - start
+    logger.info(f"[Similarity] 相似度: {similarity} elapsed={elapsed:.3f}s")
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "fund_code_1": code1,
+            "fund_code_2": code2,
+            "similarity": similarity,
+            "method": method,
+        },
+        "timestamp": int(time.time() * 1000),
+        "_perf": {"elapsed_s": round(elapsed, 3)},
+    }
+
+
+@router.get("/similar/{code}")
+@handle_errors(module="fund")
+async def find_similar_funds(
+    code: str,
+    top_n: int = Query(10, ge=1, le=50, description="返回数量"),
+    fund_type: Optional[str] = Query(None, description="筛选基金类型"),
+    min_scale: Optional[float] = Query(None, description="最小规模（亿元）"),
+):
+    """
+    查找相似基金
+    
+    返回: 相似基金列表，按相似度降序排列
+    
+    PRD Chapter 5.3: 基金相似度计算器
+    """
+    from app.services.fund_similarity import get_similarity_service
+    
+    logger.info(f"[Similar] 查找相似基金 {code} top_n={top_n}")
+    start = time.time()
+    
+    service = get_similarity_service()
+    similar_funds = service.find_similar_funds(code, top_n, fund_type, min_scale)
+    
+    elapsed = time.time() - start
+    logger.info(f"[Similar] 找到 {len(similar_funds)} 只相似基金 elapsed={elapsed:.3f}s")
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "target_fund": code,
+            "similar_funds": similar_funds,
+            "total": len(similar_funds),
+        },
+        "timestamp": int(time.time() * 1000),
+        "_perf": {"elapsed_s": round(elapsed, 3)},
+    }
+
+
+@router.get("/factor-exposure/{code}")
+@handle_errors(module="fund")
+async def get_factor_exposure(code: str):
+    """
+    获取基金因子暴露
+    
+    使用 SLSQP 算法计算因子权重
+    
+    PRD Chapter 5.3: 基金相似度计算器
+    """
+    from app.services.fund_similarity import get_similarity_service, FACTORS
+    
+    logger.info(f"[FactorExposure] 获取因子暴露 {code}")
+    start = time.time()
+    
+    service = get_similarity_service()
+    exposure = service.calculate_factor_exposure_slsqp(code)
+    
+    if exposure is None:
+        raise HTTPException(400, f"无法获取基金 {code} 的因子暴露")
+    
+    elapsed = time.time() - start
+    logger.info(f"[FactorExposure] 完成 elapsed={elapsed:.3f}s")
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "fund_code": code,
+            "factor_exposure": exposure,
+            "factors": FACTORS,
+        },
+        "timestamp": int(time.time() * 1000),
+        "_perf": {"elapsed_s": round(elapsed, 3)},
+    }
