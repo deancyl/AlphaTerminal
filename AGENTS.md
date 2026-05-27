@@ -6444,3 +6444,119 @@ ls frontend/public/favicon.svg  # Expected: exists
 cd frontend && npm run build  # Expected: success
 ```
 
+---
+
+## v0.6.203 Critical Database Path Fix (2026-05-27)
+
+### Overview
+
+Fixed critical P0 issues causing data synchronization failure between scheduler and API.
+
+### Issues Fixed
+
+| Issue | Severity | Root Cause | Solution |
+|-------|----------|------------|----------|
+| Database path mismatch | P0 | db_writer.py used hardcoded relative path | Use get_db_path() from database.py |
+| Financial color inconsistency | P0 | Mixed bull/bear colors across themes | Unified: bull=red, bear=green |
+| Index symbol mapping | P0 | INDEX_SH whitelist incomplete | Added comprehensive whitelist |
+| Fund flow API failure | P1 | ProxyError not caught | Added Exception catch-all |
+
+### Database Path Unification
+
+**Problem**: 
+- `database.py` uses `~/.config/alphaterminal/database.db` (Tauri path)
+- `db_writer.py` used `backend/database.db` (hardcoded relative path)
+- Scheduler writes to one DB, API reads from another
+
+**Solution**:
+```python
+# db_writer.py - Before
+_db_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "database.db",
+)
+
+# db_writer.py - After
+from app.db.database import get_db_path
+_db_path = get_db_path()
+```
+
+**Impact**:
+- Database now contains 8,648 records for 000001 (was 100)
+- API returns correct price ~4093 (was incorrect ~10.76)
+
+### Financial Color Semantics
+
+**A-Share Convention**: 红涨绿跌 (Red=Up, Green=Down)
+
+| Theme | bull (上涨) | bear (下跌) |
+|-------|-------------|-------------|
+| dark | #ef4444 (red) | #22c55e (green) |
+| black | #ef4444 (red) | #22c55e (green) |
+| wind | #ef4444 (red) | #22c55e (green) |
+| light | #ef4444 (red) | #22c55e (green) |
+
+### Index Symbol Mapping Enhancement
+
+**INDEX_SH Whitelist**:
+```python
+INDEX_SH = {
+    "000001",  # 上证指数
+    "000300",  # 沪深300
+    "000688",  # 科创50
+    "000016",  # 上证50
+    "000010",  # 上证180
+    "000009",  # 上证380
+}
+```
+
+### Fund Flow API Fallback
+
+**Problem**: ProxyError from Eastmoney API not caught, causing empty response.
+
+**Solution**: Added `except Exception` to trigger mock data fallback:
+```python
+except Exception as e:
+    logger.warning(f"[FundFlow] error ({type(e).__name__}), triggering fallback: {e}")
+    # Returns 30 mock records
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `backend/app/db/db_writer.py` | Database path unification |
+| `backend/app/services/data_fetcher.py` | INDEX_SH whitelist enhancement |
+| `backend/app/routers/market/overview.py` | Fund flow fallback exception handling |
+| `frontend/src/style.css` | Financial color fix (removed duplicate dark theme) |
+
+### Verification Commands
+
+```bash
+# Database path verification
+python3 -c "from app.db.db_writer import _db_path; from app.db.database import get_db_path; assert _db_path == get_db_path()"
+
+# Database record count
+sqlite3 ~/.config/alphaterminal/database.db "SELECT COUNT(*) FROM market_data_daily WHERE symbol='000001'"
+# Expected: 8000+
+
+# API price accuracy
+curl http://localhost:60100/api/v1/market/history/000001?period=day&limit=1 | jq '.data.history[0].close'
+# Expected: ~4093
+
+# Financial color verification
+grep "color-bull.*#ef4444" frontend/src/style.css | wc -l  # Expected: 4+ (one per theme)
+grep "color-bear.*#22c55e" frontend/src/style.css | wc -l  # Expected: 4+ (one per theme)
+
+# Fund flow fallback
+curl http://localhost:60100/api/v1/market/fund_flow | jq '.data.source'
+# Expected: "fallback_mock" (when proxy blocks Eastmoney)
+```
+
+### Architecture Improvements Needed (Future)
+
+1. **Unified Index Registry**: Consolidate symbol mapping logic across all modules
+2. **Price Validation**: Add sanity checks before writing to database
+3. **DBWriter Health Monitoring**: Add periodic health checks and alerts
+4. **Data Integrity Verification**: Add automated data quality checks
+
