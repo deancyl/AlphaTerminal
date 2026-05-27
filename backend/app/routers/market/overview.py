@@ -21,6 +21,7 @@ from app.services.fetchers.global_index_fetcher import (
     GLOBAL_INDEX_SYMBOLS,
 )
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["market"])
@@ -554,6 +555,22 @@ async def market_global():
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取全球指数失败: {str(e)}")
 
 
+# Alias for backward compatibility
+@router.get("/market/global_index")
+@handle_errors(module="market_overview")
+async def market_global_index():
+    """Alias for /market/global - backward compatibility"""
+    return await market_global()
+
+
+# Alias for frontend compatibility (plural form)
+@router.get("/market/global_indices")
+@handle_errors(module="market_overview")
+async def market_global_indices():
+    """Alias for /market/global - frontend compatibility"""
+    return await market_global()
+
+
 @router.get("/market/global/kline")
 @handle_errors(module="market_overview")
 async def get_global_kline(
@@ -799,8 +816,8 @@ async def get_fund_flow():
         )
     except ValueError:
         logger.warning("[FundFlow] empty result, triggering fallback", exc_info=True)
-    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] error, triggered fallback: {e}", exc_info=True)
+    except Exception as e:
+        logger.warning(f"[FundFlow] error ({type(e).__name__}), triggering fallback: {e}", exc_info=True)
 
     # Fallback（akshare 超时或空数据时）
     mock_result = []
@@ -866,12 +883,6 @@ async def get_north_flow_ranking():
     try:
         import akshare as ak
         import asyncio
-        from concurrent.futures import ThreadPoolExecutor
-
-        # 专用线程池，避免阻塞事件循环
-        _north_executor = ThreadPoolExecutor(
-            max_workers=5, thread_name_prefix="north_flow_"
-        )
 
         def fetch_north_data():
             """同步获取北向资金数据"""
@@ -888,9 +899,9 @@ async def get_north_flow_ranking():
                 logger.error(f"[north_flow] akshare获取失败: {e}", exc_info=True)
                 return None
 
-        # 异步执行
+        # 异步执行（使用集中式线程池）
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(_north_executor, fetch_north_data)
+        data = await loop.run_in_executor(get_executor(), fetch_north_data)
 
         if data is None or data["summary"] is None:
             return error_response(ErrorCode.EXTERNAL_API_ERROR, "北向资金数据获取失败")
@@ -993,3 +1004,10 @@ async def get_north_flow_ranking():
         return error_response(
             ErrorCode.INTERNAL_ERROR, f"获取北向资金数据失败: {str(e)}"
         )
+
+
+# Alias for /market/north_flow_ranking - matches frontend API calls
+@router.get("/market/north_flow_ranking")
+@handle_errors(module="market_overview")
+async def market_north_flow_ranking():
+    return await get_north_flow_ranking()

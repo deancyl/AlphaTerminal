@@ -38,10 +38,9 @@ _writer_start_time: float = 0.0
 _heartbeat_lock = threading.Lock()
 
 # ── 数据库路径（与 database.py 保持一致）───────────────────────
-_db_path = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "database.db",
-)
+# 使用统一的数据库路径函数（Tauri兼容）
+from app.db.database import get_db_path
+_db_path = get_db_path()
 
 # ── 任务类型常量 ────────────────────────────────────────────────
 T_DAILY = "daily"  # market_data_daily

@@ -73,100 +73,6 @@
   }
 
   /* ============================================
-     主题 1: DARK - 专业深色（默认）
-     Deep Slate Palette - 金融终端专业配色
-     ============================================ */
-  [data-theme="dark"] {
-    /* ── 基础与面板 ── */
-    --bg-base: #0f172a;        /* slate-900 - 最深背景 */
-    --bg-surface: #1e293b;     /* slate-800 - 面板背景 */
-    --bg-surface-hover: #334155; /* slate-700 - 悬停状态 */
-    --bg-elevated: #334155;    /* slate-700 - 提升层级 */
-    --bg-overlay: rgba(0, 0, 0, 0.70);
-    --bg-glass: rgba(15, 23, 42, 0.95);
-
-    /* ── 边框与分割线 ── */
-    --border-base: #334155;    /* slate-700 */
-    --border-light: #475569;   /* slate-600 */
-    --border-focus: #3b82f6;   /* blue-500 */
-    --border-hover: #475569;   /* slate-600 */
-
-    /* ── 文本层级 ── */
-    --text-primary: #f1f5f9;   /* slate-100 */
-    --text-secondary: #94a3b8; /* slate-400 */
-    --text-muted: #64748b;     /* slate-500 */
-    --text-disabled: #475569;  /* slate-600 */
-    --text-placeholder: #64748b; /* slate-500 */
-    --text-inverse: #0f172a;   /* slate-900 */
-
-    /* ── 品牌与强调色 ── */
-    --color-primary: #3b82f6;  /* blue-500 */
-    --color-primary-hover: #60a5fa; /* blue-400 */
-    --color-primary-light: #93c5fd; /* blue-300 */
-    --color-primary-dark: #2563eb; /* blue-600 */
-    --color-primary-bg: rgba(59, 130, 246, 0.10);
-    --color-primary-border: rgba(59, 130, 246, 0.30);
-
-    /* ── 金融语义色（中国惯例：绿涨红跌）── */
-    --color-bull: #22c55e;     /* green-500 - 上涨 */
-    --color-bull-light: #4ade80; /* green-400 */
-    --color-bull-bg: rgba(34, 197, 94, 0.15);
-    --color-bull-border: rgba(34, 197, 94, 0.30);
-
-    --color-bear: #ef4444;     /* red-500 - 下跌 */
-    --color-bear-light: #f87171; /* red-400 */
-    --color-bear-bg: rgba(239, 68, 68, 0.15);
-    --color-bear-border: rgba(239, 68, 68, 0.30);
-
-    --color-neutral: #94a3b8;  /* slate-400 */
-    --color-neutral-bg: rgba(148, 163, 184, 0.10);
-    --color-neutral-border: rgba(148, 163, 184, 0.25);
-
-    /* ── 功能状态色 ── */
-    --color-warning: #f59e0b; /* amber-500 */
-    --color-warning-bg: rgba(245, 158, 11, 0.15);
-    --color-warning-border: rgba(245, 158, 11, 0.30);
-
-    --color-danger: #ef4444;  /* red-500 */
-    --color-danger-bg: rgba(239, 68, 68, 0.15);
-    --color-danger-border: rgba(239, 68, 68, 0.30);
-
-    --color-success: #22c55e; /* green-500 */
-    --color-success-bg: rgba(34, 197, 94, 0.15);
-    --color-success-border: rgba(34, 197, 94, 0.30);
-
-    --color-info: #3b82f6;  /* blue-500 */
-    --color-info-bg: rgba(59, 130, 246, 0.15);
-    --color-info-border: rgba(59, 130, 246, 0.30);
-
-    /* ── Copilot Agent 专用色 ── */
-    --color-agent-blue: #60a5fa; /* blue-400 */
-    --color-agent-blue-hover: #93c5fd; /* blue-300 */
-    --color-agent-blue-bg: rgba(96, 165, 250, 0.10);
-    --color-agent-blue-border: rgba(96, 165, 250, 0.30);
-
-    /* ── 图表配色 ── */
-    --chart-bg: transparent;
-    --chart-grid: #1e293b;  /* slate-800 */
-    --chart-text: #64748b;  /* slate-500 */
-    --chart-line: #3b82f6;  /* blue-500 */
-    --chart-area: rgba(59, 130, 246, 0.10);
-    --chart-crosshair: rgba(241, 245, 249, 0.20);
-
-    /* ── 阴影 ── */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
-    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.40);
-    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.50);
-    --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.60);
-    --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.20);
-
-    /* ── 滚动条 ── */
-    --scrollbar-track: #1e293b; /* slate-800 */
-    --scrollbar-thumb: #334155; /* slate-700 */
-    --scrollbar-thumb-hover: #475569; /* slate-600 */
-  }
-
-  /* ============================================
      主题 2: BLACK - OLED 纯黑
      ============================================ */
   [data-theme="black"] {
@@ -200,16 +106,16 @@
     --color-primary-bg: rgba(15, 82, 186, 0.12);
     --color-primary-border: rgba(15, 82, 186, 0.35);
 
-    /* ── 金融语义色（严格统一）── */
-    --color-bull: #10b981;
-    --color-bull-light: #34d399;
-    --color-bull-bg: rgba(16, 185, 129, 0.20);
-    --color-bull-border: rgba(16, 185, 129, 0.40);
+    /* ── 金融语义色（中国惯例：红涨绿跌）── */
+    --color-bull: #ef4444;     /* red-500 - 上涨 */
+    --color-bull-light: #f87171; /* red-400 */
+    --color-bull-bg: rgba(239, 68, 68, 0.20);
+    --color-bull-border: rgba(239, 68, 68, 0.40);
 
-    --color-bear: #ef4444;
-    --color-bear-light: #f87171;
-    --color-bear-bg: rgba(239, 68, 68, 0.20);
-    --color-bear-border: rgba(239, 68, 68, 0.40);
+    --color-bear: #22c55e;     /* green-500 - 下跌 */
+    --color-bear-light: #4ade80; /* green-400 */
+    --color-bear-bg: rgba(34, 197, 94, 0.20);
+    --color-bear-border: rgba(34, 197, 94, 0.40);
 
     --color-neutral: #B0B8CC;
     --color-neutral-bg: rgba(176, 184, 204, 0.12);
@@ -293,16 +199,16 @@
     --color-primary-bg: rgba(24, 144, 255, 0.10);
     --color-primary-border: rgba(24, 144, 255, 0.30);
 
-    /* ── 金融语义色（严格统一）── */
-    --color-bull: #10b981;
-    --color-bull-light: #34d399;
-    --color-bull-bg: rgba(16, 185, 129, 0.15);
-    --color-bull-border: rgba(16, 185, 129, 0.35);
+    /* ── 金融语义色（中国惯例：红涨绿跌）── */
+    --color-bull: #ef4444;     /* red-500 - 上涨 */
+    --color-bull-light: #f87171; /* red-400 */
+    --color-bull-bg: rgba(239, 68, 68, 0.15);
+    --color-bull-border: rgba(239, 68, 68, 0.35);
 
-    --color-bear: #ef4444;
-    --color-bear-light: #f87171;
-    --color-bear-bg: rgba(239, 68, 68, 0.15);
-    --color-bear-border: rgba(239, 68, 68, 0.35);
+    --color-bear: #22c55e;     /* green-500 - 下跌 */
+    --color-bear-light: #4ade80; /* green-400 */
+    --color-bear-bg: rgba(34, 197, 94, 0.15);
+    --color-bear-border: rgba(34, 197, 94, 0.35);
 
     --color-neutral: #B0B8CC;
     --color-neutral-bg: rgba(176, 184, 204, 0.10);

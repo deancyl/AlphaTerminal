@@ -1233,11 +1233,16 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
         # AkShare 指数接口需要带 sh/sz 前缀
         ak_sym = symbol
         if not any(symbol.startswith(p) for p in ("sh", "sz", "SH", "SZ")):
-            # 推算交易所：6/9开头=上海，0/1/2/3开头=深圳；直接补足6位
+            # 指数代码判断：
+            # - 000001(上证指数), 000300(沪深300), 000688(科创50), 000016(上证50) -> sh
+            # - 399001(深证成指), 399006(创业板指), 399005(中小板指) -> sz
+            # - 6/9开头=上海股票，0/2/3开头=深圳股票
             numeric = symbol.strip().zfill(6)
-            prefix = (
-                "sh" if numeric.startswith("6") or numeric.startswith("9") else "sz"
-            )
+            INDEX_SH = {"000001", "000300", "000688", "000016", "000010", "000009"}
+            if numeric in INDEX_SH or numeric.startswith("6") or numeric.startswith("9"):
+                prefix = "sh"
+            else:
+                prefix = "sz"
             ak_sym = f"{prefix}{numeric}"
 
         logger.info(f"[AkShare Index] 开始拉取指数 {ak_sym}")
