@@ -350,11 +350,8 @@ export async function getTopSectors(limit = 5) {
  */
 export async function getNorthFlowRanking() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/market/north_flow_ranking`)
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    const result = await response.json()
+    const result = await apiFetch(`${API_BASE}/api/v1/market/north_flow_ranking`, { timeoutMs: 15000 })
+    // apiFetch returns parsed JSON directly: { code: 0, data: {...}, message: 'success' }
     if (result.code === 0 && result.data) {
       return {
         topBuy: result.data.topBuy || [],
@@ -366,7 +363,7 @@ export async function getNorthFlowRanking() {
     }
     throw new Error(result.message || '获取北向资金数据失败')
   } catch (error) {
-    console.error('[getNorthFlowRanking] API调用失败:', error)
+    logger.warn('[getNorthFlowRanking] API调用失败:', error.message)
     // 降级返回空数据，避免前端崩溃
     return {
       topBuy: [],

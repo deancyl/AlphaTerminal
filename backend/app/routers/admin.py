@@ -552,6 +552,33 @@ def save_llm_settings(body: LLMSettingsRequest):
 # ═══════════════════════════════════════════════════════════════
 
 
+@router.get("/models/")
+@router.get("/models")
+@handle_errors(module="admin")
+def get_models():
+    """Return available LLM models from all providers"""
+    from app.services.model_config_service import get_model_config_service
+
+    service = get_model_config_service()
+    providers = service.get_all_providers()
+    
+    result = []
+    for provider_name, provider_state in providers.items():
+        for model_id, model in provider_state.models.items():
+            result.append({
+                "provider": provider_name,
+                "model_id": model_id,
+                "enabled": model.enabled,
+                "is_default": model.is_default,
+                "context_length": model.context_length,
+                "max_concurrent": model.max_concurrent,
+                "api_key_masked": _mask_key(model.api_key),
+                "base_url": model.base_url
+            })
+    
+    return {"code": 0, "data": result, "count": len(result)}
+
+
 @router.get("/models/all")
 @handle_errors(module="admin")
 def get_all_models():
@@ -1312,6 +1339,85 @@ def get_token_stats(
     stats = service.get_total_stats(start_time, end_time)
 
     return {"code": 0, "data": stats}
+
+
+@router.get("/tokens/summary")
+@handle_errors(module="admin")
+def get_tokens_summary():
+    """Get aggregate token statistics summary"""
+    from app.services.token_tracking_service import get_token_tracking_service
+
+    service = get_token_tracking_service()
+    
+    # Get total stats
+    total_stats = service.get_total_stats()
+    
+    # Get recent 24h stats
+    now = datetime.now()
+    yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+    daily_stats = service.get_total_stats(yesterday, today)
+    
+    # Get model breakdown
+    model_breakdown = service.get_model_breakdown(yesterday, today)
+    
+    return {
+        "code": 0,
+        "data": {
+            "total": total_stats,
+            "last_24h": daily_stats,
+            "models": model_breakdown[:10] if model_breakdown else [],
+            "timestamp": now.isoformat()
+        }
+    }
+
+
+@router.get("/tokens/trend")
+@handle_errors(module="admin")
+def get_tokens_trend(
+    period: str = Query(default="daily", pattern="^(hourly|daily|weekly)$"),
+    limit: int = Query(default=30, ge=1, le=365)
+):
+    """Get token usage trend over time"""
+    from app.services.token_tracking_service import get_token_tracking_service
+
+    service = get_token_tracking_service()
+    trend = service.get_aggregated_stats(period, limit)
+    
+    return {
+        "code": 0,
+        "data": trend,
+        "period": period,
+        "count": len(trend)
+    }
+
+
+@router.get("/tokens/recent")
+@handle_errors(module="admin")
+def get_tokens_recent(
+    limit: int = Query(default=50, ge=1, le=1000)
+):
+    """Get recent token usage records"""
+    from app.services.token_tracking_service import get_token_tracking_service
+
+    service = get_token_tracking_service()
+    
+    # Get recent records (last 7 days by default)
+    now = datetime.now()
+    week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+    
+    history = service.get_usage_history(
+        start_date=week_ago,
+        end_date=today,
+        limit=limit
+    )
+    
+    return {
+        "code": 0,
+        "data": history,
+        "count": len(history)
+    }
 
 
 @router.get("/tokens/history")

@@ -174,7 +174,7 @@
           </div>
 
         <!-- 股票行情（默认） -->
-        <KeepAlive :max="10" :include="['DashboardGrid', 'MacroDashboard', 'FuturesDashboard', 'PortfolioDashboard', 'BondDashboard', 'ForexDashboard', 'MarketRadar']">
+        <KeepAlive :max="10" :include="['DashboardGrid', 'MacroDashboard', 'FuturesDashboard', 'PortfolioDashboard', 'BondDashboard', 'ForexDashboard', 'MarketRadar', 'MultiAssetMatrix']">
           <DashboardGrid
             v-if="currentView === 'stock'"
             ref="dashboardGridRef"
@@ -218,6 +218,8 @@
           <MarketRadar v-else-if="currentView === 'market-radar'" />
           <!-- 时光机 -->
           <TimeMachine v-else-if="currentView === 'timemachine'" />
+          <!-- 四屏矩阵 -->
+          <MultiAssetMatrix v-else-if="currentView === 'multi-asset-matrix'" />
         </KeepAlive>
         
           <!-- ━━━ 移动端滑动指示器 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
@@ -374,7 +376,7 @@ import { preloadECharts } from './utils/lazyEcharts.js'
 const { ui, openKlineFullscreen } = useUiStore()
 const { currentSymbol } = useMarketStore()
 const { success: toastSuccess, info: toastInfo } = useToast()
-const { wsStatus, latency, manualReconnect, lastConnectedAt, connectionAttempts } = useMarketStream()
+const { wsStatus, latency, manualReconnect, lastConnectedAt, connectionAttempts } = useMarketStream('sh000001')
 
 // 初始化主题系统（必须在组件挂载前调用）
 const { theme: currentTheme, isDark, cycleTheme, THEME_ICONS } = useTheme()
@@ -464,7 +466,8 @@ function getViewName(viewId) {
     'walk-forward': '策略稳定性测试',
     'factor-sandbox': '因子沙盒',
     'market-radar': '市场雷达',
-    'timemachine': '时光机'
+    'timemachine': '时光机',
+    'multi-asset-matrix': '四屏矩阵'
   }
   return names[viewId] || viewId
 }
@@ -584,6 +587,18 @@ const dashboardGridRef = ref(null) // DashboardGrid ref for layout reset
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
 const currentTime = ref('')  // 时钟显示
+
+// ── 退出确认：只在实际有未保存更改时触发 ─────────────────────────────────
+const hasUnsavedChanges = ref(false) // 跟踪实际未保存状态
+
+// TODO: 在以下场景设置 hasUnsavedChanges.value = true:
+// 1. 活跃持仓（PortfolioDashboard 有未平仓交易）
+// 2. 未保存的策略配置（StrategyCenter 有修改但未保存）
+// 3. Copilot 草稿消息（用户正在输入但未发送）
+// 示例：
+// - PortfolioDashboard: 在交易执行后设置 true，成交确认后设置 false
+// - StrategyCenter: 在策略参数修改后设置 true，保存后设置 false
+// - CopilotSidebar: 输入框有内容时设置 true，发送后设置 false
 
 // 全屏 K 线状态（提升到 App 根级别，脱离 stacking context 约束）
 function openFullscreenKline({ symbol, name }) {
@@ -861,13 +876,16 @@ function handlePopState(event) {
 }
 
 function handleBeforeUnload(event) {
-  // 仅在移动端显示退出确认
-  if (isMobile.value && viewHistory.value.length > 1) {
-    const message = '确定要退出 AlphaTerminal 吗？'
-    event.preventDefault()
-    event.returnValue = message
-    return message
+  // 只在实际有未保存更改时显示确认对话框
+  if (!hasUnsavedChanges.value) {
+    return // 不阻止默认行为，不显示对话框
   }
+  
+  // 有未保存更改时显示确认
+  const message = '您有未保存的更改，确定要离开吗？'
+  event.preventDefault()
+  event.returnValue = message
+  return message
 }
 
 function showExitConfirmation() {

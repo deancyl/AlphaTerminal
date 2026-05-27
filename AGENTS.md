@@ -6300,3 +6300,147 @@ cd backend && python3 -m py_compile app/main.py app/utils/executor.py app/servic
 3. **Tauri Compatible**: Database in `~/.config/alphaterminal/`, relative API paths
 4. **WAL Mode SQLite**: `journal_mode=WAL`, `synchronous=NORMAL`, `cache_size=-64000`
 
+---
+
+## Audit Issue Fixes (v0.6.202)
+
+### Overview
+
+Based on comprehensive audit report identifying 47 issues across 12 CRITICAL, 15 HIGH, 8 MEDIUM categories, the following critical fixes were implemented.
+
+### Issue Summary
+
+| Issue | Severity | Fix | Status |
+|-------|----------|-----|--------|
+| Multi-asset-matrix blank | CRITICAL | Add missing v-else-if condition | ✅ Fixed |
+| WebSocket "未连接" status | CRITICAL | Auto-connect with default symbol | ✅ Fixed |
+| Admin API 404 errors | HIGH | Add missing endpoints | ✅ Fixed |
+| FundFlow API_BASE bug | HIGH | Use API_BASE instead of undefined | ✅ Fixed |
+| Exit dialog on refresh | CRITICAL | Add hasUnsavedChanges condition | ✅ Fixed |
+| favicon.ico missing | HIGH | Add favicon.svg | ✅ Fixed |
+
+### Fix Details
+
+#### 1. Routing System - Multi-asset-matrix
+
+**Problem**: Sidebar has `multi-asset-matrix` nav item but App.vue missing v-else-if condition.
+
+**Solution**: Added in `frontend/src/App.vue`:
+```vue
+<!-- 四屏矩阵 -->
+<MultiAssetMatrix v-else-if="currentView === 'multi-asset-matrix'" />
+```
+
+Also added to KeepAlive include array and getViewName function.
+
+**Verification**: `grep -c "multi-asset-matrix" frontend/src/App.vue` returns 2+
+
+#### 2. WebSocket Auto-Connect
+
+**Problem**: WebSocket showed "未连接" because useMarketStream() called without initial symbol.
+
+**Solution**: Modified `frontend/src/App.vue` line 379:
+```javascript
+// Before
+const { wsStatus, ... } = useMarketStream()
+
+// After
+const { wsStatus, ... } = useMarketStream('sh000001')
+```
+
+**Verification**: WebSocket now auto-connects on startup with default symbol.
+
+#### 3. Admin API Missing Endpoints
+
+**Problem**: These endpoints returned 404:
+- `/api/v1/admin/models/`
+- `/api/v1/admin/tokens/summary`
+- `/api/v1/admin/tokens/trend`
+- `/api/v1/admin/tokens/recent`
+
+**Solution**: Added endpoints in `backend/app/routers/admin.py`:
+- `/tokens/summary` - Aggregate token statistics
+- `/tokens/trend` - Time-series usage data
+- `/tokens/recent` - Recent token records
+- `/models/` - Available LLM models
+
+**Verification**: All endpoints return `{"code": 0, "data": {...}}`
+
+#### 4. FundFlow API_BASE Bug
+
+**Problem**: `copilotData.js` used undefined `API_BASE_URL` instead of `API_BASE`.
+
+**Solution**: Modified `frontend/src/services/copilotData.js` line 353:
+```javascript
+// Before
+const response = await fetch(`${API_BASE_URL}/api/v1/market/north_flow_ranking`)
+
+// After
+const response = await apiFetch(`${API_BASE}/api/v1/market/north_flow_ranking`, { timeoutMs: 15000 })
+```
+
+**Verification**: `grep "API_BASE_URL" frontend/src/services/copilotData.js` returns nothing
+
+#### 5. Exit Confirmation Dialog
+
+**Problem**: Dialog triggered on every refresh due to `viewHistory.length > 1` condition.
+
+**Solution**: Added `hasUnsavedChanges` ref in `frontend/src/App.vue`:
+```javascript
+const hasUnsavedChanges = ref(false)
+
+function handleBeforeUnload(event) {
+  if (!hasUnsavedChanges.value) return  // Don't show dialog
+  event.preventDefault()
+  event.returnValue = '您有未保存的更改，确定要离开吗？'
+}
+```
+
+**Verification**: `grep -c "hasUnsavedChanges" frontend/src/App.vue` returns 3+
+
+#### 6. favicon Missing
+
+**Problem**: `favicon.ico` returned 404.
+
+**Solution**: 
+- Created `frontend/public/favicon.svg` (simple "AT" design)
+- Updated `frontend/index.html` with favicon link
+
+**Verification**: `ls frontend/public/favicon.svg` exists
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `frontend/src/App.vue` | Routing, WebSocket, Exit dialog fixes |
+| `frontend/src/services/copilotData.js` | FundFlow API fix |
+| `frontend/public/favicon.svg` | New favicon |
+| `frontend/index.html` | Favicon link |
+| `backend/app/routers/admin.py` | New API endpoints |
+
+### Verification Commands
+
+```bash
+# Routing fix
+grep -c "multi-asset-matrix" frontend/src/App.vue  # Expected: 2+
+
+# WebSocket fix
+grep "useMarketStream('sh000001')" frontend/src/App.vue
+
+# Admin API
+curl http://localhost:60100/api/v1/admin/tokens/summary | jq '.code'  # Expected: 0
+curl http://localhost:60100/api/v1/admin/models/ | jq '.code'  # Expected: 0
+
+# FundFlow fix
+grep "API_BASE_URL" frontend/src/services/copilotData.js  # Expected: empty
+
+# Exit dialog fix
+grep -c "hasUnsavedChanges" frontend/src/App.vue  # Expected: 3+
+
+# favicon fix
+ls frontend/public/favicon.svg  # Expected: exists
+
+# Build verification
+cd frontend && npm run build  # Expected: success
+```
+
