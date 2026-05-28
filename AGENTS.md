@@ -7062,3 +7062,72 @@ cd backend && python3 -m py_compile app/routers/fund.py
 | SQL injection | `backend/app/services/agentic/tool_registry.py` | Already protected |
 
 **Total**: 3 files modified, 13 improvements
+
+---
+
+## v0.6.211 外汇模块深度审计修复 (2026-05-29)
+
+### Overview
+
+A comprehensive 12-issue fix for the Forex module based on deep audit findings (7 P0 + 5 P1).
+
+### Wave 1 - P0 Critical Fixes (7个)
+
+| Issue | Solution | File |
+|-------|----------|------|
+| ForexDashboard missing onActivated | Add onActivated hook with data refresh | `ForexDashboard.vue` |
+| Missing httpx import | Add `import httpx` | `forex.py:22` |
+| str(e) exposes internals (CWE-209) | Replace with `sanitize_error(e)` | `forex.py` (5 locations) |
+| Circuit breaker never resets on fallback | Add `cb.record_success()` in 3 fallback paths | `forex_fetcher.py` |
+| WebSocket recovery race condition | Add sequence validation to skip stale ticks | `useMarketStream.js` |
+| CFETS endpoints no timeout | Add 30s `asyncio.wait_for()` to 3 endpoints | `forex.py` |
+| AbortController not cleared | Add `completeAbort()` in onDeactivated | `ForexDashboard.vue` |
+
+### Wave 2 - P1 High Priority Fixes (3个)
+
+| Issue | Solution | File |
+|-------|----------|------|
+| BaseKLineChart theme re-subscription | Add theme re-subscription in onActivated | `BaseKLineChart.vue` |
+| Symbol parameter no validation | Add `validate_forex_symbol()` function | `forex.py` |
+| Thundering herd on stale fetch | Add `_forex_spot_fetch_lock` singleflight | `forex.py` |
+
+### Verification Commands
+
+```bash
+# P0-1: onActivated
+grep -c "onActivated" frontend/src/components/ForexDashboard.vue  # Expected: 2+
+
+# P0-3: httpx import
+grep "^import httpx" backend/app/routers/forex.py  # Expected: 1
+
+# P0-4: sanitize_error
+grep -c "sanitize_error(e)" backend/app/routers/forex.py  # Expected: 5+
+
+# P0-5: record_success
+grep -c "record_success()" backend/app/services/fetchers/forex_fetcher.py  # Expected: 8+
+
+# P0-8: sequence validation
+grep -c "data.seq <= globalLastSeq" frontend/src/composables/useMarketStream.js  # Expected: 1
+
+# P0-10: timeout protection
+grep -c "asyncio.wait_for" backend/app/routers/forex.py  # Expected: 7+
+
+# P1-10: theme re-subscription
+grep -c "_unsubscribeTheme = onThemeChange" frontend/src/components/BaseKLineChart.vue  # Expected: 2
+
+# P1-11: symbol validation
+grep -c "validate_forex_symbol" backend/app/routers/forex.py  # Expected: 2+
+
+# P1-12: singleflight
+grep -c "_forex_spot_fetch_lock" backend/app/routers/forex.py  # Expected: 3+
+
+# Build verification
+cd frontend && npm run build  # Expected: Success
+cd backend && python3 -m py_compile app/routers/forex.py  # Expected: Success
+```
+
+### Documentation
+
+- Release Notes: `docs/RELEASE_v0.6.211.md`
+- Audit Report: `docs/FOREX_AUDIT_REPORT_v0.6.210.md`
+
