@@ -260,6 +260,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
 import FreshnessIndicator from './FreshnessIndicator.vue'
 import { safeNumber, safePct } from '../utils/typeCoercion.js'
+import { safePercent } from '../utils/safeMath.js'
 import { getUnifiedPrice, getSourceStyle, getPriceConsistency } from '../utils/priceSourceTracker.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
 import { useTheme } from '../composables/useTheme.js'
@@ -404,9 +405,11 @@ const pricePosition = computed(() => {
   const low52w = safeNumber(data.value?.low_52w, null)
   
   if (price === null || high52w === null || low52w === null) return 50
-  if (high52w === low52w) return 50
   
-  return Math.min(100, Math.max(0, ((price - low52w) / (high52w - low52w)) * 100))
+  // Use safePercent to prevent division by zero when high52w === low52w
+  const position = safePercent(price - low52w, high52w - low52w, 50)
+  
+  return Math.min(100, Math.max(0, position))
 })
 
 // ── 判断是否为指数 ──────────────────────────────────────────────

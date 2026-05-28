@@ -18,6 +18,7 @@ from app.services.data_fetcher import akshare_breaker
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
 from app.routers.market.dependencies import _normalize_symbol, _unprefix
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -195,15 +196,16 @@ async def market_quote(symbol: str):
     返回：最新价、涨跌额、涨跌幅、成交量、成交额、振幅、换手率
     """
     norm = _validate_symbol(symbol)
+    db_sym = _unprefix(norm)  # Use unprefixed for cache key
     cache = _get_cache()
-    cache_key = f"quote:{norm}"
+    cache_key = f"quote:{db_sym}"
 
     cached = cache.get(cache_key)
     if cached:
         logger.debug(f"[Cache] Hit: {cache_key}")
         return success_response(cached)
 
-    rows = get_price_history(_unprefix(norm), limit=2)
+    rows = get_price_history(db_sym, limit=2)
     if not rows:
         return success_response(None, "no data")
     latest = rows[0]
@@ -273,8 +275,9 @@ async def market_quote_detail(symbol: str):
       concepts: [{name, change_pct}, ...]
     """
     norm = _validate_symbol(symbol)
+    db_sym = _unprefix(norm)  # Use unprefixed for cache key
     cache = _get_cache()
-    cache_key = f"quote_detail:{norm}"
+    cache_key = f"quote_detail:{db_sym}"
 
     cached = cache.get(cache_key)
     if cached:
@@ -282,7 +285,7 @@ async def market_quote_detail(symbol: str):
         return success_response(cached)
 
     # ── 基础实时行情（market_data_realtime 存无前缀 symbol，用 _unprefix 查）──
-    db_sym = _unprefix(norm)  # 'sh000001' → '000001'
+    # db_sym already computed above
     rows_latest = get_latest_prices([db_sym]) if callable(get_latest_prices) else []
     w = rows_latest[0] if rows_latest else {}
 
@@ -517,7 +520,8 @@ async def market_quote_v2(symbol: str):
         )
     except Exception as e:
         logger.error(f"quote_v2 error: {e}", exc_info=True)
-        return error_response(500, str(e))
+        sanitized_msg = sanitize_error(e)
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitized_msg)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -627,7 +631,8 @@ async def get_order_book(symbol: str):
             )
     except Exception as e:
         logger.error(f"order_book error: {e}", exc_info=True)
-        return error_response(500, str(e))
+        sanitized_msg = sanitize_error(e)
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitized_msg)
 
 
 # ═════════════════════════════════════════════════════════════════════════════

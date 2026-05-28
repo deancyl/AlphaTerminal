@@ -79,6 +79,23 @@
         </div>
       </div>
 
+      <!-- 错误状态 UI -->
+      <div
+        v-if="error && !isLoading"
+        class="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 p-4"
+        style="background: rgba(15,23,42,0.95);"
+      >
+        <div class="text-center">
+          <p class="text-theme-secondary text-sm mb-2">{{ error.message }}</p>
+          <button
+            class="px-4 py-2 text-xs rounded-sm border border-theme-secondary/50 bg-theme-tertiary/20 text-theme-primary hover:bg-theme-tertiary/40 transition-colors"
+            @click="error.retry()"
+          >
+            重试
+          </button>
+        </div>
+      </div>
+
       <!-- 右键上下文菜单 -->
       <div
         v-if="ctxMenu.visible"
@@ -170,6 +187,7 @@ import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
 import { useOrientation } from '../composables/useOrientation.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import { apiFetch } from '../utils/api.js'
 import { useKlineCache } from '../composables/useKlineCache.js'
 import { buildChartData } from '../utils/chartDataBuilder.js'
@@ -191,6 +209,7 @@ const {
 // Mobile & Orientation detection
 const isMobile = useMediaQuery('(max-width: 768px)')
 const { isLandscape, unlockOrientation } = useOrientation()
+const { createSignal, abort: abortAllRequests } = useAbortableRequest()
 
 function exitLandscape() {
   unlockOrientation()
@@ -204,6 +223,7 @@ const isLoading           = ref(false)
 const isFetching          = ref(false)
 const hasMore             = ref(false)
 const loadOffset          = ref(0)
+const error               = ref(null)  // Error state: { message, retry }
 
 // chartInstance：暴露给 DrawingCanvas 做坐标吸附
 const chartInstance = computed(() => baseChartRef.value?.getChartInstance() ?? null)
@@ -303,12 +323,19 @@ const limit = computed(() => PERIOD_LIMITS[period.value] ?? 300)
 
 // ── 实时行情轮询 ────────────────────────────────────────────────
 let quotePollingTimer = null
+let fetchQuoteRequestId = 0
 
 async function fetchLatestQuote() {
+  const currentRequestId = ++fetchQuoteRequestId
   const sym = currentSymbol.value
   if (!sym || drillDownDate.value) return
   try {
-    const data = await apiFetch(`/api/v1/market/quote/${sym}`)
+    const signal = createSignal()
+    const data = await apiFetch(`/api/v1/market/quote/${sym}`, { signal })
+    
+    // Check if this request is still the current one
+    if (currentRequestId !== fetchQuoteRequestId) return
+    
     if (!data) return
     const quote = data.data || data
     if (quote.error) return
@@ -329,6 +356,7 @@ async function fetchLatestQuote() {
       time:   Date.now(),
     }
   } catch (e) {
+    if (e.name === 'AbortError') return
     logger.error('[AdvancedKlinePanel] fetchLatestQuote error:', e.message)
   }
 }
@@ -388,6 +416,7 @@ async function fetchHistory(append = false) {
   }
   
   isLoading.value = true
+  error.value = null  // Clear previous error
 
   try {
     const params = new URLSearchParams({
@@ -401,7 +430,9 @@ async function fetchHistory(append = false) {
     const url = _isEtfCode(sym)
       ? `/api/v1/fund/etf/history?code=${_etfCode(sym)}&${params}`
       : `/api/v1/market/history/${sym}?${params}`
-    const data = await apiFetch(url)
+    
+    const signal = createSignal()
+    const data = await apiFetch(url, { signal })
 
     if (currentRequestId !== fetchHistoryRequestId) return
 
@@ -451,6 +482,11 @@ async function fetchHistory(append = false) {
   } catch (e) {
     if (currentRequestId !== fetchHistoryRequestId) return
     logger.warn('[AdvancedKlinePanel] fetchHistory failed:', e)
+    // Set error state with retry function
+    error.value = {
+      message: 'K线数据加载失败，请检查网络连接后重试',
+      retry: () => fetchHistory(append)
+    }
   } finally {
     if (currentRequestId === fetchHistoryRequestId) {
       isLoading.value = false
@@ -507,11 +543,19 @@ function onOverlayChange(payload) {
   else { overlayData.value = []; rebuildChartData() }
 }
 
+let fetchOverlayRequestId = 0
+
 async function fetchOverlayHistory(sym) {
+  const currentRequestId = ++fetchOverlayRequestId
   if (!sym) { overlayData.value = []; return }
   try {
     const params = new URLSearchParams({ period: 'daily', limit: '3000', offset: '0' })
-    const data = await apiFetch(`/api/v1/market/history/${sym}?${params}`)
+    const signal = createSignal()
+    const data = await apiFetch(`/api/v1/market/history/${sym}?${params}`, { signal })
+    
+    // Check if this request is still the current one
+    if (currentRequestId !== fetchOverlayRequestId) return
+    
     const raw = (data?.history || data?.data || []).map(r => ({
       date:  r.date || r.time || '',
       close: Number(r.close) || 0,
@@ -519,16 +563,25 @@ async function fetchOverlayHistory(sym) {
     overlayData.value = raw
     rebuildChartData()
   } catch (e) {
+    if (e.name === 'AbortError') return
     logger.error('[AdvancedKlinePanel] fetchOverlayHistory error:', e.message)
     overlayData.value = []
   }
 }
 
+let fetchNewsRequestId = 0
+
 async function fetchNewsEvents() {
+  const currentRequestId = ++fetchNewsRequestId
   const sym = currentSymbol.value
   if (!sym) { newsEvents.value = []; return }
   try {
-    const data = await apiFetch(`/api/v1/news/events/${sym}?limit=20`)
+    const signal = createSignal()
+    const data = await apiFetch(`/api/v1/news/events/${sym}?limit=20`, { signal })
+    
+    // Check if this request is still the current one
+    if (currentRequestId !== fetchNewsRequestId) return
+    
     const events = data?.data?.events || []
     
     // Match news dates to K-line prices
@@ -542,6 +595,7 @@ async function fetchNewsEvents() {
     
     newsEvents.value = matchedEvents
   } catch (e) {
+    if (e.name === 'AbortError') return
     logger.error('[AdvancedKlinePanel] fetchNewsEvents error:', e.message)
     newsEvents.value = []
   }
@@ -764,6 +818,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  abortAllRequests()
   stopQuotePolling()
   disconnectStream()
   const inst = baseChartRef.value?.getChartInstance?.()

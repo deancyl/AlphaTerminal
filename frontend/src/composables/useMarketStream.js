@@ -67,6 +67,11 @@ const globalConnectionAttempts = ref(0)
 const globalLatency = ref(null) // WebSocket latency in ms
 const globalLastSeq = shallowRef({})  // {symbol: last_seq} for recovery
 
+// P0-7: Recovery wait mechanism (prevent old data overwriting new data)
+const globalRecoveryPending = ref(false)
+const RECOVERY_TIMEOUT_MS = 2000
+const tickBuffer = {}  // Buffer for ticks during recovery wait
+
 // HTTP polling fallback state
 const globalPollingStatus = ref(false)
 const POLLING_INTERVAL = 5000  // 5 seconds
@@ -319,8 +324,9 @@ function _newConnection() {
     if (activeSyms.length) _doSubscribe(activeSyms)
     _flushPendingSubscriptions()
     
-    // P0-4: Request missed ticks on reconnect
+    // P0-7: Request missed ticks on reconnect with wait mechanism
     if (activeSyms.length > 0) {
+      globalRecoveryPending.value = true
       const recoveryPayload = {
         action: 'recover',
         symbols: activeSyms.map(s => ({
@@ -333,7 +339,28 @@ function _newConnection() {
         logger.log('[MarketStream] Sent recovery request for', activeSyms.length, 'symbols')
       } catch (e) {
         logger.warn('[MarketStream] Recovery request failed:', e)
+        globalRecoveryPending.value = false
       }
+
+      setTimeout(() => {
+        if (globalRecoveryPending.value) {
+          globalRecoveryPending.value = false
+          logger.warn('[MarketStream] Recovery timeout, proceeding with live data')
+          for (const sym of Object.keys(tickBuffer)) {
+            const buffered = tickBuffer[sym]
+            if (buffered && buffered.length > 0) {
+              const latest = buffered[buffered.length - 1]
+              _dataVersion++
+              const currentVersion = _dataVersion
+              globalTicks.value[sym] = Object.assign({}, latest, { _version: currentVersion, _priority: WS_PRIORITY })
+              if (latest.seq) globalLastSeq.value[sym] = latest.seq
+              _tickDirty = true
+            }
+            delete tickBuffer[sym]
+          }
+          triggerRef(globalTicks)
+        }
+      }, RECOVERY_TIMEOUT_MS)
     }
     
     // When page becomes visible, refresh UI with latest snapshot
@@ -363,10 +390,51 @@ function _newConnection() {
         return
       }
 
+      if (data.type === 'recovery') {
+        globalRecoveryPending.value = false
+        const recoveryData = data.data || []
+        _dataVersion++
+        const currentVersion = _dataVersion
+        for (const tick of recoveryData) {
+          const sym = tick.symbol
+          if (!sym) continue
+          if (!tickHistory[sym]) tickHistory[sym] = new CircularBuffer(MAX_TICK_HISTORY)
+          tickHistory[sym].push({ ...tick, _version: currentVersion, _priority: WS_PRIORITY })
+          if (tick.seq && (!globalLastSeq.value[sym] || tick.seq > globalLastSeq.value[sym])) {
+            globalLastSeq.value[sym] = tick.seq
+          }
+          globalTicks.value[sym] = Object.assign({}, tick, { _version: currentVersion, _priority: WS_PRIORITY })
+        }
+        for (const sym of Object.keys(tickBuffer)) {
+          const buffered = tickBuffer[sym]
+          if (buffered && buffered.length > 0) {
+            const lastBufferedSeq = globalLastSeq.value[sym] || 0
+            for (const bufferedTick of buffered) {
+              if (bufferedTick.seq && bufferedTick.seq > lastBufferedSeq) {
+                globalTicks.value[sym] = Object.assign({}, bufferedTick, { _version: currentVersion, _priority: WS_PRIORITY })
+                globalLastSeq.value[sym] = bufferedTick.seq
+                tickHistory[sym].push({ ...bufferedTick, _version: currentVersion, _priority: WS_PRIORITY })
+              }
+            }
+          }
+          delete tickBuffer[sym]
+        }
+        _tickDirty = true
+        triggerRef(globalTicks)
+        logger.log('[MarketStream] Recovery complete, processed', recoveryData.length, 'ticks')
+        return
+      }
+
       if (data.type === 'subscribed' || data.type === 'unsubscribed') return
 
       const sym = data.symbol
       if (!sym) return
+
+      if (globalRecoveryPending.value) {
+        if (!tickBuffer[sym]) tickBuffer[sym] = []
+        tickBuffer[sym].push(data)
+        return
+      }
 
       _dataVersion++
       const currentVersion = _dataVersion

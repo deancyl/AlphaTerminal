@@ -23,7 +23,12 @@
         </div>
       </div>
     </div>
-    <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-else-if="error" class="error">
+      {{ error }}
+      <button @click="manualRetry" class="retry-btn mt-2 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 rounded text-xs text-red-400 transition-colors">
+        重试 ({{ MAX_RETRIES - retryCount }} 次)
+      </button>
+    </div>
     <div v-else class="quote-content">
       <div class="symbol-info">
         <span class="symbol">{{ symbol }}</span>
@@ -86,6 +91,11 @@ const priceDirection = ref('')
 let prevPrice = 0
 let unregisterPolling = null
 
+// Retry mechanism
+const retryCount = ref(0)
+const MAX_RETRIES = 3
+const RETRY_DELAY = 1000  // 1 second
+
 const { flashClass, triggerFlash } = usePriceFlash()
 const { register } = usePollingManager()
 
@@ -124,13 +134,15 @@ async function fetchQuote() {
   loading.value = true
   error.value = null
   
-  const signal = createSignal()
-  
   try {
+    const signal = createSignal()
     const json = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}`, { signal })
     
-    // Ignore stale responses
-    if (currentRequestId !== fetchQuoteRequestId) return
+    // Check request ID BEFORE processing data
+    if (currentRequestId !== fetchQuoteRequestId) {
+      complete()
+      return
+    }
     
     if (json) {
       const oldPrice = data.value?.price || 0
@@ -147,18 +159,36 @@ async function fetchQuote() {
       lastPrice.value = json.price
       
       triggerFlash(json.price, oldPrice)
+      
+      // Reset retry count on success
+      retryCount.value = 0
     }
     complete()
   } catch (e) {
     if (e.name === 'AbortError') return // Ignore abort errors
     if (currentRequestId !== fetchQuoteRequestId) return
     logger.error('[SimpleQuote] fetch error:', e)
+    
+    // Automatic retry logic
+    if (retryCount.value < MAX_RETRIES) {
+      retryCount.value++
+      logger.info(`[SimpleQuote] Retrying (${retryCount.value}/${MAX_RETRIES})...`)
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+      return fetchQuote()  // Retry
+    }
+    
+    // Max retries reached, show error
     error.value = e.message || '获取数据失败'
   } finally {
     if (currentRequestId === fetchQuoteRequestId) {
       loading.value = false
     }
   }
+}
+
+function manualRetry() {
+  retryCount.value = 0  // Reset for manual retry
+  fetchQuote()
 }
 
 function setupPolling() {
