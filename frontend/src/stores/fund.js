@@ -177,9 +177,12 @@ export const useFundStore = defineStore('fund', () => {
 
   async function fetchCompareFundReturns(code) {
     try {
-      const res = await apiFetch(`/api/v1/fund/open/returns/${code}`)
+      const signal = createSignal()
+      const res = await apiFetch(`/api/v1/fund/open/returns/${code}`, { signal })
+      complete()
       return extractData(res)
     } catch (e) {
+      if (e.name === 'AbortError') return null
       logger.warn(`[FundStore] 对比基金 ${code} 收益加载失败:`, e)
       return null
     }

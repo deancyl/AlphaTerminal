@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="agentic_tool_")
 
 
+def _escape_like_wildcards(value: str) -> str:
+    """Escape SQL LIKE wildcards to prevent injection."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @dataclass
 class ToolParameter:
     """Parameter definition for a tool"""
@@ -302,10 +307,10 @@ class ToolRegistry:
                 rows = conn.execute(
                     """SELECT title, content, ctime, tag, source 
                        FROM news_cache 
-                       WHERE title LIKE ? OR content LIKE ?
+                       WHERE title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'
                        ORDER BY ctime DESC 
                        LIMIT ?""",
-                    (f"%{symbol}%", f"%{symbol}%", limit),
+                    (f"%{_escape_like_wildcards(symbol)}%", f"%{_escape_like_wildcards(symbol)}%", limit),
                 ).fetchall()
             else:
                 rows = conn.execute(
@@ -414,9 +419,9 @@ class ToolRegistry:
             rows = conn.execute(
                 """SELECT symbol, name, price, change_pct 
                    FROM market_all_stocks 
-                   WHERE symbol LIKE ? OR name LIKE ?
+                   WHERE symbol LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\'
                    LIMIT ?""",
-                (f"%{keyword}%", f"%{keyword}%", limit),
+                (f"%{_escape_like_wildcards(keyword)}%", f"%{_escape_like_wildcards(keyword)}%", limit),
             ).fetchall()
             conn.close()
 

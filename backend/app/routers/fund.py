@@ -5,6 +5,7 @@ fund.py — 基金数据路由（Phase 6.2 性能优化版）
 - 异步端点（async def）
 - 性能日志（耗时统计）
 - 并发数据组装
+- 超时保护（asyncio.wait_for）
 
 Wave 1 新增:
 - 基金筛选 (screener) 端点
@@ -26,12 +27,16 @@ from app.services.fund_screener import (
     FundPagination,
 )
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fund", tags=["fund"])
 
 fetcher = get_fetcher()
 screener = get_fund_screener()
+
+FUND_API_TIMEOUT = 30.0
 
 
 def validate_fund_code(code: str) -> str:
@@ -60,7 +65,15 @@ async def etf_info(code: str = Query(..., description="ETF 代码（6 位数字�
     logger.info(f"[ETF Info] 请求 {code}")
     start = time.time()
 
-    data = await fetcher.get_etf_info(code)
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_etf_info(code),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[ETF Info] {code} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
+
     if not data:
         raise HTTPException(400, f"无法获取 ETF {code} 数据")
 
@@ -89,7 +102,14 @@ async def etf_history(
     logger.info(f"[ETF History] 请求 {code} {period}")
     start = time.time()
 
-    data = await fetcher.get_etf_history(code, period)
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_etf_history(code, period),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[ETF History] {code} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
 
     elapsed = time.time() - start
     logger.info(f"[ETF History] {code} 完成 elapsed={elapsed:.3f}s records={len(data)}")
@@ -116,7 +136,15 @@ async def open_fund_info(code: str = Query(..., description="基金代码（6 �
     logger.info(f"[Open Fund Info] 请求 {code}")
     start = time.time()
 
-    data = await fetcher.get_fund_info(code)
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_fund_info(code),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[Open Fund Info] {code} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
+
     if not data:
         raise HTTPException(400, f"无法获取基金 {code} 数据")
 
@@ -144,7 +172,15 @@ async def open_fund_rank(
     logger.info(f"[Open Fund Rank] 请求 type={type}")
     start = time.time()
 
-    data = await fetcher.get_fund_rank(type)
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_fund_rank(type),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[Open Fund Rank] {type} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
+
     result = data[:limit] if data else []
 
     elapsed = time.time() - start
@@ -168,7 +204,14 @@ async def fund_portfolio(code: str):
     logger.info(f"[Fund Portfolio] 请求 {code}")
     start = time.time()
 
-    data = await fetcher.get_fund_portfolio(code)
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_fund_portfolio(code),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[Fund Portfolio] {code} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
 
     elapsed = time.time() - start
 
@@ -211,7 +254,14 @@ async def fund_nav_history(
     logger.info(f"[Fund NAV History] 请求 {code} {period}")
     start = time.time()
 
-    data = await fetcher.get_fund_nav_history(code, period)
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_fund_nav_history(code, period),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[Fund NAV History] {code} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
 
     elapsed = time.time() - start
     logger.info(
@@ -238,7 +288,14 @@ async def fund_returns(code: str):
     logger.info(f"[Fund Returns] 请求 {code}")
     start = time.time()
 
-    data = await fetcher.get_fund_returns(code)
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_fund_returns(code),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[Fund Returns] {code} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
 
     elapsed = time.time() - start
     logger.info(
@@ -265,7 +322,14 @@ async def fund_risk_metrics(code: str):
     logger.info(f"[Fund Risk Metrics] 请求 {code}")
     start = time.time()
 
-    data = await fetcher.get_fund_risk_metrics(code)
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_fund_risk_metrics(code),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[Fund Risk Metrics] {code} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
 
     elapsed = time.time() - start
     logger.info(
@@ -301,7 +365,14 @@ async def fund_full_data(
     logger.info(f"[Fund Full] 请求 {code}")
     start = time.time()
 
-    results = await fetcher.get_fund_full_data(code, is_etf=False)
+    try:
+        results = await asyncio.wait_for(
+            fetcher.get_fund_full_data(code, is_etf=False),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[Fund Full] {code} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
 
     elapsed = time.time() - start
     logger.info(f"[Fund Full] {code} 完成 elapsed={elapsed:.3f}s")
@@ -369,7 +440,7 @@ async def money_fund_rank(limit: int = Query(50, description="返回数量")):
         logger.error(f"[Money Fund Rank] 获取失败：{e}", exc_info=True)
         return {
             "code": 0,
-            "message": "success",
+            "message": sanitize_error(e),
             "data": [],
             "timestamp": int(time.time() * 1000),
         }
