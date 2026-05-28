@@ -71,7 +71,7 @@
       
       <!-- Empty State -->
       <div v-if="filteredBonds.length === 0" class="py-8 text-center text-terminal-dim text-xs">
-        {{ searchQuery ? '未找到匹配的可转债' : '暂无数据' }}
+        {{ debouncedQuery ? '未找到匹配的可转债' : '暂无数据' }}
       </div>
     </div>
 
@@ -159,7 +159,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, onDeactivated } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onDeactivated, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { useAbortableRequest } from '../composables/useAbortableRequest.js'
@@ -171,19 +172,30 @@ const bonds = ref([])
 const loading = ref(false)
 const error = ref('')
 const searchQuery = ref('')
+const debouncedQuery = ref('')
 const page = ref(1)
 const pageSize = 20
 const updateTime = ref('')
 const totalBonds = ref(0)
 const detailModalVisible = ref(false)
 const selectedBond = ref(null)
+const fetchBondsRequestId = ref(0) // Request ID tracking for race condition prevention
+
+// Debounce search query
+const updateDebouncedQuery = useDebounceFn((value) => {
+  debouncedQuery.value = value
+}, 300)
+
+watch(searchQuery, (newVal) => {
+  updateDebouncedQuery(newVal)
+})
 
 let refreshTimer = null
 
 // Computed
 const filteredBonds = computed(() => {
-  if (!searchQuery.value) return bonds.value
-  const q = searchQuery.value.toLowerCase()
+  if (!debouncedQuery.value) return bonds.value
+  const q = debouncedQuery.value.toLowerCase()
   return bonds.value.filter(b => 
     b.name?.toLowerCase().includes(q) || 
     b.code?.includes(q) ||
@@ -201,11 +213,19 @@ const paginatedBonds = computed(() => {
 
 // Methods
 async function fetchBonds() {
+  const currentRequestId = ++fetchBondsRequestId.value
   const signal = createSignal()
   loading.value = true
   error.value = ''
   try {
     const data = await apiFetch('/api/v1/bond/convertible/list', { timeoutMs: 30000, signal })
+    
+    // Check if this is still the current request (prevent race condition)
+    if (currentRequestId !== fetchBondsRequestId.value) {
+      complete()
+      return
+    }
+    
     if (data?.bonds) {
       bonds.value = data.bonds
       totalBonds.value = data.total || data.bonds.length

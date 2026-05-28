@@ -277,7 +277,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated, onActivated } from 'vue'
 import { logger } from '../utils/logger.js'
 import { safeDivide } from '../utils/safeMath.js'
 import { useAbortableRequest } from '../composables/useAbortableRequest.js'
@@ -488,5 +488,12 @@ onDeactivated(() => {
   timer = null
   abortBond()
   abortSpread()
+})
+
+onActivated(() => {
+  if (!timer) {
+    fetchBondData()
+    timer = setInterval(fetchBondData, 5 * 60 * 1000)
+  }
 })
 </script>

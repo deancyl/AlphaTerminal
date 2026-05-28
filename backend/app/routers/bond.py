@@ -19,6 +19,7 @@ from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.services.fetchers.bond_fetcher import get_bond_fetcher
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -230,46 +231,50 @@ async def bond_curve():
       bp < 0：信用债收益率低于国债（异常，可能为数据问题）
     """
     try:
-        cache_data = await _cache.get_or_set_async(
-            key=f"{NAMESPACE}main", ttl=TTL, fetch_fn=_fetch_curve_data_for_cache
+        cache_data = await asyncio.wait_for(
+            _cache.get_or_set_async(
+                key=f"{NAMESPACE}main", ttl=TTL, fetch_fn=_fetch_curve_data_for_cache
+            ),
+            timeout=30.0
         )
-        source = cache_data.get("source", "unknown")
-        last_update = cache_data.get("last_update", "")
-        is_stale = cache_data.get("is_stale", False)
+    except asyncio.TimeoutError:
+        logger.error("[bond_curve] Timeout after 30s", exc_info=True)
+        return error_response(ErrorCode.INTERNAL_ERROR, "获取债券曲线超时，请稍后重试")
 
-        warning = None
-        warning_level = None
-        if is_stale:
-            warning = f"⚠️ 数据已过期，最后更新于 {last_update}。建议接入中债登或上交所数据源。"
-            warning_level = "critical"
-        elif source == "akshare" and last_update:
-            try:
-                last_update_dt = datetime.strptime(last_update, "%Y-%m-%d")
-                days_old = (datetime.now() - last_update_dt).days
-                if days_old > 1:
-                    warning = f"数据源 akshare bond_china_yield 最后更新于 {last_update}（{days_old}天前）。"
-                    warning_level = "warning"
-            except (ValueError, TypeError):
-                pass
+    source = cache_data.get("source", "unknown")
+    last_update = cache_data.get("last_update", "")
+    is_stale = cache_data.get("is_stale", False)
 
-        return success_response(
-            {
-                "yield_curve": cache_data.get("yield_curve", {}),
-                "yield_curve_1m": cache_data.get("yield_curve_1m", {}),
-                "yield_curve_1y": cache_data.get("yield_curve_1y", {}),
-                "comm_yield": cache_data.get("comm_yield", {}),
-                "spreads_bps": cache_data.get("spreads_bps", {}),
-                "update_time": cache_data.get("update_time", ""),
-                "source": source,
-                "last_update": last_update,
-                "is_stale": is_stale,
-                "warning": warning,
-                "warning_level": warning_level,
-            }
-        )
-    except Exception as e:
-        logger.error(f"[bond_curve] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取债券曲线失败: {str(e)}")
+    warning = None
+    warning_level = None
+    if is_stale:
+        warning = f"⚠️ 数据已过期，最后更新于 {last_update}。建议接入中债登或上交所数据源。"
+        warning_level = "critical"
+    elif source == "akshare" and last_update:
+        try:
+            last_update_dt = datetime.strptime(last_update, "%Y-%m-%d")
+            days_old = (datetime.now() - last_update_dt).days
+            if days_old > 1:
+                warning = f"数据源 akshare bond_china_yield 最后更新于 {last_update}（{days_old}天前）。"
+                warning_level = "warning"
+        except (ValueError, TypeError):
+            pass
+
+    return success_response(
+        {
+            "yield_curve": cache_data.get("yield_curve", {}),
+            "yield_curve_1m": cache_data.get("yield_curve_1m", {}),
+            "yield_curve_1y": cache_data.get("yield_curve_1y", {}),
+            "comm_yield": cache_data.get("comm_yield", {}),
+            "spreads_bps": cache_data.get("spreads_bps", {}),
+            "update_time": cache_data.get("update_time", ""),
+            "source": source,
+            "last_update": last_update,
+            "is_stale": is_stale,
+            "warning": warning,
+            "warning_level": warning_level,
+        }
+    )
 
 
 @router.get("/bond/yield_curve")
@@ -292,7 +297,7 @@ async def bond_yield_curve():
     except Exception as e:
         logger.error(f"[bond_yield_curve] 错误: {e}", exc_info=True)
         return error_response(
-            ErrorCode.INTERNAL_ERROR, f"获取国债收益率曲线失败: {str(e)}"
+            ErrorCode.INTERNAL_ERROR, f"获取国债收益率曲线失败: {sanitize_error(e)}"
         )
 
 
@@ -316,8 +321,16 @@ async def bond_active():
 @router.get("/bond/history")
 @handle_errors(module="bond")
 async def bond_history(
-    tenor: str = Query("10年", description="期限（1年/3年/5年/10年/30年）"),
-    period: str = Query("1Y", description="回溯窗口（1M/3M/6M/1Y/3Y）"),
+    tenor: str = Query(
+        "10年",
+        description="期限（1年/3年/5年/10年/30年）",
+        regex="^(1年|3年|5年|7年|10年|30年)$"
+    ),
+    period: str = Query(
+        "1Y",
+        description="回溯窗口（1M/3M/6M/1Y/3Y）",
+        regex="^(1M|3M|6M|1Y|3Y)$"
+    ),
     limit: int = Query(252, ge=1, le=1000, description="返回条数限制"),
     offset: int = Query(0, ge=0, description="偏移量（用于分页）"),
 ):
@@ -376,13 +389,11 @@ async def bond_history(
                     pass
         if not numeric:
             raise ValueError(f"no numeric data in column: {tenor_col}")
-        current_yield = numeric[-1] if numeric else None
-        if current_yield is not None:
-            percentile = float(
-                sum(1 for v in numeric if v < current_yield) / len(numeric) * 100
-            )
-        else:
-            percentile = None
+        current_yield = numeric[-1]
+        # Calculate percentile (numeric is guaranteed non-empty at this point)
+        percentile = float(
+            sum(1 for v in numeric if v < current_yield) / len(numeric) * 100
+        )
         days_map = {"1M": 22, "3M": 66, "6M": 132, "1Y": 252, "3Y": 756}
         n_rows = days_map.get(period, 252)
 

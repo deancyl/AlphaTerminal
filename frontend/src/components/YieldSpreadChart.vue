@@ -78,15 +78,19 @@ const spread = computed(() => {
 function buildOption() {
   const data = spreadData.value
   if (!data || data.length === 0) return null
-  
+
   const dates = data.map(d => d.date)
   const values = data.map(d => d.spread)
-  
+
   // Guard against empty arrays
   if (values.length === 0) return null
 
-  const minV = Math.min(...values)
-  const maxV = Math.max(...values)
+  // Filter out NaN and Infinity values
+  const validValues = values.filter(v => typeof v === 'number' && isFinite(v))
+  if (validValues.length === 0) return null  // Don't render chart if no valid data
+
+  const minV = Math.min(...validValues)
+  const maxV = Math.max(...validValues)
   const pad  = (maxV - minV) * 0.2 || 10
 
   return {
