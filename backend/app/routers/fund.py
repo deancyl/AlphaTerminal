@@ -27,7 +27,6 @@ from app.services.fund_screener import (
     FundPagination,
 )
 from app.utils.error_decorator import handle_errors
-from app.utils.executor import get_executor
 from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
@@ -401,7 +400,10 @@ async def money_fund_rank(limit: int = Query(50, description="返回数量")):
     try:
         import akshare as ak
 
-        df = await asyncio.to_thread(ak.fund_money_fund_daily_em)
+        df = await asyncio.wait_for(
+            asyncio.to_thread(ak.fund_money_fund_daily_em),
+            timeout=FUND_API_TIMEOUT
+        )
 
         if df is None or df.empty:
             return {
@@ -410,6 +412,43 @@ async def money_fund_rank(limit: int = Query(50, description="返回数量")):
                 "data": [],
                 "timestamp": int(time.time() * 1000),
             }
+
+        result = []
+        for _, row in df.head(limit).iterrows():
+            result.append(
+                {
+                    "code": str(row.get("基金代码", "")),
+                    "name": row.get("基金简称", ""),
+                    "return_7d": float(row.get("7 日年化", 0) or 0),
+                    "return_1d": float(row.get("万份收益", 0) or 0),
+                    "manager": row.get("基金经理", ""),
+                }
+            )
+
+        elapsed = time.time() - start
+        logger.info(
+            f"[Money Fund Rank] 完成 elapsed={elapsed:.3f}s count={len(result)}"
+        )
+
+        return {
+            "code": 0,
+            "message": "success",
+            "data": result,
+            "timestamp": int(time.time() * 1000),
+            "_perf": {"elapsed_s": round(elapsed, 3)},
+        }
+
+    except asyncio.TimeoutError:
+        logger.error(f"[Money Fund Rank] timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
+    except Exception as e:
+        logger.error(f"[Money Fund Rank] 获取失败：{e}", exc_info=True)
+        return {
+            "code": 0,
+            "message": "success",
+            "data": [],
+            "timestamp": int(time.time() * 1000),
+        }
 
         result = []
         for _, row in df.head(limit).iterrows():
