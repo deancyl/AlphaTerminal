@@ -29,7 +29,7 @@ router = APIRouter(tags=["market"])
 _cache = get_cache()
 NAMESPACE = "overview:"
 _MACRO_CACHE_KEY = f"{NAMESPACE}macro"
-_MACRO_TTL = 60  # 1 minute
+_MACRO_TTL = 300  # v0.6.212: Unified to 5 minutes (was 60s, dependencies.py was 600s)
 _MACRO_CACHE_TTL = _MACRO_TTL  # Alias for test compatibility
 _MACRO_CACHE_LOCK = threading.RLock()
 _LAST_FETCH_TIME = 0

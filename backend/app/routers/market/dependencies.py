@@ -33,7 +33,7 @@ NAMESPACE = "realtime:"
 TTL = 10
 
 _MACRO_CACHE_KEY = f"{NAMESPACE}macro"
-_MACRO_TTL = 600  # 10 minutes
+_MACRO_TTL = 300  # v0.6.212: Unified to 5 minutes (was 600s, overview.py was 60s)
 _MACRO_CACHE_LOCK = threading.RLock()
 _LAST_FETCH_TIME = 0
 _REFRESH_SEMAPHORE = threading.Semaphore(1)

@@ -1074,22 +1074,28 @@ async def control_scheduler_job(job_id: str, body: SchedulerControlRequest):
 async def invalidate_cache(body: CacheInvalidateRequest):
     """清空指定缓存"""
     cache_type = body.cache_type
+    from app.services.data_cache import get_cache
+    _cache = get_cache()
+    
     if cache_type == "sectors":
         from app.services.sectors_cache import invalidate
-
         invalidate()
         return {"message": "板块缓存已清空"}
     elif cache_type == "quotes":
         from app.services.quote_source import clear_cache
-
         clear_cache()
         return {"message": "行情缓存已清空"}
+    elif cache_type == "data":
+        # v0.6.212: Clear DataCache (L1 memory cache)
+        _cache.clear()
+        return {"message": "数据缓存已清空"}
     elif cache_type == "all":
         from app.services.sectors_cache import invalidate as invalidate_sectors
         from app.services.quote_source import clear_cache as clear_quotes
-
+        
         invalidate_sectors()
         clear_quotes()
+        _cache.clear()  # v0.6.212: Also clear DataCache
         return {"message": "所有缓存已清空"}
     else:
         raise HTTPException(status_code=400, detail=f"Unknown cache type: {cache_type}")

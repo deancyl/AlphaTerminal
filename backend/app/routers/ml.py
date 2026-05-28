@@ -482,7 +482,8 @@ async def optimize_portfolio(
         )
     except Exception as e:
         logger.error(f"[ML] Portfolio optimization error: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, str(e))
+        from app.utils.error_sanitizer import sanitize_error
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 async def _run_portfolio_optimization(req: PortfolioOptimizeRequest) -> Dict:
@@ -705,7 +706,8 @@ async def analyze_factors(
         )
     except Exception as e:
         logger.error(f"[ML] Factor analysis error: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, str(e))
+        from app.utils.error_sanitizer import sanitize_error
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:

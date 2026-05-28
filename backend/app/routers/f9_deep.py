@@ -114,7 +114,7 @@ async def get_shareholder_data(symbol: str):
         return error_response(ErrorCode.BAD_REQUEST, error)
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
-    cache_key = f"shareholder_{symbol}"
+    cache_key = f"f9:shareholder:v1:{symbol}"
     cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[shareholder] Cache hit for {symbol}")
@@ -309,7 +309,7 @@ async def get_margin_data(symbol: str):
         return error_response(ErrorCode.BAD_REQUEST, error)
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
-    cache_key = f"margin_{symbol}"
+    cache_key = f"f9:margin:v1:{symbol}"
     cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[Margin] Cache hit for {symbol}")
@@ -437,7 +437,7 @@ async def get_financial_data(symbol: str):
         return error_response(ErrorCode.BAD_REQUEST, error)
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
-    cache_key = f"financial_{symbol}"
+    cache_key = f"f9:financial:v1:{symbol}"
 
     # 检查缓存
     cached = await get_cached(cache_key)
@@ -547,7 +547,7 @@ async def get_profit_forecast(symbol: str):
         return error_response(ErrorCode.BAD_REQUEST, error)
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
-    cache_key = f"forecast_{symbol}"
+    cache_key = f"f9:forecast:v1:{symbol}"
 
     # 检查缓存
     cached = await get_cached(cache_key)
@@ -641,7 +641,7 @@ async def get_institution_holdings(symbol: str):
         return error_response(ErrorCode.BAD_REQUEST, error)
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
-    cache_key = f"institution_{symbol}"
+    cache_key = f"f9:institution:v1:{symbol}"
     cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[Institution] Cache hit for {symbol}")
@@ -822,7 +822,7 @@ async def get_peer_comparison(symbol: str):
         return error_response(ErrorCode.BAD_REQUEST, error)
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
-    cache_key = f"peers_{symbol}"
+    cache_key = f"f9:peers:v1:{symbol}"
     cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[Peers] Cache hit for {symbol}")
@@ -1126,7 +1126,7 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
         return error_response(ErrorCode.BAD_REQUEST, error)
 
     symbol = normalize_f9_symbol(symbol)
-    cache_key = f"announcements_{symbol}_{page}"
+    cache_key = f"f9:announcements:v1:{symbol}_{page}"
     cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[Announcements] Cache hit for {symbol} page {page}")

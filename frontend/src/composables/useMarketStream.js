@@ -450,6 +450,10 @@ function _newConnection() {
       if (globalRecoveryPending.value) {
         if (!tickBuffer[sym]) tickBuffer[sym] = []
         tickBuffer[sym].push(data)
+        // v0.6.212: Limit buffer size to prevent memory leak
+        if (tickBuffer[sym].length > 100) {
+          tickBuffer[sym].shift()
+        }
         return
       }
 

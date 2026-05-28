@@ -15,6 +15,7 @@
 from collections import deque
 from typing import Dict, List
 import time
+import threading
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,8 @@ class TickBuffer:
     用于WebSocket断连恢复：
     - 客户端重连时发送last_seq
     - 服务端返回last_seq之后的所有tick
+    
+    v0.6.212: 添加线程锁保护，防止多协程并发push导致序列号竞争
     """
 
     def __init__(self, max_size: int = 1000):
@@ -40,7 +43,7 @@ class TickBuffer:
         # {symbol: deque([{seq, tick, timestamp}, ...])}
         self._buffers: Dict[str, deque] = {}
         self._seq_counter = 0
-        self._lock = None  # 异步锁，在需要时初始化
+        self._lock = threading.Lock()  # v0.6.212: 线程锁保护序列号递增
 
     def push(self, symbol: str, tick: dict) -> int:
         """
@@ -53,17 +56,19 @@ class TickBuffer:
         Returns:
             序列号
         """
-        if symbol not in self._buffers:
-            self._buffers[symbol] = deque(maxlen=self.max_size)
+        # v0.6.212: 使用线程锁保护整个push操作，防止序列号竞争
+        with self._lock:
+            if symbol not in self._buffers:
+                self._buffers[symbol] = deque(maxlen=self.max_size)
 
-        self._seq_counter += 1
-        seq = self._seq_counter
+            self._seq_counter += 1
+            seq = self._seq_counter
 
-        self._buffers[symbol].append(
-            {"seq": seq, "tick": tick, "timestamp": time.time()}
-        )
+            self._buffers[symbol].append(
+                {"seq": seq, "tick": tick, "timestamp": time.time()}
+            )
 
-        return seq
+            return seq
 
     def get_since(self, symbol: str, last_seq: int) -> List[dict]:
         """

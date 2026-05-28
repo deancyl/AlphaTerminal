@@ -682,7 +682,8 @@ async def get_forex_history_new(
     try:
         validated_symbol = validate_forex_symbol(symbol)
     except ValueError as e:
-        return error_response(ErrorCode.VALIDATION_ERROR, str(e))
+        from app.utils.error_sanitizer import sanitize_error
+        return error_response(ErrorCode.VALIDATION_ERROR, sanitize_error(e))
     
     cache = get_cache()
     cache_key = f"forex:history:{validated_symbol}:{start_date}:{end_date}:{limit}"

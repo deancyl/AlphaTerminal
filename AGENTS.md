@@ -7131,3 +7131,171 @@ cd backend && python3 -m py_compile app/routers/forex.py  # Expected: Success
 - Release Notes: `docs/RELEASE_v0.6.211.md`
 - Audit Report: `docs/FOREX_AUDIT_REPORT_v0.6.210.md`
 
+
+---
+
+## Architecture Audit Fixes (v0.6.212)
+
+### Overview
+
+Comprehensive architecture-level fixes based on deep audit of 4 domains: Data Cache, WebSocket, Error Handling, and Performance Monitoring.
+
+### Wave 1 - P0 Critical Fixes (8 issues)
+
+| Issue | Solution | File |
+|-------|----------|------|
+| TickBuffer no threading lock | Add `threading.Lock()` for sequence counter | `tick_buffer.py` |
+| Recovery tick buffer unbounded | Add 100-item limit per symbol | `useMarketStream.js` |
+| ConnectionLock auto-release too short | Increase from 5s to 15s | `connectionLock.js` |
+| Admin cache invalidate incomplete | Add "data" cache type to clear DataCache | `admin.py` |
+| F9 cache keys no namespace | Add `f9:` prefix + `:v1` version | `f9_deep.py` |
+| _MACRO_TTL conflict (60 vs 600) | Unify to 300s (5 minutes) | `overview.py`, `dependencies.py` |
+| str(e) exposes internals | Use `sanitize_error(e)` | `ml.py`, `forex.py` |
+| Web Vitals API 404 | Already exists at `/web-vitals` | `admin.py` |
+
+### Wave 2 - Architecture Improvements
+
+#### Data Cache Architecture
+
+**Cache Key Naming Convention** (v0.6.212):
+```
+{module}:{name}:{version}:{params}
+```
+
+**Examples**:
+- `f9:shareholder:v1:600519`
+- `forex:history:USDCNH:2024-01-01:2024-12-31:30`
+- `macro:gdp:v1:24:2023-01-01:2024-01-01`
+
+**TTL Unification**:
+- `_MACRO_TTL`: 300s (was 60s in overview.py, 600s in dependencies.py)
+- Cache jitter: ±10% (already implemented in `data_cache.py`)
+
+#### WebSocket Architecture
+
+**TickBuffer Threading**:
+```python
+# tick_buffer.py
+self._lock = threading.Lock()
+
+def push(self, symbol: str, tick: dict) -> int:
+    with self._lock:
+        self._seq_counter += 1
+        # ... rest of push logic
+```
+
+**Connection Lock Timeout**:
+```javascript
+// connectionLock.js
+const AUTO_RELEASE_TIMEOUT = 15000  // Was 5000ms
+```
+
+**Recovery Buffer Limit**:
+```javascript
+// useMarketStream.js
+if (tickBuffer[sym].length > 100) {
+    tickBuffer[sym].shift()  // Prevent unbounded growth
+}
+```
+
+#### Admin Cache API Enhancement
+
+**New cache types**:
+- `"data"` - Clear DataCache (L1 memory cache)
+- `"all"` - Now also clears DataCache
+
+```bash
+# Clear DataCache only
+POST /api/v1/admin/cache/invalidate
+{"cache_type": "data"}
+
+# Clear all caches (sectors + quotes + data)
+POST /api/v1/admin/cache/invalidate
+{"cache_type": "all"}
+```
+
+#### Error Handling Improvements
+
+**sanitize_error Usage**:
+```python
+# Before
+return error_response(ErrorCode.INTERNAL_ERROR, str(e))
+
+# After
+from app.utils.error_sanitizer import sanitize_error
+return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
+```
+
+**Files Updated**:
+- `ml.py` (2 locations)
+- `forex.py` (1 location)
+
+### Audit Findings Summary
+
+| Domain | Files Scanned | Issues Found | Critical |
+|--------|--------------|--------------|----------|
+| Data Cache | 32 | 11 | 7 |
+| WebSocket | 5 | 8 | 3 |
+| Error Handling | 7 | 15 | 4 |
+| Performance Monitoring | 12 | 8 | 2 |
+| **Total** | **56** | **42** | **16** |
+
+### Performance Monitoring Status
+
+**Already Implemented**:
+- System metrics API: `/api/v1/admin/system/metrics`
+- Cache metrics: `/api/v1/metrics` (Prometheus format)
+- Web Vitals collection: `usePerformanceMonitor.js`
+- Error history: `error_history_db.py` (7-day retention)
+
+**Gaps Identified** (deferred to v0.7.0):
+- API response time middleware
+- Real-time performance dashboard
+- Error rate alerting
+- Memory leak detection
+
+### Verification Commands
+
+```bash
+# P0-1: TickBuffer threading lock
+grep -c "threading.Lock" backend/app/services/tick_buffer.py  # Expected: 2+
+
+# P0-2: Recovery buffer limit
+grep -c "tickBuffer\[sym\].length > 100" frontend/src/composables/useMarketStream.js  # Expected: 1
+
+# P0-3: ConnectionLock timeout
+grep "AUTO_RELEASE_TIMEOUT = 15000" frontend/src/utils/connectionLock.js  # Expected: 1
+
+# P0-4: Admin cache invalidate
+grep -c '"data"' backend/app/routers/admin.py  # Expected: 2+
+
+# P0-6: F9 cache keys
+grep -c "f9:" backend/app/routers/f9_deep.py  # Expected: 7+
+
+# P0-7: _MACRO_TTL unified
+grep "_MACRO_TTL = 300" backend/app/routers/market/overview.py backend/app/routers/market/dependencies.py  # Expected: 2
+
+# P0-8: sanitize_error
+grep -c "sanitize_error(e)" backend/app/routers/ml.py  # Expected: 2+
+
+# Build verification
+cd frontend && npm run build  # Expected: Success
+cd backend && python3 -m py_compile app/services/tick_buffer.py app/routers/f9_deep.py  # Expected: Success
+```
+
+### Files Modified
+
+| Category | Files |
+|----------|-------|
+| Backend Services | `tick_buffer.py` |
+| Backend Routers | `f9_deep.py`, `overview.py`, `dependencies.py`, `admin.py`, `ml.py`, `forex.py` |
+| Frontend Composables | `useMarketStream.js` |
+| Frontend Utils | `connectionLock.js` |
+
+### Documentation
+
+- Cache Architecture Audit: `docs/CACHE_AUDIT_v0.6.212.md`
+- WebSocket Architecture Audit: `docs/WEBSOCKET_AUDIT_v0.6.212.md`
+- Error Handling Audit: `docs/ERROR_HANDLING_AUDIT_v0.6.212.md`
+- Performance Monitoring Audit: `docs/PERFORMANCE_MONITORING_AUDIT_v0.6.212.md`
+

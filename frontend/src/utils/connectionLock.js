@@ -1,27 +1,23 @@
 // WebSocket connection lock utility for preventing race conditions
-// Auto-releases after 5 seconds to prevent indefinite lock holding
+// Auto-releases after 15 seconds to prevent indefinite lock holding
 
 let _locked = false
 let _lockTimeout = null
 
-/**
- * Acquire the connection lock.
- * @returns {boolean} True if lock acquired, false if already locked.
- * @description Lock auto-releases after 5 seconds to prevent indefinite holding.
- */
+const AUTO_RELEASE_TIMEOUT = 15000 // v0.6.212: Increased from 5s to 15s for slow networks
+
 export function acquireLock() {
   if (_locked) {
     return false
   }
   _locked = true
   
-  // Auto-release after 5 seconds to prevent indefinite lock holding
   _lockTimeout = setTimeout(() => {
     if (_locked) {
       releaseLock()
-      console.warn('[ConnectionLock] Auto-released after 5s timeout')
+      console.warn('[ConnectionLock] Auto-released after 15s timeout')
     }
-  }, 5000)
+  }, AUTO_RELEASE_TIMEOUT)
   
   return true
 }
