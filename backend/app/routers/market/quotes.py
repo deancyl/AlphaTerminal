@@ -19,6 +19,7 @@ from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
 from app.routers.market.dependencies import _normalize_symbol, _unprefix
 from app.utils.error_sanitizer import sanitize_error
+from app.utils.singleflight import get_singleflight
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -29,6 +30,9 @@ CACHE_TTL_QUOTE_DETAIL = 30  # 30 seconds for detailed quote
 
 # Cache helper
 _cache = None
+
+# Singleflight instance for cache stampede prevention
+_sf = get_singleflight()
 
 
 def _get_cache():
@@ -196,7 +200,7 @@ async def market_quote(symbol: str):
     返回：最新价、涨跌额、涨跌幅、成交量、成交额、振幅、换手率
     """
     norm = _validate_symbol(symbol)
-    db_sym = _unprefix(norm)  # Use unprefixed for cache key
+    db_sym = _unprefix(norm)
     cache = _get_cache()
     cache_key = f"quote:{db_sym}"
 
@@ -205,35 +209,41 @@ async def market_quote(symbol: str):
         logger.debug(f"[Cache] Hit: {cache_key}")
         return success_response(cached)
 
-    rows = get_price_history(db_sym, limit=2)
-    if not rows:
+    async def fetch():
+        rows = get_price_history(db_sym, limit=2)
+        if not rows:
+            return None
+
+        latest = rows[0]
+        prev = rows[1] if len(rows) > 1 else latest
+        close = float(latest.get("close") or 0)
+        prev_c = float(prev.get("close") or close)
+        chg = close - prev_c
+        chg_pct = _safe_divide(chg, prev_c) * 100 if prev_c else 0.0
+
+        data_timestamp = (
+            latest.get("timestamp") or latest.get("updated_at") or latest.get("date")
+        )
+
+        result = {
+            "symbol": norm,
+            "price": close,
+            "change": round(chg, 3),
+            "change_pct": round(chg_pct, 2),
+            "volume": float(latest.get("volume") or 0),
+            "amount": float(latest.get("amount") or 0),
+            "amplitude": _calc_amplitude(latest, prev_c),
+            "turnover_rate": float(latest.get("turnover_rate") or 0),
+            "timestamp": data_timestamp,
+            "response_time": datetime.now().isoformat(),
+        }
+
+        cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE)
+        return result
+
+    result = await _sf.do(cache_key, fetch)
+    if result is None:
         return success_response(None, "no data")
-    latest = rows[0]
-    prev = rows[1] if len(rows) > 1 else latest
-    close = float(latest.get("close") or 0)
-    prev_c = float(prev.get("close") or close)
-    chg = close - prev_c
-    chg_pct = _safe_divide(chg, prev_c) * 100 if prev_c else 0.0
-
-    data_timestamp = (
-        latest.get("timestamp") or latest.get("updated_at") or latest.get("date")
-    )
-
-    result = {
-        "symbol": norm,
-        "price": close,
-        "change": round(chg, 3),
-        "change_pct": round(chg_pct, 2),
-        "volume": float(latest.get("volume") or 0),
-        "amount": float(latest.get("amount") or 0),
-        "amplitude": _calc_amplitude(latest, prev_c),
-        "turnover_rate": float(latest.get("turnover_rate") or 0),
-        "timestamp": data_timestamp,
-        "response_time": datetime.now().isoformat(),
-    }
-
-    cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE)
-
     return success_response(result)
 
 
@@ -275,7 +285,7 @@ async def market_quote_detail(symbol: str):
       concepts: [{name, change_pct}, ...]
     """
     norm = _validate_symbol(symbol)
-    db_sym = _unprefix(norm)  # Use unprefixed for cache key
+    db_sym = _unprefix(norm)
     cache = _get_cache()
     cache_key = f"quote_detail:{db_sym}"
 
@@ -284,196 +294,175 @@ async def market_quote_detail(symbol: str):
         logger.debug(f"[Cache] Hit: {cache_key}")
         return success_response(cached)
 
-    # ── 基础实时行情（market_data_realtime 存无前缀 symbol，用 _unprefix 查）──
-    # db_sym already computed above
-    rows_latest = get_latest_prices([db_sym]) if callable(get_latest_prices) else []
-    w = rows_latest[0] if rows_latest else {}
+    async def fetch():
+        rows_latest = get_latest_prices([db_sym]) if callable(get_latest_prices) else []
+        w = rows_latest[0] if rows_latest else {}
 
-    # 修复：market_data_realtime 表的 price 字段即为当前价（不是 'index'）
-    price = float(w.get("price") or 0.0)
-    change_pct = float(w.get("change_pct") or 0.0)
-    change_val = round(price * change_pct / 100, 3) if price and change_pct else 0.0
-    volume = float(w.get("volume") or 0.0) or None
-    status = w.get("status") or ""
-    market = w.get("market") or "AShare"
+        price = float(w.get("price") or 0.0)
+        change_pct = float(w.get("change_pct") or 0.0)
+        change_val = round(price * change_pct / 100, 3) if price and change_pct else 0.0
+        volume = float(w.get("volume") or 0.0) or None
+        status = w.get("status") or ""
+        market = w.get("market") or "AShare"
 
-    # ── 历史 K 线（单次查询，复用于 OHLC/振幅/收益率/52周高低）──────────────────
-    _HIST_LIMIT = 400
-    hist_all = (
-        get_daily_history(db_sym, limit=_HIST_LIMIT, offset=0)
-        if callable(get_daily_history)
-        else []
-    )
-
-    if not hist_all:
-        hist_all = await _fetch_history_fallback(db_sym, limit=_HIST_LIMIT)
-
-    # 实时快照：从 hist_all 前2条获取（最新 + 前一日）
-    latest_row = hist_all[0] if hist_all else {}
-    prev_row = hist_all[1] if len(hist_all) > 1 else latest_row
-
-    open_ = float(latest_row.get("open") or price)
-    high_ = float(latest_row.get("high") or price)
-    low_ = float(latest_row.get("low") or price)
-    close_ = float(latest_row.get("close") or price)
-    # 指数的 amount/turnover_rate 字段在 DB 中常为 0（AkShare 不提供），视为无数据
-    amount = float(latest_row.get("amount") or 0.0) or None
-    turnover_rate = round(float(latest_row.get("turnover_rate") or 0.0), 4) or None
-    # 振幅 = (最高-最低)/昨收 × 100；当日仅一价时用 (现价-昨收)/昨收
-    prev_close = float(prev_row.get("close") or 0.0)
-    if low_ and low_ > 0 and high_ != low_:
-        amplitude = (
-            round(_safe_divide(high_ - low_, prev_close) * 100, 2)
-            if prev_close
-            else None
-        )
-    else:
-        amplitude = (
-            round(_safe_divide(abs(price - prev_close), prev_close) * 100, 2)
-            if prev_close and prev_close > 0
-            else None
+        _HIST_LIMIT = 400
+        hist_all = (
+            get_daily_history(db_sym, limit=_HIST_LIMIT, offset=0)
+            if callable(get_daily_history)
+            else []
         )
 
-    def _period_return(hist, n):
-        """最近 n 日收益率（DESC 排序：最新在前）"""
-        if len(hist) < n + 1:
-            return None
-        cur = float(hist[0].get("close", 0))  # 最新 = 第一条
-        prev = float(hist[n].get("close", 0))  # n 日前 = 第 n+1 条
-        if not prev:
-            return None
-        return round((cur / prev - 1) * 100, 4)
+        if not hist_all:
+            hist_all = await _fetch_history_fallback(db_sym, limit=_HIST_LIMIT)
 
-    def _52w_bounds(hist):
-        """52 周最高/最低（最近 252 个交易日）。hist 为 DESC 排序（最新在前）。"""
-        if not hist:
-            return None, None, None, None
-        recent = hist[:252] if len(hist) >= 252 else hist
-        # O(n) 扫描替代 O(n log n) 排序
-        max_close = max(
-            (float(r.get("close", 0) or 0), r.get("date", ""))
-            for r in recent
-            if r.get("close")
+        latest_row = hist_all[0] if hist_all else {}
+        prev_row = hist_all[1] if len(hist_all) > 1 else latest_row
+
+        open_ = float(latest_row.get("open") or price)
+        high_ = float(latest_row.get("high") or price)
+        low_ = float(latest_row.get("low") or price)
+        close_ = float(latest_row.get("close") or price)
+        amount = float(latest_row.get("amount") or 0.0) or None
+        turnover_rate = round(float(latest_row.get("turnover_rate") or 0.0), 4) or None
+        prev_close = float(prev_row.get("close") or 0.0)
+        if low_ and low_ > 0 and high_ != low_:
+            amplitude = (
+                round(_safe_divide(high_ - low_, prev_close) * 100, 2)
+                if prev_close
+                else None
+            )
+        else:
+            amplitude = (
+                round(_safe_divide(abs(price - prev_close), prev_close) * 100, 2)
+                if prev_close and prev_close > 0
+                else None
+            )
+
+        def _period_return(hist, n):
+            if len(hist) < n + 1:
+                return None
+            cur = float(hist[0].get("close", 0))
+            prev = float(hist[n].get("close", 0))
+            if not prev:
+                return None
+            return round((cur / prev - 1) * 100, 4)
+
+        def _52w_bounds(hist):
+            if not hist:
+                return None, None, None, None
+            recent = hist[:252] if len(hist) >= 252 else hist
+            max_close = max(
+                (float(r.get("close", 0) or 0), r.get("date", ""))
+                for r in recent
+                if r.get("close")
+            )
+            min_close = min(
+                (float(r.get("close", 0) or 0), r.get("date", ""))
+                for r in recent
+                if r.get("close")
+            )
+            return max_close[0], max_close[1], min_close[0], min_close[1]
+
+        ret_5d = _period_return(hist_all, 5)
+        ret_20d = _period_return(hist_all, 20)
+        ret_60d = _period_return(hist_all, 60)
+        ytd_start = [
+            r for r in hist_all if str(r.get("date", ""))[:4] == str(datetime.now().year)
+        ]
+        ret_ytd = (
+            _period_return(ytd_start, len(ytd_start) - 1) if len(ytd_start) >= 2 else None
         )
-        min_close = min(
-            (float(r.get("close", 0) or 0), r.get("date", ""))
-            for r in recent
-            if r.get("close")
-        )
-        return max_close[0], max_close[1], min_close[0], min_close[1]
+        high_52w, h52w_date, low_52w, l52w_date = _52w_bounds(hist_all)
 
-    ret_5d = _period_return(hist_all, 5)
-    ret_20d = _period_return(hist_all, 20)
-    ret_60d = _period_return(hist_all, 60)
-    # 今年以来（累计收益率，粗略用年初至今交易日）
-    ytd_start = [
-        r for r in hist_all if str(r.get("date", ""))[:4] == str(datetime.now().year)
-    ]
-    ret_ytd = (
-        _period_return(ytd_start, len(ytd_start) - 1) if len(ytd_start) >= 2 else None
-    )
-    high_52w, h52w_date, low_52w, l52w_date = _52w_bounds(hist_all)
+        _hist = SpotCache.get_histogram()
+        _ready = SpotCache.is_ready()
+        if _ready and _hist.get("total", 0) > 0:
+            advance_count = _hist.get("advance", 0)
+            decline_count = _hist.get("decline", 0)
+            unchanged_count = _hist.get("unchanged", 0)
+            advance_rate = _hist.get("up_ratio", 0)
+        else:
+            advance_count = None
+            decline_count = None
+            unchanged_count = None
+            advance_rate = None
 
-    # ── 涨跌家数（来自 SpotCache 的 Sina HQ 实时全市场数据）───
-    # SpotCache 由后台线程定期刷新，包含沪深全市场股票涨跌幅统计
-    _hist = SpotCache.get_histogram()
-    _ready = SpotCache.is_ready()
-    if _ready and _hist.get("total", 0) > 0:
-        advance_count = _hist.get("advance", 0)
-        decline_count = _hist.get("decline", 0)
-        unchanged_count = _hist.get("unchanged", 0)
-        advance_rate = _hist.get("up_ratio", 0)  # 上涨比例 0~1
-    else:
-        advance_count = None
-        decline_count = None
-        unchanged_count = None
-        advance_rate = None
+        fund_main_net = None
+        fund_main_in = None
+        fund_main_out = None
+        fund_huge_in = None
+        fund_huge_out = None
+        fund_big_in = None
+        fund_big_out = None
+        fund_medium_in = None
+        fund_medium_out = None
+        fund_small_in = None
+        fund_small_out = None
 
-    # ── 资金流向（暂无数据源→返回 null）────────────────────────
-    fund_main_net = None
-    fund_main_in = None
-    fund_main_out = None
-    fund_huge_in = None
-    fund_huge_out = None
-    fund_big_in = None
-    fund_big_out = None
-    fund_medium_in = None
-    fund_medium_out = None
-    fund_small_in = None
-    fund_small_out = None
+        industry = None
+        industry_change_pct = None
+        concepts = []
 
-    # ── 板块联动（暂无数据源→返回 null）────────────────────────
-    industry = None
-    industry_change_pct = None
-    concepts = []
+        quote_data = await get_quote_with_fallback_async(norm)
+        pe_static = quote_data.get("pe_static")
+        pe_ttm_val = quote_data.get("pe_ttm")
+        pb_val = quote_data.get("pb")
 
-    # ── 估值 ── 调用多源fallback获取PE/PB
-    quote_data = await get_quote_with_fallback_async(norm)
-    pe_static = quote_data.get("pe_static")
-    pe_ttm_val = quote_data.get("pe_ttm")
-    pb_val = quote_data.get("pb")
+        result = {
+            "name": w.get("name") or norm,
+            "symbol": norm,
+            "price": round(price, 3),
+            "change": change_val,
+            "change_pct": round(change_pct, 2),
+            "open": round(open_, 3),
+            "high": round(high_, 3),
+            "low": round(low_, 3),
+            "close": round(close_, 3),
+            "volume": volume,
+            "amount": round(amount, 2) if amount is not None else None,
+            "amplitude": amplitude,
+            "turnover_rate": round(turnover_rate, 4) if turnover_rate is not None else None,
+            "status": status,
+            "market": market,
+            "pe_ttm": pe_ttm_val,
+            "pb": pb_val,
+            "returns_5d": ret_5d,
+            "returns_20d": ret_20d,
+            "returns_60d": ret_60d,
+            "returns_ytd": ret_ytd,
+            "high_52w": round(high_52w, 3) if high_52w else None,
+            "low_52w": round(low_52w, 3) if low_52w else None,
+            "high_52w_date": h52w_date,
+            "low_52w_date": l52w_date,
+            "advance_count": advance_count,
+            "decline_count": decline_count,
+            "unchanged_count": unchanged_count,
+            "advance_rate": advance_rate,
+            "fund_main_net": fund_main_net,
+            "fund_main_in": fund_main_in,
+            "fund_main_out": fund_main_out,
+            "fund_huge_in": fund_huge_in,
+            "fund_huge_out": fund_huge_out,
+            "fund_big_in": fund_big_in,
+            "fund_big_out": fund_big_out,
+            "fund_medium_in": fund_medium_in,
+            "fund_medium_out": fund_medium_out,
+            "fund_small_in": fund_small_in,
+            "fund_small_out": fund_small_out,
+            "industry": industry,
+            "industry_change_pct": industry_change_pct,
+            "concepts": concepts,
+            "timestamp": latest_row.get("date") or latest_row.get("timestamp"),
+            "response_time": datetime.now().isoformat(),
+            "data_freshness_seconds": _calculate_freshness_seconds(
+                latest_row.get("date") or ""
+            ),
+        }
 
-    result = {
-        # ── Module 1: 基础行情 ──
-        "name": w.get("name") or norm,
-        "symbol": norm,
-        "price": round(price, 3),
-        "change": change_val,
-        "change_pct": round(change_pct, 2),
-        "open": round(open_, 3),
-        "high": round(high_, 3),
-        "low": round(low_, 3),
-        "close": round(close_, 3),
-        "volume": volume,
-        "amount": round(amount, 2) if amount is not None else None,
-        "amplitude": amplitude,
-        "turnover_rate": round(turnover_rate, 4) if turnover_rate is not None else None,
-        "status": status,
-        "market": market,
-        # ── 估值 ──
-        "pe_ttm": pe_ttm_val,  # 从腾讯/东财/新浪获取
-        "pb": pb_val,  # 从腾讯/东财/新浪获取
-        # ── 周期收益 ──
-        "returns_5d": ret_5d,
-        "returns_20d": ret_20d,
-        "returns_60d": ret_60d,
-        "returns_ytd": ret_ytd,
-        # ── 52 周高低 ──
-        "high_52w": round(high_52w, 3) if high_52w else None,
-        "low_52w": round(low_52w, 3) if low_52w else None,
-        "high_52w_date": h52w_date,
-        "low_52w_date": l52w_date,
-        # ── Module 2: 市场情绪 ──
-        "advance_count": advance_count,
-        "decline_count": decline_count,
-        "unchanged_count": unchanged_count,
-        "advance_rate": advance_rate,
-        # ── Module 3: 资金流向 ──
-        "fund_main_net": fund_main_net,
-        "fund_main_in": fund_main_in,
-        "fund_main_out": fund_main_out,
-        "fund_huge_in": fund_huge_in,
-        "fund_huge_out": fund_huge_out,
-        "fund_big_in": fund_big_in,
-        "fund_big_out": fund_big_out,
-        "fund_medium_in": fund_medium_in,
-        "fund_medium_out": fund_medium_out,
-        "fund_small_in": fund_small_in,
-        "fund_small_out": fund_small_out,
-        # ── Module 4: 板块联动 ──
-        "industry": industry,
-        "industry_change_pct": industry_change_pct,
-        "concepts": concepts,
-        # ── Timestamps ──
-        "timestamp": latest_row.get("date") or latest_row.get("timestamp"),
-        "response_time": datetime.now().isoformat(),
-        "data_freshness_seconds": _calculate_freshness_seconds(
-            latest_row.get("date") or ""
-        ),
-    }
+        cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE_DETAIL)
+        return result
 
-    cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE_DETAIL)
-
+    result = await _sf.do(cache_key, fetch)
     return success_response(result)
 
 
@@ -773,4 +762,5 @@ async def get_stock_fund_flow(symbol: str):
         return error_response(504, "数据获取超时，请稍后重试")
     except Exception as e:
         logger.error(f"[StockFundFlow] Error for {ak_symbol}: {e}", exc_info=True)
-        return error_response(500, f"数据获取失败: {str(e)}")
+        sanitized_msg = sanitize_error(e)
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitized_msg)

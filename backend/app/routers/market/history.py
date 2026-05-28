@@ -7,7 +7,7 @@ Price history and futures data endpoints extracted from market.py.
 import asyncio
 import threading
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.utils.executor import get_executor
 
@@ -33,9 +33,9 @@ router = APIRouter()
 @handle_errors(module="market_history")
 async def market_history(
     symbol: str,
-    limit: int = 300,
-    period: str = "daily",
-    offset: int = 0,
+    limit: int = Query(300, ge=1, le=5000, description="返回数据条数"),
+    period: str = Query("daily", description="周期"),
+    offset: int = Query(0, ge=0, le=100000, description="分页偏移量"),
     trade_date: str = None,
     adjustment: str = "none",
 ):

@@ -143,7 +143,14 @@ async function fetchQuote() {
       complete()
       return
     }
-    
+
+    // Validate symbol matches current props to prevent stale data
+    if (json && json.symbol && json.symbol !== props.symbol) {
+      logger.warn('[SimpleQuote] Stale symbol data, ignoring')
+      complete()
+      return
+    }
+
     if (json) {
       const oldPrice = data.value?.price || 0
       data.value = json

@@ -6765,3 +6765,180 @@ grep -c "retryCount" frontend/src/components/SimpleQuotePanel.vue
 # Expected: 7
 ```
 
+---
+
+## Stock Quote Module QA/UX Fixes Wave 3-4 (v0.6.205)
+
+### Overview
+
+Continuation of Top 10 QA/UX fixes for stock quote module, addressing Wave 3-4 issues.
+
+### Wave 3 Fixes (4 tasks)
+
+#### P1-4: FundDashboard ECharts onDeactivated Cleanup
+
+**Problem**: ECharts instances not properly cleaned up when component is deactivated via KeepAlive, causing memory leaks.
+
+**Solution**:
+1. Added `clearAll()` method to `chartManager.js` that clears charts without disposing
+2. Updated `onDeactivated` hook to use `chart.clear()` instead of `disposeAll()`
+
+```javascript
+// chartManager.js - New method
+clearAll() {
+  for (const [id, entry] of this._charts.entries()) {
+    if (entry.instance && !entry.instance.isDisposed()) {
+      entry.instance.clear()
+    }
+  }
+}
+
+// FundDashboard.vue - onDeactivated hook
+onDeactivated(() => {
+  // Clear charts (preserve instances) instead of dispose (destroy instances)
+  for (const chart of [chartInstance1, chartInstance2, ...]) {
+    if (chart && !chart.isDisposed()) {
+      chart.clear()
+    }
+  }
+})
+```
+
+**Files**:
+- `frontend/src/utils/chartManager.js`
+- `frontend/src/components/FundDashboard.vue`
+
+**Why This Matters**: `clear()` removes chart data but preserves instances for quick reuse when reactivated via KeepAlive.
+
+#### P1-6: ConnectionLock 5-Second Timeout Auto-Release
+
+**Problem**: Lock could be held indefinitely if `releaseLock()` was never called due to errors.
+
+**Solution**:
+```javascript
+let _lockTimeout = null
+
+function acquireLock() {
+  if (_lockHeld) return false
+  _lockHeld = true
+  
+  // Auto-release after 5 seconds
+  _lockTimeout = setTimeout(() => {
+    if (_lockHeld) {
+      releaseLock()
+      console.warn('[ConnectionLock] Auto-released after 5s timeout')
+    }
+  }, 5000)
+  
+  return true
+}
+
+function releaseLock() {
+  if (_lockTimeout) {
+    clearTimeout(_lockTimeout)
+    _lockTimeout = null
+  }
+  _lockHeld = false
+}
+```
+
+**File**: `frontend/src/utils/connectionLock.js`
+
+**Why This Matters**: Prevents indefinite lock holding that could block all subsequent WebSocket reconnection attempts.
+
+#### P1-7: QuotePanel Error State UI
+
+**Problem**: No user feedback when API fails, just blank chart with no retry option.
+
+**Solution**:
+```vue
+<template>
+  <!-- Loading state -->
+  <div v-if="loading">...</div>
+  
+  <!-- Error state (NEW) -->
+  <div v-else-if="error" class="error-container">
+    <p class="text-red-400">{{ error.message || '数据加载失败' }}</p>
+    <button @click="handleRetry" class="retry-btn">重试</button>
+  </div>
+  
+  <!-- Success state -->
+  <div v-else>...</div>
+</template>
+
+<script>
+// New props
+const props = defineProps({
+  error: { type: Object, default: null }  // { message: string, retry: Function }
+})
+
+const emit = defineEmits(['retry'])
+
+const handleRetry = () => {
+  if (props.error?.retry) {
+    props.error.retry()
+  } else {
+    emit('retry')
+  }
+}
+</script>
+```
+
+**File**: `frontend/src/components/QuotePanel.vue`
+
+**Why This Matters**: Users now see clear error message and can retry, improving UX when API fails.
+
+### Wave 4 Verification (1 task)
+
+#### P2-9: 52-Week Range Division by Zero
+
+**Status**: ✅ **VERIFIED** - Already implemented correctly.
+
+**Evidence**:
+- **Import**: Line 263: `import { safePercent } from '../utils/safeMath.js'`
+- **Usage**: Line 410: `const position = safePercent(price - low52w, high52w - low52w, 50)`
+- **Comment**: Line 409: "Use safePercent to prevent division by zero when high52w === low52w"
+
+When `yearHigh === yearLow`, `safePercent` returns the default value of 50%, preventing NaN.
+
+**File**: `frontend/src/components/QuotePanel.vue`
+
+### Summary
+
+| Wave | Tasks | Status |
+|------|-------|--------|
+| Wave 3 (P1) | 3 | ✅ Complete |
+| Wave 4 (P2) | 1 | ✅ Verified |
+| **Total** | **4** | **100% Complete** |
+
+### Verification Commands
+
+```bash
+# P1-4: FundDashboard ECharts cleanup
+grep -c "onDeactivated" frontend/src/components/FundDashboard.vue
+# Expected: 2+
+
+grep -c "clearAll" frontend/src/utils/chartManager.js
+# Expected: 1+
+
+# P1-6: ConnectionLock timeout
+grep -c "_lockTimeout" frontend/src/utils/connectionLock.js
+# Expected: 5+
+
+# P1-7: QuotePanel error state
+grep -c "v-else-if=\"error\"" frontend/src/components/QuotePanel.vue
+# Expected: 1+
+
+grep "error:" frontend/src/components/QuotePanel.vue
+# Expected: shows prop definition
+
+# P2-9: safePercent usage (verification)
+grep -c "safePercent" frontend/src/components/QuotePanel.vue
+# Expected: 3 (import + usage + comment)
+
+# Frontend build
+cd frontend && npm run build
+# Expected: success
+```
+
+

@@ -167,6 +167,18 @@ class ChartManager {
     this.charts.clear()
   }
 
+  clearAll() {
+    this.charts.forEach((chart) => {
+      try {
+        if (!chart.isDisposed?.()) {
+          chart.clear()
+        }
+      } catch (e) {
+        // Ignore clear errors
+      }
+    })
+  }
+
   getStats() {
     return {
       chartCount: this.charts.size,

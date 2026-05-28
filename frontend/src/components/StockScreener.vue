@@ -181,10 +181,13 @@ import { fmtPrice, fmtPct, fmtChg, fmtTurnover, formatAmount } from '../utils/fo
 import { apiFetch } from '../utils/api.js'
 import ContextMenu from './ContextMenu.vue'
 import { useToast } from '../composables/useToast.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 
 const emit = defineEmits(['symbol-click'])
 const { setSymbol } = useMarketStore()
 const { success: toastSuccess, info: toastInfo } = useToast()
+const { createSignal, complete, abort } = useAbortableRequest()
+let searchRequestId = 0
 
 // ── 右键菜单状态 ───────────────────────────────────────────────────
 const contextMenu = ref({ visible: false, x: 0, y: 0, stock: null })
@@ -286,6 +289,7 @@ const flt = ref({
 
 // ── 核心：服务端搜索（防抖 300ms）────────────────────────────────────
 async function fetchStocks() {
+  const currentRequestId = ++searchRequestId
   loading.value = true
   try {
     const params = new URLSearchParams()
@@ -308,11 +312,21 @@ async function fetchStocks() {
     if (flt.value.mktcap.min != null) params.set('min_mktcap', flt.value.mktcap.min)
     if (flt.value.mktcap.max != null) params.set('max_mktcap', flt.value.mktcap.max)
 
-    const d = await apiFetch(`/api/v1/market/stocks/search?${params}`)
+    const signal = createSignal()
+    const d = await apiFetch(`/api/v1/market/stocks/search?${params}`, { signal })
+    
+    // Check if this request is still the current one
+    if (currentRequestId !== searchRequestId) {
+      complete()
+      return
+    }
+    
     const payload = d?.data || d || {}
     stocks.value = (payload.stocks || []).map((s, i) => ({ ...s, seq: (currentPage.value - 1) * pageSize.value + i + 1 }))
     total.value  = payload.total || 0
+    complete()
   } catch (e) {
+    if (e.name === 'AbortError') return
     logger.warn('[StockScreener] fetchStocks failed:', e.message)
   } finally {
     loading.value = false
@@ -508,6 +522,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  abort() // Cancel any pending search request
   _observer?.disconnect()
   _tableResizeObserver?.disconnect()
   _sentinelResizeObserver?.disconnect()

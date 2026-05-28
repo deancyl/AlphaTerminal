@@ -395,9 +395,32 @@ function _newConnection() {
         const recoveryData = data.data || []
         _dataVersion++
         const currentVersion = _dataVersion
+
+        // Collect ALL ticks (recovery + buffered)
+        const allTicks = []
+
+        // Add recovery ticks
         for (const tick of recoveryData) {
+          if (tick.symbol) allTicks.push(tick)
+        }
+
+        // Add buffered ticks
+        for (const sym of Object.keys(tickBuffer)) {
+          const buffered = tickBuffer[sym]
+          if (buffered && buffered.length > 0) {
+            for (const tick of buffered) {
+              if (tick.symbol) allTicks.push(tick)
+            }
+          }
+          delete tickBuffer[sym]
+        }
+
+        // Sort by sequence number ascending
+        allTicks.sort((a, b) => (a.seq || 0) - (b.seq || 0))
+
+        // Process in order
+        for (const tick of allTicks) {
           const sym = tick.symbol
-          if (!sym) continue
           if (!tickHistory[sym]) tickHistory[sym] = new CircularBuffer(MAX_TICK_HISTORY)
           tickHistory[sym].push({ ...tick, _version: currentVersion, _priority: WS_PRIORITY })
           if (tick.seq && (!globalLastSeq.value[sym] || tick.seq > globalLastSeq.value[sym])) {
@@ -405,23 +428,10 @@ function _newConnection() {
           }
           globalTicks.value[sym] = Object.assign({}, tick, { _version: currentVersion, _priority: WS_PRIORITY })
         }
-        for (const sym of Object.keys(tickBuffer)) {
-          const buffered = tickBuffer[sym]
-          if (buffered && buffered.length > 0) {
-            const lastBufferedSeq = globalLastSeq.value[sym] || 0
-            for (const bufferedTick of buffered) {
-              if (bufferedTick.seq && bufferedTick.seq > lastBufferedSeq) {
-                globalTicks.value[sym] = Object.assign({}, bufferedTick, { _version: currentVersion, _priority: WS_PRIORITY })
-                globalLastSeq.value[sym] = bufferedTick.seq
-                tickHistory[sym].push({ ...bufferedTick, _version: currentVersion, _priority: WS_PRIORITY })
-              }
-            }
-          }
-          delete tickBuffer[sym]
-        }
+
         _tickDirty = true
         triggerRef(globalTicks)
-        logger.log('[MarketStream] Recovery complete, processed', recoveryData.length, 'ticks')
+        logger.log('[MarketStream] Recovery complete, processed', allTicks.length, 'ticks in sequence order')
         return
       }
 

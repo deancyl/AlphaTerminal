@@ -707,6 +707,7 @@ import { debounce } from '../utils/cache.js'
 import EmptyState from './f9/EmptyState.vue'
 import { useToast } from '../composables/useToast.js'
 import { useChartManager, safeDispose, safeResize } from '../utils/chartManager.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import ConfirmModal from './ConfirmModal.vue'
 
 const fundStore = useFundStore()
@@ -841,6 +842,10 @@ const assetChart = shallowRef(null)
 
 // Request ID tracking to prevent race conditions on rapid fund switching
 const selectFundRequestId = ref(0)
+
+// AbortController for compare data requests
+const { createSignal: createCompareSignal, complete: completeCompare, abort: abortCompare } = useAbortableRequest()
+let compareRequestId = 0
 
 const chartManager = useChartManager()
 
@@ -1044,6 +1049,10 @@ function clearCompareFunds() {
     info('对比列表已为空')
     return
   }
+  
+  // Abort any pending compare requests
+  abortCompare('Clearing compare funds')
+  
   confirmModal.value?.show()
 }
 
@@ -1055,16 +1064,20 @@ function onConfirmClear() {
 async function loadCompareData() {
   if (compareFunds.value.length < 2) return
 
+  const currentRequestId = ++compareRequestId
+  
   loadingCompare.value = true
   try {
+    const signal = createCompareSignal()
+    
     // Parallel fetch all funds
     const results = await Promise.allSettled(
       compareFunds.value.map(async (fund) => {
         // Parallel fetch all data for this fund
         const [infoRes, navRes, returnsRes] = await Promise.all([
-          apiFetch(`/api/v1/fund/open/info?code=${fund.code}`),
-          apiFetch(`/api/v1/fund/open/nav/${fund.code}?period=1y`),
-          apiFetch(`/api/v1/fund/open/returns/${fund.code}`)
+          apiFetch(`/api/v1/fund/open/info?code=${fund.code}`, { signal }),
+          apiFetch(`/api/v1/fund/open/nav/${fund.code}?period=1y`, { signal }),
+          apiFetch(`/api/v1/fund/open/returns/${fund.code}`, { signal })
         ])
         
         const infoData = extractData(infoRes)
@@ -1074,6 +1087,12 @@ async function loadCompareData() {
         return { fund, infoData, navData, returnsData }
       })
     )
+    
+    // Check if request is still valid after await
+    if (currentRequestId !== compareRequestId) {
+      logger.debug('[loadCompareData] Request superseded, ignoring results')
+      return
+    }
     
     // Process results
     results.forEach((result, idx) => {
@@ -1103,15 +1122,29 @@ async function loadCompareData() {
           fund.returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
         }
       } else {
-        logger.warn(`[Compare] 加载基金 ${idx} 失败:`, result.reason)
-        compareFunds.value[idx].returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
+        // Check if it's an abort error
+        if (result.reason?.name === 'AbortError') {
+          logger.debug('[loadCompareData] Request aborted')
+        } else {
+          logger.warn(`[Compare] 加载基金 ${idx} 失败:`, result.reason)
+          compareFunds.value[idx].returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
+        }
       }
     })
 
     await nextTick()
     renderCompareChart()
+    completeCompare()
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      logger.debug('[loadCompareData] Request aborted')
+      return
+    }
+    logger.error('[loadCompareData] 加载失败:', e)
   } finally {
-    loadingCompare.value = false
+    if (currentRequestId === compareRequestId) {
+      loadingCompare.value = false
+    }
   }
 }
 
@@ -1651,14 +1684,23 @@ onBeforeUnmount(() => {
   }
 })
 
-// v0.6.70: KeepAlive lifecycle - prevent white screen on tab switch
+// v0.6.70: KeepAlive lifecycle - prevent memory leak by clearing charts (not disposing)
 onDeactivated(() => {
-  window.removeEventListener('resize', handleResize)
-  chartManager.disposeAll()
-  klineChart.value = null
-  navChart.value = null
-  assetChart.value = null
-  compareChart.value = null
+  // Clear charts without disposing to preserve instances for onActivated
+  if (klineChart.value && !klineChart.value.isDisposed?.()) {
+    try { klineChart.value.clear() } catch (e) { /* ignore */ }
+  }
+  if (navChart.value && !navChart.value.isDisposed?.()) {
+    try { navChart.value.clear() } catch (e) { /* ignore */ }
+  }
+  if (assetChart.value && !assetChart.value.isDisposed?.()) {
+    try { assetChart.value.clear() } catch (e) { /* ignore */ }
+  }
+  if (compareChart.value && !compareChart.value.isDisposed?.()) {
+    try { compareChart.value.clear() } catch (e) { /* ignore */ }
+  }
+
+  // Abort pending requests and clear interval
   abortAllPendingRequests()
   if (freshnessInterval) {
     clearInterval(freshnessInterval)

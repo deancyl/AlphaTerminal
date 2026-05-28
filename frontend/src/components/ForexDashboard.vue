@@ -121,11 +121,12 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, onMounted, onUnmounted, onDeactivated, watch, computed, onWatcherCleanup } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, onDeactivated, watch, computed } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useSmartPolling } from '../composables/useSmartPolling.js'
 import { classifyForexError } from '../utils/forexErrors.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import ForexQuotePanel from './forex/ForexQuotePanel.vue'
 import CrossRateMatrix from './forex/CrossRateMatrix.vue'
 import ForexKLineChart from './forex/ForexKLineChart.vue'
@@ -170,6 +171,9 @@ const isOfflineMode = computed(() =>
 
 const FOREX_TIMEOUT = 30000
 
+// AbortController for request cancellation
+const { createSignal, complete: completeAbort } = useAbortableRequest()
+
 // 请求版本跟踪 - 防止竞态条件
 let quotesRequestId = 0
 let matrixRequestId = 0
@@ -187,7 +191,8 @@ async function fetchQuotes() {
   const startTime = Date.now()
   
   try {
-    const res = await apiFetch('/api/v1/forex/spot', { timeoutMs: FOREX_TIMEOUT })
+    const signal = createSignal()
+    const res = await apiFetch('/api/v1/forex/spot', { signal, timeoutMs: FOREX_TIMEOUT })
     
     // 只接受最新请求的响应
     if (requestId !== quotesRequestId) return
@@ -199,6 +204,7 @@ async function fetchQuotes() {
       lastQuotesUpdate.value = formatTimeNow()
     }
   } catch (e) {
+    if (e.name === 'AbortError') return
     if (requestId !== quotesRequestId) return
     const classified = classifyForexError(e)
     quotesError.value = classified.message
@@ -227,7 +233,8 @@ async function fetchMatrix() {
   const startTime = Date.now()
   
   try {
-    const res = await apiFetch('/api/v1/forex/matrix', { timeoutMs: FOREX_TIMEOUT })
+    const signal = createSignal()
+    const res = await apiFetch('/api/v1/forex/matrix', { signal, timeoutMs: FOREX_TIMEOUT })
     
     // 只接受最新请求的响应
     if (requestId !== matrixRequestId) return
@@ -238,6 +245,7 @@ async function fetchMatrix() {
       lastMatrixUpdate.value = formatTimeNow()
     }
   } catch (e) {
+    if (e.name === 'AbortError') return
     if (requestId !== matrixRequestId) return
     const classified = classifyForexError(e)
     matrixError.value = classified.message
@@ -267,7 +275,8 @@ async function fetchKline() {
 
   try {
     const symbol = selectedSymbol.value.replace('/', '')
-    const res = await apiFetch(`/api/v1/forex/history/${symbol}?limit=100`, { timeoutMs: FOREX_TIMEOUT })
+    const signal = createSignal()
+    const res = await apiFetch(`/api/v1/forex/history/${symbol}?limit=100`, { signal, timeoutMs: FOREX_TIMEOUT })
 
     // 只接受最新请求的响应
     if (requestId !== klineRequestId) return
@@ -278,6 +287,7 @@ async function fetchKline() {
       lastKlineUpdate.value = formatTimeNow()
     }
 } catch (e) {
+    if (e.name === 'AbortError') return
     if (requestId !== klineRequestId) return
     const classified = classifyForexError(e)
     klineError.value = classified.message
@@ -385,6 +395,8 @@ onUnmounted(() => {
   if (timeInterval) {
     clearInterval(timeInterval)
   }
+  // Cancel all pending requests
+  completeAbort()
 })
 
 // KeepAlive deactivated: cleanup to prevent resource usage when cached

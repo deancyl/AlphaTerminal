@@ -148,8 +148,11 @@ import FuturesMainChart from './FuturesMainChart.vue'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
 import Skeleton from './Skeleton.vue'
 import { apiFetch } from '../utils/api.js'
+import { useAbortableRequest } from '@/composables/useAbortableRequest'
 
 const emit = defineEmits(['open-futures'])
+
+const { createSignal, complete, abort } = useAbortableRequest()
 
 const futuresCards     = shallowRef([])
 const commodityBlocks  = shallowRef([])
@@ -182,21 +185,18 @@ function openCommodity(item) {
   emit('open-futures', { symbol: item.symbol })
 }
 
-let fetchRequestId = 0
-
 async function fetchFuturesData() {
-  const currentRequestId = ++fetchRequestId
   isLoading.value = true
   hasError.value = false
   errorMessage.value = ''
 
   try {
+    const signal = createSignal()
+    
     const [mi, mc] = await Promise.all([
-      apiFetch('/api/v1/futures/main_indexes'),
-      apiFetch('/api/v1/futures/commodities'),
+      apiFetch('/api/v1/futures/main_indexes', { signal }),
+      apiFetch('/api/v1/futures/commodities', { signal }),
     ])
-
-    if (currentRequestId !== fetchRequestId) return
 
     if (mi) {
       const indexFutures = mi.index_futures || []
@@ -204,14 +204,12 @@ async function fetchFuturesData() {
       const historyPromises = indexFutures.map(fut => {
         const symbol = fut.symbol || ''
         const baseSymbol = symbol.replace(/\d+$/, '')
-        return apiFetch(`/api/v1/futures/index_history?symbol=${baseSymbol}&limit=20`)
+        return apiFetch(`/api/v1/futures/index_history?symbol=${baseSymbol}&limit=20`, { signal })
           .then(res => ({ symbol: fut.symbol, history: res?.history || [] }))
           .catch(() => ({ symbol: fut.symbol, history: [] }))
       })
       
       const historyResults = await Promise.all(historyPromises)
-      
-      if (currentRequestId !== fetchRequestId) return
       
       const historyMap = Object.fromEntries(historyResults.map(r => [r.symbol, r.history]))
       
@@ -226,15 +224,15 @@ async function fetchFuturesData() {
       commodityBlocks.value = commodities
       commodityUpdateTime.value = mc.update_time || ''
     }
+    
+    complete()
   } catch (e) {
-    if (currentRequestId !== fetchRequestId) return
+    if (e.name === 'AbortError') return
     logger.warn('[FuturesDashboard] fetch failed:', e)
     hasError.value = true
     errorMessage.value = '加载失败，请点击重试'
   } finally {
-    if (currentRequestId === fetchRequestId) {
-      isLoading.value = false
-    }
+    isLoading.value = false
   }
 }
 
@@ -247,11 +245,13 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  abort('Component unmounted')
 })
 
 // KeepAlive deactivated: cleanup to prevent resource usage when cached
 onDeactivated(() => {
   if (timer) clearInterval(timer)
   timer = null
+  abort('Component deactivated')
 })
 </script>
