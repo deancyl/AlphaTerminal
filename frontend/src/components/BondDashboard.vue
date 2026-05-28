@@ -7,8 +7,16 @@
         <span class="text-lg">{{ bondDataInfo.warning_level === 'critical' ? '🚨' : '⚠️' }}</span>
         <span class="text-xs" :class="bondDataInfo.warning_level === 'critical' ? 'text-bearish font-semibold' : 'text-warning'">{{ bondDataInfo.warning }}</span>
       </div>
-      <div class="text-[10px] text-theme-muted mt-1">
-        数据截止日期：{{ bondDataInfo.last_update }} | 来源：{{ bondDataSource === 'mock' ? '模拟数据' : bondDataSource }}
+      <div class="text-[10px] text-theme-muted mt-1 flex items-center gap-2">
+        <span>数据截止日期：{{ bondDataInfo.last_update }} | 来源：{{ bondDataSource === 'mock' ? '模拟数据' : bondDataSource }}</span>
+        <div v-if="bondDataTimestamp" class="flex items-center gap-1">
+          <span :style="{ color: bondDataFreshness.color }">
+            {{ bondDataFreshness.icon }}
+          </span>
+          <span class="text-[10px] text-theme-muted">
+            {{ bondDataFreshness.ageText }}
+          </span>
+        </div>
       </div>
     </div>
 
@@ -280,6 +288,7 @@
 import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated, onActivated } from 'vue'
 import { logger } from '../utils/logger.js'
 import { safeDivide } from '../utils/safeMath.js'
+import { getFreshness } from '../utils/freshness.js'
 import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import YieldCurveChart from './YieldCurveChart.vue'
 import YieldSpreadChart from './YieldSpreadChart.vue'
@@ -317,6 +326,16 @@ const yieldCurve1y  = ref({})
 const yieldUpdateTime = ref('')
 const bondList      = shallowRef([])
 const activeSource  = ref('gov')
+
+// 数据新鲜度指示器
+const bondDataTimestamp = ref(null)
+const freshnessTick = ref(0)
+let freshnessInterval = null
+
+const bondDataFreshness = computed(() => {
+  freshnessTick.value
+  return getFreshness(bondDataTimestamp.value)
+})
 
 // 历史分位弹窗
 const historyModalVisible = ref(false)
@@ -380,6 +399,7 @@ async function fetchBondData() {
         last_update: data.last_update || '',
         warning: data.warning || null
       }
+      bondDataTimestamp.value = new Date()
 
       yieldCurve.value       = govCurve
       yieldCurve1m.value    = data.yield_curve_1m || {}
@@ -475,10 +495,14 @@ onMounted(() => {
   fetchBondData()
   fetchSpreadHistory()
   timer = setInterval(fetchBondData, 5 * 60 * 1000)
+  freshnessInterval = setInterval(() => {
+    freshnessTick.value++
+  }, 30000)
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  if (freshnessInterval) clearInterval(freshnessInterval)
   abortBond()
   abortSpread()
 })
@@ -486,6 +510,8 @@ onUnmounted(() => {
 onDeactivated(() => {
   if (timer) clearInterval(timer)
   timer = null
+  if (freshnessInterval) clearInterval(freshnessInterval)
+  freshnessInterval = null
   abortBond()
   abortSpread()
 })
@@ -494,6 +520,11 @@ onActivated(() => {
   if (!timer) {
     fetchBondData()
     timer = setInterval(fetchBondData, 5 * 60 * 1000)
+  }
+  if (!freshnessInterval) {
+    freshnessInterval = setInterval(() => {
+      freshnessTick.value++
+    }, 30000)
   }
 })
 </script>

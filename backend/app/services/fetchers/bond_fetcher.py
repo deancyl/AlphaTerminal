@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import httpx
 
+from app.services.unified_fetcher import get_source_breaker
+
 logger = logging.getLogger(__name__)
 
 # Constants
@@ -30,13 +32,22 @@ class BondDataFetcher:
     Multi-source bond yield data fetcher with automatic fallback.
 
     Fallback chain:
-    1. bond_spot_quote (real-time dealer quotes) - PRIMARY
-    2. bond_spot_deal (real-time deals)
-    3. akshare bond_china_yield (historical, may be stale)
-    4. CFETS (China Foreign Exchange Trade System)
-    5. Chinabond (China Central Depository & Clearing)
-    6. Static mock data
+    1. bond_zh_us_rate (daily updated yields) - PRIMARY
+    2. bond_spot_quote (real-time dealer quotes)
+    3. bond_spot_deal (real-time deals)
+    4. akshare bond_china_yield (historical, may be stale)
+    5. CFETS (China Foreign Exchange Trade System)
+    6. Chinabond (China Central Depository & Clearing)
+    7. Static mock data
     """
+
+    # Source name constants for circuit breaker registry
+    SOURCE_BOND_ZH_US_RATE = "bond_zh_us_rate"
+    SOURCE_BOND_SPOT_QUOTE = "bond_spot_quote"
+    SOURCE_BOND_SPOT_DEAL = "bond_spot_deal"
+    SOURCE_AKSHARE = "bond_akshare"
+    SOURCE_CFETS = "bond_cfets"
+    SOURCE_CHINABOND = "bond_chinabond"
 
     def __init__(self, executor=None):
         self._executor = executor
@@ -105,6 +116,12 @@ class BondDataFetcher:
 
         This provides daily updated yield curve data with multiple tenors.
         """
+        cb = get_source_breaker(self.SOURCE_BOND_ZH_US_RATE)
+
+        if not cb.is_available():
+            logger.warning(f"[Bond] {self.SOURCE_BOND_ZH_US_RATE} CB OPEN")
+            return None
+
         try:
             import akshare as ak
             import warnings
@@ -123,12 +140,16 @@ class BondDataFetcher:
             if df is None or df.empty:
                 return None
 
-            return self._parse_bond_zh_us_rate_df(df)
+            data = self._parse_bond_zh_us_rate_df(df)
+            cb.record_success()
+            return data
         except asyncio.TimeoutError:
-            logger.warning("[BondFetcher] bond_zh_us_rate timeout", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[Bond] {self.SOURCE_BOND_ZH_US_RATE} timeout", exc_info=True)
             return None
         except Exception as e:
-            logger.warning(f"[BondFetcher] bond_zh_us_rate failed: {e}", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[Bond] {self.SOURCE_BOND_ZH_US_RATE} failed: {e}", exc_info=True)
             return None
 
     def _parse_bond_zh_us_rate_df(self, df) -> Dict[str, Any]:
@@ -192,6 +213,12 @@ class BondDataFetcher:
 
         This is a working alternative to bond_china_yield which stopped updating 2021-01-22.
         """
+        cb = get_source_breaker(self.SOURCE_BOND_SPOT_QUOTE)
+
+        if not cb.is_available():
+            logger.warning(f"[Bond] {self.SOURCE_BOND_SPOT_QUOTE} CB OPEN")
+            return None
+
         try:
             import akshare as ak
             import warnings
@@ -210,12 +237,16 @@ class BondDataFetcher:
             if df is None or df.empty:
                 return None
 
-            return self._parse_bond_spot_df(df)
+            data = self._parse_bond_spot_df(df)
+            cb.record_success()
+            return data
         except asyncio.TimeoutError:
-            logger.warning("[BondFetcher] bond_spot_quote timeout", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[Bond] {self.SOURCE_BOND_SPOT_QUOTE} timeout", exc_info=True)
             return None
         except Exception as e:
-            logger.warning(f"[BondFetcher] bond_spot_quote failed: {e}", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[Bond] {self.SOURCE_BOND_SPOT_QUOTE} failed: {e}", exc_info=True)
             return None
 
     async def _fetch_from_bond_spot_deal(self) -> Optional[Dict[str, Any]]:
@@ -224,6 +255,12 @@ class BondDataFetcher:
 
         bond_spot_deal returns recent bond transactions with yield rates.
         """
+        cb = get_source_breaker(self.SOURCE_BOND_SPOT_DEAL)
+
+        if not cb.is_available():
+            logger.warning(f"[Bond] {self.SOURCE_BOND_SPOT_DEAL} CB OPEN")
+            return None
+
         try:
             import akshare as ak
             import warnings
@@ -242,16 +279,26 @@ class BondDataFetcher:
             if df is None or df.empty:
                 return None
 
-            return self._parse_bond_spot_deal_df(df)
+            data = self._parse_bond_spot_deal_df(df)
+            cb.record_success()
+            return data
         except asyncio.TimeoutError:
-            logger.warning("[BondFetcher] bond_spot_deal timeout", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[Bond] {self.SOURCE_BOND_SPOT_DEAL} timeout", exc_info=True)
             return None
         except Exception as e:
-            logger.warning(f"[BondFetcher] bond_spot_deal failed: {e}", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[Bond] {self.SOURCE_BOND_SPOT_DEAL} failed: {e}", exc_info=True)
             return None
 
     async def _fetch_from_akshare(self) -> Optional[Dict[str, Any]]:
         """Fetch from akshare bond_china_yield."""
+        cb = get_source_breaker(self.SOURCE_AKSHARE)
+
+        if not cb.is_available():
+            logger.warning(f"[Bond] {self.SOURCE_AKSHARE} CB OPEN")
+            return None
+
         try:
             import akshare as ak
             import warnings
@@ -270,12 +317,16 @@ class BondDataFetcher:
             if df is None or df.empty:
                 return None
 
-            return self._parse_akshare_df(df)
+            data = self._parse_akshare_df(df)
+            cb.record_success()
+            return data
         except asyncio.TimeoutError:
-            logger.warning("[BondFetcher] akshare timeout", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[Bond] {self.SOURCE_AKSHARE} timeout", exc_info=True)
             return None
         except Exception as e:
-            logger.warning(f"[BondFetcher] akshare failed: {e}", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[Bond] {self.SOURCE_AKSHARE} failed: {e}", exc_info=True)
             return None
 
     def _parse_akshare_df(self, df) -> Dict[str, Any]:
@@ -474,13 +525,21 @@ class BondDataFetcher:
 
         CFETS provides RMB bond yield data via their public API.
         """
+        cb = get_source_breaker(self.SOURCE_CFETS)
+
+        if not cb.is_available():
+            logger.warning(f"[Bond] {self.SOURCE_CFETS} CB OPEN")
+            return None
+
         try:
             response = await self._http_client.get(CFETS_BOND_API)
             if response.status_code != 200:
+                cb.record_failure()
                 return None
 
             data = response.json()
             if not data or "records" not in data:
+                cb.record_failure()
                 return None
 
             # Parse CFETS data format
@@ -508,6 +567,7 @@ class BondDataFetcher:
                         comm_yield[tenor] = round(float(yield_val), 4)
 
             if not yield_curve:
+                cb.record_failure()
                 return None
 
             # Calculate spreads
@@ -517,7 +577,7 @@ class BondDataFetcher:
                         (comm_yield[tenor] - yield_curve[tenor]) * 100, 2
                     )
 
-            return {
+            result = {
                 "yield_curve": yield_curve,
                 "yield_curve_1m": {},
                 "yield_curve_1y": {},
@@ -528,8 +588,11 @@ class BondDataFetcher:
                 "last_update": datetime.now().strftime("%Y-%m-%d"),
                 "is_stale": False,
             }
+            cb.record_success()
+            return result
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] failed: {e}", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[HTTP] {self.SOURCE_CFETS} failed: {e}", exc_info=True)
             return None
 
     async def _fetch_from_chinabond(self) -> Optional[Dict[str, Any]]:
@@ -538,6 +601,12 @@ class BondDataFetcher:
 
         Chinabond provides official bond yield curves.
         """
+        cb = get_source_breaker(self.SOURCE_CHINABOND)
+
+        if not cb.is_available():
+            logger.warning(f"[Bond] {self.SOURCE_CHINABOND} CB OPEN")
+            return None
+
         try:
             # Chinabond API endpoint for yield curves
             response = await self._http_client.get(
@@ -545,11 +614,13 @@ class BondDataFetcher:
             )
 
             if response.status_code != 200:
+                cb.record_failure()
                 return None
 
             # Parse response (format varies, this is a simplified example)
             data = response.json()
             if not data:
+                cb.record_failure()
                 return None
 
             # Try to extract yield curve data
@@ -562,9 +633,10 @@ class BondDataFetcher:
                         yield_curve[tenor] = round(float(rate), 4)
 
             if not yield_curve:
+                cb.record_failure()
                 return None
 
-            return {
+            result = {
                 "yield_curve": yield_curve,
                 "yield_curve_1m": {},
                 "yield_curve_1y": {},
@@ -575,8 +647,11 @@ class BondDataFetcher:
                 "last_update": datetime.now().strftime("%Y-%m-%d"),
                 "is_stale": False,
             }
+            cb.record_success()
+            return result
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] failed: {e}", exc_info=True)
+            cb.record_failure()
+            logger.warning(f"[HTTP] {self.SOURCE_CHINABOND} failed: {e}", exc_info=True)
             return None
 
     def _map_cfets_code_to_tenor(self, code: str, name: str) -> Optional[str]:
