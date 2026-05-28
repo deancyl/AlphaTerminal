@@ -695,7 +695,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, reactive, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick, watch } from 'vue'
+import { ref, shallowRef, reactive, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick, watch, markRaw } from 'vue'
 import { storeToRefs } from 'pinia'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
@@ -1485,7 +1485,7 @@ function renderKlineChart() {
         }
       }]
     }
-    klineChart.value.setOption(option)
+    klineChart.value.setOption(markRaw(option))
     klineChart.value.resize()
   } catch (e) {
     logger.error('[FundDashboard] K线图表渲染失败:', e)
@@ -1546,7 +1546,7 @@ function renderNavChart() {
         { name: '累计净值', type: 'line', data: data.map(d => d.accumulated), smooth: true, lineStyle: { color: '#34d399', width: 2, type: 'dashed' } }
       ]
     }
-    navChart.value.setOption(option)
+    navChart.value.setOption(markRaw(option))
     navChart.value.resize()
   } catch (e) {
     logger.error('[FundDashboard] 净值图表渲染失败:', e)
@@ -1591,7 +1591,7 @@ function renderAssetChart() {
         data: assetAllocation.value.map(a => ({ name: a.name, value: a.value, itemStyle: { color: a.color } }))
       }]
     }
-    assetChart.value.setOption(option)
+    assetChart.value.setOption(markRaw(option))
     assetChart.value.resize()
   } catch (e) {
     logger.error('[FundDashboard] 资产配置图表渲染失败:', e)
@@ -1709,8 +1709,15 @@ onDeactivated(() => {
 })
 
 onActivated(() => {
-  window.addEventListener('resize', handleResize)
   window.dispatchEvent(new Event('resize'))
+  
+  // Restart freshness interval if not running
+  if (!freshnessInterval) {
+    freshnessInterval = setInterval(() => {
+      freshnessTick.value++
+    }, 30000)
+  }
+  
   if (selectedFundCode.value) {
     nextTick(() => {
       renderKlineChart()

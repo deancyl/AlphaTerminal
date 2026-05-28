@@ -14,6 +14,7 @@ Wave 1 新增:
 import logging
 import time
 import asyncio
+import re
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 
@@ -33,6 +34,13 @@ fetcher = get_fetcher()
 screener = get_fund_screener()
 
 
+def validate_fund_code(code: str) -> str:
+    """Validate fund code format (6 digits)."""
+    if not re.match(r'^\d{6}$', code):
+        raise HTTPException(400, "基金代码格式错误，应为6位数字")
+    return code
+
+
 # ══════════════════════════════════════════════════════════════════════
 # 场内基金 (ETF/LOF)
 # ══════════════════════════════════════════════════════════════════════
@@ -48,6 +56,7 @@ async def etf_info(code: str = Query(..., description="ETF 代码（6 位数字�
     - 首次请求：记录 AkShare 实际耗时
     - 缓存命中：记录 < 0.01s
     """
+    code = validate_fund_code(code)
     logger.info(f"[ETF Info] 请求 {code}")
     start = time.time()
 
@@ -103,6 +112,7 @@ async def etf_history(
 @handle_errors(module="fund")
 async def open_fund_info(code: str = Query(..., description="基金代码（6 位数字）")):
     """获取场外公募基金详细信息"""
+    code = validate_fund_code(code)
     logger.info(f"[Open Fund Info] 请求 {code}")
     start = time.time()
 
@@ -197,6 +207,7 @@ async def fund_nav_history(
     period: str = Query("6m", description="周期：1m/3m/6m/1y/3y"),
 ):
     """获取场外基金净值历史"""
+    code = validate_fund_code(code)
     logger.info(f"[Fund NAV History] 请求 {code} {period}")
     start = time.time()
 

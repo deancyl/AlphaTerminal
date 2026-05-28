@@ -13,6 +13,8 @@ import time
 import logging
 import datetime
 from typing import Optional, Dict, List, Any
+from app.services.unified_fetcher import get_source_breaker
+from app.services.circuit_breaker import CircuitState
 
 logger = logging.getLogger(__name__)
 
@@ -197,9 +199,17 @@ class EastmoneyClient:
 class AkShareClient:
     """AkShare 客户端（所有调用在线程池）"""
 
+    def __init__(self):
+        self._cb = get_source_breaker("fund")
+
     @fund_cache.cached(CACHE_TTL["etf_spot"], key_prefix="etf:")
     async def get_etf_spot(self, code: str) -> Optional[Dict]:
         """获取 ETF 实时行情"""
+        # Check circuit breaker first
+        if self._cb.state == CircuitState.OPEN:
+            logger.warning(f"[AkShare ETF] {code} Circuit Breaker OPEN, skipping request")
+            return None
+
         try:
             import akshare as ak
 
@@ -207,6 +217,8 @@ class AkShareClient:
             df = await asyncio.wait_for(
                 asyncio.to_thread(ak.fund_etf_spot_em), timeout=TIMEOUT_TOTAL
             )
+
+            self._cb.record_success()
 
             if df is not None and not df.empty:
                 matched = df[df["基金代码"] == code]
@@ -231,8 +243,10 @@ class AkShareClient:
             logger.warning(
                 f"[AkShare ETF] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True
             )
+            self._cb.record_failure()
         except Exception as e:
             logger.warning(f"[AkShare ETF] {code} 获取失败：{e}", exc_info=True)
+            self._cb.record_failure()
 
         return None
 
@@ -244,6 +258,11 @@ class AkShareClient:
         ✅ 修复：不再调用 fund_open_fund_rank_em(symbol="全部")
         改用轻量的 fund_open_fund_daily_em 接口获取单只基金
         """
+        # Check circuit breaker first
+        if self._cb.state == CircuitState.OPEN:
+            logger.warning(f"[AkShare Fund] {code} Circuit Breaker OPEN, skipping request")
+            return None
+
         try:
             import akshare as ak
 
@@ -252,6 +271,8 @@ class AkShareClient:
                 asyncio.to_thread(ak.fund_open_fund_daily_em, symbol=code),
                 timeout=TIMEOUT_TOTAL,
             )
+
+            self._cb.record_success()
 
             if df is not None and not df.empty:
                 row = df.iloc[0]
@@ -278,12 +299,14 @@ class AkShareClient:
             logger.error(
                 f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True
             )
+            self._cb.record_failure()
         except Exception as e:
             logger.error(
                 f"[AkShare Fund] {code} 获取失败：{type(e).__name__}: {e}",
                 exc_info=True,
             )
             logger.exception("完整 traceback:")
+            self._cb.record_failure()
 
         logger.warning(f"[AkShare Fund] {code} 返回 None，降级到 Mock")
         return None
@@ -291,6 +314,11 @@ class AkShareClient:
     @fund_cache.cached(CACHE_TTL["portfolio"], key_prefix="portfolio:")
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
         """获取基金投资组合"""
+        # Check circuit breaker first
+        if self._cb.state == CircuitState.OPEN:
+            logger.warning(f"[AkShare Portfolio] {code} Circuit Breaker OPEN, skipping request")
+            return None
+
         try:
             import akshare as ak
 
@@ -298,6 +326,8 @@ class AkShareClient:
                 asyncio.to_thread(ak.fund_portfolio_hold_em, symbol=code),
                 timeout=TIMEOUT_TOTAL,
             )
+
+            self._cb.record_success()
 
             if df is not None and not df.empty:
                 stock_df = df[df["股票名称"].notna()]
@@ -429,8 +459,10 @@ class AkShareClient:
             logger.warning(
                 f"[AkShare Portfolio] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True
             )
+            self._cb.record_failure()
         except Exception as e:
             logger.warning(f"[AkShare Portfolio] {code} 获取失败：{e}", exc_info=True)
+            self._cb.record_failure()
 
         return None
 
@@ -439,6 +471,11 @@ class AkShareClient:
         self, code: str, period: str = "6m"
     ) -> Optional[List[Dict]]:
         """获取基金净值历史"""
+        # Check circuit breaker first
+        if self._cb.state == CircuitState.OPEN:
+            logger.warning(f"[AkShare NAV] {code} Circuit Breaker OPEN, skipping request")
+            return None
+
         try:
             import akshare as ak
 
@@ -448,6 +485,8 @@ class AkShareClient:
                 ),
                 timeout=TIMEOUT_TOTAL,
             )
+
+            self._cb.record_success()
 
             if df is not None and not df.empty:
                 result = []
@@ -464,14 +503,21 @@ class AkShareClient:
             logger.warning(
                 f"[AkShare NAV] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True
             )
+            self._cb.record_failure()
         except Exception as e:
             logger.warning(f"[AkShare NAV] {code} 获取失败：{e}", exc_info=True)
+            self._cb.record_failure()
 
         return None
 
     @fund_cache.cached(CACHE_TTL["fund_rank"], key_prefix="rank:")
     async def get_fund_rank(self, type: str = "全部") -> Optional[List[Dict]]:
         """获取基金排行"""
+        # Check circuit breaker first
+        if self._cb.state == CircuitState.OPEN:
+            logger.warning(f"[AkShare Rank] Circuit Breaker OPEN, skipping request")
+            return None
+
         try:
             import akshare as ak
 
@@ -479,6 +525,8 @@ class AkShareClient:
                 asyncio.to_thread(ak.fund_open_fund_rank_em, symbol=type),
                 timeout=TIMEOUT_TOTAL,
             )
+
+            self._cb.record_success()
 
             if df is not None and not df.empty:
                 result = []
@@ -498,8 +546,10 @@ class AkShareClient:
                 return result
         except asyncio.TimeoutError:
             logger.warning(f"[AkShare Rank] 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
+            self._cb.record_failure()
         except Exception as e:
             logger.warning(f"[AkShare Rank] 获取失败：{e}", exc_info=True)
+            self._cb.record_failure()
 
         return None
 

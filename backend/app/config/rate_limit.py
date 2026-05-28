@@ -28,6 +28,7 @@ ENDPOINT_LIMITS = {
     "macro": EndpointLimit(requests=30, period=60),
     "forex": EndpointLimit(requests=60, period=60),
     "bond": EndpointLimit(requests=30, period=60),
+    "fund": EndpointLimit(requests=30, period=60),
     "market_radar": EndpointLimit(requests=30, period=60),
     "global_index": EndpointLimit(requests=30, period=60),
     "default": EndpointLimit(requests=200, period=60),
@@ -85,6 +86,8 @@ def get_endpoint_category(path: str) -> str:
         return "macro"
     if "/bond/" in path:
         return "bond"
+    if "/fund/" in path:
+        return "fund"
     if "/market_radar/" in path:
         return "market_radar"
     if "/market/global" in path:

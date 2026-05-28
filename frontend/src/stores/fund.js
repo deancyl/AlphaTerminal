@@ -1,10 +1,14 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 
 // PRD: 支持最多 15 只基金对比
 export const MAX_COMPARE_FUNDS = 15
+
+// LocalStorage key for compare funds persistence
+const COMPARE_FUNDS_KEY = 'alphaterminal-compare-funds'
 
 export const FUND_QUICK_LIST = {
   etf: [
@@ -23,6 +27,8 @@ export const FUND_QUICK_LIST = {
 }
 
 export const useFundStore = defineStore('fund', () => {
+  const { createSignal, complete } = useAbortableRequest()
+  
   const selectedFundCode = ref('')
   const fundInfo = ref(null)
   const navHistory = ref([])
@@ -40,11 +46,16 @@ export const useFundStore = defineStore('fund', () => {
     alpha: null,
     beta: null,
   })
-  const compareFunds = ref([])
+  const compareFunds = ref(JSON.parse(localStorage.getItem(COMPARE_FUNDS_KEY) || '[]'))
   const loading = ref(false)
   const error = ref(null)
   const dataSource = ref('')
   const lastUpdateTime = ref('')
+  
+  // Persist compareFunds to localStorage
+  watch(compareFunds, (newVal) => {
+    localStorage.setItem(COMPARE_FUNDS_KEY, JSON.stringify(newVal))
+  }, { deep: true })
 
   const hasFundInfo = computed(() => fundInfo.value !== null)
   const isLoading = computed(() => loading.value)
@@ -56,11 +67,15 @@ export const useFundStore = defineStore('fund', () => {
     selectedFundCode.value = code
 
     try {
+      const signal = createSignal()
+      
       const [infoRes, returnsRes, riskRes] = await Promise.all([
-        apiFetch(`/api/v1/fund/open/info?code=${code}`),
-        apiFetch(`/api/v1/fund/open/returns/${code}`),
-        apiFetch(`/api/v1/fund/open/risk/${code}`),
+        apiFetch(`/api/v1/fund/open/info?code=${code}`, { signal }),
+        apiFetch(`/api/v1/fund/open/returns/${code}`, { signal }),
+        apiFetch(`/api/v1/fund/open/risk/${code}`, { signal }),
       ])
+
+      complete()
 
       const infoData = extractData(infoRes)
       const returnsData = extractData(returnsRes)
@@ -118,6 +133,7 @@ export const useFundStore = defineStore('fund', () => {
 
       lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
     } catch (e) {
+      if (e.name === 'AbortError') return
       logger.error('[FundStore] 加载失败:', e)
       error.value = e.message || '加载失败'
     } finally {
@@ -127,10 +143,13 @@ export const useFundStore = defineStore('fund', () => {
 
   async function fetchNavHistory(code, period = '6m') {
     try {
-      const res = await apiFetch(`/api/v1/fund/open/nav/${code}?period=${period}`)
+      const signal = createSignal()
+      const res = await apiFetch(`/api/v1/fund/open/nav/${code}?period=${period}`, { signal })
+      complete()
       const data = extractData(res)
       navHistory.value = Array.isArray(data) ? data : []
     } catch (e) {
+      if (e.name === 'AbortError') return
       logger.warn('[FundStore] 净值历史加载失败:', e)
       navHistory.value = []
     }
@@ -138,7 +157,9 @@ export const useFundStore = defineStore('fund', () => {
 
   async function fetchPortfolio(code) {
     try {
-      const res = await apiFetch(`/api/v1/fund/portfolio/${code}`)
+      const signal = createSignal()
+      const res = await apiFetch(`/api/v1/fund/portfolio/${code}`, { signal })
+      complete()
       const data = extractData(res)
       if (data) {
         topHoldings.value = (data.stocks || []).slice(0, 10)
@@ -149,6 +170,7 @@ export const useFundStore = defineStore('fund', () => {
         }))
       }
     } catch (e) {
+      if (e.name === 'AbortError') return
       logger.warn('[FundStore] 持仓数据加载失败:', e)
     }
   }
@@ -197,6 +219,16 @@ export const useFundStore = defineStore('fund', () => {
     selectedFundCode.value = ''
     error.value = null
   }
+  
+  function addToCompare(fund) {
+    if (!compareFunds.value.find(f => f.code === fund.code)) {
+      compareFunds.value.push(fund)
+    }
+  }
+  
+  function removeFromCompare(code) {
+    compareFunds.value = compareFunds.value.filter(f => f.code !== code)
+  }
 
   return {
     selectedFundCode,
@@ -222,5 +254,7 @@ export const useFundStore = defineStore('fund', () => {
     removeCompareFund,
     clearCompareFunds,
     clearFundInfo,
+    addToCompare,
+    removeFromCompare,
   }
 })

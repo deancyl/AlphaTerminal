@@ -98,6 +98,11 @@ class FundPagination:
 # ══════════════════════════════════════════════════════════════════════
 
 
+def _escape_like_wildcards(value: str) -> str:
+    """Escape SQL LIKE wildcards to prevent injection."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class FundScreener:
     """基金筛选服务"""
     
@@ -178,13 +183,13 @@ class FundScreener:
         
         # 基金经理
         if criteria.manager:
-            conditions.append("manager LIKE ?")
-            params.append(f"%{criteria.manager}%")
+            conditions.append("manager LIKE ? ESCAPE '\\'")
+            params.append(f"%{_escape_like_wildcards(criteria.manager)}%")
         
         # 基金公司
         if criteria.company_name:
-            conditions.append("company_name LIKE ?")
-            params.append(f"%{criteria.company_name}%")
+            conditions.append("company_name LIKE ? ESCAPE '\\'")
+            params.append(f"%{_escape_like_wildcards(criteria.company_name)}%")
         
         # 评级
         if criteria.rating_morningstar_min is not None:
