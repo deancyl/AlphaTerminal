@@ -121,7 +121,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, onMounted, onUnmounted, onDeactivated, watch, computed } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, onDeactivated, onActivated, watch, computed } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useSmartPolling } from '../composables/useSmartPolling.js'
@@ -406,6 +406,23 @@ onDeactivated(() => {
     clearInterval(timeInterval)
     timeInterval = null
   }
+  // Cancel all pending AbortControllers
+  completeAbort()
+})
+
+// KeepAlive activated: restart polling and refresh data when component is reactivated
+onActivated(() => {
+  // Refresh data when component is reactivated via KeepAlive
+  if (!quotes.value || quotes.value.length === 0) {
+    fetchQuotes()
+  }
+  if (!matrix.value || matrix.value.length === 0) {
+    fetchMatrix()
+  }
+  // Restart time updates
+  updateTime()
+  timeInterval = setInterval(updateTime, 1000)
+  startPolling()
 })
 
 watch(selectedSymbol, () => {

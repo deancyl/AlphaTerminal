@@ -236,6 +236,7 @@ class ForexFetcher(BaseMarketFetcher):
             if df is not None and not df.empty:
                 quotes = self._parse_cfets_to_quotes(df, ts)
                 if quotes:
+                    self.cb.record_success()  # Record success for fallback
                     logger.info(f"[Forex] 使用CFETS报价作为回退数据: {len(quotes)} 条")
                     return quotes
         except Exception as e:
@@ -248,6 +249,7 @@ class ForexFetcher(BaseMarketFetcher):
             if df is not None and not df.empty:
                 quotes = self._parse_cfets_pair_to_quotes(df, ts)
                 if quotes:
+                    self.cb.record_success()  # Record success for fallback
                     logger.info(
                         f"[Forex] 使用CFETS交叉汇率作为回退数据: {len(quotes)} 条"
                     )
@@ -262,6 +264,7 @@ class ForexFetcher(BaseMarketFetcher):
             if df is not None and not df.empty:
                 quotes = self._parse_boc_to_quotes(df, ts)
                 if quotes:
+                    self.cb.record_success()  # Record success for fallback
                     logger.info(
                         f"[Forex] 使用BOC官方中间价作为回退数据: {len(quotes)} 条"
                     )

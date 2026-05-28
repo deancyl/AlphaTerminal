@@ -440,6 +440,13 @@ function _newConnection() {
       const sym = data.symbol
       if (!sym) return
 
+      // P0-8: Sequence validation - ignore stale ticks
+      // If this tick's seq is less than or equal to the last received seq, skip it
+      if (data.seq && globalLastSeq.value[sym] && data.seq <= globalLastSeq.value[sym]) {
+        logger.debug(`[MarketStream] Ignoring stale tick for ${sym}: seq ${data.seq} <= ${globalLastSeq.value[sym]}`)
+        return
+      }
+
       if (globalRecoveryPending.value) {
         if (!tickBuffer[sym]) tickBuffer[sym] = []
         tickBuffer[sym].push(data)

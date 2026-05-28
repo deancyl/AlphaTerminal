@@ -596,15 +596,18 @@ onDeactivated(() => {
 })
 
 onActivated(() => {
-  // Re-initialize ResizeObserver and theme subscription when reactivated
   if (chartEl.value && chart && !chart.isDisposed()) {
-    // Reconnect ResizeObserver
     if (_ro) {
       _ro.observe(chartEl.value)
     }
     
-    // Resize chart to fit container
     chart.resize()
+    
+    if (!_unsubscribeTheme) {
+      _unsubscribeTheme = onThemeChange(() => {
+        updateChartTheme()
+      })
+    }
     
     _isInitialized = true
   }

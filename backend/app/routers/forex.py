@@ -19,12 +19,14 @@ Caching:
 import logging
 import random
 import asyncio
+import httpx
 from datetime import datetime, timedelta
 from decimal import Decimal
 from fastapi import APIRouter, Query
 from typing import Optional, List, Dict
 
 from app.utils.errors import success_response, error_response, ErrorCode
+from app.utils.error_sanitizer import sanitize_error
 from app.config.settings import get_settings
 from app.services.fetchers.forex_fetcher import (
     forex_fetcher,
@@ -38,8 +40,41 @@ from app.routers.forex_schemas import (
     CrossRateRequest,
 )
 from app.utils.executor import get_executor
+import re
 
 logger = logging.getLogger(__name__)
+
+_forex_spot_fetch_lock = asyncio.Lock()
+_forex_spot_fetch_in_progress = False
+
+SYMBOL_PATTERN = re.compile(r'^[A-Z]{3}(CNY|CNH|USD|EUR|GBP|JPY|AUD|CAD|CHF|HKD|SGD|NZD|KRW|INR|RUB|ZAR|TRY|MXN|BRL|THB|IDR|PHP|PLN|SEK|NOK|DKK|CZK|HUF|RON|BGN|HRK)?$', re.IGNORECASE)
+
+def validate_forex_symbol(symbol: str) -> str:
+    """
+    Validate forex symbol format to prevent injection attacks.
+    
+    Valid formats:
+    - 3-letter currency code: USD, EUR, GBP
+    - 6-letter pair: USDCNY, EURUSD, GBPJPY
+    
+    Args:
+        symbol: Forex symbol to validate
+        
+    Returns:
+        Normalized uppercase symbol
+        
+    Raises:
+        ValueError: If symbol format is invalid
+    """
+    if not symbol or len(symbol) < 3:
+        raise ValueError(f"Invalid symbol: must be at least 3 characters")
+    
+    normalized = symbol.upper().strip()
+    
+    if not SYMBOL_PATTERN.match(normalized):
+        raise ValueError(f"Invalid symbol format: {symbol}")
+    
+    return normalized
 
 
 def _generate_bounded_random_walk(
@@ -303,7 +338,19 @@ async def get_spot_quotes():
 
 
 async def _fetch_forex_spot_background():
-    """Background fetch for forex spot quotes (fire-and-forget)"""
+    """Background fetch for forex spot quotes (fire-and-forget)
+    
+    Uses singleflight pattern to prevent thundering herd when multiple
+    clients request stale data simultaneously.
+    """
+    global _forex_spot_fetch_in_progress
+    
+    async with _forex_spot_fetch_lock:
+        if _forex_spot_fetch_in_progress:
+            logger.debug("[Forex] Background fetch already in progress, skipping")
+            return
+        _forex_spot_fetch_in_progress = True
+    
     try:
         quotes = await forex_fetcher.get_spot_quotes()
         source = "akshare"
@@ -388,6 +435,9 @@ async def _fetch_forex_spot_background():
 
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] failed: {e}", exc_info=True)
+    finally:
+        async with _forex_spot_fetch_lock:
+            _forex_spot_fetch_in_progress = False
 
 
 async def _fetch_forex_spot_foreground():
@@ -489,7 +539,7 @@ async def reset_circuit_breaker():
         return success_response(result)
     except Exception as e:
         logger.error(f"[Forex] 重置熔断器失败: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"重置熔断器失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 @router.get("/cfets")
@@ -505,8 +555,13 @@ async def get_cfets_spot():
     Returns:
         List[ForexCFETSQuote]: 银行间报价列表
     """
+    FOREX_API_TIMEOUT = 30.0
+    
     try:
-        quotes = await forex_fetcher.get_cfets_spot()
+        quotes = await asyncio.wait_for(
+            forex_fetcher.get_cfets_spot(),
+            timeout=FOREX_API_TIMEOUT
+        )
 
         return success_response(
             {
@@ -517,9 +572,12 @@ async def get_cfets_spot():
             }
         )
 
+    except asyncio.TimeoutError:
+        logger.error(f"[Forex] CFETS报价请求超时", exc_info=True)
+        return error_response(ErrorCode.TIMEOUT_ERROR, "请求超时，请稍后重试")
     except Exception as e:
         logger.error(f"[Forex] 获取CFETS报价失败: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取CFETS报价失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 @router.get("/cfets/cross")
@@ -534,8 +592,13 @@ async def get_cfets_crosses():
     Returns:
         List[ForexCFETSQuote]: 交叉汇率列表
     """
+    FOREX_API_TIMEOUT = 30.0
+    
     try:
-        quotes = await forex_fetcher.get_cfets_crosses()
+        quotes = await asyncio.wait_for(
+            forex_fetcher.get_cfets_crosses(),
+            timeout=FOREX_API_TIMEOUT
+        )
 
         return success_response(
             {
@@ -546,11 +609,12 @@ async def get_cfets_crosses():
             }
         )
 
+    except asyncio.TimeoutError:
+        logger.error(f"[Forex] CFETS交叉汇率请求超时", exc_info=True)
+        return error_response(ErrorCode.TIMEOUT_ERROR, "请求超时，请稍后重试")
     except Exception as e:
         logger.error(f"[Forex] 获取CFETS交叉汇率失败: {e}", exc_info=True)
-        return error_response(
-            ErrorCode.INTERNAL_ERROR, f"获取CFETS交叉汇率失败: {str(e)}"
-        )
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 @router.get("/official")
@@ -570,14 +634,22 @@ async def get_official_rates(
     Returns:
         List[ForexOfficialRate]: 官方中间价列表
     """
+    FOREX_API_TIMEOUT = 30.0
+    
     try:
-        rates = await forex_fetcher.get_official_rates(days)
+        rates = await asyncio.wait_for(
+            forex_fetcher.get_official_rates(days),
+            timeout=FOREX_API_TIMEOUT
+        )
 
         return success_response({"rates": rates, "total": len(rates), "source": "safe"})
 
+    except asyncio.TimeoutError:
+        logger.error(f"[Forex] 官方中间价请求超时", exc_info=True)
+        return error_response(ErrorCode.TIMEOUT_ERROR, "请求超时，请稍后重试")
     except Exception as e:
         logger.error(f"[Forex] 获取官方中间价失败: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取官方中间价失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 @router.get("/history/{symbol}")
@@ -607,16 +679,20 @@ async def get_forex_history_new(
     Returns:
         ForexHistoryResponse: K线数据列表
     """
+    try:
+        validated_symbol = validate_forex_symbol(symbol)
+    except ValueError as e:
+        return error_response(ErrorCode.VALIDATION_ERROR, str(e))
+    
     cache = get_cache()
-    cache_key = f"forex:history:{symbol}:{start_date}:{end_date}:{limit}"
+    cache_key = f"forex:history:{validated_symbol}:{start_date}:{end_date}:{limit}"
 
     cached = cache.get(cache_key)
     if cached:
         return success_response(cached)
 
-    # Try to fetch data with timeout (10 seconds)
     try:
-        ak_symbol = symbol.upper().replace("CNY", "CNH")
+        ak_symbol = validated_symbol.upper().replace("CNY", "CNH")
 
         history = await asyncio.wait_for(
             forex_fetcher.get_history(ak_symbol, start_date, end_date, limit),
@@ -1092,7 +1168,7 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
 
     except Exception as e:
         logger.error(f"[Forex] 计算交叉汇率失败: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"计算交叉汇率失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 # ==================== 保留旧版端点 (兼容) ====================
