@@ -10,13 +10,15 @@ import logging
 import asyncio
 import re
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
+from functools import partial
 import httpx
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -114,7 +116,7 @@ async def _fetch_index_futures_realtime():
             df = await asyncio.wait_for(
                 loop.run_in_executor(
                     get_executor(),
-                    lambda: ak.futures_zh_realtime(symbol=ak_symbol_name),
+                    partial(ak.futures_zh_realtime, symbol=ak_symbol_name),
                 ),
                 timeout=15.0,
             )
@@ -299,7 +301,9 @@ async def _get_futures_cache() -> dict:
 @router.get("/futures/index_history")
 @handle_errors(module="futures")
 async def futures_index_history(
-    symbol: str = "IF", period: str = "daily", limit: int = 200
+    symbol: str = "IF",
+    period: str = "daily",
+    limit: int = Query(200, ge=1, le=500, description="Number of records to return"),
 ):
     """
     股指期货历史K线数据
@@ -343,7 +347,7 @@ async def futures_index_history(
             df = await asyncio.wait_for(
                 loop.run_in_executor(
                     get_executor(),
-                    lambda: ak.futures_zh_daily_sina(symbol=contract_symbol),
+                    partial(ak.futures_zh_daily_sina, symbol=contract_symbol),
                 ),
                 timeout=10.0,
             )
@@ -352,7 +356,7 @@ async def futures_index_history(
             df = await asyncio.wait_for(
                 loop.run_in_executor(
                     get_executor(),
-                    lambda: ak.futures_zh_minute_sina(symbol=contract_symbol),
+                    partial(ak.futures_zh_minute_sina, symbol=contract_symbol),
                 ),
                 timeout=10.0,
             )
@@ -423,7 +427,7 @@ async def futures_index_history(
                 "symbol": symbol,
                 "period": period,
                 "history": [],
-                "message": f"获取数据失败: {str(e)}",
+                "message": sanitize_error(e),
             }
         )
 
@@ -445,7 +449,7 @@ async def futures_main_indexes():
         )
     except Exception as e:
         logger.error(f"[futures_main_indexes] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取股指期货失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 @router.get("/futures/commodities")
@@ -464,7 +468,7 @@ async def futures_commodities():
         )
     except Exception as e:
         logger.error(f"[futures_commodities] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取大宗商品失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 @router.get("/futures/term_structure")
@@ -520,7 +524,7 @@ async def futures_term_structure(symbol: str = "RB"):
         try:
             df = await asyncio.wait_for(
                 loop.run_in_executor(
-                    get_executor(), lambda: ak.futures_zh_realtime(symbol=zh_name)
+                    get_executor(), partial(ak.futures_zh_realtime, symbol=zh_name)
                 ),
                 timeout=10.0,
             )
@@ -617,7 +621,7 @@ async def futures_term_structure(symbol: str = "RB"):
         )
         return error_response(
             ErrorCode.INTERNAL_ERROR,
-            f"获取期限结构失败: {type(e).__name__}: {str(e)}",
+            sanitize_error(e),
             {"symbol": prefix, "name": zh_name, "term_structure": []},
         )
 

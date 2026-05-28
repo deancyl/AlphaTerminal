@@ -27,8 +27,13 @@
           <div
             v-for="card in futuresCards"
             :key="card.symbol"
-            class="flex-1 min-w-[100px] md:min-w-0 terminal-panel border border-theme-secondary rounded-sm px-2 md:px-4 py-2 md:py-3 flex flex-col gap-1 cursor-pointer hover:border-terminal-accent/40 transition"
+            tabindex="0"
+            class="flex-1 min-w-[100px] md:min-w-0 terminal-panel border border-theme-secondary rounded-sm px-2 md:px-4 py-2 md:py-3 flex flex-col gap-1 cursor-pointer hover:border-terminal-accent/40 transition focus:outline-none focus:ring-2 focus:ring-terminal-accent/50"
             @click="openFuturesCard(card)"
+            @keydown.enter="openFuturesCard(card)"
+            @keydown.space.prevent="openFuturesCard(card)"
+            @keydown.arrow-down="focusNextFuturesCard($event)"
+            @keydown.arrow-up="focusPrevFuturesCard($event)"
           >
             <div class="flex items-center justify-between">
               <span class="text-[10px] md:text-[10px] text-terminal-dim uppercase tracking-wider">{{ card.name }}</span>
@@ -89,7 +94,8 @@
                 <div
                   v-for="item in sector.items"
                   :key="item.symbol"
-                  class="rounded-sm border flex flex-col items-center justify-center py-1.5 md:py-2 px-1 cursor-pointer hover:brightness-125 hover:scale-[1.02] transition-all"
+                  tabindex="0"
+                  class="rounded-sm border flex flex-col items-center justify-center py-1.5 md:py-2 px-1 cursor-pointer hover:brightness-125 hover:scale-[1.02] transition-all focus:outline-none focus:ring-2 focus:ring-terminal-accent/50"
                   style="min-height: 44px;"
                   :style="{
                     borderColor: (item.change_pct || 0) >= 0
@@ -100,6 +106,12 @@
                       : 'rgba(34,197,94,0.08)',
                   }"
                   @click="openCommodity(item)"
+                  @keydown.enter="openCommodity(item)"
+                  @keydown.space.prevent="openCommodity(item)"
+                  @keydown.arrow-down="focusNextCommodity($event)"
+                  @keydown.arrow-up="focusPrevCommodity($event)"
+                  @keydown.arrow-right="focusRightCommodity($event)"
+                  @keydown.arrow-left="focusLeftCommodity($event)"
                 >
                   <span class="text-[10px] md:text-[10px] text-theme-primary truncate w-full text-center">{{ item.name }}</span>
                   <span
@@ -142,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated, onActivated } from 'vue'
 import { logger } from '../utils/logger.js'
 import FuturesMainChart from './FuturesMainChart.vue'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
@@ -183,6 +195,60 @@ function openFuturesCard(card) {
 
 function openCommodity(item) {
   emit('open-futures', { symbol: item.symbol })
+}
+
+// Keyboard navigation for futures cards
+function focusNextFuturesCard(event) {
+  const items = document.querySelectorAll('.flex-1.min-w-\\[100px\\][tabindex="0"]')
+  const index = Array.from(items).indexOf(event.target)
+  if (index < items.length - 1) {
+    items[index + 1].focus()
+  }
+}
+
+function focusPrevFuturesCard(event) {
+  const items = document.querySelectorAll('.flex-1.min-w-\\[100px\\][tabindex="0"]')
+  const index = Array.from(items).indexOf(event.target)
+  if (index > 0) {
+    items[index - 1].focus()
+  }
+}
+
+// Keyboard navigation for commodities (2D grid)
+function focusNextCommodity(event) {
+  const items = document.querySelectorAll('.grid [tabindex="0"]')
+  const index = Array.from(items).indexOf(event.target)
+  if (index < items.length - 1) {
+    items[index + 1].focus()
+  }
+}
+
+function focusPrevCommodity(event) {
+  const items = document.querySelectorAll('.grid [tabindex="0"]')
+  const index = Array.from(items).indexOf(event.target)
+  if (index > 0) {
+    items[index - 1].focus()
+  }
+}
+
+function focusRightCommodity(event) {
+  const grid = event.target.closest('.grid')
+  if (!grid) return
+  const items = grid.querySelectorAll('[tabindex="0"]')
+  const index = Array.from(items).indexOf(event.target)
+  if (index < items.length - 1) {
+    items[index + 1].focus()
+  }
+}
+
+function focusLeftCommodity(event) {
+  const grid = event.target.closest('.grid')
+  if (!grid) return
+  const items = grid.querySelectorAll('[tabindex="0"]')
+  const index = Array.from(items).indexOf(event.target)
+  if (index > 0) {
+    items[index - 1].focus()
+  }
 }
 
 async function fetchFuturesData() {
@@ -253,5 +319,13 @@ onDeactivated(() => {
   if (timer) clearInterval(timer)
   timer = null
   abort('Component deactivated')
+})
+
+// KeepAlive activated: resume data fetching when component becomes active
+onActivated(() => {
+  fetchFuturesData()
+  if (!timer) {
+    timer = setInterval(fetchFuturesData, 180_000)  // 每3分钟刷新
+  }
 })
 </script>

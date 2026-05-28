@@ -10,7 +10,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, onDeactivated, onActivated, nextTick, markRaw } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useLazyLoad } from '../composables/useLazyLoad.js'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
@@ -75,7 +75,8 @@ function buildChart() {
     }
   })
 
-  chartInstance.setOption({
+  // v0.6.210: Wrap option in markRaw to prevent Vue reactive overhead on WebSocket ticks
+  chartInstance.setOption(markRaw({
     backgroundColor: 'transparent',
     grid: { top: 16, right: 16, bottom: 28, left: 56 },
     legend: {
@@ -103,7 +104,7 @@ function buildChart() {
       splitLine: { lineStyle: { color: '#1f1f1f', type: 'dashed' } },
     },
     series,
-  }, true)
+  }), true)
 }
 
 async function init() { await nextTick(); buildChart() }
@@ -111,15 +112,50 @@ async function init() { await nextTick(); buildChart() }
 const debouncedInit = useDebounceFn(init, 300)
 
 let ro = null
+let resizeCleanup = null
+
 onMounted(() => {
-  if (chartRef.value) { ro = createResizeObserver(chartInstance); ro.observe(chartRef.value) }
+  if (chartRef.value) {
+    const { observer, cleanup } = createResizeObserver(chartInstance)
+    ro = observer
+    resizeCleanup = cleanup
+    ro.observe(chartRef.value)
+  }
 })
+
 onBeforeUnmount(() => {
+  // Cancel debounce timer FIRST
+  if (resizeCleanup) {
+    resizeCleanup()
+    resizeCleanup = null
+  }
   ro && ro.disconnect()
   ro = null
   if (chartInstance && !chartInstance.isDisposed()) {
     chartInstance.dispose()
     chartInstance = null
+  }
+})
+
+// KeepAlive deactivated: clear chart but preserve instance
+onDeactivated(() => {
+  if (chartInstance && !chartInstance.isDisposed()) {
+    chartInstance.clear()
+  }
+  ro && ro.disconnect()
+})
+
+// KeepAlive activated: rebuild chart and restore resize observer
+onActivated(async () => {
+  await nextTick()
+  if (isVisible.value && chartRef.value) {
+    buildChart()
+    if (!ro && chartRef.value) {
+      const { observer, cleanup } = createResizeObserver(chartInstance)
+      ro = observer
+      resizeCleanup = cleanup
+      ro.observe(chartRef.value)
+    }
   }
 })
 watch([() => props.futuresData, isVisible], () => { 

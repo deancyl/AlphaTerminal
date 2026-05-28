@@ -42,7 +42,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, markRaw } from 'vue'
 import { useLazyLoad } from '../composables/useLazyLoad.js'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
 import { safeDispose } from '../utils/chartManager.js'
@@ -61,8 +61,8 @@ const chartRef  = ref(null)
 const chartInst = ref(null)
 const error     = ref('')
 const updateTime = ref('')
-
 let ro = null
+let resizeCleanup = null  // v0.6.209: Store cleanup function for timer cancellation
 
 const symbolName = computed(() => props.name || props.symbol)
 
@@ -175,19 +175,27 @@ async function initChart() {
   if (!chartRef.value || !window.echarts) return
   if (chartInst.value) { chartInst.value.dispose(); chartInst.value = null }
   chartInst.value = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-  // v0.6.66: 使用增量更新避免全量重绘
-  chartInst.value.setOption(buildOption(), { replaceMerge: ['series'], lazyUpdate: true })
+  // v0.6.66: 使用增量更新避免全量重绘 + markRaw避免Vue响应式开销
+  chartInst.value.setOption(markRaw(buildOption()), { replaceMerge: ['series'], lazyUpdate: true })
 }
 
 onMounted(() => {
   initChart()
   if (chartRef.value) {
-    ro = createResizeObserver(chartInst.value)
+    // v0.6.209: Properly destructure to get cleanup function for timer cancellation
+    const { observer, cleanup } = createResizeObserver(chartInst.value)
+    ro = observer
+    resizeCleanup = cleanup
     ro.observe(chartRef.value)
   }
 })
 
 onBeforeUnmount(() => {
+  // v0.6.209: Cancel resize timer FIRST before disconnecting observer
+  if (resizeCleanup) {
+    resizeCleanup()  // Clear the debounce timer
+    resizeCleanup = null
+  }
   ro?.disconnect()
   ro = null
   if (chartInst.value && !chartInst.value.isDisposed()) {

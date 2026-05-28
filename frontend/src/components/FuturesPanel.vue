@@ -116,6 +116,7 @@ import BaseKLineChart from './BaseKLineChart.vue'
 import TermStructureChart from './TermStructureChart.vue'
 import { buildChartData } from '../utils/chartDataBuilder.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
+import { apiFetch } from '../utils/api.js'
 
 const props = defineProps({
   symbol: { type: String, default: 'IF0' },
@@ -164,9 +165,7 @@ async function fetchTermStructure() {
   termError.value = ''
   termLoading.value = true
   try {
-    const res = await fetch(`/api/v1/futures/term_structure?symbol=${prefix}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await apiFetch(`/api/v1/futures/term_structure?symbol=${prefix}`, { timeoutMs: 10000 })
     // Ignore stale responses
     if (currentRequestId !== fetchTermStructureRequestId) return
     if (data.code !== 0 && data.code !== undefined) {
@@ -268,9 +267,7 @@ async function fetchData() {
       period:  period.value,
       limit:   2000,
     })
-    const res = await fetch(`/api/v1/market/futures/${currentSymbol.value}?${params}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await apiFetch(`/api/v1/market/futures/${currentSymbol.value}?${params}`, { timeoutMs: 10000 })
     // Ignore stale responses
     if (currentRequestId !== fetchDataRequestId) return
     if (data.error) { chartError.value = data.error; return }
