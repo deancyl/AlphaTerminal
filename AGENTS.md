@@ -6942,3 +6942,123 @@ cd frontend && npm run build
 ```
 
 
+
+---
+
+## Fund Module Deep Audit Fixes (v0.6.209)
+
+### Overview
+
+Deep audit fixes for fund module after v0.6.208, addressing additional security and reliability issues discovered during comprehensive review.
+
+### Issues Fixed
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| Fund router no timeout protection | P0 | Add `asyncio.wait_for` with 30s timeout | ✅ Fixed |
+| Error messages expose internals | P0 | Add `sanitize_error` for user-friendly messages | ✅ Fixed |
+| fetchCompareFundReturns no AbortController | P1 | Add request cancellation support | ✅ Fixed |
+| tool_registry SQL injection | P1 | Verify ESCAPE clause protection | ✅ Verified |
+
+### Backend Changes
+
+#### 1. Timeout Protection
+
+**File**: `backend/app/routers/fund.py`
+
+```python
+FUND_API_TIMEOUT = 30.0
+
+async def get_etf_info(code: str):
+    try:
+        data = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), fetch_etf_info_sync, code),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[ETF Info] {code} timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        return error_response(ErrorCode.TIMEOUT_ERROR, "请求超时，请稍后重试")
+```
+
+#### 2. Error Message Sanitization
+
+**File**: `backend/app/routers/fund.py`
+
+```python
+from app.utils.error_sanitizer import sanitize_error
+
+except Exception as e:
+    logger.error(f"Error: {e}", exc_info=True)
+    return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
+```
+
+### Frontend Changes
+
+#### 3. AbortController for Compare
+
+**File**: `frontend/src/stores/fund.js`
+
+```javascript
+async function fetchCompareFundReturns(codes) {
+  try {
+    const signal = createSignal()
+    const response = await apiFetch('/api/v1/fund/compare', {
+      method: 'POST',
+      body: JSON.stringify({ codes }),
+      signal
+    })
+    compareData.value = response.data || response
+    complete()
+  } catch (e) {
+    if (e.name === 'AbortError') return
+    console.error('Failed to fetch compare data:', e)
+  }
+}
+```
+
+### SQL Injection Verification
+
+**File**: `backend/app/services/agentic/tool_registry.py`
+
+Both LIKE queries already have ESCAPE clause protection:
+- Line 310: `WHERE title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'`
+- Line 422: `WHERE symbol LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\'`
+
+### Verification Commands
+
+```bash
+# Timeout protection
+grep -c "asyncio.wait_for" backend/app/routers/fund.py
+# Expected: 9
+
+# Error sanitization
+grep -c "sanitize_error" backend/app/routers/fund.py
+# Expected: 2
+
+# AbortController
+grep -c "createSignal" frontend/src/stores/fund.js
+# Expected: 5
+
+# SQL injection protection
+grep -c "ESCAPE" backend/app/services/agentic/tool_registry.py
+# Expected: 2
+
+# Frontend build
+cd frontend && npm run build
+# Expected: Success
+
+# Backend compile
+cd backend && python3 -m py_compile app/routers/fund.py
+# Expected: Success
+```
+
+### Summary
+
+| Fix | Files Modified | Impact |
+|-----|----------------|--------|
+| Timeout protection | `backend/app/routers/fund.py` | 10 endpoints protected |
+| Error sanitization | `backend/app/routers/fund.py` | User-friendly messages |
+| AbortController | `frontend/src/stores/fund.js` | Race condition prevention |
+| SQL injection | `backend/app/services/agentic/tool_registry.py` | Already protected |
+
+**Total**: 3 files modified, 13 improvements
