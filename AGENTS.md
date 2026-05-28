@@ -6560,3 +6560,208 @@ curl http://localhost:60100/api/v1/market/fund_flow | jq '.data.source'
 3. **DBWriter Health Monitoring**: Add periodic health checks and alerts
 4. **Data Integrity Verification**: Add automated data quality checks
 
+---
+
+## Stock Quote Module QA/UX Fixes (v0.6.204)
+
+### Overview
+
+Complete Top 10 QA/UX fixes for the stock quote module based on comprehensive audit.
+
+### Wave 1 Fixes (6 tasks)
+
+#### P0-1: SimpleQuotePanel AbortController Race Condition
+
+**Problem**: `createSignal()` called outside try block, causing aborted requests to continue execution.
+
+**Solution**:
+```javascript
+// Before
+const signal = createSignal()  // OUTSIDE try block
+try {
+  const json = await apiFetch(url, { signal })
+}
+
+// After
+try {
+  const signal = createSignal()  // INSIDE try block
+  const json = await apiFetch(url, { signal })
+  if (currentRequestId !== fetchQuoteRequestId) return  // Check after fetch
+}
+```
+
+**File**: `frontend/src/components/SimpleQuotePanel.vue`
+
+#### P0-2: QuotePanel ECharts Lifecycle Order
+
+**Problem**: Potential memory leak if debounce callback fires after ResizeObserver disconnect.
+
+**Solution**: Verified correct order (already fixed):
+```javascript
+onBeforeUnmount(() => {
+  if (_debouncedResize) {
+    _debouncedResize.cancel()    // FIRST: Cancel debounce
+  }
+  _donutRO?.disconnect()          // SECOND: Disconnect observer
+})
+```
+
+**File**: `frontend/src/components/QuotePanel.vue`
+
+#### P0-4: Backend Cache Key Consistency
+
+**Problem**: Cache key used prefixed symbol (e.g., `sh600519`) but database stores unprefixed symbol (e.g., `600519`).
+
+**Solution**:
+```python
+norm = _validate_symbol(symbol)
+db_sym = _unprefix(norm)  # Get unprefixed symbol
+cache_key = f"quote:{db_sym}"  # Use db_sym for cache key
+# Result returns prefixed symbol: "symbol": norm
+```
+
+**File**: `backend/app/routers/market/quotes.py`
+
+#### P1-5: Backend Error Message Sanitization
+
+**Problem**: `str(e)` exposed internal error details (paths, API keys, stack traces).
+
+**Solution**:
+```python
+from app.utils.error_sanitizer import sanitize_error
+
+sanitized_msg = sanitize_error(e)
+return error_response(ErrorCode.INTERNAL_ERROR, sanitized_msg)
+```
+
+**File**: `backend/app/routers/market/quotes.py`
+
+#### P1-7: WebSocket Recovery Wait Mechanism
+
+**Problem**: Recovery request sent on reconnect, but new live ticks may arrive BEFORE recovery data.
+
+**Solution**:
+```javascript
+const globalRecoveryPending = ref(false)
+const tickBuffer = {}
+
+// Set pending before recovery request
+globalRecoveryPending.value = true
+
+// Buffer ticks during recovery
+if (globalRecoveryPending.value) {
+  tickBuffer[symbol] = [...]
+  return
+}
+
+// Process recovery response with seq ordering
+```
+
+**File**: `frontend/src/composables/useMarketStream.js`
+
+#### P1-8: ConnectionLock Auto-Release
+
+**Problem**: 5-second auto-release timeout caused concurrency race condition.
+
+**Solution**: Removed auto-release, lock only releases via explicit `releaseLock()` call.
+
+**File**: `frontend/src/utils/connectionLock.js`
+
+### Wave 2 Fixes (4 tasks)
+
+#### P0-3: AdvancedKlinePanel AbortController
+
+**Problem**: Overlay API call lacked request ID tracking for race condition prevention.
+
+**Solution**: Added `fetchOverlayRequestId` for the overlay API call.
+
+**File**: `frontend/src/components/AdvancedKlinePanel.vue`
+
+#### P1-6: AdvancedKlinePanel Error State
+
+**Problem**: Blank chart with no error message or retry button when API fails.
+
+**Solution**:
+```vue
+<div v-if="error && !isLoading" class="error-overlay">
+  <p>{{ error.message }}</p>
+  <button @click="error.retry()">重试</button>
+</div>
+```
+
+**File**: `frontend/src/components/AdvancedKlinePanel.vue`
+
+#### P2-9: 52-Week Range Division by Zero
+
+**Problem**: NaN when `yearHigh === yearLow` in range calculation.
+
+**Solution**: Verified `safePercent` already used, defaulting to 50% when range is 0.
+
+**File**: `frontend/src/components/QuotePanel.vue`
+
+#### P2-10: SimpleQuotePanel Retry Mechanism
+
+**Problem**: No automatic retry or manual retry button when API fails.
+
+**Solution**:
+```javascript
+const retryCount = ref(0)
+const MAX_RETRIES = 3
+
+// Automatic retry with 1s delay
+if (retryCount.value < MAX_RETRIES) {
+  retryCount.value++
+  await new Promise(resolve => setTimeout(resolve, 1000))
+  return fetchQuote()
+}
+
+// Manual retry button
+<button @click="manualRetry">重试 ({{ MAX_RETRIES - retryCount }} 次)</button>
+```
+
+**File**: `frontend/src/components/SimpleQuotePanel.vue`
+
+### Verification Commands
+
+```bash
+# P0-1: AbortController in try block
+grep -A20 "async function fetchQuote" frontend/src/components/SimpleQuotePanel.vue | grep -c "const signal = createSignal()"
+# Expected: 1
+
+# P0-2: ECharts lifecycle order
+sed -n '582,592p' frontend/src/components/QuotePanel.vue | grep -n "cancel\|disconnect"
+# Expected: cancel first, disconnect second
+
+# P0-4: Cache key consistency
+grep -c "db_sym = _unprefix" backend/app/routers/market/quotes.py
+# Expected: 2
+
+# P1-5: Error sanitization
+grep -c "sanitize_error" backend/app/routers/market/quotes.py
+# Expected: 3
+
+# P1-7: WebSocket recovery wait
+grep -c "globalRecoveryPending" frontend/src/composables/useMarketStream.js
+# Expected: 7
+
+# P1-8: ConnectionLock no auto-release
+grep -c "setTimeout" frontend/src/utils/connectionLock.js
+# Expected: 0
+
+# P0-3: AdvancedKlinePanel AbortController
+grep -c "useAbortableRequest" frontend/src/components/AdvancedKlinePanel.vue
+# Expected: 2
+
+# P1-6: Error state UI
+grep -c "error && !isLoading" frontend/src/components/AdvancedKlinePanel.vue
+# Expected: 1
+
+# P2-9: safePercent usage
+grep -c "safePercent" frontend/src/components/QuotePanel.vue
+# Expected: 3
+
+# P2-10: Retry mechanism
+grep -c "retryCount" frontend/src/components/SimpleQuotePanel.vue
+# Expected: 7
+```
+
