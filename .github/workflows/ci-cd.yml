@@ -17,7 +17,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: dorny/paths-filter@v3
       id: filter
       with:
@@ -54,7 +54,7 @@ jobs:
     needs: [backend, frontend, e2e]
     if: ${{ always() && (needs.backend.result != 'failure' && needs.frontend.result != 'failure' && needs.e2e.result != 'failure') }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -90,7 +90,7 @@ jobs:
     needs: [backend, frontend, e2e]
     if: ${{ always() && (needs.backend.result != 'failure' && needs.frontend.result != 'failure' && needs.e2e.result != 'failure') }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Download backend coverage
       uses: actions/download-artifact@v4
