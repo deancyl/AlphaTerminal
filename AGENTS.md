@@ -7065,6 +7065,101 @@ cd backend && python3 -m py_compile app/routers/fund.py
 
 ---
 
+## v0.6.214 GreeksChart Rendering Fix (2026-05-29)
+
+### Overview
+
+Critical fix for GreeksChart component that prevented options panel from rendering.
+
+### Root Cause
+
+**useElementSize Anti-Pattern**: The `useElementSize` VueUse composable was called inside a render callback function (`setChartRef`), violating Vue 3's Composition API lifecycle rules.
+
+```javascript
+// WRONG: Composable called during render
+function setChartRef(name, el) {
+  if (el) {
+    chartRefs.value[name] = el
+    const { width, height } = useElementSize(el)  // VIOLATION!
+    containerSizes.value[name] = { width, height }
+  }
+}
+```
+
+**Impact**:
+- ResizeObserver instances never received `onUnmounted` cleanup
+- Memory leak: 5 Greeks × N re-renders = 5N leaked observers
+- Reactive refs disconnected from Vue's reactivity system
+- Chart initialization silently failed
+
+### Solution
+
+**Single ResizeObserver Pattern**: Replaced with proper lifecycle management.
+
+```javascript
+let resizeObserver = null
+
+onMounted(() => {
+  resizeObserver = new ResizeObserver(entries => {
+    for (const entry of entries) {
+      const chart = chartInstances.value[entry.target.dataset.greekName]
+      if (chart && !chart.isDisposed()) {
+        chart.resize()
+      }
+    }
+  })
+})
+
+function setChartRef(name, el) {
+  if (el) {
+    chartRefs.value[name] = el
+    el.dataset.greekName = name  // Tag for observer
+    if (resizeObserver) resizeObserver.observe(el)
+  }
+}
+
+onUnmounted(() => {
+  resizeObserver?.disconnect()
+})
+```
+
+### Additional Fixes
+
+| Issue | Solution | Status |
+|-------|----------|--------|
+| waitForContainer infinite loop | Removed async wait, use offsetWidth/Height directly | ✅ Fixed |
+| Missing onDeactivated cleanup | Added for KeepAlive compatibility | ✅ Fixed |
+| validateChainData too strict | Support both calls/puts and chain formats | ✅ Fixed |
+
+### Verification Commands
+
+```bash
+# Test options API
+curl http://localhost:60100/api/v1/options/cffex/chain?symbol=io2506 | jq '.data.calls | length'
+# Expected: 32
+
+# Check ResizeObserver pattern
+grep -c "resizeObserver = new ResizeObserver" frontend/src/components/options/GreeksChart.vue
+# Expected: 1
+
+# Check onDeactivated
+grep -c "onDeactivated" frontend/src/components/options/GreeksChart.vue
+# Expected: 1
+
+# Frontend build
+cd frontend && npm run build
+# Expected: Success
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `GreeksChart.vue` | ResizeObserver pattern, removed useElementSize |
+| `useOptions.js` | Relaxed validateChainData |
+
+---
+
 ## v0.6.211 外汇模块深度审计修复 (2026-05-29)
 
 ### Overview
