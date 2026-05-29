@@ -807,7 +807,15 @@ async def get_price(
 
         logger.debug(f"[AGENT_PRICE] Symbol mapping | original={symbol} mapped={sym}")
 
-        quote = await market_quote(sym)
+        # P0: Add 30s timeout protection
+        AGENT_TIMEOUT = 30.0
+        
+        # P0: Timeout protection for blocking market_quote
+        loop = asyncio.get_running_loop()
+        quote = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), lambda: market_quote(sym)),
+            timeout=AGENT_TIMEOUT
+        )
 
         logger.debug(f"[AGENT_PRICE] Quote fetched | has_data={'data' in quote}")
 

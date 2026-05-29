@@ -242,6 +242,12 @@ onDeactivated(() => {
   }
 })
 
+// P0: Retry function for component initialization errors
+function handleRetry() {
+  componentError.value = null
+  clearWorkflow()
+}
+
 onActivated(() => {
   // Ready for new workflow execution
 })
