@@ -7579,14 +7579,143 @@ cd frontend && npm run build  # Expected: Success
 
 ### Known Issues
 
-- Wave 2 color migration incomplete (347 instances, only ~20% migrated)
-- E2E tests not yet integrated into CI/CD pipeline
+- Wave 2 color migration incomplete (partial completion in v0.6.217)
+- Performance dashboard panel not yet implemented
 - Some frontend components still have hardcoded colors
 
 ### Next Steps
 
-1. Complete Wave 2 color migration (v0.6.217)
-2. Integrate E2E tests into GitHub Actions
-3. Add API response time monitoring middleware
-4. Implement real-time performance dashboard
+1. Complete Wave 2 color migration (v0.6.218)
+2. Add PerformancePanel.vue to AdminDashboard
+3. WebSocket streaming for real-time metrics
+4. Integration tests for performance monitoring
+
+---
+
+## v0.6.217 Performance Monitoring + Theme Enhancement (2026-05-30)
+
+### Overview
+
+Infrastructure release focusing on performance monitoring, theme system enhancement, and CI/CD integration.
+
+### Wave 1: P0 High Priority (All Complete)
+
+| Task | Status | Deliverable |
+|------|--------|-------------|
+| CSS Variables for Indicators | ✅ Complete | 10 new CSS variables in all 4 themes |
+| Response Time Middleware | ✅ Complete | `backend/app/middleware/response_time.py` |
+| CI/CD E2E Integration | ✅ Complete | E2E job in `ci-cd.yml` |
+
+### Wave 2: P2 Medium Priority (Partial)
+
+| Task | Status | Deliverable |
+|------|--------|-------------|
+| Metrics SQLite DB | ✅ Complete | `backend/app/db/metrics_db.py` |
+| ECharts Color Migration | 🔄 Partial | MacroDashboard.vue migrated |
+| CSS Color Migration | ⏳ Pending | Deferred to v0.6.218 |
+| JS Color Migration | ⏳ Pending | Deferred to v0.6.218 |
+
+### New Features
+
+#### 1. Performance Monitoring Infrastructure
+
+**Response Time Middleware** (`backend/app/middleware/response_time.py`):
+- Tracks: endpoint, method, response_time_ms, status_code
+- Adds `X-Response-Time` header to all API responses
+- Skips `/health` and `/metrics` endpoints
+- Normalizes endpoints (replaces IDs with `:id`)
+
+**Prometheus Metrics** (updated `cache_metrics.py`):
+- `api_endpoint_latency_avg_seconds` - Average response time per endpoint
+- `api_endpoint_latency_p95_seconds` - 95th percentile latency
+- `api_endpoint_requests_total` - Request count with status labels
+
+**SQLite Persistence** (`backend/app/db/metrics_db.py`):
+- Table: `api_metrics (timestamp, endpoint, method, response_time_ms, status_code)`
+- Functions: `record_metric()`, `get_metrics_history()`, `get_endpoint_stats()`
+- 7-day retention with auto-cleanup
+
+#### 2. Theme System Enhancement
+
+**New CSS Variables** (all 4 themes):
+```css
+/* Indicator Colors - MA Lines */
+--color-ma5: #F5A623;        /* Golden - MA5 */
+--color-ma10: #0F52BA;       /* Brand Blue - MA10 */
+--color-ma20: #A855F7;       /* Purple - MA20 */
+--color-ma60: #EC4899;       /* Pink - MA60 */
+
+/* Indicator Colors - MACD */
+--color-macd-dif: #60a5fa;   /* Blue-400 - MACD DIF */
+--color-macd-dea: #f87171;   /* Red-400 - MACD DEA */
+--color-macd-hist: #22c55e;  /* Green-500 - MACD Histogram */
+
+/* Overlay & Flat Colors */
+--color-overlay: #f97316;    /* Orange-500 - Overlay */
+--color-oi: #f59e0b;         /* Amber-500 - OI */
+--color-flat: #71717a;       /* Zinc-500 - Flat */
+```
+
+**Updated Functions** (`useTheme.js`):
+- `getIndicatorColors()` - Returns all indicator colors
+- `getThemeColor('ma5')` - Supports named indicator colors
+- Updated `NAMED_COLORS` map with 10 new entries
+
+**Dynamic ECharts Colors** (`echartsTheme.js`):
+- MA colors use `getCSSVar('--color-ma5', ...)` instead of hardcoded
+- MACD colors use CSS variables
+- Charts respond to theme changes automatically
+
+#### 3. CI/CD Integration
+
+**E2E Workflow** (`.github/workflows/e2e-test.yml`):
+- Added `workflow_call:` trigger for reusable workflow
+
+**Main Pipeline** (`.github/workflows/ci-cd.yml`):
+- Added `e2e` job after `frontend` job
+- E2E tests run automatically on every push/PR
+- Pipeline fails if E2E tests fail
+
+### Verification Commands
+
+```bash
+# CSS Variables
+grep -c "color-ma5" frontend/src/style.css  # Expected: 4
+
+# Response Time Middleware
+ls backend/app/middleware/response_time.py  # Should exist
+curl -I http://localhost:8002/api/v1/macro/overview | grep X-Response-Time
+
+# Prometheus Metrics
+curl http://localhost:8002/api/v1/metrics | grep api_endpoint_latency
+
+# CI/CD Integration
+grep "workflow_call:" .github/workflows/e2e-test.yml  # Expected: 1
+grep -A5 "e2e:" .github/workflows/ci-cd.yml  # Expected: job definition
+
+# Frontend Build
+cd frontend && npm run build  # Expected: Success
+```
+
+### Files Modified
+
+| Category | Files | Changes |
+|----------|-------|---------|
+| Backend Middleware | `response_time.py`, `cache_metrics.py`, `main.py` | Response time tracking |
+| Backend DB | `metrics_db.py` | SQLite persistence |
+| Frontend Theme | `style.css`, `useTheme.js`, `echartsTheme.js` | CSS variables + dynamic colors |
+| CI/CD | `e2e-test.yml`, `ci-cd.yml` | E2E integration |
+
+### Known Issues
+
+- Wave 2 color migration incomplete (partial completion in v0.6.217)
+- Performance dashboard panel not yet implemented
+- Some frontend components still have hardcoded colors
+
+### Next Steps
+
+1. Complete Wave 2 color migration (v0.6.218)
+2. Add PerformancePanel.vue to AdminDashboard
+3. WebSocket streaming for real-time metrics
+4. Integration tests for performance monitoring
 
