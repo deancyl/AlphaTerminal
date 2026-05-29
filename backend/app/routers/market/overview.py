@@ -22,9 +22,32 @@ from app.services.fetchers.global_index_fetcher import (
 )
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["market"])
+
+
+def validate_global_index_symbol(symbol: str) -> str:
+    """验证全球指数代码 - whitelist validation (P0-3 security fix)"""
+    # Whitelist of valid index symbols
+    VALID_SYMBOLS = {
+        'DJI', 'IXIC', 'GSPC', 'N225', 'HSI', 'FTSE', 'FCHI', 'GDAXI',
+        'SSEC', 'SZSE', 'CSI300', 'HSCEI', 'SSEC50', 'CSI100',
+        'AU200', 'NZ50', 'KOSPI', 'TWII', 'JKSE', 'BSESN',
+        'RTS', 'MXEF', 'GSPTSE', 'NZSE50', 'AS51'
+    }
+    
+    if not symbol or len(symbol) > 10:
+        raise ValueError("无效的指数代码")
+    
+    # Extract base symbol (remove exchange prefix like 'sh', 'sz', '^')
+    base_symbol = symbol.upper().lstrip('SH').lstrip('SZ').lstrip('^')
+    
+    if base_symbol not in VALID_SYMBOLS:
+        raise ValueError(f"不支持的指数代码: {symbol}")
+    
+    return symbol.upper()
 
 _cache = get_cache()
 NAMESPACE = "overview:"
@@ -516,10 +539,18 @@ async def market_global():
     - Asia-Pacific: N225, HSI, KS11, AXJO, NSEI
     """
     try:
-        from app.services.fetchers.global_index_fetcher import get_global_index_fetcher
-
         fetcher = get_global_index_fetcher()
-        quotes = await fetcher.fetch_all_quotes()
+        loop = asyncio.get_running_loop()
+        
+        # P0-1: Add 30s timeout protection for external API
+        try:
+            quotes = await asyncio.wait_for(
+                loop.run_in_executor(get_executor(), fetcher.fetch_all_quotes),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"[GlobalIndex] fetch_all_quotes timeout after 30s", exc_info=True)
+            return error_response(ErrorCode.TIMEOUT_ERROR, "请求超时，请稍后重试")
 
         global_data = []
         for quote in quotes:
@@ -552,7 +583,7 @@ async def market_global():
         )
     except Exception as e:
         logger.error(f"[market_global] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取全球指数失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 # Alias for backward compatibility
@@ -590,11 +621,24 @@ async def get_global_kline(
         K线数据列表 [{date, open, high, low, close, volume, change_pct}, ...]
     """
     try:
+        # P0-3: Validate symbol parameter (security fix for injection vulnerability)
+        validated_symbol = validate_global_index_symbol(symbol)
+        
         # Normalize symbol: remove ^ prefix if present
-        normalized_symbol = symbol.lstrip("^")
+        normalized_symbol = validated_symbol.lstrip("^")
 
         fetcher = get_global_index_fetcher()
-        klines = await fetcher.fetch_kline_history(normalized_symbol, period, limit)
+        loop = asyncio.get_running_loop()
+        
+        # P0-1: Add 30s timeout protection for external API
+        try:
+            klines = await asyncio.wait_for(
+                loop.run_in_executor(get_executor(), lambda: fetcher.fetch_kline_history(normalized_symbol, period, limit)),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"[GlobalIndex] fetch_kline_history timeout after 30s", exc_info=True)
+            return error_response(ErrorCode.TIMEOUT_ERROR, "请求超时，请稍后重试")
 
         if not klines:
             return error_response(
@@ -613,7 +657,7 @@ async def get_global_kline(
         return error_response(ErrorCode.BAD_REQUEST, str(e))
     except Exception as e:
         logger.error(f"[get_global_kline] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取K线数据失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 @router.get("/market/global/sparkline")
@@ -637,7 +681,17 @@ async def get_global_sparkline(
         normalized_symbol = symbol.lstrip("^")
 
         fetcher = get_global_index_fetcher()
-        sparkline = await fetcher.fetch_sparkline(normalized_symbol, days)
+        loop = asyncio.get_running_loop()
+        
+        # P0-1: Add 30s timeout protection for external API
+        try:
+            sparkline = await asyncio.wait_for(
+                loop.run_in_executor(get_executor(), lambda: fetcher.fetch_sparkline(normalized_symbol, days)),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"[GlobalIndex] fetch_sparkline timeout after 30s", exc_info=True)
+            return error_response(ErrorCode.TIMEOUT_ERROR, "请求超时，请稍后重试")
 
         return success_response(
             {
@@ -648,7 +702,7 @@ async def get_global_sparkline(
         )
     except Exception as e:
         logger.error(f"[get_global_sparkline] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取走势数据失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 @router.get("/market/global/regions")

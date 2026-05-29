@@ -56,67 +56,73 @@
         hint="请检查网络连接或稍后重试" 
       />
       
-      <!-- Data Grid -->
-      <div 
-        v-else 
-        ref="indexGrid"
-        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
-        tabindex="0"
+      <!-- P1-8: Virtual scrolling for performance with 20+ indices -->
+      <VirtualizedTable
+        v-else
+        ref="indexTable"
+        :items="filteredIndexes"
+        :columns="indexColumns"
+        :item-size="100"
+        :selected-id="selectedIndex?.symbol"
+        @row-click="handleRowClick"
         @keydown="handleKeydown"
       >
-        <div
-          v-for="(index, idx) in filteredIndexes"
-          :key="index.symbol"
-          :data-index="idx"
-          class="bg-terminal-panel rounded-sm border p-4 transition cursor-pointer"
-          :class="focusedIndex === idx 
-            ? 'border-terminal-accent ring-1 ring-terminal-accent/30' 
-            : 'border-theme-secondary hover:border-terminal-accent/30'"
-          @click="selectIndex(index)"
-          @mouseenter="focusedIndex = idx"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">{{ index.flag }}</span>
-              <div>
-                <div class="text-sm font-bold text-theme-primary">
-                  {{ index.name }}
-                  <span v-if="index.is_mock" class="text-[10px] text-yellow-500 ml-1">(模拟)</span>
-                </div>
-                <div class="text-[10px] text-theme-muted">{{ index.symbol }}</div>
-              </div>
+        <template #cell-flag="{ item }">
+          <span class="text-lg">{{ item.flag }}</span>
+        </template>
+        <template #cell-name="{ item }">
+          <div>
+            <div class="text-sm font-bold text-theme-primary">
+              {{ item.name }}
+              <span v-if="item.is_mock" class="text-[10px] text-yellow-500 ml-1">(模拟)</span>
             </div>
-            <div class="text-right">
-              <div class="text-lg font-mono font-bold" :class="index.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ index.price?.toFixed(2) || '--' }}
-              </div>
-              <div class="text-xs font-mono" :class="index.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ index.change_pct >= 0 ? '+' : '' }}{{ index.change_pct?.toFixed(2) || '0.00' }}%
-              </div>
+            <div class="text-[10px] text-theme-muted">{{ item.symbol }}</div>
+          </div>
+        </template>
+        <template #cell-price="{ item }">
+          <div class="text-right">
+            <div class="text-lg font-mono font-bold" :class="item.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
+              {{ item.price?.toFixed(2) || '--' }}
+            </div>
+            <div class="text-xs font-mono" :class="item.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
+              {{ item.change_pct >= 0 ? '+' : '' }}{{ item.change_pct?.toFixed(2) || '0.00' }}%
             </div>
           </div>
-          
-          <!-- 迷你走势图 -->
-          <div class="h-16 w-full">
-            <svg viewBox="0 0 100 40" class="w-full h-full" preserveAspectRatio="none">
+        </template>
+        <!-- P2-10: Error state UI for sparkline -->
+        <template #cell-sparkline="{ item }">
+          <div class="h-16 w-full flex items-center justify-center">
+            <!-- Error state -->
+            <div v-if="item.sparklineError" class="flex flex-col items-center gap-1">
+              <p class="text-[10px] text-red-400">{{ item.sparklineError?.message || '加载失败' }}</p>
+              <button
+                class="text-[10px] px-2 py-0.5 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
+                @click.stop="retrySparkline(item)"
+              >
+                重试
+              </button>
+            </div>
+            <!-- Success state -->
+            <svg v-else viewBox="0 0 100 40" class="w-full h-full" preserveAspectRatio="none">
               <polyline
-                v-if="index.sparkline && index.sparkline.length > 1"
-                :points="getSparkline(index.sparkline)"
+                v-if="item.sparkline && item.sparkline.length > 1"
+                :points="getSparkline(item.sparkline)"
                 fill="none"
-                :stroke="index.change_pct >= 0 ? 'var(--color-up)' : 'var(--color-down)'"
+                :stroke="item.change_pct >= 0 ? 'var(--color-up)' : 'var(--color-down)'"
                 stroke-width="1.5"
               />
               <text v-else x="50" y="20" text-anchor="middle" fill="#666" font-size="10">加载中...</text>
             </svg>
           </div>
-          
-          <div class="flex justify-between mt-2 text-[10px] text-theme-muted">
-            <span>开盘: {{ index.open?.toFixed(2) || '--' }}</span>
-            <span>最高: {{ index.high?.toFixed(2) || '--' }}</span>
-            <span>最低: {{ index.low?.toFixed(2) || '--' }}</span>
+        </template>
+        <template #cell-details="{ item }">
+          <div class="flex justify-between text-[10px] text-theme-muted">
+            <span>开: {{ item.open?.toFixed(2) || '--' }}</span>
+            <span>高: {{ item.high?.toFixed(2) || '--' }}</span>
+            <span>低: {{ item.low?.toFixed(2) || '--' }}</span>
           </div>
-        </div>
-      </div>
+        </template>
+      </VirtualizedTable>
 
       <!-- 选中指数的详细图表 -->
       <div v-if="selectedIndex" class="mt-4 rounded-sm border border-theme bg-terminal-panel p-4">
@@ -135,22 +141,32 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick, watch } from 'vue'
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
 import ErrorDisplay from './f9/ErrorDisplay.vue'
 import EmptyState from './f9/EmptyState.vue'
+import VirtualizedTable from './VirtualizedTable.vue'
 
 const loading = ref(false)
 const error = ref('')
 const activeRegion = ref('all')
 const selectedIndex = ref(null)
 const detailChart = ref(null)
-const indexGrid = ref(null)
+const indexTable = ref(null)
 const focusedIndex = ref(0)
 let chart = null
 let abortController = null // AbortController for request cancellation
+
+// P1-8: VirtualizedTable columns for performance with 20+ indices
+const indexColumns = [
+  { key: 'flag', label: '地区', width: '50px', sortable: false },
+  { key: 'name', label: '指数', width: '150px', sortable: true },
+  { key: 'price', label: '价格/涨跌', width: '120px', align: 'right', sortable: true },
+  { key: 'sparkline', label: '走势', width: '100px', sortable: false },
+  { key: 'details', label: 'OHLC', width: '120px', sortable: false }
+]
 
 // localStorage cache key and TTL (5 minutes)
 // CACHE_VERSION: Increment when data format changes to invalidate old cache
@@ -165,8 +181,9 @@ const regions = [
   { id: 'Asia-Pacific', name: '亚太' },
 ]
 
-const allIndexes = ref([])
-const regionData = ref({})
+// P0-4: Use shallowRef for large data arrays to prevent deep reactivity overhead
+const allIndexes = shallowRef([])
+const regionData = shallowRef({})
 
 const mockCount = computed(() => allIndexes.value.filter(i => i.is_mock).length)
 
@@ -187,7 +204,7 @@ function getRegionCount(regionId) {
 
 watch(activeRegion, () => {
   focusedIndex.value = 0
-  nextTick(() => indexGrid.value?.focus())
+  nextTick(() => indexTable.value?.focus())
 })
 
 function getSparkline(data) {
@@ -203,12 +220,40 @@ function getSparkline(data) {
   }).join(' ')
 }
 
+// P2-10: Retry sparkline fetch for individual index
+async function retrySparkline(index) {
+  if (!index || index.is_mock) return
+  
+  // Clear error state
+  index.sparklineError = null
+  
+  try {
+    const sparkResp = await apiFetch(`/api/v1/market/global/sparkline?symbol=${index.symbol}&days=20`, {
+      timeoutMs: 5000
+    })
+    index.sparkline = sparkResp?.data?.data || []
+  } catch (e) {
+    index.sparklineError = {
+      message: '数据加载失败',
+      error: e
+    }
+    index.sparkline = []
+  }
+}
+
 async function selectIndex(index) {
   selectedIndex.value = index
   await nextTick()
   await new Promise(resolve => requestAnimationFrame(resolve))
   await new Promise(resolve => requestAnimationFrame(resolve))
   await renderDetailChart()
+}
+
+// P1-8: VirtualizedTable row click handler
+function handleRowClick(item) {
+  if (item) {
+    selectIndex(item)
+  }
 }
 
 async function renderDetailChart() {
@@ -401,7 +446,7 @@ onMounted(() => {
     setTimeout(() => refreshAll(), 1000)
   }
   window.addEventListener('resize', handleResize)
-  nextTick(() => indexGrid.value?.focus())
+  nextTick(() => indexTable.value?.focus())
 })
 
 onBeforeUnmount(() => {
@@ -483,9 +528,7 @@ function handleKeydown(e) {
 }
 
 function scrollToFocused() {
-  nextTick(() => {
-    const el = indexGrid.value?.querySelector(`[data-index="${focusedIndex.value}"]`)
-    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-  })
+  // P1-8: VirtualizedTable handles scrolling internally
+  // This function is kept for compatibility but no longer needed
 }
 </script>

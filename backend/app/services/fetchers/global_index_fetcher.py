@@ -279,7 +279,9 @@ class GlobalIndexFetcher:
                 success_count += 1
                 results.append(quote)
 
-        if success_count > failure_count:
+        # P1-5: Record success on fallback success, failure only when both fail
+        # If we have any results (from live data, cache, or mock fallback), it's a success
+        if results and len(results) > 0:
             _GLOBAL_INDEX_CB.record_success()
         else:
             _GLOBAL_INDEX_CB.record_failure()
