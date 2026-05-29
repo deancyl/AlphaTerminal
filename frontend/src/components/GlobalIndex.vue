@@ -166,6 +166,9 @@ import VirtualizedTable from './VirtualizedTable.vue'
 
 const loading = ref(false)
 const error = ref('')
+
+// P0: Error state for component initialization errors
+const componentError = ref(null)
 const activeRegion = ref('all')
 const selectedIndex = ref(null)
 const detailChart = ref(null)
@@ -463,6 +466,12 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
   nextTick(() => indexTable.value?.focus())
 })
+
+// P0: Retry function for component initialization errors
+function handleRetry() {
+  componentError.value = null
+  refreshAll()
+}
 
 onBeforeUnmount(() => {
   // Cancel pending requests

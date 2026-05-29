@@ -371,18 +371,18 @@ defineExpose({
   font-size: 11px;
   font-family: monospace;
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-gray-200);
   min-width: 50px;
   text-align: right;
 }
 
 .price-value.up {
-  color: #ef4444;
+  color: var(--color-bull);
   border-color: rgba(239, 68, 68, 0.5);
 }
 
 .price-value.down {
-  color: #22c55e;
+  color: var(--color-bear);
   border-color: rgba(34, 197, 94, 0.5);
 }
 
@@ -402,7 +402,7 @@ defineExpose({
   padding: 2px 8px;
   font-size: 10px;
   font-family: monospace;
-  color: #9ca3af;
+  color: var(--text-gray-400);
   white-space: nowrap;
 }
 
@@ -427,7 +427,7 @@ defineExpose({
 
 .tooltip-date {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-gray-400);
   font-weight: 500;
 }
 
@@ -440,22 +440,22 @@ defineExpose({
 }
 
 .tooltip-row .label {
-  color: #6b7280;
+  color: var(--text-gray-500);
   min-width: 24px;
 }
 
 .tooltip-row .value {
   font-family: monospace;
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-gray-200);
 }
 
 .tooltip-row .value.up {
-  color: #ef4444;
+  color: var(--color-bull);
 }
 
 .tooltip-row .value.down {
-  color: #22c55e;
+  color: var(--color-bear);
 }
 
 .tooltip-row.volume {

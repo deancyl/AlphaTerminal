@@ -255,14 +255,14 @@ onActivated(() => {
 
 <style scoped>
 .copilot-markdown {
-  color: #e5e7eb;
+  color: var(--text-gray-200);
 }
 
 .copilot-markdown h1 {
   font-size: 1.5rem;
   font-weight: 600;
   margin-bottom: 1rem;
-  color: #f3f4f6;
+  color: var(--text-slate-100);
 }
 
 .copilot-markdown h2 {
@@ -270,7 +270,7 @@ onActivated(() => {
   font-weight: 600;
   margin-top: 1.5rem;
   margin-bottom: 0.75rem;
-  color: #f3f4f6;
+  color: var(--text-slate-100);
 }
 
 .copilot-markdown table {

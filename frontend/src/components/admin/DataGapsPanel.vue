@@ -1,5 +1,20 @@
 <template>
-  <div class="space-y-6">
+  <!-- P0: Error state UI -->
+  <div v-if="componentError" class="flex flex-col items-center justify-center p-8 min-h-[300px]" role="alert" aria-live="assertive">
+    <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
+    <div class="text-lg text-terminal-dim mb-2">数据缺口雷达加载失败</div>
+    <div class="text-sm text-theme-muted mb-4 max-w-md text-center">{{ componentError.message }}</div>
+    <button
+      class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
+      @click="handleRetry"
+      aria-label="重试加载"
+      type="button"
+    >
+      重试
+    </button>
+  </div>
+
+  <div v-else class="space-y-6">
     <h2 class="text-lg font-bold text-theme-primary">📡 数据缺口雷达</h2>
     <p class="text-xs text-theme-muted">监控缺失的市场数据，一键回填补全</p>
 
@@ -227,6 +242,9 @@ const startDate = ref('')
 const endDate = ref('')
 const dataType = ref('kline')
 
+// P0: Error state for component initialization errors
+const componentError = ref(null)
+
 const scanning = ref(false)
 const backfilling = ref(false)
 const scanResult = ref(null)
@@ -426,6 +444,12 @@ onMounted(() => {
     loadCalendarData()
   })
 })
+
+// P0: Retry function for component initialization errors
+function handleRetry() {
+  componentError.value = null
+  loadCalendarData()
+}
 
 // P0: KeepAlive cleanup
 onBeforeUnmount(() => {

@@ -1,5 +1,20 @@
 <template>
-  <div class="space-y-4">
+  <!-- P0: Error state UI -->
+  <div v-if="componentError" class="flex flex-col items-center justify-center p-8 min-h-[300px]" role="alert" aria-live="assertive">
+    <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
+    <div class="text-lg text-terminal-dim mb-2">回测沙箱监控加载失败</div>
+    <div class="text-sm text-theme-muted mb-4 max-w-md text-center">{{ componentError.message }}</div>
+    <button
+      class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
+      @click="handleRetry"
+      aria-label="重试加载"
+      type="button"
+    >
+      重试
+    </button>
+  </div>
+
+  <div v-else class="space-y-4">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-bold text-theme-primary">🔬 回测沙箱监控</h2>
       <div class="flex items-center gap-2">
@@ -150,6 +165,9 @@ import { apiFetch } from '../../utils/api.js'
 import { toast } from '../../composables/useToast.js'
 import { logger } from '../../utils/logger.js'
 
+// P0: Error state for component initialization errors
+const componentError = ref(null)
+
 const workers = ref([])
 const summary = reactive({
   total_workers: 0,
@@ -282,6 +300,12 @@ onMounted(() => {
   refreshMetrics()
   connectWebSocket()
 })
+
+// P0: Retry function for component initialization errors
+function handleRetry() {
+  componentError.value = null
+  refreshMetrics()
+}
 
 onUnmounted(() => {
   disconnectWebSocket()

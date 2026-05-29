@@ -1,5 +1,20 @@
 <template>
-  <div class="space-y-6">
+  <!-- P0: Error state UI -->
+  <div v-if="componentError" class="flex flex-col items-center justify-center p-8 min-h-[300px]" role="alert" aria-live="assertive">
+    <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
+    <div class="text-lg text-terminal-dim mb-2">审计回放加载失败</div>
+    <div class="text-sm text-theme-muted mb-4 max-w-md text-center">{{ componentError.message }}</div>
+    <button
+      class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
+      @click="handleRetry"
+      aria-label="重试加载"
+      type="button"
+    >
+      重试
+    </button>
+  </div>
+
+  <div v-else class="space-y-6">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-lg font-bold text-theme-primary">📜 审计回放</h2>
@@ -172,6 +187,9 @@ import { ref, computed, watch, onMounted, onDeactivated, onActivated } from 'vue
 
 const emit = defineEmits(['refresh', 'verify-chain', 'rollback', 'fetch-timeline', 'fetch-diff', 'fetch-record'])
 
+// P0: Error state for component initialization errors
+const componentError = ref(null)
+
 const timeline = ref([])
 const timelineIndex = ref(0)
 const chainValid = ref(true)
@@ -273,6 +291,13 @@ defineExpose({
   setChainStatus,
   setDiffData
 })
+
+// P0: Retry function for component initialization errors
+function handleRetry() {
+  componentError.value = null
+  fetchTimeline()
+  verifyChain()
+}
 
 onMounted(() => {
   fetchTimeline()

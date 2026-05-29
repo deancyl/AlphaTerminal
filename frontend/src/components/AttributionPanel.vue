@@ -143,7 +143,8 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { safeDispose } from '../utils/chartManager.js'
-import { getDynamicMarketColors } from '../utils/echartsTheme.js'
+import { getDynamicMarketColors, getDynamicChartColors, getDynamicThemeColors } from '../utils/echartsTheme.js'
+import { onThemeChange } from '../composables/useTheme.js'
 import ErrorDisplay from './f9/ErrorDisplay.vue'
 
 const props = defineProps({
@@ -212,6 +213,9 @@ function renderPie() {
   if (pieChart) { pieChart.dispose(); pieChart = null }
 
   const exposure = data.value.total_exposure
+  const marketColors = getDynamicMarketColors()
+  const chartColors = getDynamicChartColors()
+  const themeColors = getDynamicThemeColors()
   const COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#c084fc', '#38bdf8', '#4ade80', '#fb923c']
 
   pieChart = window.echarts.init(pieEl.value, 'dark')
@@ -219,13 +223,14 @@ function renderPie() {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
-      backgroundColor: '#1e2130', borderColor: '#374151',
-      textStyle: { color: '#d1d5db', fontSize: 10 },
+      backgroundColor: chartColors.TOOLTIP_BG,
+      borderColor: chartColors.TOOLTIP_BORDER,
+      textStyle: { color: chartColors.TOOLTIP_TEXT, fontSize: 10 },
       formatter: (p) => `${p.name}<br/>市值: ${fmtYuan(p.value)}<br/>权重: ${p.percent?.toFixed(1)}%`,
     },
     legend: {
       orient: 'vertical', right: 2, top: 'center',
-      textStyle: { color: '#9ca3af', fontSize: 9 },
+      textStyle: { color: themeColors.axisLabel, fontSize: 9 },
       itemWidth: 8, itemHeight: 8,
     },
     series: [{
@@ -248,6 +253,8 @@ function renderBar() {
 
   const attr = data.value.attribution
   const marketColors = getDynamicMarketColors()
+  const chartColors = getDynamicChartColors()
+  const themeColors = getDynamicThemeColors()
   const COLORS = attr.map(a => (a.pnl || 0) >= 0 ? marketColors.UP : marketColors.DOWN)
 
   barChart = window.echarts.init(barEl.value, 'dark')
@@ -256,8 +263,9 @@ function renderBar() {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      backgroundColor: '#1e2130', borderColor: '#374151',
-      textStyle: { color: '#d1d5db', fontSize: 10 },
+      backgroundColor: chartColors.TOOLTIP_BG,
+      borderColor: chartColors.TOOLTIP_BORDER,
+      textStyle: { color: chartColors.TOOLTIP_TEXT, fontSize: 10 },
       formatter: (items) => {
         const it = items[0]
         return `${it.name}<br/><b style="color:${it.color}">${it.value >= 0 ? '+' : ''}${fmtYuan(it.value)}</b>`
@@ -267,16 +275,16 @@ function renderBar() {
     xAxis: {
       type: 'category',
       data: attr.map(a => a.sub_category),
-      axisLabel: { color: '#6b7280', fontSize: 8, rotate: 20, interval: 0 },
-      axisLine: { lineStyle: { color: '#374151' } },
+      axisLabel: { color: themeColors.axisLabel, fontSize: 8, rotate: 20, interval: 0 },
+      axisLine: { lineStyle: { color: chartColors.AXIS_LINE } },
     },
     yAxis: {
       type: 'value',
       axisLabel: {
-        color: '#6b7280', fontSize: 8,
+        color: themeColors.axisLabel, fontSize: 8,
         formatter: (v) => Math.abs(v) >= 1e4 ? (v / 1e4).toFixed(0) + 'w' : v.toFixed(0),
       },
-      splitLine: { lineStyle: { color: '#1f2937' } },
+      splitLine: { lineStyle: { color: chartColors.SPLIT_LINE } },
     },
     series: [{
       type: 'bar',
@@ -288,7 +296,7 @@ function renderBar() {
       label: {
         show: true,
         position: 'top',
-        color: '#9ca3af',
+        color: themeColors.axisLabel,
         fontSize: 8,
         formatter: (p) => `${p.value >= 0 ? '+' : ''}${(p.value / 1e4).toFixed(1)}w`,
       },
@@ -297,14 +305,20 @@ function renderBar() {
 }
 
 // ── 生命周期 ──────────────────────────────────────────────────
+let _unsubscribeTheme = null
+
 onMounted(() => {
   loadAttribution()
+  _unsubscribeTheme = onThemeChange(() => {
+    renderCharts()
+  })
 })
 
 onBeforeUnmount(() => {
   safeDispose(pieChart)
   safeDispose(barChart)
   pieChart = barChart = null
+  _unsubscribeTheme?.()
 })
 
 watch([() => props.portfolioId, includeChildren], () => {

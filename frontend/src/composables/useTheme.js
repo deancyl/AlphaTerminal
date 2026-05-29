@@ -42,8 +42,83 @@ export function onThemeChange(cb) {
   return () => themeChangeCallbacks.delete(cb)
 }
 
-export function getThemeColor(varName, fallback = '') {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback
+/**
+ * Get theme color by name or CSS variable.
+ * 
+ * @param {string} nameOrVar - Either a named color ('primary', 'warning', etc.) 
+ *                              or CSS variable ('--color-primary')
+ * @param {string} fallback - Fallback value if color not found
+ * @returns {string} Color value
+ * 
+ * Named colors map:
+ *   - 'primary' → --color-primary (brand accent)
+ *   - 'bull' / 'up' → --color-bull (上涨 color)
+ *   - 'bear' / 'down' → --color-bear (下跌 color)
+ *   - 'warning' → Standard warning yellow (#fbbf24)
+ *   - 'success' → Standard success green (#22c55e)
+ *   - 'error' → Standard error red (#ef4444)
+ *   - 'info' → Standard info blue (#3b82f6)
+ *   - 'bg-base', 'bg-surface', 'text-primary', etc. → Corresponding CSS vars
+ */
+export function getThemeColor(nameOrVar, fallback = '') {
+  // Named color map (semantic aliases)
+  const NAMED_COLORS = {
+    // Brand colors
+    'primary': '--color-primary',
+    'primary-hover': '--color-primary-hover',
+    
+    // Market colors (涨跌)
+    'bull': '--color-bull',
+    'up': '--color-bull',
+    'bear': '--color-bear',
+    'down': '--color-bear',
+    'bull-light': '--color-bull-light',
+    'bear-light': '--color-bear-light',
+    
+    // Background colors
+    'bg-base': '--bg-base',
+    'bg-surface': '--bg-surface',
+    'bg-surface-hover': '--bg-surface-hover',
+    
+    // Text colors
+    'text-primary': '--text-primary',
+    'text-secondary': '--text-secondary',
+    'text-muted': '--text-muted',
+    
+    // Border colors
+    'border-base': '--border-base',
+    'border-light': '--border-light',
+    
+    // Chart colors
+    'chart-grid': '--chart-grid',
+    'chart-text': '--chart-text',
+    'chart-line': '--chart-line',
+    
+    // Semantic colors (standard values, not CSS vars)
+    'warning': '#fbbf24',
+    'success': '#22c55e',
+    'error': '#ef4444',
+    'info': '#3b82f6',
+  }
+  
+  // If it's a named color, get the CSS var or return the value
+  if (NAMED_COLORS[nameOrVar]) {
+    const mapped = NAMED_COLORS[nameOrVar]
+    // If mapped starts with '--', it's a CSS variable
+    if (mapped.startsWith('--')) {
+      return getComputedStyle(document.documentElement).getPropertyValue(mapped).trim() || fallback
+    }
+    // Otherwise it's a direct color value (like standard semantic colors)
+    return mapped
+  }
+  
+  // If it starts with '--', treat as CSS variable
+  if (nameOrVar.startsWith('--')) {
+    return getComputedStyle(document.documentElement).getPropertyValue(nameOrVar).trim() || fallback
+  }
+  
+  // Return fallback if not found
+  return fallback || nameOrVar
 }
 
 export function getChartColors() {

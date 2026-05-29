@@ -4,7 +4,8 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { getDynamicMarketColors } from '../utils/echartsTheme.js'
+import { getDynamicMarketColors, getDynamicChartColors, getDynamicThemeColors } from '../utils/echartsTheme.js'
+import { onThemeChange } from '../composables/useTheme.js'
 
 const props = defineProps({
   // 格式: [{ date, open, high, low, close, volume }, ...]
@@ -24,6 +25,8 @@ function buildOption() {
   if (!hist || hist.length === 0) return {}
   
   const marketColors = getDynamicMarketColors()
+  const chartColors = getDynamicChartColors()
+  const themeColors = getDynamicThemeColors()
   const UP = marketColors.UP
   const DOWN = marketColors.DOWN
 
@@ -93,14 +96,15 @@ function buildOption() {
     animation: false,
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'cross', crossStyle: { color: '#555' } },
-      backgroundColor: '#1e2130', borderColor: '#374151',
-      textStyle: { color: '#d1d5db', fontSize: 11 },
+      axisPointer: { type: 'cross', crossStyle: { color: chartColors.CROSSHAIR } },
+      backgroundColor: chartColors.TOOLTIP_BG,
+      borderColor: chartColors.TOOLTIP_BORDER,
+      textStyle: { color: chartColors.TOOLTIP_TEXT, fontSize: 11 },
     },
     legend: {
       show: true,
       bottom: 0,
-      textStyle: { color: '#9ca3af', fontSize: 10 },
+      textStyle: { color: themeColors.axisLabel, fontSize: 10 },
       data: ['K线', '买入', '卖出', '资金曲线'],
     },
     grid: [
@@ -111,25 +115,25 @@ function buildOption() {
       {
         type: 'category', data: times, gridIndex: 0,
         axisLabel: { show: false },
-        axisLine: { lineStyle: { color: '#374151' } },
+        axisLine: { lineStyle: { color: chartColors.AXIS_LINE } },
       },
       {
         type: 'category', data: times, gridIndex: 1,
-        axisLabel: { show: true, fontSize: 9, color: '#6b7280' },
-        axisLine: { lineStyle: { color: '#374151' } },
+        axisLabel: { show: true, fontSize: 9, color: themeColors.axisLabel },
+        axisLine: { lineStyle: { color: chartColors.AXIS_LINE } },
       },
     ],
     yAxis: [
       {
         type: 'value', gridIndex: 0, scale: true,
         min: yMin, max: yMax,
-        splitLine: { lineStyle: { color: '#1f2937' } },
-        axisLabel: { color: '#6b7280', fontSize: 9 },
+        splitLine: { lineStyle: { color: chartColors.SPLIT_LINE } },
+        axisLabel: { color: themeColors.axisLabel, fontSize: 9 },
       },
       {
         type: 'value', gridIndex: 1,
         splitLine: { show: false },
-        axisLabel: { color: '#6b7280', fontSize: 9, formatter: (v) => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v.toFixed(0) },
+        axisLabel: { color: themeColors.axisLabel, fontSize: 9, formatter: (v) => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v.toFixed(0) },
       },
     ],
     series: [
@@ -166,7 +170,7 @@ function buildOption() {
         data: equityData,
         xAxisIndex: 1, yAxisIndex: 1,
         symbol: 'none',
-        lineStyle: { color: '#60a5fa', width: 1.5 },
+        lineStyle: { color: themeColors.ma5, width: 1.5 },
         tooltip: {
           formatter: (p) => `资金曲线<br/>${times[p.dataIndex] || ''}: ${p.value?.[1]?.toFixed(2) ?? '-'}`
         },
@@ -177,9 +181,9 @@ function buildOption() {
       {
         type: 'slider', xAxisIndex: [0, 1],
         bottom: 0, height: 16,
-        borderColor: '#374151', fillerColor: 'rgba(96,165,250,0.1)',
-        handleStyle: { color: '#60a5fa' },
-        textStyle: { color: '#6b7280', fontSize: 9 },
+        borderColor: chartColors.AXIS_LINE, fillerColor: themeColors.primaryBg,
+        handleStyle: { color: themeColors.primary },
+        textStyle: { color: themeColors.axisLabel, fontSize: 9 },
       },
     ],
   }

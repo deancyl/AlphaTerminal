@@ -121,6 +121,27 @@
     --color-neutral-bg: rgba(176, 184, 204, 0.12);
     --color-neutral-border: rgba(176, 184, 204, 0.28);
 
+    /* ── 扩展文本色（用于组件迁移）── */
+    --text-gray-200: #e5e7eb;
+    --text-gray-300: #d1d5db;
+    --text-gray-400: #9ca3af;
+    --text-gray-500: #6b7280;
+    --text-gray-600: #4b5563;
+    --text-gray-700: #374151;
+    --text-gray-800: #1f2937;
+    --text-gray-900: #111827;
+    --text-slate-50: #f8fafc;
+    --text-slate-100: #f1f5f9;
+    --text-slate-200: #e2e8f0;
+
+    /* ── 扩展背景色（用于组件迁移）── */
+    --bg-gray-50: #f9fafb;
+    --bg-gray-100: #f3f4f6;
+    --bg-gray-200: #e5e7eb;
+    --bg-blue-50: #f0f9ff;
+    --bg-white: #ffffff;
+    --bg-black: #000000;
+
     /* ── 功能状态色 ── */
     --color-warning: #FFCC00;
     --color-warning-bg: rgba(255, 204, 0, 0.18);
@@ -213,6 +234,27 @@
     --color-neutral: #B0B8CC;
     --color-neutral-bg: rgba(176, 184, 204, 0.10);
     --color-neutral-border: rgba(176, 184, 204, 0.25);
+
+    /* ── 扩展文本色（用于组件迁移）── */
+    --text-gray-200: #e5e7eb;
+    --text-gray-300: #d1d5db;
+    --text-gray-400: #9ca3af;
+    --text-gray-500: #6b7280;
+    --text-gray-600: #4b5563;
+    --text-gray-700: #374151;
+    --text-gray-800: #1f2937;
+    --text-gray-900: #111827;
+    --text-slate-50: #f8fafc;
+    --text-slate-100: #f1f5f9;
+    --text-slate-200: #e2e8f0;
+
+    /* ── 扩展背景色（用于组件迁移）── */
+    --bg-gray-50: #f9fafb;
+    --bg-gray-100: #f3f4f6;
+    --bg-gray-200: #e5e7eb;
+    --bg-blue-50: #f0f9ff;
+    --bg-white: #ffffff;
+    --bg-black: #000000;
 
     /* ── 功能状态色 ── */
     --color-warning: #FAAD14;
@@ -308,6 +350,27 @@
     --color-neutral-bg: rgba(148, 163, 184, 0.10);
     --color-neutral-border: rgba(148, 163, 184, 0.25);
 
+    /* ── 扩展文本色（用于组件迁移）── */
+    --text-gray-200: #e5e7eb;   /* gray-200 */
+    --text-gray-300: #d1d5db;   /* gray-300 */
+    --text-gray-400: #9ca3af;   /* gray-400 */
+    --text-gray-500: #6b7280;   /* gray-500 */
+    --text-gray-600: #4b5563;   /* gray-600 */
+    --text-gray-700: #374151;   /* gray-700 */
+    --text-gray-800: #1f2937;   /* gray-800 */
+    --text-gray-900: #111827;   /* gray-900 */
+    --text-slate-50: #f8fafc;   /* slate-50 */
+    --text-slate-100: #f1f5f9;  /* slate-100 */
+    --text-slate-200: #e2e8f0;  /* slate-200 */
+
+    /* ── 扩展背景色（用于组件迁移）── */
+    --bg-gray-50: #f9fafb;     /* gray-50 */
+    --bg-gray-100: #f3f4f6;    /* gray-100 */
+    --bg-gray-200: #e5e7eb;    /* gray-200 */
+    --bg-blue-50: #f0f9ff;     /* blue-50 */
+    --bg-white: #ffffff;       /* white */
+    --bg-black: #000000;       /* black */
+
     /* ── 功能状态色 ── */
     --color-warning: #f59e0b; /* amber-500 */
     --color-warning-bg: rgba(245, 158, 11, 0.15);
@@ -401,6 +464,27 @@
     --color-neutral: #64748b;  /* slate-500 */
     --color-neutral-bg: rgba(100, 116, 139, 0.10);
     --color-neutral-border: rgba(100, 116, 139, 0.20);
+
+    /* ── 扩展文本色（用于组件迁移）── */
+    --text-gray-200: #e5e7eb;
+    --text-gray-300: #d1d5db;
+    --text-gray-400: #9ca3af;
+    --text-gray-500: #6b7280;
+    --text-gray-600: #4b5563;
+    --text-gray-700: #374151;
+    --text-gray-800: #1f2937;
+    --text-gray-900: #111827;
+    --text-slate-50: #f8fafc;
+    --text-slate-100: #f1f5f9;
+    --text-slate-200: #e2e8f0;
+
+    /* ── 扩展背景色（用于组件迁移）── */
+    --bg-gray-50: #f9fafb;
+    --bg-gray-100: #f3f4f6;
+    --bg-gray-200: #e5e7eb;
+    --bg-blue-50: #f0f9ff;
+    --bg-white: #ffffff;
+    --bg-black: #000000;
 
     /* ── 功能状态色 ── */
     --color-warning: #f59e0b; /* amber-500 */
