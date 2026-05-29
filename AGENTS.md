@@ -7249,6 +7249,94 @@ return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 - Error history: `error_history_db.py` (7-day retention)
 
 **Gaps Identified** (deferred to v0.7.0):
+
+---
+
+## Options Module Top 10 QA/UX Fixes (v0.6.213)
+
+### Overview
+
+A comprehensive fix for 10 critical QA/UX issues in the Options Analysis module based on deep audit findings.
+
+### P0 Critical Fixes (4 issues)
+
+| Issue | CWE | Solution | Status |
+|-------|-----|----------|--------|
+| Error message information disclosure | CWE-209 | Replace `str(e)` with `sanitize_error(e)` | ✅ Fixed |
+| Missing rate limiting protection | - | Add `options` category (30 req/60s) | ✅ Fixed |
+| Parameter injection vulnerability | CWE-20 | Regex/whitelist validation for symbol/code/exchange | ✅ Fixed |
+| GreeksChart container not ready | - | Replace `setTimeout` with `useElementSize` | ✅ Fixed |
+
+### P1 High Priority Fixes (4 issues)
+
+| Issue | Solution | Status |
+|-------|----------|--------|
+| No virtual scrolling for large chains | Replace v-for with VirtualizedTable | ✅ Fixed |
+| No API data validation | Add `validateChainData()` function | ✅ Fixed |
+| Circuit breaker failure not recorded | Add `record_failure()` in exception handler | ✅ Fixed |
+| Missing timeout protection | Add 30s `asyncio.wait_for` | ✅ Fixed |
+
+### P2 Medium Priority Fixes (2 issues)
+
+| Issue | Solution | Status |
+|-------|----------|--------|
+| Black-Scholes boundary handling | Add parameter validation at entry | ✅ Fixed |
+| maxOI Infinity error | Add filter and length check | ✅ Fixed |
+
+### Files Modified
+
+| Category | Files |
+|----------|-------|
+| Backend | `options.py`, `rate_limit.py`, `options_fetcher.py`, `black_scholes.py` |
+| Frontend | `GreeksChart.vue`, `OptionsDashboard.vue`, `useOptions.js` |
+
+### Security Improvements
+
+| Vulnerability | CWE | Mitigation |
+|--------------|-----|------------|
+| Information Disclosure | CWE-209 | `sanitize_error()` replaces `str(e)` |
+| Input Validation | CWE-20 | Regex + whitelist + length limits |
+| Divide By Zero | CWE-369 | Parameter boundary checks |
+
+### Performance Improvements
+
+- **Virtual Scrolling**: 100+ row chains from O(N) DOM nodes to O(visible)
+- **Rate Limiting**: 30 requests per 60 seconds for DDoS protection
+- **Timeout Protection**: 30s timeout prevents request hanging
+
+### Verification Commands
+
+```bash
+# P0-1: Error sanitization
+grep -c "sanitize_error" backend/app/routers/options.py  # Expected: 6
+
+# P0-2: Rate limiting
+grep -c '"options"' backend/app/config/rate_limit.py  # Expected: 2
+
+# P0-3: Parameter validation
+grep -c "validate_option_symbol\|validate_contract_code\|validate_exchange" backend/app/routers/options.py  # Expected: 6
+
+# P0-4: GreeksChart container
+grep -c "useElementSize" frontend/src/components/options/GreeksChart.vue  # Expected: 2
+
+# P1-5: Virtual scrolling
+grep -c "VirtualizedTable" frontend/src/components/options/OptionsDashboard.vue  # Expected: 3
+
+# P1-6: Data validation
+grep -c "validateChainData" frontend/src/composables/useOptions.js  # Expected: 2
+
+# P1-7: CB recording
+grep -c "record_failure()" backend/app/services/fetchers/options_fetcher.py  # Expected: 7
+
+# P1-8: Timeout protection
+grep -c "asyncio.wait_for" backend/app/routers/options.py  # Expected: 3
+
+# P2-9: Black-Scholes boundary
+grep -c "raise ValueError" backend/app/services/pricing/black_scholes.py  # Expected: 3
+
+# P2-10: maxOI fix
+grep -c "allOI.length === 0" frontend/src/components/options/OptionsDashboard.vue  # Expected: 1
+```
 - API response time middleware
 - Real-time performance dashboard
 - Error rate alerting
