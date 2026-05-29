@@ -12,6 +12,7 @@ Agent Gateway Router - AI Agent API 端点
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 import logging
@@ -19,6 +20,9 @@ import traceback
 from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, Query
 from pydantic import BaseModel, Field
+
+from app.utils.errors import error_response, ErrorCode
+from app.utils.executor import get_executor
 
 # Configure comprehensive logging for 20 debug cycles
 logger = logging.getLogger(__name__)
@@ -37,14 +41,17 @@ if DEBUG_MODE:
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
-from ..services.agent.token_service import (
+from app.db.database import _get_conn
+from app.services.agent.token_service import (
     AgentTokenService,
     TokenScope,
     Market,
 )
-from ..middleware.agent_auth import verify_agent_token, require_scope
+from app.middleware.agent_auth import verify_agent_token, require_scope
 from app.utils.error_decorator import handle_errors
 from app.utils.error_sanitizer import sanitize_error
+from app.utils.executor import get_executor
+from app.utils.errors import error_response, ErrorCode
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pydantic Models

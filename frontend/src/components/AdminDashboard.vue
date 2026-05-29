@@ -231,7 +231,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, shallowReactive, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, reactive, shallowReactive, onMounted, onUnmounted, onDeactivated, onActivated, watch, computed } from 'vue'
 import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
 import { toast } from '../composables/useToast.js'
@@ -990,6 +990,22 @@ onMounted(() => {
     error.value = e.message || '加载管理面板失败'
     loading.value = false
   })
+})
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Disconnect WebSocket for logs
+  if (wsConnected.value) {
+    disconnectLogsWs()
+  }
+})
+
+onActivated(() => {
+  // Reconnect WebSocket and refresh data
+  if (!wsConnected.value) {
+    connectLogsWs()
+  }
+  refreshLogs()
 })
 </script>
 

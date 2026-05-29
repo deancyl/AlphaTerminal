@@ -9,6 +9,7 @@ Endpoints:
 - GET /api/v1/agentic/workflow/{id} - Get workflow status
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -17,9 +18,9 @@ from pydantic import BaseModel, Field
 
 from app.services.agentic.workflow_engine import get_workflow_engine, WorkflowStatus
 from app.services.agentic.tool_registry import get_tool_registry
-from app.utils.errors import success_response, error_response
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.error_decorator import handle_errors
-from app.utils.error_sanitizer import sanitize_error
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -70,12 +71,20 @@ async def create_workflow(request: WorkflowRequest, background_tasks: Background
     Returns:
         Workflow ID and initial status
     """
+    # P0: Add 30s timeout protection
+    AGENTIC_TIMEOUT = 30.0
+    
     if not request.query or not request.query.strip():
-        return error_response("Query cannot be empty", code=400)
+        return error_response(ErrorCode.VALIDATION_ERROR, "Query cannot be empty")
 
     engine = get_workflow_engine()
 
-    workflow = engine.plan_workflow(request.query.strip())
+    # P0: Timeout protection for blocking plan_workflow
+    loop = asyncio.get_running_loop()
+    workflow = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), engine.plan_workflow, request.query.strip()),
+        timeout=AGENTIC_TIMEOUT
+    )
 
     if request.execute:
 
