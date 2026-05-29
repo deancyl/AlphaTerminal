@@ -1753,22 +1753,32 @@ async def get_job_status(
     token: Any = Depends(require_scope(TokenScope.READ)),
 ):
     """查询任务状态"""
+    # P0: Add 30s timeout protection
+    AGENT_TIMEOUT = 30.0
+    
     # 审计日志
     service = get_token_service()
     service.log_audit(token.id, "get_job_status", f"/jobs/{job_id}")
 
     # TODO: 实现实际的 job 状态查询
-    return JobStatusResponse(
-        job_id=job_id,
-        status="completed",
-        progress=1.0,
-        result={
-            "total_return": 0.15,
-            "annual_return": 0.18,
-            "sharpe_ratio": 1.5,
-            "max_drawdown": 0.08,
-        },
+    # P0: Timeout protection for simulated job status query
+    loop = asyncio.get_running_loop()
+    result = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), lambda: {
+            "job_id": job_id,
+            "status": "completed",
+            "progress": 1.0,
+            "result": {
+                "total_return": 0.15,
+                "annual_return": 0.18,
+                "sharpe_ratio": 1.5,
+                "max_drawdown": 0.08,
+            },
+        }),
+        timeout=AGENT_TIMEOUT
     )
+
+    return JobStatusResponse(**result)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

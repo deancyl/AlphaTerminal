@@ -226,9 +226,24 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
 @handle_errors(module="news")
 async def video_transcript(video_id: str):
     """YouTube 字幕（走代理）"""
+    # P0: Add 30s timeout protection
+    NEWS_TIMEOUT = 30.0
     from app.services.news_fetcher import fetch_youtube_transcript
+    from app.utils.executor import get_executor
 
-    return fetch_youtube_transcript(video_id)
+    try:
+        loop = asyncio.get_running_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), fetch_youtube_transcript, video_id),
+            timeout=NEWS_TIMEOUT
+        )
+        return result
+    except asyncio.TimeoutError:
+        logger.error(f"[News] video_transcript {video_id} timeout after {NEWS_TIMEOUT}s", exc_info=True)
+        return error_response(ErrorCode.TIMEOUT_ERROR, "获取字幕超时，请稍后重试")
+    except Exception as e:
+        logger.error(f"[News] video_transcript failed: {type(e).__name__}: {e}", exc_info=True)
+        return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
 @router.get("/news/events/{symbol}")

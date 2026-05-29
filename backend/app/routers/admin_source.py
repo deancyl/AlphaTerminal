@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from app.services.fetcher_factory import FetcherFactory
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -63,7 +64,7 @@ async def list_data_sources():
         }
     except Exception as e:
         logger.error(f"list_data_sources error: {e}", exc_info=True)
-        return {"code": 500, "message": str(e)}
+        return {"code": 500, "message": sanitize_error(e)}
 
 
 @router.post("/admin/data-sources/switch")
@@ -81,7 +82,7 @@ async def switch_data_source(name: str):
             }
     except Exception as e:
         logger.error(f"switch_data_source error: {e}", exc_info=True)
-        return {"code": 500, "message": str(e)}
+        return {"code": 500, "message": sanitize_error(e)}
 
 
 @router.post("/admin/data-sources/health-check")
@@ -111,7 +112,7 @@ async def health_check_source(name: Optional[str] = None):
         }
     except Exception as e:
         logger.error(f"health_check_source error: {e}", exc_info=True)
-        return {"code": 500, "message": str(e)}
+        return {"code": 500, "message": sanitize_error(e)}
 
 
 @router.get("/admin/data-sources/status")
@@ -138,7 +139,7 @@ async def get_source_status():
         }
     except Exception as e:
         logger.error(f"get_source_status error: {e}", exc_info=True)
-        return {"code": 500, "message": str(e)}
+        return {"code": 500, "message": sanitize_error(e)}
 
 
 @router.post("/admin/data-sources/reset/{name}")
@@ -153,4 +154,4 @@ async def reset_circuit_breaker(name: str):
         }
     except Exception as e:
         logger.error(f"reset_circuit_breaker error: {e}", exc_info=True)
-        return {"code": 500, "message": str(e)}
+        return {"code": 500, "message": sanitize_error(e)}

@@ -19,6 +19,7 @@ from app.config.timeout import SEARCH_TIMEOUT, QUOTE_TIMEOUT
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -443,7 +444,7 @@ async def get_all_stocks(
         )
     except Exception as e:
         logger.error(f"[Stocks] get_all_stocks error: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取股票列表失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取股票列表失败: {sanitize_error(e)}")
 
 
 @router.get("/quote")

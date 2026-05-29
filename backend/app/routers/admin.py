@@ -37,6 +37,7 @@ from app.utils.ip_validation import get_client_ip_safe
 from app.db import session_db
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 _DEFAULT_LOG_DIR = BASE_DIR / "logs"
@@ -106,7 +107,7 @@ def _validate_jwt_token(token: str) -> tuple[bool, str]:
     except jwt.ExpiredSignatureError:
         return False, "Token expired"
     except jwt.InvalidTokenError as e:
-        return False, f"Invalid token: {str(e)}"
+        return False, f"Invalid token: {sanitize_error(e)}"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -839,7 +840,7 @@ def test_llm_connection(body: LLMTestRequest):
     except httpx.TimeoutException:
         return {"code": 1, "error": "连接超时，请检查 URL"}
     except Exception as e:
-        return {"code": 1, "error": str(e)[:100]}
+        return {"code": 1, "error": sanitize_error(e)[:100]}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -951,7 +952,7 @@ async def probe_all_sources():
                 "fail_count": 0,
                 "is_primary": name == current_source,
                 "history": [],
-                "error": str(e),
+                "error": sanitize_error(e),
             }
 
     return {
@@ -1161,9 +1162,9 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
                     )
                 except Exception as e:
                     conn.close()
-                    task_manager.fail_task(task_id, str(e))
+                    task_manager.fail_task(task_id, sanitize_error(e))
             except Exception as e:
-                task_manager.fail_task(task_id, str(e))
+                task_manager.fail_task(task_id, sanitize_error(e))
 
         loop.run_in_executor(get_executor(), _run_vacuum)
 
@@ -2358,7 +2359,7 @@ async def switch_data_source(body: SourceSwitchRequest):
         }
     except Exception as e:
         logger.error(f"[Admin] Failed to switch data source: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"切换失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"切换失败: {sanitize_error(e)}")
 
 
 @router.get("/sources/config")

@@ -183,6 +183,9 @@ async def get_carbon_data():
 
     数据来源: 北京碳交易、国内碳交易、欧盟碳交易
     """
+    # P0: Add 30s timeout protection
+    ESG_TIMEOUT = 30.0
+    
     cache_key = "esg_carbon"
     cached = _get_cache(cache_key)
     if cached:
@@ -191,10 +194,15 @@ async def get_carbon_data():
     try:
         ak = _get_ak()
         carbon_data = []
+        loop = asyncio.get_running_loop()
 
         # 北京碳交易
         try:
-            df_bj = ak.energy_carbon_bj()
+            # P0: Timeout protection for blocking akshare call
+            df_bj = await asyncio.wait_for(
+                loop.run_in_executor(get_executor(), ak.energy_carbon_bj),
+                timeout=ESG_TIMEOUT
+            )
             if df_bj is not None and not df_bj.empty:
                 latest = df_bj.iloc[-1]
                 carbon_data.append(

@@ -88,7 +88,7 @@ async def get_cffex_chain(
 
     except ValueError as e:
         logger.warning(f"[Options] Invalid symbol: {e}")
-        return error_response(ErrorCode.INVALID_PARAMS, str(e))
+        return error_response(ErrorCode.INVALID_PARAMS, sanitize_error(e))
     except asyncio.TimeoutError:
         logger.warning(f"[Options] CFFEX chain timeout: {symbol}", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
@@ -142,7 +142,7 @@ async def get_greeks(code: str = Query(..., description="合约代码，如 1000
 
     except ValueError as e:
         logger.warning(f"[Options] Invalid contract code: {e}")
-        return error_response(ErrorCode.INVALID_PARAMS, str(e))
+        return error_response(ErrorCode.INVALID_PARAMS, sanitize_error(e))
     except asyncio.TimeoutError:
         logger.warning(f"[Options] Greeks timeout: {code}", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
@@ -182,7 +182,7 @@ async def get_contracts(
 
     except ValueError as e:
         logger.warning(f"[Options] Invalid exchange: {e}")
-        return error_response(ErrorCode.INVALID_PARAMS, str(e))
+        return error_response(ErrorCode.INVALID_PARAMS, sanitize_error(e))
     except asyncio.TimeoutError:
         logger.warning(f"[Options] Contracts timeout: {exchange}", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")

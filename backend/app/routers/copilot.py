@@ -1651,7 +1651,7 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
         logger.error(f"[Copilot] chart_data error: {e}", exc_info=True)
         return {
             "success": False,
-            "error": str(e),
+            "error": sanitize_error(e),
             "data": [],
             "symbol": symbol,
             "data_type": data_type,

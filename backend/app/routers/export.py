@@ -17,6 +17,7 @@ from ..db.database import get_conn
 from ..middleware import require_api_key
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -191,7 +192,7 @@ async def export_portfolio(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {sanitize_error(e)}")
 
 
 @router.post("/backtest/result")
@@ -291,7 +292,7 @@ async def export_backtest_result(
             return _generate_json(data, filename)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {sanitize_error(e)}")
 
 
 @router.get("/backtest/{backtest_id}")
@@ -388,7 +389,7 @@ async def export_backtest(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {sanitize_error(e)}")
 
 
 @router.post("/screener")
@@ -422,7 +423,7 @@ async def export_screener(
             return _generate_json(data, filename)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {sanitize_error(e)}")
 
 
 @router.get("/market/history/{symbol}")
@@ -518,4 +519,4 @@ async def export_market_history(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {sanitize_error(e)}")

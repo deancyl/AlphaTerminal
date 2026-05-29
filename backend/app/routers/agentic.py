@@ -193,8 +193,17 @@ async def list_workflows(limit: int = 20):
     Returns:
         List of recent workflows
     """
+    # P0: Add 30s timeout protection
+    AGENTIC_TIMEOUT = 30.0
+    
     engine = get_workflow_engine()
-    workflows = engine.list_workflows(limit=limit)
+    
+    # P0: Timeout protection for blocking list_workflows
+    loop = asyncio.get_running_loop()
+    workflows = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), engine.list_workflows, limit),
+        timeout=AGENTIC_TIMEOUT
+    )
 
     return success_response(
         {"workflows": [w.to_dict() for w in workflows], "count": len(workflows)}

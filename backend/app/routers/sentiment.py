@@ -26,6 +26,7 @@ from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ async def market_sentiment():
         )
     except Exception as e:
         logger.error(f"[market_sentiment] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取市场情绪失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取市场情绪失败: {sanitize_error(e)}")
 
 
 @router.get("/market/sentiment/intraday")
@@ -120,7 +121,7 @@ async def sentiment_intraday():
         )
     except Exception as e:
         logger.error(f"[sentiment_intraday] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取日内数据失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取日内数据失败: {sanitize_error(e)}")
 
 
 @router.get("/market/sentiment/histogram")
@@ -149,7 +150,7 @@ async def sentiment_histogram():
         )
     except Exception as e:
         logger.error(f"[sentiment_histogram] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取直方图数据失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取直方图数据失败: {sanitize_error(e)}")
 
 
 @router.get("/market/sentiment/news")
@@ -163,7 +164,7 @@ async def news_sentiment():
         return success_response(get_news_sentiment())
     except Exception as e:
         logger.error(f"[news_sentiment] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取快讯情感失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取快讯情感失败: {sanitize_error(e)}")
 
 
 @router.get("/market/stocks")
@@ -183,7 +184,7 @@ async def market_stocks(
         )
     except Exception as e:
         logger.error(f"[market_stocks] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取个股列表失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取个股列表失败: {sanitize_error(e)}")
 
 
 @router.get("/debug/scheduler")
@@ -287,7 +288,7 @@ async def market_fund_flow():
         return res
     except Exception as e:
         logger.error(f"market_fund_flow error: {e}", exc_info=True)
-        return error_response(500, f"获取资金流数据失败: {str(e)}")
+        return error_response(500, f"获取资金流数据失败: {sanitize_error(e)}")
 
 
 @router.get("/market/fund_flow/industry")
@@ -350,4 +351,4 @@ async def industry_fund_flow():
         return res
     except Exception as e:
         logger.error(f"industry_fund_flow error: {e}", exc_info=True)
-        return error_response(500, f"获取行业资金流失败: {str(e)}")
+        return error_response(500, f"获取行业资金流失败: {sanitize_error(e)}")

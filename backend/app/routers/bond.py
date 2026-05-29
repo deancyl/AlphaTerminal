@@ -540,7 +540,7 @@ async def get_risk_free_rate():
             {
                 "rate": 0.025,
                 "source": "fallback",
-                "error": str(e),
+                "error": sanitize_error(e),
                 "timestamp": datetime.now().isoformat(),
             }
         )

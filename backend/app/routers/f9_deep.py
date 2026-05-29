@@ -22,6 +22,7 @@ from app.services.data_fetcher import akshare_breaker
 from app.config.timeout import AKSHARE_TIMEOUT
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/f9", tags=["f9_deep_data"])
@@ -290,10 +291,10 @@ async def get_shareholder_data(symbol: str):
         logger.error(
             f"[shareholder] Data processing error for {symbol}: {e}", exc_info=True
         )
-        return error_response(f"数据处理失败: {str(e)}")
+        return error_response(f"数据处理失败: {sanitize_error(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing data for {symbol}: {e}", exc_info=True)
-        return error_response(f"获取股东数据失败: {str(e)}")
+        return error_response(f"获取股东数据失败: {sanitize_error(e)}")
 
 
 # ── 融资融券端点 ─────────────────────────────────────────────────
@@ -418,10 +419,10 @@ async def get_margin_data(symbol: str):
         return error_response("请求超时，请稍后重试", code=504)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[Margin] Data processing error for {symbol}: {e}", exc_info=True)
-        return error_response(f"数据处理失败: {str(e)}", code=500)
+        return error_response(f"数据处理失败: {sanitize_error(e)}", code=500)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing margin data for {symbol}: {e}", exc_info=True)
-        return error_response(f"获取融资融券数据失败: {str(e)}", code=500)
+        return error_response(f"获取融资融券数据失败: {sanitize_error(e)}", code=500)
 
 
 # ── 财务摘要端点 ─────────────────────────────────────────────────
@@ -611,10 +612,10 @@ async def get_profit_forecast(symbol: str):
         logger.error(
             f"[F9] Data processing error for forecast {symbol}: {e}", exc_info=True
         )
-        return error_response(f"数据处理失败: {str(e)}")
+        return error_response(f"数据处理失败: {sanitize_error(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing forecast for {symbol}: {e}", exc_info=True)
-        return error_response(f"获取盈利预测数据失败: {str(e)}")
+        return error_response(f"获取盈利预测数据失败: {sanitize_error(e)}")
 
 
 # ── 机构持股端点 ─────────────────────────────────────────────────
@@ -782,10 +783,10 @@ async def get_institution_holdings(symbol: str):
         logger.error(
             f"[Institution] Data processing error for {symbol}: {e}", exc_info=True
         )
-        return error_response(f"数据处理失败: {str(e)}")
+        return error_response(f"数据处理失败: {sanitize_error(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing data for {symbol}: {e}", exc_info=True)
-        return error_response(f"获取机构持股数据失败: {str(e)}")
+        return error_response(f"获取机构持股数据失败: {sanitize_error(e)}")
 
 
 # ── 同业比较端点 ─────────────────────────────────────────────────
@@ -1102,10 +1103,10 @@ async def get_peer_comparison(symbol: str):
         logger.error(
             f"[Peers] Data processing error for peer data {symbol}: {e}", exc_info=True
         )
-        return error_response(f"数据处理失败: {str(e)}")
+        return error_response(f"数据处理失败: {sanitize_error(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing peer data for {symbol}: {e}", exc_info=True)
-        return error_response(f"获取同业比较数据失败: {str(e)}")
+        return error_response(f"获取同业比较数据失败: {sanitize_error(e)}")
 
 
 # ── 公司公告端点 ─────────────────────────────────────────────────
@@ -1211,10 +1212,10 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
         logger.error(
             f"[Announcements] Data processing error for {symbol}: {e}", exc_info=True
         )
-        return error_response(f"数据处理失败: {str(e)}")
+        return error_response(f"数据处理失败: {sanitize_error(e)}")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]ing data for {symbol}: {e}", exc_info=True)
-        return error_response(f"获取公司公告数据失败: {str(e)}")
+        return error_response(f"获取公司公告数据失败: {sanitize_error(e)}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1254,4 +1255,4 @@ async def reset_circuit_breaker():
         )
     except Exception as e:
         logger.error(f"[F9] Failed to reset circuit breaker: {e}", exc_info=True)
-        return error_response(f"重置熔断器失败: {str(e)}")
+        return error_response(f"重置熔断器失败: {sanitize_error(e)}")

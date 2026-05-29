@@ -1336,7 +1336,7 @@ async def get_forex_history(
     except Exception as e:
         logger.error(f"获取外汇历史数据失败: {e}", exc_info=True)
         return error_response(
-            ErrorCode.INTERNAL_ERROR, f"获取外汇历史数据失败: {str(e)}"
+            ErrorCode.INTERNAL_ERROR, f"获取外汇历史数据失败: {sanitize_error(e)}"
         )
 
 

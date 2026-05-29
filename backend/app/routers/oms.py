@@ -30,6 +30,7 @@ from app.services.oms.order_engine import (
     OrderNotFoundError,
 )
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,7 @@ async def submit_order(
             updated_order = oms.submit_order(order)
             return success_response(updated_order.to_dict())
         except InvalidStateTransitionError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=sanitize_error(e))
 
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
@@ -171,9 +172,9 @@ async def cancel_order(
             order = oms.cancel_order(order_id)
             return success_response(order.to_dict())
         except OrderNotFoundError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=sanitize_error(e))
         except InvalidStateTransitionError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=sanitize_error(e))
 
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 
@@ -194,11 +195,11 @@ async def process_fill(
             )
             return success_response(order.to_dict())
         except OrderNotFoundError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=sanitize_error(e))
         except InvalidStateTransitionError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=sanitize_error(e))
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=sanitize_error(e))
 
     return await asyncio.wait_for(_inner(), timeout=OMS_TIMEOUT)
 

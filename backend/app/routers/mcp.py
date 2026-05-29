@@ -408,8 +408,11 @@ async def test_mcp_connection():
 
 @router.post("/start")
 @handle_errors(module="mcp")
-def start_mcp_server():
+async def start_mcp_server():
     """Start MCP server (mock implementation)"""
+    # P0: Add 30s timeout protection
+    MCP_TIMEOUT = 30.0
+    
     global _mcp_status, _start_time
 
     if _mcp_status.running:
@@ -419,20 +422,34 @@ def start_mcp_server():
             "data": _mcp_status.model_dump(),
         }
 
-    # Mock start
-    _mcp_status.running = True
-    _mcp_status.error = None
-    _start_time = time.time()
-    _mcp_status.uptime = 0
-    _mcp_status.last_heartbeat = datetime.now().isoformat()
+    try:
+        loop = asyncio.get_running_loop()
+        
+        # P0: Timeout protection for simulated server startup
+        async def _mock_startup():
+            await asyncio.sleep(0.05)
+            _mcp_status.running = True
+            _mcp_status.error = None
+            _start_time = time.time()
+            _mcp_status.uptime = 0
+            _mcp_status.last_heartbeat = datetime.now().isoformat()
+        
+        await asyncio.wait_for(_mock_startup(), timeout=MCP_TIMEOUT)
 
-    logger.info("[MCP] Server started (mock)")
+        logger.info("[MCP] Server started (mock)")
 
-    return {
-        "code": 0,
-        "message": "MCP server started successfully",
-        "data": _mcp_status.model_dump(),
-    }
+        return {
+            "code": 0,
+            "message": "MCP server started successfully",
+            "data": _mcp_status.model_dump(),
+        }
+    except asyncio.TimeoutError:
+        logger.error(f"[MCP] Server start timeout after {MCP_TIMEOUT}s", exc_info=True)
+        return {
+            "code": 1,
+            "message": "Server start timeout",
+            "data": {"error": "Server start took too long"},
+        }
 
 
 @router.post("/stop")

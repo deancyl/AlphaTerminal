@@ -20,6 +20,7 @@ from app.config.timeout import BOND_REFRESH_TIMEOUT
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -494,7 +495,7 @@ async def convertible_bond_list():
         )
     except Exception as e:
         logger.error(f"[convertible_bond_list] 错误: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取可转债列表失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取可转债列表失败: {sanitize_error(e)}")
 
 
 @router.get("/bond/convertible/spot")
@@ -528,7 +529,7 @@ async def convertible_bond_spot():
     except Exception as e:
         logger.error(f"[convertible_bond_spot] 错误: {e}", exc_info=True)
         return error_response(
-            ErrorCode.INTERNAL_ERROR, f"获取可转债实时行情失败: {str(e)}"
+            ErrorCode.INTERNAL_ERROR, f"获取可转债实时行情失败: {sanitize_error(e)}"
         )
 
 
@@ -565,7 +566,7 @@ async def convertible_bond_comparison():
     except Exception as e:
         logger.error(f"[convertible_bond_comparison] 错误: {e}", exc_info=True)
         return error_response(
-            ErrorCode.INTERNAL_ERROR, f"获取可转债比价表失败: {str(e)}"
+            ErrorCode.INTERNAL_ERROR, f"获取可转债比价表失败: {sanitize_error(e)}"
         )
 
 
@@ -626,7 +627,7 @@ async def convertible_bond_value(symbol: str):
                 "values": [],
                 "total": 0,
                 "source": "error",
-                "message": f"获取可转债价值分析失败: {str(e)}",
+                "message": f"获取可转债价值分析失败: {sanitize_error(e)}",
             }
         )
 

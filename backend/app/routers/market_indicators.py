@@ -116,11 +116,20 @@ async def get_style_strength(
     
     PRD Chapter 5.5: 风格强度轮动
     """
+    # P0: Add 30s timeout protection
+    INDICATOR_TIMEOUT = 30.0
+    
     logger.info(f"[StyleStrength] 获取风格强度 limit={limit}")
     start = time.time()
     
     try:
-        conn = _get_fund_thread_conn()
+        loop = asyncio.get_running_loop()
+        
+        # P0: Timeout protection for DB query
+        conn = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _get_fund_thread_conn),
+            timeout=INDICATOR_TIMEOUT
+        )
         cursor = conn.cursor()
         
         cursor.execute("""

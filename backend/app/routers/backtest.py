@@ -15,6 +15,7 @@ from app.middleware import require_api_key
 from app.services.backtest_worker_registry import get_backtest_registry
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -763,10 +764,10 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
     except asyncio.CancelledError:
         return error_response(ErrorCode.BAD_REQUEST, "Backtest was cancelled")
     except ValueError as e:
-        return error_response(ErrorCode.BAD_REQUEST, str(e))
+        return error_response(ErrorCode.BAD_REQUEST, sanitize_error(e))
     except Exception as e:
         logger.error(f"[Backtest] Execution failed: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"Backtest failed: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"Backtest failed: {sanitize_error(e)}")
 
 
 @router.get("/results")

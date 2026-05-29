@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from app.utils.errors import success_response
 from app.db.database import _db_path
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -36,7 +37,7 @@ def _get_db_status():
             "path": str(_db_path),
         }
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": sanitize_error(e)}
 
 
 def _get_memory_status():
