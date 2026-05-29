@@ -9,6 +9,7 @@ import { logger } from '../utils/logger.js'
 import { TIMEOUTS } from '../utils/constants.js'
 import { useToast } from './useToast.js'
 import { CircularBuffer } from '../utils/circularBuffer.js'
+import { useAbortableRequest } from './useAbortableRequest.js'
 
 const BASE = '/api/v1/timemachine'
 
@@ -37,6 +38,14 @@ function formatDate(dateStr) {
 export function useTimeMachine() {
   // Toast for user feedback
   const toast = useToast()
+  
+  // P0: AbortController for race condition prevention
+  let createSessionRequestId = 0
+  let stepForwardRequestId = 0
+  let seekToRequestId = 0
+  const { createSignal: createSessionSignal } = useAbortableRequest()
+  const { createSignal: createStepSignal } = useAbortableRequest()
+  const { createSignal: createSeekSignal } = useAbortableRequest()
   
   // Session state
   const session = ref(null)
@@ -99,9 +108,13 @@ export function useTimeMachine() {
    * @param {number} initialCapital - 初始资金
    */
   async function createSession(symbol, startDate, endDate, initialCapital = 1000000) {
+    createSessionRequestId++
+    const currentRequestId = createSessionRequestId
+    
     loading.value = true
     error.value = null
     
+    const signal = createSessionSignal()
     try {
       const response = await apiFetch(`${BASE}/session/create`, {
         method: 'POST',
@@ -112,8 +125,12 @@ export function useTimeMachine() {
           end_date: endDate,
           initial_capital: initialCapital,
           speed: speed.value
-        })
+        }),
+        signal
       })
+      
+      // Check if request is stale
+      if (currentRequestId !== createSessionRequestId) return
       
       session.value = response?.data?.session_id
       
@@ -140,6 +157,8 @@ export function useTimeMachine() {
       logger.info('[TimeMachine] Session created:', session.value)
       return response?.data
     } catch (e) {
+      if (e.name === 'AbortError') return
+      
       const errorMsg = e.message || ''
       if (errorMsg.includes('404') || errorMsg.includes('not found')) {
         error.value = '会话已过期，请重新创建'
@@ -165,12 +184,20 @@ export function useTimeMachine() {
   async function stepForward(bars = 1) {
     if (!session.value) return
     
+    stepForwardRequestId++
+    const currentRequestId = stepForwardRequestId
+    
+    const signal = createStepSignal()
     try {
       const response = await apiFetch(`${BASE}/session/${session.value}/step`, {
         method: 'POST',
         timeoutMs: TIMEOUTS.API_DEFAULT,
-        body: JSON.stringify({ bars })
+        body: JSON.stringify({ bars }),
+        signal
       })
+      
+      // Check if request is stale
+      if (currentRequestId !== stepForwardRequestId) return
       
       currentBar.value = response?.data?.current_bar ?? 0
       portfolio.value = response?.data?.portfolio || portfolio.value
@@ -183,6 +210,7 @@ export function useTimeMachine() {
       
       return response?.data
     } catch (e) {
+      if (e.name === 'AbortError') return
       toast.error('前进失败，请重试')
       logger.error('[TimeMachine] Step failed:', e)
     }
@@ -284,18 +312,27 @@ if (response?.data?.success) {
   async function seekTo(targetBar) {
     if (!session.value || targetBar < 0 || targetBar >= totalBars.value) return
     
+    seekToRequestId++
+    const currentRequestId = seekToRequestId
+    
+    const signal = createSeekSignal()
     try {
       const response = await apiFetch(`${BASE}/session/${session.value}/seek`, {
         method: 'POST',
         timeoutMs: TIMEOUTS.API_DEFAULT,
-        body: JSON.stringify({ target_bar: targetBar })
+        body: JSON.stringify({ target_bar: targetBar }),
+        signal
       })
+      
+      // Check if request is stale
+      if (currentRequestId !== seekToRequestId) return
       
       currentBar.value = response?.data?.current_bar ?? 0
       portfolio.value = response?.data?.portfolio || portfolio.value
       
       return response?.data
     } catch (e) {
+      if (e.name === 'AbortError') return
       toast.error('跳转失败，请重试')
       logger.error('[TimeMachine] Seek failed:', e)
     }
@@ -389,6 +426,11 @@ if (response?.data?.success) {
     session.value = null
     playbackStatus.value = 'idle'
     stopPlaybackTimer()
+    
+    // P0: Reset request IDs on clear
+    createSessionRequestId = 0
+    stepForwardRequestId = 0
+    seekToRequestId = 0
   }
   
   onUnmounted(() => {
@@ -396,6 +438,11 @@ if (response?.data?.success) {
     if (session.value) {
       endSession()
     }
+    
+    // P0: Reset request IDs on unmount
+    createSessionRequestId = 0
+    stepForwardRequestId = 0
+    seekToRequestId = 0
   })
   
   // ── Return ──────────────────────────────────────────────────────

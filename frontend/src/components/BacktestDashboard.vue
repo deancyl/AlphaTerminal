@@ -520,11 +520,12 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, reactive, onMounted, onUnmounted, onErrorCaptured } from 'vue'
+import { ref, shallowRef, computed, reactive, onMounted, onUnmounted, onErrorCaptured, onDeactivated, onActivated } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { usePortfolioStore } from '../composables/usePortfolioStore.js'
 import { safeDivide } from '../utils/safeMath.js'
 import { useValidation } from '../composables/useValidation.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import BacktestChart from './BacktestChart.vue'
 
 // ── Error Boundary State ─────────────────────────────────────────────
@@ -666,10 +667,26 @@ onMounted(async () => {
   await portfolioStore.fetchPortfolios()
 })
 
-onUnmounted(() => {
-  // Cancel any pending fetch requests
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Abort pending requests
   _fetchController?.abort()
   _fetchController = null
+  
+  // Clear request ID to prevent stale responses
+  runBacktestRequestId = 0
+})
+
+onActivated(() => {
+  // Resume portfolio data if needed
+  if (portfolioOptions.value.length === 0) {
+    portfolioStore.fetchPortfolios()
+  }
+})
+
+onUnmounted(() => {
+  // P0: Cleanup on unmount
+  runBacktestRequestId = 0
 })
 
 // portfolioStore.portfolios 在 reactive 代理中已自动解包，无需 .value
@@ -695,32 +712,6 @@ function normalizeSymbol(code) {
   if (num.startsWith('6') || num.startsWith('5') || num.startsWith('9')) return 'sh' + num
   if (num.startsWith('0') || num.startsWith('1') || num.startsWith('2') || num.startsWith('3')) return 'sz' + num
   return c
-}
-
-async function onPortfolioChange() {
-  positionTags.value = []
-  const pid = selectedPortfolioId.value
-  if (!pid) return
-  positionTagsLoading.value = true
-  try {
-    // Abort any pending request before starting a new one
-    _fetchController?.abort()
-    _fetchController = new AbortController()
-    const d = await apiFetch(`/api/v1/portfolio/${pid}/positions`, { signal: _fetchController.signal })
-    const list = Array.isArray(d) ? d : (d?.positions || [])
-    positionTags.value = list.map(p => ({
-      symbol:     p.symbol || '',
-      name:       p.name || (p.symbol ? normalizeSymbol(p.symbol).toUpperCase() : ''),
-      normalized: normalizeSymbol(p.symbol),
-    }))
-  } catch (e) {
-    // Ignore abort errors silently
-    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
-    positionTags.value = []
-  } finally {
-    _fetchController = null
-    positionTagsLoading.value = false
-  }
 }
 
 // 从组合持仓标签点击触发回测（自动补全市场前缀）
@@ -814,6 +805,37 @@ const chartRef      = ref(null)  // BacktestChart 实例，用于联动
 
 let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
 
+// P0: AbortController for race condition prevention
+const { createSignal: createPortfolioSignal } = useAbortableRequest()
+
+async function onPortfolioChange() {
+  positionTags.value = []
+  const pid = selectedPortfolioId.value
+  if (!pid) return
+  positionTagsLoading.value = true
+  
+  const signal = createPortfolioSignal()
+  try {
+    const d = await apiFetch(`/api/v1/portfolio/${pid}/positions`, { signal })
+    
+    // Check if still loading (component may have been unmounted)
+    if (!positionTagsLoading.value) return
+    
+    const list = Array.isArray(d) ? d : (d?.positions || [])
+    positionTags.value = list.map(p => ({
+      symbol:     p.symbol || '',
+      name:       p.name || (p.symbol ? normalizeSymbol(p.symbol).toUpperCase() : ''),
+      normalized: normalizeSymbol(p.symbol),
+    }))
+  } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError') return
+    positionTags.value = []
+  } finally {
+    positionTagsLoading.value = false
+  }
+}
+
 function presetDates(preset) {
   const end = new Date()
   const start = new Date()
@@ -838,23 +860,28 @@ async function runBacktest() {
     return
   }
   
+  runBacktestRequestId++
+  const currentRequestId = runBacktestRequestId
+  
   running.value = true
   statusMsg.value = ''
   backtestResult.value = null
   histData.value = []
 
+  const signal = createBacktestSignal()
   try {
-    // Abort any pending request before starting a new one
-    _fetchController?.abort()
-    _fetchController = new AbortController()
     const { start_date, end_date } = presetDates(windowPreset.value)
     const sym = symbol.value.trim() || 'sh600519'
 
     statusMsg.value = '📡 拉取历史数据...'
     const histResp = await apiFetch(
       `/api/v1/market/history/${sym}?period=daily&limit=5000&offset=0`,
-      { signal: _fetchController.signal }
+      { signal }
     )
+    
+    // Check if request is stale
+    if (currentRequestId !== runBacktestRequestId) return
+    
     // 统一解包: apiFetch 已解包 data，需兼容 history 在不同层级
     const histDataRaw = histResp?.data?.history || histResp?.history || histResp || []
     const rawHist = histDataRaw.map(s => ({
@@ -898,8 +925,11 @@ async function runBacktest() {
     const btResp = await apiFetch('/api/v1/backtest/run', {
       method: 'POST',
       body: params,
-      signal: _fetchController.signal,
+      signal,
     })
+
+    // Check if request is stale again
+    if (currentRequestId !== runBacktestRequestId) return
 
     // 兼容后端报错格式 {code, message, ...}
     if (btResp?.code !== 0 && btResp?.code !== undefined) {
@@ -916,7 +946,6 @@ async function runBacktest() {
     if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     statusMsg.value = `❌ ${e.message || '回测失败'}`
   } finally {
-    _fetchController = null
     running.value = false
   }
 }

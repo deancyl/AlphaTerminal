@@ -474,11 +474,16 @@ async def get_cost_breakdown(
     - model: Group by model_id
     - session: Group by session_id
     """
+    # P0: Add 30s timeout protection
+    COST_TIMEOUT = 30.0
+    
     loop = asyncio.get_event_loop()
 
     try:
-        result = await loop.run_in_executor(
-            get_executor(), _get_cost_breakdown_sync, start_date, end_date, group_by
+        # P0: Timeout protection for blocking DB call
+        result = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _get_cost_breakdown_sync, start_date, end_date, group_by),
+            timeout=COST_TIMEOUT
         )
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:
@@ -496,11 +501,16 @@ async def get_sessions_list(
     """
     Get list of sessions with token usage for the prompt tree selector.
     """
+    # P0: Add 30s timeout protection
+    COST_TIMEOUT = 30.0
+    
     loop = asyncio.get_event_loop()
 
     try:
-        result = await loop.run_in_executor(
-            get_executor(), _get_sessions_list_sync, start_date, end_date, limit
+        # P0: Timeout protection for blocking DB call
+        result = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _get_sessions_list_sync, start_date, end_date, limit),
+            timeout=COST_TIMEOUT
         )
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:

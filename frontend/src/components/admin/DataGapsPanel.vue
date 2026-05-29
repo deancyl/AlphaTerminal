@@ -217,7 +217,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, onDeactivated, onActivated, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { apiFetch } from '@/utils/api.js'
 import { toast } from '@/composables/useToast.js'
@@ -425,5 +425,27 @@ onMounted(() => {
   nextTick(() => {
     loadCalendarData()
   })
+})
+
+// P0: KeepAlive cleanup
+onBeforeUnmount(() => {
+  if (calendarChart) {
+    calendarChart.dispose()
+    calendarChart = null
+  }
+})
+
+onDeactivated(() => {
+  // Clear chart to free memory
+  if (calendarChart) {
+    calendarChart.clear()
+  }
+})
+
+onActivated(() => {
+  // Re-render chart if container exists
+  if (calendarChartRef.value) {
+    nextTick(() => loadCalendarData())
+  }
 })
 </script>

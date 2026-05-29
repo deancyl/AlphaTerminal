@@ -1,5 +1,20 @@
 <template>
-  <div class="h-full flex flex-col bg-terminal-bg overflow-hidden" role="region" aria-label="ESG评级面板">
+  <!-- P0: Error state UI -->
+  <div v-if="componentError" class="flex flex-col w-full h-full items-center justify-center p-8" role="alert" aria-live="assertive">
+    <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
+    <div class="text-lg text-terminal-dim mb-2">ESG评级加载失败</div>
+    <div class="text-sm text-theme-muted mb-4 max-w-md text-center">{{ componentError.message }}</div>
+    <button
+      class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
+      @click="handleRetry"
+      aria-label="重试加载"
+      type="button"
+    >
+      重试
+    </button>
+  </div>
+
+  <div v-else class="h-full flex flex-col bg-terminal-bg overflow-hidden" role="region" aria-label="ESG评级面板">
     <!-- 顶部标题栏 -->
     <div class="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-theme-secondary">
       <div class="flex items-center gap-3">
@@ -533,7 +548,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount, nextTick, onDeactivated, onActivated } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useApiError } from '../composables/useApiError.js'
 import { safeDispose } from '../utils/chartManager.js'
@@ -552,6 +567,9 @@ const tabs = [
 const activeTab = ref('rank')
 const loading = ref(false)
 const lastUpdate = ref(null)
+
+// P0: Error state for component initialization errors
+const componentError = ref(null)
 
 // ESG评级查询
 const symbolInput = ref('')
@@ -961,12 +979,47 @@ function handleResize() {
   historyChartInstance?.resize()
 }
 
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Abort pending requests
+  _fetchController?.abort()
+  _fetchController = null
+  
+  // Clear charts (preserve instances)
+  if (radarChartInstance && !radarChartInstance.isDisposed()) {
+    radarChartInstance.clear()
+  }
+  if (historyChartInstance && !historyChartInstance.isDisposed()) {
+    historyChartInstance.clear()
+  }
+  
+  // Stop loading if in progress
+  if (loading.value) {
+    loading.value = false
+  }
+})
+
+onActivated(() => {
+  // Resume resize listener
+  window.addEventListener('resize', handleResize)
+  
+  // Resize charts if visible
+  radarChartInstance?.resize()
+  historyChartInstance?.resize()
+})
+
 onMounted(async () => {
   loading.value = true
   await fetchRankData()
   loading.value = false
   window.addEventListener('resize', handleResize)
 })
+
+// P0: Retry function for component initialization errors
+function handleRetry() {
+  componentError.value = null
+  refreshCurrentTab()
+}
 
 onBeforeUnmount(() => {
   _fetchController?.abort()

@@ -39,7 +39,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onDeactivated, onActivated } from 'vue'
 import ErrorBoundary from './ErrorBoundary.vue'
 import MLModelManager from './ml/MLModelManager.vue'
 import MLTrainingPanel from './ml/MLTrainingPanel.vue'
@@ -56,4 +56,7 @@ const mlTabs = [
 ]
 
 const activeMLTab = ref('models')
+
+// P0: KeepAlive cleanup - state is preserved via KeepAlive
+// No timers or charts to clean up in this container component
 </script>

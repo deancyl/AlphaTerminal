@@ -258,7 +258,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onDeactivated, onActivated } from 'vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { useOrientation } from '@/composables/useOrientation.js'
 import { useTimeMachine } from '@/composables/useTimeMachine.js'
@@ -400,6 +400,28 @@ function startDrag(e) {
   document.addEventListener('touchmove', handleMove)
   document.addEventListener('touchend', handleEnd)
 }
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // End session to stop playback and free resources
+  if (session.value) {
+    endSession()
+  }
+  // Clear error state
+  error.value = null
+})
+
+onActivated(() => {
+  // Re-initialize dates if needed
+  if (!startDate.value || !endDate.value) {
+    const today = new Date()
+    const oneYearAgo = new Date(today)
+    oneYearAgo.setFullYear(today.getFullYear() - 1)
+    
+    endDate.value = today.toISOString().split('T')[0]
+    startDate.value = oneYearAgo.toISOString().split('T')[0]
+  }
+})
 </script>
 
 <style scoped>

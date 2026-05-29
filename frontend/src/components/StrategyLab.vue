@@ -1,5 +1,20 @@
 <template>
-  <div class="flex flex-col w-full h-full overflow-hidden">
+  <!-- P0: Error state UI for component initialization errors -->
+  <div v-if="componentError" class="flex flex-col w-full h-full items-center justify-center p-8" role="alert" aria-live="assertive">
+    <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
+    <div class="text-lg text-terminal-dim mb-2">策略实验室加载失败</div>
+    <div class="text-sm text-theme-muted mb-4 max-w-md text-center">{{ componentError.message }}</div>
+    <button
+      class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
+      @click="handleRetry"
+      aria-label="重试加载"
+      type="button"
+    >
+      重试
+    </button>
+  </div>
+
+  <div v-else class="flex flex-col w-full h-full overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 border-b border-theme bg-terminal-panel/80">
       <div class="flex items-center gap-3">
         <h2 class="text-lg font-bold text-theme-primary">策略实验室</h2>
@@ -250,16 +265,20 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted, onDeactivated, onActivated } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { useToast } from '../composables/useToast.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import { parseAnnotations, validateStrategy } from '../utils/strategyParser.js'
 import { STRATEGY_TEMPLATES, TEMPLATE_CATEGORIES, MARKET_OPTIONS } from '../templates/strategyTemplates.js'
 import BottomSheet from './BottomSheet.vue'
 import ConditionBuilder from './strategy/ConditionBuilder.vue'
 
 const { success: toastSuccess, error: toastError, info: toastInfo } = useToast()
+
+// P0: Error state for component initialization errors
+const componentError = ref(null)
 
 const templateList = Object.values(STRATEGY_TEMPLATES)
 const selectedTemplate = ref(null)
@@ -330,9 +349,21 @@ function selectTemplate(tpl) {
   toastInfo('模板已加载', `已选择 ${tpl.name} 策略模板`)
 }
 
+// P0: AbortController for race condition prevention
+let loadStrategyRequestId = 0
+const { createSignal: createLoadSignal } = useAbortableRequest()
+
 async function loadStrategy(s) {
+  loadStrategyRequestId++
+  const currentRequestId = loadStrategyRequestId
+  
+  const signal = createLoadSignal()
   try {
-    const data = await apiFetch(`/api/v1/strategy/strategies/${s.id}`)
+    const data = await apiFetch(`/api/v1/strategy/strategies/${s.id}`, { signal })
+    
+    // Check if request is stale
+    if (currentRequestId !== loadStrategyRequestId) return
+    
     if (data) {
       selectedStrategy.value = data
       selectedTemplate.value = null
@@ -346,17 +377,31 @@ async function loadStrategy(s) {
       toastInfo('策略已加载', `已加载 ${data.name}`)
     }
   } catch (err) {
+    if (err.name === 'AbortError') return
     logger.error('[StrategyLab] Load strategy failed:', err)
     toastError('加载失败', err.message || '无法加载策略')
   }
 }
 
+// P0: AbortController for race condition prevention
+let fetchStrategiesRequestId = 0
+const { createSignal: createFetchSignal } = useAbortableRequest()
+
 async function fetchStrategies() {
+  fetchStrategiesRequestId++
+  const currentRequestId = fetchStrategiesRequestId
+  
   strategiesLoading.value = true
+  const signal = createFetchSignal()
   try {
-    const data = await apiFetch('/api/v1/strategy/strategies')
+    const data = await apiFetch('/api/v1/strategy/strategies', { signal })
+    
+    // Check if request is stale
+    if (currentRequestId !== fetchStrategiesRequestId) return
+    
     strategies.value = data?.strategies || []
   } catch (err) {
+    if (err.name === 'AbortError') return
     logger.error('[StrategyLab] Fetch strategies failed:', err)
   } finally {
     strategiesLoading.value = false
@@ -409,6 +454,10 @@ async function saveStrategy() {
   }
 }
 
+// P0: AbortController for race condition prevention
+let runBacktestRequestId = 0
+const { createSignal: createBacktestSignal } = useAbortableRequest()
+
 async function runBacktest() {
   if (isRunning.value || !strategyCode.value) return
   
@@ -418,10 +467,14 @@ async function runBacktest() {
     return
   }
 
+  runBacktestRequestId++
+  const currentRequestId = runBacktestRequestId
+
   isRunning.value = true
   strategyError.value = ''
   backtestResult.value = null
 
+  const signal = createBacktestSignal()
   try {
     const response = await apiFetch('/api/v1/strategy/backtest', {
       method: 'POST',
@@ -432,13 +485,18 @@ async function runBacktest() {
         end_date: endDate.value,
         initial_capital: initialCapital.value,
       },
+      signal,
     })
+
+    // Check if request is stale
+    if (currentRequestId !== runBacktestRequestId) return
 
     if (response) {
       backtestResult.value = response
       toastSuccess('回测完成', `完成 ${response.trades_count || 0} 笔交易`)
     }
   } catch (err) {
+    if (err.name === 'AbortError') return
     logger.error('[StrategyLab] Backtest failed:', err)
     strategyError.value = err.message || '回测失败'
     toastError('回测失败', err.message || '请检查策略代码')
@@ -451,6 +509,38 @@ watch(strategyCode, () => {
   strategyError.value = ''
 })
 
+// P0: Retry function for component initialization errors
+function handleRetry() {
+  componentError.value = null
+  fetchStrategies()
+}
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Clear request IDs to prevent stale responses
+  loadStrategyRequestId = 0
+  fetchStrategiesRequestId = 0
+  runBacktestRequestId = 0
+  
+  // Abort pending requests
+  createLoadSignal()?.abort()
+  createFetchSignal()?.abort()
+  createBacktestSignal()?.abort()
+})
+
+onActivated(() => {
+  // Resume data fetching if needed
+  if (strategies.value.length === 0 && !strategiesLoading.value) {
+    fetchStrategies()
+  }
+})
+
+onUnmounted(() => {
+  loadStrategyRequestId = 0
+  fetchStrategiesRequestId = 0
+  runBacktestRequestId = 0
+})
+
 function handleCodeGenerated(code) {
   strategyCode.value = code
   showVisualBuilder.value = false
@@ -458,5 +548,10 @@ function handleCodeGenerated(code) {
   toastSuccess('代码已生成', '可视化策略代码已填充到编辑器')
 }
 
-fetchStrategies()
+// P0: Initialize with error handling
+try {
+  fetchStrategies()
+} catch (err) {
+  componentError.value = { message: err.message || '初始化失败' }
+}
 </script>

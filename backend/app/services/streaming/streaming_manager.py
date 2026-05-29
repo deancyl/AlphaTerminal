@@ -10,6 +10,7 @@ Manages multiple WebSocket streamers and provides:
 
 import asyncio
 import logging
+import random
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -182,7 +183,10 @@ class StreamingManager:
 
             await streamer.start(list(self._subscribed_symbols))
 
-            await asyncio.sleep(2.0)
+            # P1: Global jitter (0-2 seconds) to prevent thundering herd
+            # when many clients reconnect simultaneously
+            jitter = random.uniform(0, 2)
+            await asyncio.sleep(2.0 + jitter)
 
             if streamer.is_connected:
                 self._streamers["sina"] = streamer

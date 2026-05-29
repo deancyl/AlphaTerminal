@@ -1,5 +1,20 @@
 <template>
-  <div class="flex flex-col min-h-0 h-full overflow-hidden" role="region" aria-label="新闻快讯">
+  <!-- P0: Error state UI -->
+  <div v-if="componentError" class="flex flex-col w-full h-full items-center justify-center p-8" role="alert" aria-live="assertive">
+    <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
+    <div class="text-lg text-terminal-dim mb-2">新闻快讯加载失败</div>
+    <div class="text-sm text-theme-muted mb-4 max-w-md text-center">{{ componentError.message }}</div>
+    <button
+      class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
+      @click="handleRetry"
+      aria-label="重试加载"
+      type="button"
+    >
+      重试
+    </button>
+  </div>
+
+  <div v-else class="flex flex-col min-h-0 h-full overflow-hidden" role="region" aria-label="新闻快讯">
 
     <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="flex items-center justify-between mb-2 shrink-0 flex-wrap gap-1">
@@ -301,7 +316,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, onDeactivated, onActivated } from 'vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { emit as busEmit } from '../composables/useEventBus.js'
@@ -323,6 +338,9 @@ const props = defineProps({
 
 const items        = ref(props.initialItems)
 const total        = ref(0)
+
+// P0: Error state for component initialization errors
+const componentError = ref(null)
 const isRefreshing = ref(false)
 const showRefreshed = ref(false)
 const refreshMsg   = ref('')
@@ -788,6 +806,43 @@ onMounted(() => {
   fetchNews(true)
   fetchSentiment()
   setupPolling()
+})
+
+// P0: Retry function for component initialization errors
+function handleRetry() {
+  componentError.value = null
+  manualRefresh()
+}
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Stop polling
+  if (unregisterNews) {
+    unregisterNews()
+  }
+  if (unregisterSentiment) {
+    unregisterSentiment()
+  }
+  
+  // Abort pending requests
+  abortNews('Component deactivated')
+  abortSentiment('Component deactivated')
+  
+  // Close modal if open
+  if (modalItem.value) {
+    closeModal()
+  }
+})
+
+onActivated(() => {
+  // Resume polling
+  setupPolling()
+  
+  // Refresh data if stale
+  if (!lastRefreshTime.value || Date.now() - lastRefreshTime.value > 5 * 60 * 1000) {
+    fetchNews(true)
+    fetchSentiment()
+  }
 })
 
 onUnmounted(() => {

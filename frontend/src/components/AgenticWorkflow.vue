@@ -1,5 +1,20 @@
 <template>
-  <div class="flex flex-col h-full bg-theme-secondary border-l border-agent-blue/20">
+  <!-- P0: Error state UI -->
+  <div v-if="componentError" class="flex flex-col w-full h-full items-center justify-center p-8" role="alert" aria-live="assertive">
+    <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
+    <div class="text-lg text-terminal-dim mb-2">智能投研工作流加载失败</div>
+    <div class="text-sm text-theme-muted mb-4 max-w-md text-center">{{ componentError.message }}</div>
+    <button
+      class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
+      @click="handleRetry"
+      aria-label="重试加载"
+      type="button"
+    >
+      重试
+    </button>
+  </div>
+
+  <div v-else class="flex flex-col h-full bg-theme-secondary border-l border-agent-blue/20">
     <!-- Header -->
     <div class="flex items-center justify-between p-4 border-b border-border-light">
       <div class="flex items-center gap-2">
@@ -106,12 +121,15 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onDeactivated, onActivated } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { mdRender } from '../composables/useCopilotMarkdown.js'
 
 const queryInput = ref('')
 const isExecuting = ref(false)
+
+// P0: Error state for component initialization errors
+const componentError = ref(null)
 const currentWorkflow = ref(null)
 const report = ref('')
 const workflowId = ref(null)
@@ -214,6 +232,19 @@ function clearWorkflow() {
   workflowId.value = null
   isExecuting.value = false
 }
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Cancel any running workflow polling
+  if (isExecuting.value) {
+    isExecuting.value = false
+    workflowId.value = null
+  }
+})
+
+onActivated(() => {
+  // Ready for new workflow execution
+})
 </script>
 
 <style scoped>

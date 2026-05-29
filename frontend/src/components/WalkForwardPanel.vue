@@ -425,7 +425,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onDeactivated, onActivated } from 'vue'
 import { apiFetch } from '../utils/api.js'
 
 const symbol = ref('sh600519')
@@ -694,4 +694,29 @@ async function showAIAnalysis() {
     aiAnalysisLoading.value = false
   }
 }
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Close AI modal if open
+  if (showAIModal.value) {
+    showAIModal.value = false
+  }
+  
+  // Close help modal if open
+  if (showHelp.value) {
+    showHelp.value = false
+  }
+  
+  // Clear analysis state
+  if (running.value) {
+    running.value = false
+  }
+  if (smartParamsLoading.value) {
+    smartParamsLoading.value = false
+  }
+})
+
+onActivated(() => {
+  // Resume if needed (no explicit action required for this component)
+})
 </script>

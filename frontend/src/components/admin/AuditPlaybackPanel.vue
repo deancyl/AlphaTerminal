@@ -168,7 +168,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onDeactivated, onActivated } from 'vue'
 
 const emit = defineEmits(['refresh', 'verify-chain', 'rollback', 'fetch-timeline', 'fetch-diff', 'fetch-record'])
 
@@ -275,6 +275,19 @@ defineExpose({
 })
 
 onMounted(() => {
+  fetchTimeline()
+  verifyChain()
+})
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Reset rollback confirmation state
+  rollbackConfirmed.value = false
+  isRollingBack.value = false
+})
+
+onActivated(() => {
+  // Refresh timeline and chain status
   fetchTimeline()
   verifyChain()
 })

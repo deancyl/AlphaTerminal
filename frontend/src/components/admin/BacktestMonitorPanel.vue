@@ -145,7 +145,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, onDeactivated, onActivated, computed } from 'vue'
 import { apiFetch } from '../../utils/api.js'
 import { toast } from '../../composables/useToast.js'
 import { logger } from '../../utils/logger.js'
@@ -285,6 +285,18 @@ onMounted(() => {
 
 onUnmounted(() => {
   disconnectWebSocket()
+})
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Disconnect WebSocket to save resources
+  disconnectWebSocket()
+})
+
+onActivated(() => {
+  // Reconnect WebSocket and refresh data
+  refreshMetrics()
+  connectWebSocket()
 })
 
 defineExpose({ refreshMetrics })

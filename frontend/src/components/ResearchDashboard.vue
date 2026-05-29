@@ -306,12 +306,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch, onDeactivated, onActivated } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useApiError } from '../composables/useApiError.js'
 import { safeDispose } from '../utils/chartManager.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 
 const { handleError } = useApiError({ showToast: false })
+
+// P0: AbortController for race condition prevention
+let fetchDataRequestId = 0
+let summarizeRequestId = 0
+const { createSignal: createFetchSignal } = useAbortableRequest()
+const { createSignal: createSummarizeSignal } = useAbortableRequest()
 
 const symbol = ref('')
 const keyword = ref('')
@@ -419,12 +426,17 @@ function closeDetailModal() {
   summaryModel.value = ''
 }
 
+// P0: AbortController for race condition prevention
 async function summarizeReport() {
   if (!selectedReport.value) return
+  
+  summarizeRequestId++
+  const currentRequestId = summarizeRequestId
   
   summaryLoading.value = true
   summary.value = ''
   
+  const signal = createSummarizeSignal()
   try {
     const res = await apiFetch('/api/v1/research/summarize', {
       method: 'POST',
@@ -433,8 +445,12 @@ async function summarizeReport() {
         title: selectedReport.value.title,
         institution: selectedReport.value.institution
       }),
-      timeoutMs: 30000
+      timeoutMs: 30000,
+      signal
     })
+    
+    // Check if request is stale
+    if (currentRequestId !== summarizeRequestId) return
     
     if (res?.code === 0) {
       summary.value = res.data?.summary || ''
@@ -443,6 +459,7 @@ async function summarizeReport() {
       summary.value = res?.data?.summary || '总结生成失败'
     }
   } catch (e) {
+    if (e.name === 'AbortError') return
     handleError(e, { context: '研报总结' })
     summary.value = '总结生成失败，请稍后重试'
   } finally {
@@ -463,13 +480,18 @@ const ratingChartRef = ref(null)
 let institutionChartInstance = null
 let ratingChartInstance = null
 
+// P0: AbortController for race condition prevention
 async function fetchData() {
   if (!symbol.value) return
+  
+  fetchDataRequestId++
+  const currentRequestId = fetchDataRequestId
   
   loading.value = true
   error.value = null
   isFallback.value = false
   
+  const signal = createFetchSignal()
   try {
     const params = new URLSearchParams({
       symbol: symbol.value,
@@ -490,11 +512,14 @@ async function fetchData() {
     }
     
     const [reportsRes, statsRes] = await Promise.all([
-      apiFetch(`/api/v1/research/reports?${params.toString()}`, { timeoutMs: 30000 })
-        .catch(e => { handleError(e, { context: '研报列表', silent: true }); return null }),
-      apiFetch(`/api/v1/research/statistics?symbol=${symbol.value}`, { timeoutMs: 30000 })
-        .catch(e => { handleError(e, { context: '研报统计', silent: true }); return null })
+      apiFetch(`/api/v1/research/reports?${params.toString()}`, { timeoutMs: 30000, signal })
+        .catch(e => { if (e.name === 'AbortError') throw e; handleError(e, { context: '研报列表', silent: true }); return null }),
+      apiFetch(`/api/v1/research/statistics?symbol=${symbol.value}`, { timeoutMs: 30000, signal })
+        .catch(e => { if (e.name === 'AbortError') throw e; handleError(e, { context: '研报统计', silent: true }); return null })
     ])
+    
+    // Check if request is stale
+    if (currentRequestId !== fetchDataRequestId) return
     
     if (reportsRes) {
       reports.value = reportsRes
@@ -513,6 +538,7 @@ async function fetchData() {
       drawCharts()
     }
   } catch (e) {
+    if (e.name === 'AbortError') return
     const { userMessage } = handleError(e, { context: '研报数据' })
     error.value = userMessage
   } finally {
@@ -622,6 +648,39 @@ function handleKeydown(e) {
   }
 }
 
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Clear request IDs
+  fetchDataRequestId = 0
+  summarizeRequestId = 0
+  
+  // Clear resize timer
+  clearTimeout(resizeTimer)
+  resizeTimer = null
+  
+  // Clear charts (preserve instances for quick reuse)
+  if (institutionChartInstance && !institutionChartInstance.isDisposed()) {
+    institutionChartInstance.clear()
+  }
+  if (ratingChartInstance && !ratingChartInstance.isDisposed()) {
+    ratingChartInstance.clear()
+  }
+  
+  // Close modal if open
+  if (showDetailModal.value) {
+    closeDetailModal()
+  }
+})
+
+onActivated(() => {
+  // Resume resize listener
+  window.addEventListener('resize', handleResize)
+  
+  // Resize charts if visible
+  institutionChartInstance?.resize()
+  ratingChartInstance?.resize()
+})
+
 onMounted(() => {
   checkCacheStatus()
   window.addEventListener('resize', handleResize)
@@ -629,6 +688,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  // P0: Cleanup on unmount
+  fetchDataRequestId = 0
+  summarizeRequestId = 0
+  
   clearTimeout(resizeTimer)
   resizeTimer = null
   if (institutionChartInstance && !institutionChartInstance.isDisposed()) {

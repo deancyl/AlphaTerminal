@@ -177,7 +177,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, onDeactivated, onActivated } from 'vue'
 import { useOptions } from '../../composables/useOptions.js'
 import EducationalTooltip from './EducationalTooltip.vue'
 import IVSmileChart from './IVSmileChart.vue'
@@ -298,6 +298,21 @@ function handleRowClick({ item, index }) {
 function getRowClass(item) {
   return item.strike === atmStrike.value ? 'bg-primary/10 font-bold' : ''
 }
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Stop auto-refresh timer
+  if (autoRefreshEnabled.value) {
+    toggleAutoRefresh()
+  }
+})
+
+onActivated(() => {
+  // Resume auto-refresh if was enabled
+  if (!autoRefreshEnabled.value) {
+    toggleAutoRefresh()
+  }
+})
 </script>
 
 <style scoped>

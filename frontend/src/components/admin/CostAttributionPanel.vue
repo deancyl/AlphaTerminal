@@ -156,7 +156,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, onDeactivated, onActivated, nextTick } from 'vue'
 import { apiFetch } from '../../utils/api.js'
 import { useECharts } from '../../composables/useECharts.js'
 import { getECharts } from '../../utils/lazyEcharts.js'
@@ -315,5 +315,18 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   disposeSankeyChart()
+})
+
+// P0: KeepAlive cleanup
+onDeactivated(() => {
+  // Clear chart to free memory
+  disposeSankeyChart()
+})
+
+onActivated(() => {
+  // Re-render chart if data exists
+  if (sankeyData.value?.nodes?.length) {
+    nextTick(() => updateSankeyChart())
+  }
 })
 </script>
