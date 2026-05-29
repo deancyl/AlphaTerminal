@@ -13,6 +13,9 @@ import akshare as ak
 from app.services.data_cache import get_cache
 from app.services.model_config_service import get_model_config_service
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
+from app.utils.executor import get_executor
+from app.utils.errors import error_response, ErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -251,8 +254,13 @@ async def get_reports(
         }
 
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(
-        None, _fetch_reports_sync, symbol, 1, 1000, keyword, institution, category
+    # P0: Add 30s timeout protection
+    RESEARCH_TIMEOUT = 30.0
+    
+    # P0: Timeout protection for blocking akshare call
+    data = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), _fetch_reports_sync, symbol, 1, 1000, keyword, institution, category),
+        timeout=RESEARCH_TIMEOUT
     )
 
     _cache.set(cache_key, data, ttl=TTL)
@@ -277,10 +285,14 @@ async def get_reports(
 @handle_errors(module="research")
 async def get_statistics(symbol: str = Query(..., description="股票代码")):
     """获取研报统计信息"""
-    # 获取所有研报
+    # P0: Add 30s timeout protection
+    RESEARCH_TIMEOUT = 30.0
+    
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(
-        None, _fetch_reports_sync, symbol, 1, 1000, "", ""
+    # P0: Timeout protection for blocking fetch
+    data = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), _fetch_reports_sync, symbol, 1, 1000, "", "", ""),
+        timeout=RESEARCH_TIMEOUT
     )
 
     if data.get("is_fallback"):
@@ -363,7 +375,7 @@ async def proxy_pdf(url: str = Query(..., description="PDF URL")):
             )
     except Exception as e:
         logger.error(f"Error proxying PDF: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
 
 
 @router.get("/categories")

@@ -19,6 +19,7 @@ from app.services.agentic.workflow_engine import get_workflow_engine, WorkflowSt
 from app.services.agentic.tool_registry import get_tool_registry
 from app.utils.errors import success_response, error_response
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -86,7 +87,7 @@ async def create_workflow(request: WorkflowRequest, background_tasks: Background
                     f"[Agentic] Workflow {workflow.id} failed: {e}", exc_info=True
                 )
                 workflow.status = WorkflowStatus.FAILED
-                workflow.result = f"执行失败: {str(e)}"
+                workflow.result = f"执行失败: {sanitize_error(e)}"
 
         background_tasks.add_task(run_workflow)
 
@@ -158,7 +159,7 @@ async def execute_workflow(workflow_id: str, background_tasks: BackgroundTasks):
         except Exception as e:
             logger.error(f"[Agentic] Workflow {workflow_id} failed: {e}", exc_info=True)
             workflow.status = WorkflowStatus.FAILED
-            workflow.result = f"执行失败: {str(e)}"
+            workflow.result = f"执行失败: {sanitize_error(e)}"
 
     background_tasks.add_task(run_workflow)
 

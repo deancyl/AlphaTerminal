@@ -13,6 +13,7 @@ import httpx
 from fastapi import APIRouter, Query
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,9 @@ async def news_force_refresh():
     同步执行真实网络抓取，等待完成后再返回最新数据。
     前端手动刷新时调用此接口，确保拿到此刻的外网最新数据。
     """
+    # P0: Add 30s timeout protection
+    NEWS_TIMEOUT = 30.0
+    
     from app.services.news_engine import (
         get_cached_news,
         is_cache_ready,
@@ -56,9 +60,12 @@ async def news_force_refresh():
     )
 
     async def _do():
-        # 在线程池中执行同步的 refresh_news_cache(background=False)
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, refresh_news_cache, False)
+        # P0: Timeout protection for blocking refresh call
+        loop = asyncio.get_running_loop()
+        await asyncio.wait_for(
+            loop.run_in_executor(None, refresh_news_cache, False),
+            timeout=NEWS_TIMEOUT
+        )
 
     # 记录刷新前的缓存条数，用于判断是否为"旧数据"
     stale_count = len(get_cached_news(limit=200)) if is_cache_ready() else 0
@@ -84,12 +91,12 @@ async def news_force_refresh():
         )
         return error_response(
             ErrorCode.INTERNAL_ERROR,
-            f"强制刷新失败: {str(e)}",
+            f"强制刷新失败: {sanitize_error(e)}",
             {
                 "news": [],
                 "source": "error",
                 "total": 0,
-                "error": str(e),
+                "error": sanitize_error(e),
                 "items_stale": True,
                 "stale_count": stale_count,
             },
@@ -316,6 +323,6 @@ async def news_events_for_symbol(
         )
         return error_response(
             ErrorCode.INTERNAL_ERROR,
-            f"Failed to get news events: {str(e)}",
+            f"Failed to get news events: {sanitize_error(e)}",
             {"events": [], "symbol": symbol, "total": 0},
         )

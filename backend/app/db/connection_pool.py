@@ -79,7 +79,7 @@ class SQLiteConnectionPool:
         """
         conn = sqlite3.connect(
             self.db_path,
-            timeout=30,
+            timeout=10.0,  # P1: Reduced timeout from 30s to 10s
             check_same_thread=False,
             isolation_level=None,  # Autocommit mode for better control
         )
@@ -88,8 +88,8 @@ class SQLiteConnectionPool:
         # Enable WAL mode for better concurrent access
         conn.execute("PRAGMA journal_mode=WAL")
 
-        # Set busy timeout to 30 seconds for handling concurrent writes
-        conn.execute("PRAGMA busy_timeout=30000")
+        # P1: Reduced busy_timeout from 30s to 10s
+        conn.execute("PRAGMA busy_timeout=10000")  # 10 seconds
 
         # Enable foreign key constraints
         conn.execute("PRAGMA foreign_keys=ON")

@@ -32,6 +32,7 @@ ENDPOINT_LIMITS = {
     "market_radar": EndpointLimit(requests=30, period=60),
     "global_index": EndpointLimit(requests=30, period=60),
     "options": EndpointLimit(requests=30, period=60),
+    "portfolio": EndpointLimit(requests=30, period=60),  # P1: Portfolio rate limiting
     "default": EndpointLimit(requests=200, period=60),
 }
 
@@ -93,6 +94,8 @@ def get_endpoint_category(path: str) -> str:
         return "market_radar"
     if "/options/" in path:
         return "options"
+    if "/portfolio/" in path:  # P1: Portfolio rate limiting
+        return "portfolio"
     if "/market/global" in path:
         return "global_index"
     if "/market/" in path or "/stocks/" in path:

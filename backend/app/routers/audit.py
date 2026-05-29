@@ -7,6 +7,7 @@ Provides endpoints for:
 - Audit log queries
 """
 
+import asyncio
 from fastapi import APIRouter, Query
 from typing import Optional
 
@@ -16,6 +17,8 @@ from app.services.audit_chain import (
 )
 from app.db.audit_db import get_audit_logs, get_audit_logs_keyset, count_audit_logs
 from app.utils.error_decorator import handle_errors
+from app.utils.errors import error_response, ErrorCode
+from app.utils.executor import get_executor
 
 router = APIRouter(prefix="/api/v1/audit", tags=["audit"])
 
@@ -40,7 +43,15 @@ async def verify_audit_chain(
         - first_invalid_id: Optional[int] - ID of first invalid record (if any)
         - error_type: Optional[str] - Type of error (if any)
     """
-    result = verify_chain(from_id=from_id, to_id=to_id)
+    # P0: Add 30s timeout protection
+    AUDIT_TIMEOUT = 30.0
+    
+    loop = asyncio.get_running_loop()
+    # P0: Timeout protection for blocking verify_chain
+    result = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), verify_chain, from_id, to_id),
+        timeout=AUDIT_TIMEOUT
+    )
     return result
 
 
@@ -59,7 +70,15 @@ async def get_audit_stats():
         - genesis_hash: str - Genesis hash (64 zeros)
         - retention_days: int - SEC Rule 17a-4 retention period
     """
-    stats = get_chain_stats()
+    # P0: Add 30s timeout protection
+    AUDIT_TIMEOUT = 30.0
+    
+    loop = asyncio.get_running_loop()
+    # P0: Timeout protection for blocking get_chain_stats
+    stats = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), get_chain_stats),
+        timeout=AUDIT_TIMEOUT
+    )
     return stats
 
 
@@ -104,20 +123,30 @@ async def query_audit_logs(
         - next_after_id: Cursor ID for next page
         - total: Total count matching filters (for UI display)
     """
+    # P0: Add 30s timeout protection
+    AUDIT_TIMEOUT = 30.0
+    
+    loop = asyncio.get_running_loop()
+    
     if after_timestamp and after_id is not None:
-        logs = get_audit_logs_keyset(
-            after_timestamp=after_timestamp,
-            after_id=after_id,
-            limit=limit,
-            agent_id=agent_id,
-            action=action,
+        # P0: Timeout protection for blocking DB call
+        logs = await asyncio.wait_for(
+            loop.run_in_executor(
+                get_executor(),
+                get_audit_logs_keyset,
+                after_timestamp, after_id, limit, agent_id, action
+            ),
+            timeout=AUDIT_TIMEOUT
         )
     else:
-        logs = get_audit_logs(
-            agent_id=agent_id,
-            action=action,
-            limit=limit,
-            offset=offset,
+        # P0: Timeout protection for blocking DB call
+        logs = await asyncio.wait_for(
+            loop.run_in_executor(
+                get_executor(),
+                get_audit_logs,
+                agent_id, action, limit, offset
+            ),
+            timeout=AUDIT_TIMEOUT
         )
 
     total = count_audit_logs(agent_id=agent_id, action=action)

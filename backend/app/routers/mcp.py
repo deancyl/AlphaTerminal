@@ -12,6 +12,7 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -344,13 +345,16 @@ def list_mcp_tools():
 @handle_errors(module="mcp")
 async def test_mcp_connection():
     """Test MCP server connection with latency measurement"""
+    # P0: Add 30s timeout protection
+    MCP_TIMEOUT = 30.0
+    
     global _mcp_config, _mcp_status
 
     start_time = time.time()
 
     try:
-        # Simulate connection test (mock)
-        await asyncio.sleep(0.1)  # Simulate network latency
+        # P0: Timeout protection for simulated network test
+        await asyncio.wait_for(asyncio.sleep(0.1), timeout=MCP_TIMEOUT)
 
         latency_ms = int((time.time() - start_time) * 1000)
 
@@ -397,8 +401,8 @@ async def test_mcp_connection():
 
         return {
             "code": 1,
-            "message": f"Connection failed: {str(e)}",
-            "data": {"connected": False, "latency_ms": latency_ms, "error": str(e)},
+            "message": f"Connection failed: {sanitize_error(e)}",
+            "data": {"connected": False, "latency_ms": latency_ms, "error": sanitize_error(e)},
         }
 
 

@@ -2,6 +2,7 @@
 Strategy API - Strategy CRUD, backtest and optimization
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -10,6 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.middleware import require_api_key
 from pydantic import BaseModel, Field, field_validator
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
+from app.utils.executor import get_executor
+from app.utils.errors import ErrorCode, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +197,7 @@ async def validate_strategy_code(request: CodeValidateRequest):
         logger.error(f"[Strategy] Validation error: {e}", exc_info=True)
         return CodeValidateResponse(
             is_valid=False,
-            errors=[f"Validation failed: {str(e)}"],
+            errors=[f"Validation failed: {sanitize_error(e)}"],
             warnings=[],
             security_score=0,
         )
@@ -429,7 +433,7 @@ async def compile_strategy(request: CompileRequest):
             "data": {
                 "code": "",
                 "valid": False,
-                "errors": [f"编译失败: {str(e)}"],
+                "errors": [f"编译失败: {sanitize_error(e)}"],
             },
         }
 
@@ -531,6 +535,10 @@ def _simulate_trades(df, signals, initial_capital=100000.0, commission=0.001):
 @handle_errors(module="strategy")
 async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_key)):
     """运行策略回测"""
+    # P0: Add 30s timeout protection
+    STRATEGY_TIMEOUT = 30.0
+    loop = asyncio.get_running_loop()
+    
     try:
         from app.services.strategy import (
             create_indicator_strategy,
@@ -539,13 +547,21 @@ async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_k
             analyze_backtest_result,
         )
 
-        is_valid, error = StrategyValidator.validate(request.code)
+        # P0: Timeout validation
+        is_valid, error = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), StrategyValidator.validate, request.code),
+            timeout=STRATEGY_TIMEOUT
+        )
         if not is_valid:
             raise HTTPException(status_code=400, detail=f"策略代码验证失败: {error}")
 
         strategy = create_indicator_strategy(request.code)
 
-        df = _get_history_data(request.symbol, request.start_date, request.end_date)
+        # P0: Timeout history fetch
+        df = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _get_history_data, request.symbol, request.start_date, request.end_date),
+            timeout=STRATEGY_TIMEOUT
+        )
         if df is None or df.empty:
             raise HTTPException(status_code=404, detail=f"未找到数据: {request.symbol}")
 
@@ -594,7 +610,7 @@ async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_k
         raise
     except Exception as e:
         logger.error(f"[Strategy] Backtest error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
 
 
 @router.post("/optimize")
@@ -654,7 +670,7 @@ async def optimize_strategy(
         raise
     except Exception as e:
         logger.error(f"[Strategy] Optimize error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
 
 
 @router.get("/templates")
@@ -734,7 +750,7 @@ async def create_strategy(request: StrategyCreate, _: None = Depends(require_api
                 take_profit_pct=request.take_profit_pct,
             )
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=sanitize_error(e))
     else:
         now = datetime.now().isoformat()
         _strategies_db[strategy_id] = {

@@ -44,6 +44,7 @@ from ..services.agent.token_service import (
 )
 from ..middleware.agent_auth import verify_agent_token, require_scope
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pydantic Models
@@ -221,7 +222,7 @@ async def health(request: Request):
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[AGENT_HEALTH] Health check failed | request_id={request_id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_HEALTH] Health check failed | request_id={request_id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.error(
@@ -381,7 +382,7 @@ async def whoami(request: Request, token: Any = Depends(verify_agent_token)):
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[AGENT_WHOAMI] Whoami failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_WHOAMI] Whoami failed | request_id={request_id} token_id={token.id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.error(
@@ -457,7 +458,7 @@ async def list_markets(
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[AGENT_MARKETS] List markets failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_MARKETS] List markets failed | request_id={request_id} token_id={token.id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.error(
@@ -578,7 +579,7 @@ async def search_symbols(
     except Exception as e:
         duration = time.time() - start_time
         logger.warning(
-            f"[AGENT_SYMBOLS] Search symbols fallback | request_id={request_id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_SYMBOLS] Search symbols fallback | request_id={request_id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.debug("[AGENT_SYMBOLS] Returning empty results due to error")
@@ -717,7 +718,7 @@ async def get_klines(
     except Exception as e:
         duration = time.time() - start_time
         logger.warning(
-            f"[AGENT_KLINES] Get klines fallback | request_id={request_id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_KLINES] Get klines fallback | request_id={request_id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.debug("[AGENT_KLINES] Returning empty data due to error")
@@ -831,7 +832,7 @@ async def get_price(
     except Exception as e:
         duration = time.time() - start_time
         logger.warning(
-            f"[AGENT_PRICE] Get price fallback | request_id={request_id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_PRICE] Get price fallback | request_id={request_id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
 
@@ -1069,7 +1070,7 @@ async def list_strategies(
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[AGENT_STRATEGIES_LIST] List strategies failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_STRATEGIES_LIST] List strategies failed | request_id={request_id} token_id={token.id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.error(
@@ -1189,7 +1190,7 @@ async def get_strategy(
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[AGENT_STRATEGY_GET] Get strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_STRATEGY_GET] Get strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.error(
@@ -1336,14 +1337,14 @@ async def create_strategy(
     except ValueError as e:
         duration = time.time() - start_time
         logger.warning(
-            f"[AGENT_STRATEGY_CREATE] Strategy creation failed (duplicate) | request_id={request_id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_STRATEGY_CREATE] Strategy creation failed (duplicate) | request_id={request_id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=sanitize_error(e))
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[AGENT_STRATEGY_CREATE] Create strategy failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_STRATEGY_CREATE] Create strategy failed | request_id={request_id} token_id={token.id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.error(
@@ -1535,7 +1536,7 @@ async def update_strategy(
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[AGENT_STRATEGY_UPDATE] Update strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_STRATEGY_UPDATE] Update strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.error(
@@ -1674,7 +1675,7 @@ async def delete_strategy(
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[AGENT_STRATEGY_DELETE] Delete strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={str(e)} duration={duration:.3f}s",
+            f"[AGENT_STRATEGY_DELETE] Delete strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={sanitize_error(e)} duration={duration:.3f}s",
             exc_info=True,
         )
         logger.error(

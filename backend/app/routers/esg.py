@@ -4,11 +4,13 @@ ESG评价体系 API
 功能: ESG评级查询、碳排放数据、ESG趋势分析
 """
 
+import asyncio
 import logging
 from fastapi import APIRouter, Query
 from typing import Optional, List
 from pydantic import BaseModel
 from app.utils.errors import success_response, error_response, ErrorCode
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/esg", tags=["esg"])
@@ -27,6 +29,7 @@ def _get_ak():
 
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 # ESG data uses static cache (L1: 1h, L2: 7 days)
 ESG_CACHE_TTL = 3600  # 1小时缓存（ESG数据更新慢）
@@ -67,6 +70,9 @@ async def get_esg_rating(symbol: str):
 
     数据来源: 华证ESG、MSCI ESG、新浪ESG
     """
+    # P0: Add 30s timeout protection
+    ESG_TIMEOUT = 30.0
+    
     cache_key = f"esg_rating_{symbol}"
     cached = _get_cache(cache_key)
     if cached:
@@ -75,10 +81,15 @@ async def get_esg_rating(symbol: str):
     try:
         ak = _get_ak()
         ratings = []
+        loop = asyncio.get_running_loop()
 
         # 华证ESG评级
         try:
-            df_hz = ak.stock_esg_hz_sina()
+            # P0: Timeout protection for blocking akshare call
+            df_hz = await asyncio.wait_for(
+                loop.run_in_executor(get_executor(), ak.stock_esg_hz_sina),
+                timeout=ESG_TIMEOUT
+            )
             if df_hz is not None and not df_hz.empty:
                 # 按股票代码筛选
                 df_filtered = (
@@ -161,7 +172,7 @@ async def get_esg_rating(symbol: str):
 
     except Exception as e:
         logger.error(f"获取ESG评级失败: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG评级失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG评级失败: {sanitize_error(e)}")
 
 
 @router.get("/carbon")
@@ -235,7 +246,7 @@ async def get_carbon_data():
 
     except Exception as e:
         logger.error(f"获取碳排放数据失败: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取碳排放数据失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取碳排放数据失败: {sanitize_error(e)}")
 
 
 @router.get("/rank")
@@ -278,7 +289,7 @@ async def get_esg_rank(limit: int = Query(20, ge=1, le=100, description="返回�
 
     except Exception as e:
         logger.error(f"获取ESG排名失败: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG排名失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG排名失败: {sanitize_error(e)}")
 
 
 @router.get("/health")

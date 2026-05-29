@@ -16,6 +16,7 @@ from app.routers.admin import verify_admin_key
 from app.db.database import _get_conn
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -415,16 +416,21 @@ async def get_sankey_data(
 
     Returns nodes and links for visualizing cost flow from Total -> Workflow -> Model.
     """
+    # P0: Add 30s timeout protection
+    COST_TIMEOUT = 30.0
+    
     loop = asyncio.get_event_loop()
 
     try:
-        result = await loop.run_in_executor(
-            get_executor(), _get_sankey_data_sync, start_date, end_date
+        # P0: Timeout protection for blocking DB call
+        result = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _get_sankey_data_sync, start_date, end_date),
+            timeout=COST_TIMEOUT
         )
         return {"code": 0, "data": result}
     except Exception as e:
         logger.error(f"[CostAttribution] Error getting Sankey data: {e}", exc_info=True)
-        return {"code": 1, "error": str(e)}
+        return {"code": 1, "error": sanitize_error(e)}
 
 
 @router.get("/prompt_tree")
@@ -437,16 +443,21 @@ async def get_prompt_tree(
 
     Returns hierarchical tree of prompts with token counts and costs.
     """
+    # P0: Add 30s timeout protection
+    COST_TIMEOUT = 30.0
+    
     loop = asyncio.get_event_loop()
 
     try:
-        result = await loop.run_in_executor(
-            get_executor(), _get_prompt_tree_sync, session_id
+        # P0: Timeout protection for blocking DB call
+        result = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _get_prompt_tree_sync, session_id),
+            timeout=COST_TIMEOUT
         )
         return {"code": 0, "data": result}
     except Exception as e:
         logger.error(f"[CostAttribution] Error getting prompt tree: {e}", exc_info=True)
-        return {"code": 1, "error": str(e)}
+        return {"code": 1, "error": sanitize_error(e)}
 
 
 @router.get("/breakdown")
@@ -472,7 +483,7 @@ async def get_cost_breakdown(
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:
         logger.error(f"[CostAttribution] Error getting breakdown: {e}", exc_info=True)
-        return {"code": 1, "error": str(e)}
+        return {"code": 1, "error": sanitize_error(e)}
 
 
 @router.get("/sessions")
@@ -494,7 +505,7 @@ async def get_sessions_list(
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:
         logger.error(f"[CostAttribution] Error getting sessions: {e}", exc_info=True)
-        return {"code": 1, "error": str(e)}
+        return {"code": 1, "error": sanitize_error(e)}
 
 
 @router.get("/health")

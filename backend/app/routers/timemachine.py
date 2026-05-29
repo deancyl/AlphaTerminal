@@ -15,7 +15,7 @@ from threading import Lock
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from app.utils.errors import success_response, error_response
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.timemachine.playback_engine import (
     PlaybackEngine,
     DailyPlaybackEngine,
@@ -23,6 +23,8 @@ from app.services.timemachine.playback_engine import (
 )
 from app.services.timemachine.paper_trading import PaperPortfolio, PaperTradingError
 from app.utils.error_decorator import handle_errors
+from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -278,6 +280,9 @@ async def get_history(
     symbol: str, start_date: Optional[str] = None, end_date: Optional[str] = None
 ):
     """Get historical K-line data up to a date."""
+    # P0: Add 30s timeout protection
+    TIMEMACHINE_TIMEOUT = 30.0
+    
     try:
         engine = DailyPlaybackEngine()
 
@@ -286,10 +291,17 @@ async def get_history(
         if not end_date:
             end_date = date.today().isoformat()
 
-        bars = await engine.get_bars(
-            symbol=symbol.lower(),
-            start_date=date.fromisoformat(start_date),
-            end_date=date.fromisoformat(end_date),
+        loop = asyncio.get_running_loop()
+        # P0: Timeout protection for blocking get_bars call
+        bars = await asyncio.wait_for(
+            loop.run_in_executor(
+                get_executor(),
+                engine.get_bars,
+                symbol.lower(),
+                date.fromisoformat(start_date),
+                date.fromisoformat(end_date),
+            ),
+            timeout=TIMEMACHINE_TIMEOUT
         )
 
         return success_response(
@@ -319,13 +331,16 @@ async def get_history(
         logger.error(
             f"[TimeMachine] Failed to get history for {symbol}: {e}", exc_info=True
         )
-        return error_response(f"Failed to get history: {str(e)}")
+        return error_response(f"Failed to get history: {sanitize_error(e)}")
 
 
 @router.post("/session/create")
 @handle_errors(module="timemachine")
 async def create_session(request: SessionCreateRequest):
     """Create a new time-machine replay session."""
+    # P0: Add 30s timeout protection
+    TIMEMACHINE_TIMEOUT = 30.0
+    
     try:
         _session_manager.cleanup_expired()
 
@@ -343,10 +358,17 @@ async def create_session(request: SessionCreateRequest):
         else:
             raise HTTPException(400, "Minute-level playback not yet implemented")
 
-        session.bars = await session.engine.get_bars(
-            symbol=request.symbol,
-            start_date=date.fromisoformat(request.start_date),
-            end_date=date.fromisoformat(request.end_date),
+        loop = asyncio.get_running_loop()
+        # P0: Timeout protection for blocking get_bars call
+        session.bars = await asyncio.wait_for(
+            loop.run_in_executor(
+                get_executor(),
+                session.engine.get_bars,
+                request.symbol,
+                date.fromisoformat(request.start_date),
+                date.fromisoformat(request.end_date),
+            ),
+            timeout=TIMEMACHINE_TIMEOUT
         )
 
         if not session.bars:
@@ -366,7 +388,7 @@ async def create_session(request: SessionCreateRequest):
         raise
     except Exception as e:
         logger.error(f"[TimeMachine] Failed to create session: {e}", exc_info=True)
-        return error_response(f"Failed to create session: {str(e)}")
+        return error_response(f"Failed to create session: {sanitize_error(e)}")
 
 
 @router.get("/session/{session_id}")
@@ -532,7 +554,7 @@ async def execute_trade(session_id: str, request: TradeRequest):
         )
 
     except PaperTradingError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, sanitize_error(e))
 
 
 @router.get("/session/{session_id}/portfolio")

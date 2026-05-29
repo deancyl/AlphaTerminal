@@ -146,6 +146,9 @@ async def get_config_diff(
     - old_value: value before change
     - new_value: value after change
     """
+    # P0: Add 30s timeout protection
+    PLAYBACK_TIMEOUT = 30.0
+    
     loop = asyncio.get_event_loop()
 
     def _sync_get_diff():
@@ -160,7 +163,11 @@ async def get_config_diff(
         finally:
             conn.close()
 
-    changes = await loop.run_in_executor(_executor, _sync_get_diff)
+    # P0: Timeout protection for blocking DB call
+    changes = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), _sync_get_diff),
+        timeout=PLAYBACK_TIMEOUT
+    )
 
     return {
         "code": 0,
@@ -186,6 +193,9 @@ async def get_audit_timeline(
 
     Returns list of timestamps with action summaries.
     """
+    # P0: Add 30s timeout protection
+    PLAYBACK_TIMEOUT = 30.0
+    
     loop = asyncio.get_event_loop()
 
     def _sync_get_timeline():
@@ -230,7 +240,11 @@ async def get_audit_timeline(
         finally:
             conn.close()
 
-    timeline = await loop.run_in_executor(_executor, _sync_get_timeline)
+    # P0: Timeout protection for blocking DB call
+    timeline = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), _sync_get_timeline),
+        timeout=PLAYBACK_TIMEOUT
+    )
 
     return {"code": 0, "data": {"timeline": timeline, "total": len(timeline)}}
 
@@ -246,6 +260,9 @@ async def rollback_config(body: RollbackRequest):
     - Restores config from audit_chain records
     - Requires confirm=true to execute
     """
+    # P0: Add 30s timeout protection
+    PLAYBACK_TIMEOUT = 30.0
+    
     if not body.confirm:
         raise HTTPException(
             status_code=400,
@@ -309,7 +326,11 @@ async def rollback_config(body: RollbackRequest):
         finally:
             conn.close()
 
-    result = await loop.run_in_executor(_executor, _sync_verify_and_rollback)
+    # P0: Timeout protection for blocking rollback
+    result = await asyncio.wait_for(
+        loop.run_in_executor(get_executor(), _sync_verify_and_rollback),
+        timeout=PLAYBACK_TIMEOUT
+    )
 
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error"))

@@ -20,6 +20,7 @@ from app.utils.errors import success_response
 from app.routers.admin import verify_admin_key
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -471,6 +472,9 @@ async def scan_data_gaps(
     - Price anomalies (>20% change)
     - Coverage percentage
     """
+    # P0: Add 30s timeout protection
+    DATAGAPS_TIMEOUT = 30.0
+    
     try:
         # Validate dates
         datetime.strptime(start_date, "%Y-%m-%d")
@@ -489,10 +493,11 @@ async def scan_data_gaps(
                 }
             )
 
-        # Run scan in thread pool
+        # P0: Timeout protection for blocking scan
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(
-            get_executor(), _scan_kline_gaps_sync, symbol, start_date, end_date
+        result = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _scan_kline_gaps_sync, symbol, start_date, end_date),
+            timeout=DATAGAPS_TIMEOUT
         )
 
         return success_response(result)
@@ -501,7 +506,7 @@ async def scan_data_gaps(
         raise HTTPException(status_code=400, detail=f"Invalid date format: {e}")
     except Exception as e:
         logger.error(f"[DataGaps] Scan error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
 
 
 @router.post("/backfill")
@@ -514,6 +519,9 @@ async def backfill_data_gaps(
 
     Fetches data from akshare and inserts into database.
     """
+    # P0: Add 30s timeout protection
+    DATAGAPS_TIMEOUT = 30.0
+    
     try:
         if not request.dates:
             raise HTTPException(
@@ -533,10 +541,11 @@ async def backfill_data_gaps(
                 }
             )
 
-        # Run backfill in thread pool
+        # P0: Timeout protection for blocking backfill
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(
-            get_executor(), _backfill_kline_sync, request.symbol, request.dates
+        result = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _backfill_kline_sync, request.symbol, request.dates),
+            timeout=DATAGAPS_TIMEOUT
         )
 
         return success_response(result)
@@ -545,7 +554,7 @@ async def backfill_data_gaps(
         raise
     except Exception as e:
         logger.error(f"[DataGaps] Backfill error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
 
 
 @router.get("/calendar")
@@ -560,18 +569,22 @@ async def get_data_gaps_calendar(
 
     Returns gap count for each day in the specified month.
     """
+    # P0: Add 30s timeout protection
+    DATAGAPS_TIMEOUT = 30.0
+    
     try:
-        # Run calendar query in thread pool
+        # P0: Timeout protection for blocking calendar query
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(
-            get_executor(), _get_calendar_data_sync, year, month
+        result = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _get_calendar_data_sync, year, month),
+            timeout=DATAGAPS_TIMEOUT
         )
 
         return success_response(result)
 
     except Exception as e:
         logger.error(f"[DataGaps] Calendar error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
 
 
 @router.get("/health")

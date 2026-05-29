@@ -10,6 +10,7 @@ Provides market indicator endpoints:
 PRD Chapter 5.4-5.7: Market Indicators
 """
 
+import asyncio
 import logging
 import time
 import sqlite3
@@ -19,6 +20,8 @@ from typing import Optional
 from app.db.fund_database import _get_fund_thread_conn
 from app.utils.error_decorator import handle_errors
 from app.utils.response import success_response
+from app.utils.errors import error_response, ErrorCode
+from app.utils.executor import get_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market-indicators", tags=["market-indicators"])
@@ -39,11 +42,20 @@ async def get_fear_greed_index(
     
     PRD Chapter 5.4: 恐贪指数 FGI
     """
+    # P0: Add 30s timeout protection
+    INDICATOR_TIMEOUT = 30.0
+    
     logger.info(f"[FGI] 获取恐慌贪婪指数 limit={limit}")
     start = time.time()
     
     try:
-        conn = _get_fund_thread_conn()
+        loop = asyncio.get_running_loop()
+        
+        # P0: Timeout protection for DB query
+        conn = await asyncio.wait_for(
+            loop.run_in_executor(get_executor(), _get_fund_thread_conn),
+            timeout=INDICATOR_TIMEOUT
+        )
         cursor = conn.cursor()
         
         cursor.execute("""
