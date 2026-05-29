@@ -184,6 +184,25 @@
     --scrollbar-track: #0A0A0A;
     --scrollbar-thumb: #2A2A2A;
     --scrollbar-thumb-hover: #3A3A3A;
+
+    /* ── 技术指标颜色 ── */
+    /* MA Lines */
+    --color-ma5: #F5A623;        /* Golden - MA5 */
+    --color-ma10: #0F52BA;       /* Brand Blue - MA10 */
+    --color-ma20: #A855F7;       /* Purple - MA20 */
+    --color-ma60: #EC4899;       /* Pink - MA60 */
+
+    /* MACD */
+    --color-macd-dif: #60a5fa;   /* Blue-400 - MACD DIF */
+    --color-macd-dea: #f87171;   /* Red-400 - MACD DEA */
+    --color-macd-hist: #22c55e;  /* Green-500 - MACD Histogram */
+
+    /* Overlay Colors */
+    --color-overlay: #f97316;    /* Orange-500 - Overlay comparison line */
+    --color-oi: #f59e0b;         /* Amber-500 - OI indicator */
+
+    /* Flat/Neutral Colors */
+    --color-flat: #71717a;       /* Zinc-500 - Flat/neutral state */
   }
 
   /* ============================================
@@ -298,6 +317,25 @@
     --scrollbar-track: #232838;
     --scrollbar-thumb: #3D4559;
     --scrollbar-thumb-hover: #4D5669;
+
+    /* ── 技术指标颜色 ── */
+    /* MA Lines */
+    --color-ma5: #F5A623;        /* Golden - MA5 */
+    --color-ma10: #1890FF;       /* Wind Blue - MA10 */
+    --color-ma20: #A855F7;       /* Purple - MA20 */
+    --color-ma60: #EC4899;       /* Pink - MA60 */
+
+    /* MACD */
+    --color-macd-dif: #60a5fa;   /* Blue-400 - MACD DIF */
+    --color-macd-dea: #f87171;   /* Red-400 - MACD DEA */
+    --color-macd-hist: #22c55e;  /* Green-500 - MACD Histogram */
+
+    /* Overlay Colors */
+    --color-overlay: #f97316;    /* Orange-500 - Overlay comparison line */
+    --color-oi: #f59e0b;         /* Amber-500 - OI indicator */
+
+    /* Flat/Neutral Colors */
+    --color-flat: #71717a;       /* Zinc-500 - Flat/neutral state */
   }
 
 /* ============================================
@@ -413,6 +451,25 @@
     --scrollbar-track: #1e293b; /* slate-800 */
     --scrollbar-thumb: #334155; /* slate-700 */
     --scrollbar-thumb-hover: #475569; /* slate-600 */
+
+    /* ── 技术指标颜色 ── */
+    /* MA Lines */
+    --color-ma5: #F5A623;        /* Golden - MA5 */
+    --color-ma10: #3b82f6;       /* Blue-500 - MA10 */
+    --color-ma20: #A855F7;       /* Purple - MA20 */
+    --color-ma60: #EC4899;       /* Pink - MA60 */
+
+    /* MACD */
+    --color-macd-dif: #60a5fa;   /* Blue-400 - MACD DIF */
+    --color-macd-dea: #f87171;   /* Red-400 - MACD DEA */
+    --color-macd-hist: #22c55e;  /* Green-500 - MACD Histogram */
+
+    /* Overlay Colors */
+    --color-overlay: #f97316;    /* Orange-500 - Overlay comparison line */
+    --color-oi: #f59e0b;         /* Amber-500 - OI indicator */
+
+    /* Flat/Neutral Colors */
+    --color-flat: #71717a;       /* Zinc-500 - Flat/neutral state */
   }
 
   /* ============================================
@@ -528,6 +585,25 @@
     --scrollbar-track: #f1f5f9; /* slate-100 */
     --scrollbar-thumb: #cbd5e1; /* slate-300 */
     --scrollbar-thumb-hover: #94a3b8; /* slate-400 */
+
+    /* ── 技术指标颜色 ── */
+    /* MA Lines */
+    --color-ma5: #F5A623;        /* Golden - MA5 */
+    --color-ma10: #3b82f6;       /* Blue-500 - MA10 */
+    --color-ma20: #A855F7;       /* Purple - MA20 */
+    --color-ma60: #EC4899;       /* Pink - MA60 */
+
+    /* MACD */
+    --color-macd-dif: #60a5fa;   /* Blue-400 - MACD DIF */
+    --color-macd-dea: #f87171;   /* Red-400 - MACD DEA */
+    --color-macd-hist: #22c55e;  /* Green-500 - MACD Histogram */
+
+    /* Overlay Colors */
+    --color-overlay: #f97316;    /* Orange-500 - Overlay comparison line */
+    --color-oi: #f59e0b;         /* Amber-500 - OI indicator */
+
+    /* Flat/Neutral Colors */
+    --color-flat: #71717a;       /* Zinc-500 - Flat/neutral state */
   }
 
   /* ============================================

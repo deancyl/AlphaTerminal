@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:  # 允许手动触发
+  workflow_call:  # 允许作为可重用工作流调用
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

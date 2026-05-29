@@ -27,10 +27,30 @@ class CacheMetrics:
     fetch_latencies: Dict[str, List[float]] = field(
         default_factory=lambda: defaultdict(list)
     )
+    
+    # API endpoint latency tracking (in milliseconds)
+    _api_latencies: Dict[str, Dict[str, List[float]]] = field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(list))
+    )
+    
+    # API endpoint status code tracking
+    _api_status_codes: Dict[str, Dict[str, Dict[int, int]]] = field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    )
 
     # Data source statistics
     source_requests: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     source_errors: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+
+    # API latency tracking (endpoint -> list of latencies in seconds)
+    _api_latencies: Dict[str, List[float]] = field(
+        default_factory=lambda: defaultdict(list)
+    )
+    
+    # API status code tracking (endpoint -> status_code -> count)
+    _api_status_codes: Dict[str, Dict[int, int]] = field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(int))
+    )
 
     # Thread safety
     _lock: Lock = field(default_factory=Lock, repr=False)
@@ -73,6 +93,29 @@ class CacheMetrics:
         """Record an error from a data source."""
         with self._lock:
             self.source_errors[source] += 1
+
+    def record_api_latency(
+        self, endpoint: str, method: str, latency_ms: float, status_code: int
+    ) -> None:
+        """
+        Record API latency for an endpoint.
+
+        Args:
+            endpoint: API endpoint path (e.g., '/api/v1/market/overview')
+            method: HTTP method (GET, POST, etc.)
+            latency_ms: Response time in milliseconds
+            status_code: HTTP status code (200, 404, 500, etc.)
+        """
+        with self._lock:
+            key = f"{method}:{endpoint}"
+            
+            latency_seconds = latency_ms / 1000.0
+            
+            if len(self._api_latencies[key]) >= 1000:
+                self._api_latencies[key] = self._api_latencies[key][-999:]
+            self._api_latencies[key].append(latency_seconds)
+            
+            self._api_status_codes[endpoint][status_code] += 1
 
     def get_hit_rate(self) -> float:
         """Calculate cache hit rate (0.0 to 1.0)."""
@@ -184,6 +227,50 @@ class CacheMetrics:
                 lines.append(
                     f'datasource_latency_p95_seconds{{source="{source}"}} {p95:.6f}'
                 )
+
+            lines.append("")
+            lines.append(
+                "# HELP api_endpoint_latency_avg_seconds Average API latency per endpoint"
+            )
+            lines.append("# TYPE api_endpoint_latency_avg_seconds gauge")
+            for key in self._api_latencies.keys():
+                latencies = self._api_latencies.get(key, [])
+                avg = sum(latencies) / len(latencies) if latencies else 0.0
+                method, endpoint = key.split(":", 1) if ":" in key else ("GET", key)
+                safe_endpoint = endpoint.replace('"', '\\"')
+                lines.append(
+                    f'api_endpoint_latency_avg_seconds{{method="{method}",endpoint="{safe_endpoint}"}} {avg:.6f}'
+                )
+
+            lines.append(
+                "# HELP api_endpoint_latency_p95_seconds 95th percentile API latency per endpoint"
+            )
+            lines.append("# TYPE api_endpoint_latency_p95_seconds gauge")
+            for key in self._api_latencies.keys():
+                latencies = self._api_latencies.get(key, [])
+                if not latencies:
+                    p95 = 0.0
+                else:
+                    sorted_latencies = sorted(latencies)
+                    idx = int(len(sorted_latencies) * 0.95)
+                    p95 = sorted_latencies[min(idx, len(sorted_latencies) - 1)]
+                method, endpoint = key.split(":", 1) if ":" in key else ("GET", key)
+                safe_endpoint = endpoint.replace('"', '\\"')
+                lines.append(
+                    f'api_endpoint_latency_p95_seconds{{method="{method}",endpoint="{safe_endpoint}"}} {p95:.6f}'
+                )
+
+            lines.append("")
+            lines.append(
+                "# HELP api_endpoint_status_total Total requests per endpoint and status code"
+            )
+            lines.append("# TYPE api_endpoint_status_total counter")
+            for endpoint, status_counts in self._api_status_codes.items():
+                safe_endpoint = endpoint.replace('"', '\\"')
+                for status_code, count in status_counts.items():
+                    lines.append(
+                        f'api_endpoint_status_total{{endpoint="{safe_endpoint}",status="{status_code}"}} {count}'
+                    )
 
             return "\n".join(lines) + "\n"
 

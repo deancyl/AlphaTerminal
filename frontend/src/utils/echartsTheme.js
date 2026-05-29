@@ -15,6 +15,39 @@ export function getDynamicThemeColors() {
     splitLine: getCSSVar('--chart-grid', '#1C2333'),
     crosshair: getCSSVar('--chart-crosshair', 'rgba(240,246,252,0.20)'),
     
+    // Text colors (semantic)
+    textPrimary: getCSSVar('--text-primary', '#F0F6FC'),
+    textSecondary: getCSSVar('--text-secondary', '#E5E7EB'),
+    textMuted: getCSSVar('--text-muted', '#9ca3af'),
+    
+    // Border colors (semantic)
+    borderBase: getCSSVar('--border-base', '#374151'),
+    borderLight: getCSSVar('--border-light', '#4b5563'),
+    
+    // Semantic colors
+    info: getCSSVar('--color-info', '#60a5fa'),
+    warning: getCSSVar('--color-warning', '#fbbf24'),
+    success: getCSSVar('--color-success', '#34d399'),
+    error: getCSSVar('--color-error', '#f87171'),
+    
+    // Pie chart colors (distinct palette)
+    pieColors: [
+      getCSSVar('--color-pie-1', '#60a5fa'),
+      getCSSVar('--color-pie-2', '#34d399'),
+      getCSSVar('--color-pie-3', '#fbbf24'),
+      getCSSVar('--color-pie-4', '#f87171'),
+      getCSSVar('--color-pie-5', '#a78bfa')
+    ],
+    
+    // Line chart colors (distinct palette)
+    lineColors: [
+      getCSSVar('--color-line-1', '#60a5fa'),
+      getCSSVar('--color-line-2', '#34d399'),
+      getCSSVar('--color-line-3', '#fbbf24'),
+      getCSSVar('--color-line-4', '#f87171'),
+      getCSSVar('--color-line-5', '#a78bfa')
+    ],
+    
     tooltipBg: isLight ? 'rgba(255,255,255,0.96)' : 'rgba(13,17,23,0.95)',
     tooltipBorder: getCSSVar('--border-base', '#30363D'),
     tooltipText: getCSSVar('--text-primary', '#F0F6FC'),
@@ -27,24 +60,24 @@ export function getDynamicThemeColors() {
     primary: getCSSVar('--color-primary', '#0F52BA'),
     primaryBg: getCSSVar('--color-primary-bg', 'rgba(15,82,186,0.10)'),
     
-    ma5: '#F5A623',
-    ma10: '#0F52BA',
-    ma20: '#A855F7',
-    ma60: '#EC4899',
+    ma5: getCSSVar('--color-ma5', '#F5A623'),
+    ma10: getCSSVar('--color-ma10', '#0F52BA'),
+    ma20: getCSSVar('--color-ma20', '#A855F7'),
+    ma60: getCSSVar('--color-ma60', '#EC4899'),
     
-    dif: '#60a5fa',
-    dea: '#f87171',
+    dif: getCSSVar('--color-macd-dif', '#60a5fa'),
+    dea: getCSSVar('--color-macd-dea', '#f87171'),
     macdUp: getCSSVar('--color-bull', '#E63946'),
     macdDown: getCSSVar('--color-bear', '#1A936F'),
     
     volUp: getCSSVar('--color-bull', '#E63946'),
     volDown: getCSSVar('--color-bear', '#1A936F'),
     
-    overlay: '#f97316',
-    oi: '#f59e0b',
+    overlay: getCSSVar('--color-overlay', '#f97316'),
+    oi: getCSSVar('--color-oi', '#f59e0b'),
     deltaOiUp: getCSSVar('--color-bull', '#E63946'),
     deltaOiDown: getCSSVar('--color-bear', '#1A936F'),
-    deltaOiFlat: '#6b7280',
+    deltaOiFlat: getCSSVar('--color-flat', '#6b7280'),
   }
 }
 

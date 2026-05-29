@@ -885,16 +885,7 @@ async function retryFailed() {
   }
 }
 
-function getChartColors() {
-  return {
-    primary: getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA',
-    text: getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E',
-    up: getComputedStyle(document.documentElement).getPropertyValue('--color-up').trim() || '#FF6B6B',
-    down: getComputedStyle(document.documentElement).getPropertyValue('--color-down').trim() || '#51CF66',
-    warning: getComputedStyle(document.documentElement).getPropertyValue('--color-warning').trim() || '#FF7D00',
-    success: getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || '#51CF66',
-  }
-}
+import { getDynamicThemeColors, getDynamicMarketColors } from '../utils/echartsTheme.js'
 
 function drawGDPChart(data) {
   if (!gdpChartInstance || !gdpChart.value) return
@@ -905,7 +896,8 @@ function drawGDPChart(data) {
     return
   }
 
-  const colors = getChartColors()
+  const colors = getDynamicThemeColors()
+  const marketColors = getDynamicMarketColors()
   const quarters = data.map(d => d.quarter)
   const yoyData = data.map(d => d.gdp_yoy)
 
@@ -965,7 +957,8 @@ function drawCPIChart(data) {
     return
   }
 
-  const colors = getChartColors()
+  const colors = getDynamicThemeColors()
+  const marketColors = getDynamicMarketColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.nation_yoy)
   const momData = data.map(d => d.nation_mom)
@@ -1034,7 +1027,8 @@ function drawPMIChart(data) {
     return
   }
 
-  const colors = getChartColors()
+  const colors = getDynamicThemeColors()
+  const marketColors = getDynamicMarketColors()
   const months = data.map(d => d.month)
   const manufacturingData = data.map(d => d.manufacturing_index)
   const nonManufacturingData = data.map(d => d.non_manufacturing_index)
@@ -1109,7 +1103,8 @@ function drawPPIChart(data) {
     return
   }
 
-  const colors = getChartColors()
+  const colors = getDynamicThemeColors()
+  const marketColors = getDynamicMarketColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.yoy)
 
@@ -1169,7 +1164,8 @@ function drawM2Chart(data) {
     return
   }
 
-  const colors = getChartColors()
+  const colors = getDynamicThemeColors()
+  const marketColors = getDynamicMarketColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.m2_yoy)
 
@@ -1229,7 +1225,8 @@ function drawSocialFinancingChart(data) {
     return
   }
 
-  const colors = getChartColors()
+  const colors = getDynamicThemeColors()
+  const marketColors = getDynamicMarketColors()
   const months = data.map(d => d.month)
   const totalData = data.map(d => d.total)
 
@@ -1286,7 +1283,8 @@ function drawIndustrialProductionChart(data) {
     return
   }
 
-  const colors = getChartColors()
+  const colors = getDynamicThemeColors()
+  const marketColors = getDynamicMarketColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.yoy)
 
@@ -1346,7 +1344,8 @@ function drawUnemploymentChart(data) {
     return
   }
 
-  const colors = getChartColors()
+  const colors = getDynamicThemeColors()
+  const marketColors = getDynamicMarketColors()
   const months = data.map(d => d.month)
   const rateData = data.map(d => d.rate)
 

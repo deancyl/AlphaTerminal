@@ -99,6 +99,18 @@ export function getThemeColor(nameOrVar, fallback = '') {
     'success': '#22c55e',
     'error': '#ef4444',
     'info': '#3b82f6',
+    
+    // Indicator colors (MA/MACD/Overlay)
+    'ma5': '--color-ma5',
+    'ma10': '--color-ma10',
+    'ma20': '--color-ma20',
+    'ma60': '--color-ma60',
+    'macd-dif': '--color-macd-dif',
+    'macd-dea': '--color-macd-dea',
+    'macd-hist': '--color-macd-hist',
+    'overlay': '--color-overlay',
+    'oi': '--color-oi',
+    'flat': '--color-flat',
   }
   
   // If it's a named color, get the CSS var or return the value
@@ -148,6 +160,21 @@ export function getChartColors() {
     ma10: '#0F52BA',
     ma20: '#A855F7',
     ma60: '#EC4899',
+  }
+}
+
+export function getIndicatorColors() {
+  return {
+    ma5: getThemeColor('ma5', '#F5A623'),
+    ma10: getThemeColor('ma10', '#0F52BA'),
+    ma20: getThemeColor('ma20', '#A855F7'),
+    ma60: getThemeColor('ma60', '#EC4899'),
+    macdDif: getThemeColor('macd-dif', '#60a5fa'),
+    macdDea: getThemeColor('macd-dea', '#f87171'),
+    macdHist: getThemeColor('macd-hist', '#22c55e'),
+    overlay: getThemeColor('overlay', '#f97316'),
+    oi: getThemeColor('oi', '#f59e0b'),
+    flat: getThemeColor('flat', '#71717a'),
   }
 }
 

@@ -64,6 +64,7 @@ from app.db.db_writer import start_writer, stop_writer
 from app.services.watchdog import init_watchdog, stop_watchdog
 from app.middleware.agent_auth import audit_middleware
 from app.middleware.rate_limit import setup_rate_limiting, RateLimitConfig
+from app.middleware.response_time import ResponseTimeMiddleware
 from app.config.settings import get_settings
 from app.services.executor_manager import executor_manager
 
@@ -201,6 +202,10 @@ app = FastAPI(
 # Enable GZip compression for responses > 1KB
 # Reduces JSON payload sizes by 70-80%, critical for large K-line datasets
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# ── Response Time Middleware ─────────────────────────────────────────────────
+# Track API response time and record to cache_metrics
+app.add_middleware(ResponseTimeMiddleware)
 
 # 初始化日志队列（WebSocket 实时日志流）
 init_logging_queue()
