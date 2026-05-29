@@ -43,17 +43,25 @@ export function useOptions(initialSymbol = 'io2506', autoRefreshMs = 60000) {
    */
   function validateChainData(data) {
     if (!data || typeof data !== 'object') return false
-    if (!Array.isArray(data.calls)) return false
-    if (!Array.isArray(data.puts)) return false
-    
-    // Validate array elements
-    for (const opt of [...data.calls, ...data.puts]) {
-      if (typeof opt !== 'object') return false
-      if (opt.strike == null) return false
-      if (opt.code == null) return false
+    // Relax: allow both calls/puts arrays OR chain array
+    if (data.calls && Array.isArray(data.calls) && data.puts && Array.isArray(data.puts)) {
+      // Standard format: calls/puts arrays
+      for (const opt of [...data.calls, ...data.puts]) {
+        if (typeof opt !== 'object') return false
+        if (opt.strike == null) return false
+        if (opt.code == null) return false
+      }
+      return true
     }
-    
-    return true
+    if (data.chain && Array.isArray(data.chain)) {
+      // Alternative format: chain array (each item has call/put)
+      for (const row of data.chain) {
+        if (typeof row !== 'object') return false
+        if (row.strike == null) return false
+      }
+      return true
+    }
+    return false
   }
   
   // ==================== Computed Properties ====================

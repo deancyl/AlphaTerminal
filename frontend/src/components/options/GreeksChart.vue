@@ -17,8 +17,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, markRaw } from 'vue'
-import { useElementSize } from '@vueuse/core'
+import { ref, computed, watch, onMounted, onUnmounted, onDeactivated, nextTick, markRaw } from 'vue'
 import EducationalTooltip from './EducationalTooltip.vue'
 import * as echarts from 'echarts'
 
@@ -36,15 +35,7 @@ const greekTypes = [
 
 const chartRefs = ref({})
 const chartInstances = ref({})
-const containerSizes = ref({})
-
-function setChartRef(name, el) {
-  if (el) {
-    chartRefs.value[name] = el
-    const { width, height } = useElementSize(el)
-    containerSizes.value[name] = { width, height }
-  }
-}
+let resizeObserver = null
 
 const isEmpty = computed(() =>
   Object.values(props.greeksData).every(arr => arr.length === 0)
@@ -90,16 +81,23 @@ function buildGreekOption(greekName) {
   })
 }
 
-async function waitForContainer(name, timeout = 5000) {
-  const startTime = Date.now()
-  while (Date.now() - startTime < timeout) {
-    const size = containerSizes.value[name]
-    if (size && size.width.value > 0 && size.height.value > 0) {
-      return true
+function setChartRef(name, el) {
+  if (el) {
+    chartRefs.value[name] = el
+    el.dataset.greekName = name  // Tag for observer identification
+    
+    // Register with existing observer
+    if (resizeObserver) {
+      resizeObserver.observe(el)
     }
-    await nextTick()
+  } else {
+    // Cleanup on unmount
+    const oldEl = chartRefs.value[name]
+    if (oldEl && resizeObserver) {
+      resizeObserver.unobserve(oldEl)
+    }
+    delete chartRefs.value[name]
   }
-  return false
 }
 
 async function initCharts() {
@@ -107,14 +105,16 @@ async function initCharts() {
     const container = chartRefs.value[greek.name]
     if (!container || chartInstances.value[greek.name]) continue
 
-    const ready = await waitForContainer(greek.name)
-    if (!ready) {
-      console.warn(`[GreeksChart] Container not ready: ${greek.name}`)
-      continue
+    // Check container dimensions directly (no async wait needed)
+    const width = container.offsetWidth
+    const height = container.offsetHeight
+    
+    if (width > 0 && height > 0) {
+      chartInstances.value[greek.name] = echarts.init(container)
+      chartInstances.value[greek.name].setOption(buildGreekOption(greek.name))
+    } else {
+      console.warn(`[GreeksChart] Container not ready: ${greek.name} (${width}x${height})`)
     }
-
-    chartInstances.value[greek.name] = echarts.init(container)
-    chartInstances.value[greek.name].setOption(buildGreekOption(greek.name))
   }
 }
 
@@ -129,14 +129,37 @@ function updateCharts() {
 watch(() => props.greeksData, updateCharts, { deep: true })
 
 onMounted(async () => {
+  // Create single ResizeObserver for all charts
+  resizeObserver = new ResizeObserver(entries => {
+    for (const entry of entries) {
+      const chart = chartInstances.value[entry.target.dataset.greekName]
+      if (chart && !chart.isDisposed()) {
+        chart.resize()
+      }
+    }
+  })
+  
   if (!isEmpty.value) {
+    await nextTick()  // Wait for DOM to be ready
     await initCharts()
   }
 })
 
 onUnmounted(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  
   Object.values(chartInstances.value).forEach(chart => {
     if (chart && !chart.isDisposed()) chart.dispose()
+  })
+})
+
+onDeactivated(() => {
+  // Clear charts but keep instances for quick reuse
+  Object.values(chartInstances.value).forEach(chart => {
+    if (chart && !chart.isDisposed()) {
+      chart.clear()
+    }
   })
 })
 </script>
