@@ -237,8 +237,16 @@ class OptionsPricingEngine:
             Tuple of (implied volatility, method name)
             - method: 'rational_approximation' or 'bisection' or None
         """
-        if price <= 0 or spot <= 0 or strike <= 0 or time_to_expiry <= 0:
-            return None, None
+        # Parameter validation
+        if spot <= 0:
+            raise ValueError("标的资产价格必须大于0")
+        if strike <= 0:
+            raise ValueError("行权价必须大于0")
+        if time_to_expiry <= 0:
+            # For expired options, use 1 day minimum
+            time_to_expiry = 1.0 / 365.0
+        if price <= 0:
+            raise ValueError("期权价格必须大于0")
 
         flag = "c" if is_call else "p"
         option_type = "call" if is_call else "put"

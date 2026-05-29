@@ -31,6 +31,7 @@ ENDPOINT_LIMITS = {
     "fund": EndpointLimit(requests=30, period=60),
     "market_radar": EndpointLimit(requests=30, period=60),
     "global_index": EndpointLimit(requests=30, period=60),
+    "options": EndpointLimit(requests=30, period=60),
     "default": EndpointLimit(requests=200, period=60),
 }
 
@@ -90,6 +91,8 @@ def get_endpoint_category(path: str) -> str:
         return "fund"
     if "/market_radar/" in path:
         return "market_radar"
+    if "/options/" in path:
+        return "options"
     if "/market/global" in path:
         return "global_index"
     if "/market/" in path or "/stocks/" in path:

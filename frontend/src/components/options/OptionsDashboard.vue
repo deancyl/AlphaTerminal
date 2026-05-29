@@ -81,76 +81,84 @@
             <div class="px-3 py-2 text-center text-bearish font-bold">Put 看跌</div>
           </div>
           
-          <div class="table-body flex-1 overflow-x-auto overflow-y-auto">
-            <table class="w-full text-xs border-collapse">
-               <thead class="sticky top-0 bg-surface z-10">
-                 <tr class="text-secondary">
-                   <th class="px-2 py-1.5 text-right">最新价</th>
-                   <th class="px-2 py-1.5 text-right">涨跌</th>
-                   <th class="px-2 py-1.5 text-right">IV</th>
-                   <th class="px-2 py-1.5 text-right">Delta</th>
-                   <th class="px-2 py-1.5 text-right">持仓量</th>
-                   <th class="px-2 py-1.5 text-center bg-primary/10 sticky left-0 z-20">Strike</th>
-                   <th class="px-2 py-1.5 text-right">持仓量</th>
-                   <th class="px-2 py-1.5 text-right">Delta</th>
-                   <th class="px-2 py-1.5 text-right">IV</th>
-                   <th class="px-2 py-1.5 text-right">涨跌</th>
-                   <th class="px-2 py-1.5 text-right">最新价</th>
-                 </tr>
-               </thead>
-               <tbody>
-                 <tr
-                   v-for="row in chainRows"
-                   :key="row.strike"
-                   class="hover:bg-primary/5 transition"
-                   :class="{ 'bg-primary/10 font-bold': row.strike === atmStrike }"
-                   tabindex="0"
-                 >
-                   <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getPriceClass(row.call?.change)">
-                     {{ formatPrice(row.call?.latest) }}
-                   </td>
-                   <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getChangeClass(row.call?.change)">
-                     {{ formatChange(row.call?.change) }}
-                   </td>
-                   <td class="px-2 py-1.5 text-right font-mono tabular-nums">
-                     {{ formatPercent(row.call?.iv) }}
-                   </td>
-                   <td class="px-2 py-1.5 text-right font-mono tabular-nums">
-                     {{ formatGreek(row.call?.delta) }}
-                   </td>
-                   <td class="px-2 py-1.5 text-right">
-                     <div class="flex items-center justify-end gap-1">
-                       <div class="oi-bar h-2 rounded" :style="{ width: getOIBarWidth(row.call?.open_interest, 'call') }"></div>
-                       <span class="font-mono tabular-nums text-xs">{{ formatOI(row.call?.open_interest) }}</span>
-                     </div>
-                   </td>
-                   
-                   <td class="px-2 py-1.5 text-center font-mono tabular-nums bg-primary/10 sticky left-0 z-10 text-primary">
-                     {{ row.strike }}
-                     <span v-if="row.strike === atmStrike" class="text-warning ml-1">◀</span>
-                   </td>
-                   
-                   <td class="px-2 py-1.5 text-right">
-                     <div class="flex items-center justify-end gap-1">
-                       <div class="oi-bar put h-2 rounded" :style="{ width: getOIBarWidth(row.put?.open_interest, 'put') }"></div>
-                       <span class="font-mono tabular-nums text-xs">{{ formatOI(row.put?.open_interest) }}</span>
-                     </div>
-                   </td>
-                   <td class="px-2 py-1.5 text-right font-mono tabular-nums">
-                     {{ formatGreek(row.put?.delta) }}
-                   </td>
-                   <td class="px-2 py-1.5 text-right font-mono tabular-nums">
-                     {{ formatPercent(row.put?.iv) }}
-                   </td>
-                   <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getChangeClass(row.put?.change)">
-                     {{ formatChange(row.put?.change) }}
-                   </td>
-                   <td class="px-2 py-1.5 text-right font-mono tabular-nums" :class="getPriceClass(row.put?.change)">
-                     {{ formatPrice(row.put?.latest) }}
-                   </td>
-                 </tr>
-               </tbody>
-            </table>
+          <div class="table-body flex-1 overflow-hidden">
+            <VirtualizedTable
+              :items="chainRows"
+              :columns="tableColumns"
+              :item-size="28"
+              :buffer="100"
+              :row-class="getRowClass"
+              @row-click="handleRowClick"
+            >
+              <template #cell-call_latest="{ item }">
+                <span :class="getPriceClass(item.call?.change)" class="font-mono tabular-nums">
+                  {{ formatPrice(item.call?.latest) }}
+                </span>
+              </template>
+              
+              <template #cell-call_change="{ item }">
+                <span :class="getChangeClass(item.call?.change)" class="font-mono tabular-nums">
+                  {{ formatChange(item.call?.change) }}
+                </span>
+              </template>
+              
+              <template #cell-call_iv="{ item }">
+                <span class="font-mono tabular-nums">
+                  {{ formatPercent(item.call?.iv) }}
+                </span>
+              </template>
+              
+              <template #cell-call_delta="{ item }">
+                <span class="font-mono tabular-nums">
+                  {{ formatGreek(item.call?.delta) }}
+                </span>
+              </template>
+              
+              <template #cell-call_oi="{ item }">
+                <div class="flex items-center justify-end gap-1">
+                  <div class="oi-bar h-2 rounded" :style="{ width: getOIBarWidth(item.call?.open_interest, 'call') }"></div>
+                  <span class="font-mono tabular-nums text-xs">{{ formatOI(item.call?.open_interest) }}</span>
+                </div>
+              </template>
+              
+              <template #cell-strike="{ item }">
+                <div class="relative">
+                  <span class="font-mono tabular-nums text-primary">{{ item.strike }}</span>
+                  <span v-if="item.strike === atmStrike" class="text-warning ml-1">◀</span>
+                </div>
+              </template>
+              
+              <template #cell-put_oi="{ item }">
+                <div class="flex items-center justify-end gap-1">
+                  <div class="oi-bar put h-2 rounded" :style="{ width: getOIBarWidth(item.put?.open_interest, 'put') }"></div>
+                  <span class="font-mono tabular-nums text-xs">{{ formatOI(item.put?.open_interest) }}</span>
+                </div>
+              </template>
+              
+              <template #cell-put_delta="{ item }">
+                <span class="font-mono tabular-nums">
+                  {{ formatGreek(item.put?.delta) }}
+                </span>
+              </template>
+              
+              <template #cell-put_iv="{ item }">
+                <span class="font-mono tabular-nums">
+                  {{ formatPercent(item.put?.iv) }}
+                </span>
+              </template>
+              
+              <template #cell-put_change="{ item }">
+                <span :class="getChangeClass(item.put?.change)" class="font-mono tabular-nums">
+                  {{ formatChange(item.put?.change) }}
+                </span>
+              </template>
+              
+              <template #cell-put_latest="{ item }">
+                <span :class="getPriceClass(item.put?.change)" class="font-mono tabular-nums">
+                  {{ formatPrice(item.put?.latest) }}
+                </span>
+              </template>
+            </VirtualizedTable>
           </div>
         </div>
         
@@ -175,6 +183,7 @@ import EducationalTooltip from './EducationalTooltip.vue'
 import IVSmileChart from './IVSmileChart.vue'
 import PCRIndicator from './PCRIndicator.vue'
 import GreeksChart from './GreeksChart.vue'
+import VirtualizedTable from '../VirtualizedTable.vue'
 
 const {
   symbol, chainData, loading, error, autoRefreshEnabled,
@@ -187,14 +196,35 @@ const localSymbol = ref(symbol.value)
 const pcrDisplay = computed(() => pcr.value === null ? '--' : pcr.value.toFixed(2))
 
 /**
+ * Table columns for virtualized options chain
+ */
+const tableColumns = computed(() => [
+  { key: 'call_latest', label: '最新价', width: '60px', align: 'right', sortable: false },
+  { key: 'call_change', label: '涨跌', width: '60px', align: 'right', sortable: false },
+  { key: 'call_iv', label: 'IV', width: '50px', align: 'right', sortable: false },
+  { key: 'call_delta', label: 'Delta', width: '60px', align: 'right', sortable: false },
+  { key: 'call_oi', label: '持仓量', width: '70px', align: 'right', sortable: false },
+  { key: 'strike', label: 'Strike', width: '60px', align: 'center', sortable: false },
+  { key: 'put_oi', label: '持仓量', width: '70px', align: 'right', sortable: false },
+  { key: 'put_delta', label: 'Delta', width: '60px', align: 'right', sortable: false },
+  { key: 'put_iv', label: 'IV', width: '50px', align: 'right', sortable: false },
+  { key: 'put_change', label: '涨跌', width: '60px', align: 'right', sortable: false },
+  { key: 'put_latest', label: '最新价', width: '60px', align: 'right', sortable: false },
+])
+
+/**
  * Maximum OI across all visible rows for bar scaling
  */
 const maxOI = computed(() => {
   const allOI = chainRows.value.flatMap(r => [
     r.call?.open_interest || 0,
     r.put?.open_interest || 0
-  ])
-  return Math.max(...allOI, 1)
+  ]).filter(oi => oi > 0)  // FILTER: Remove zeros
+
+  // LENGTH CHECK: Handle empty array
+  if (allOI.length === 0) return 1
+
+  return Math.max(...allOI)
 })
 
 /**
@@ -249,6 +279,24 @@ function getPriceClass(change) {
 function getChangeClass(change) {
   if (change == null) return 'text-secondary'
   return change >= 0 ? 'text-bullish' : 'text-bearish'
+}
+
+/**
+ * Handle row click in virtualized table
+ * @param {Object} payload - { item, index }
+ */
+function handleRowClick({ item, index }) {
+  // Row click handler for future use (e.g., show detailed info)
+  console.log('Row clicked:', item.strike)
+}
+
+/**
+ * Get row class for virtualized table (highlight ATM strike)
+ * @param {Object} item - Row item
+ * @returns {string} CSS class
+ */
+function getRowClass(item) {
+  return item.strike === atmStrike.value ? 'bg-primary/10 font-bold' : ''
 }
 </script>
 

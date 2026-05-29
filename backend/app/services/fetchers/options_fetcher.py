@@ -171,6 +171,7 @@ class OptionsFetcher(BaseMarketFetcher):
 
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.warning(f"[HTTP] underlying spot: {symbol} - {e}", exc_info=True)
+            self.cb.record_failure()
             return None
 
     @property

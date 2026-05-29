@@ -17,7 +17,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, markRaw } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, markRaw } from 'vue'
+import { useElementSize } from '@vueuse/core'
 import EducationalTooltip from './EducationalTooltip.vue'
 import * as echarts from 'echarts'
 
@@ -35,12 +36,17 @@ const greekTypes = [
 
 const chartRefs = ref({})
 const chartInstances = ref({})
+const containerSizes = ref({})
 
 function setChartRef(name, el) {
-  if (el) chartRefs.value[name] = el
+  if (el) {
+    chartRefs.value[name] = el
+    const { width, height } = useElementSize(el)
+    containerSizes.value[name] = { width, height }
+  }
 }
 
-const isEmpty = computed(() => 
+const isEmpty = computed(() =>
   Object.values(props.greeksData).every(arr => arr.length === 0)
 )
 
@@ -48,7 +54,7 @@ function buildGreekOption(greekName) {
   const data = props.greeksData[greekName] || []
   const callData = data.filter(d => d.isCall).map(d => [d.strike, d.value])
   const putData = data.filter(d => !d.isCall).map(d => [d.strike, d.value])
-  
+
   return markRaw({
     grid: { left: 40, right: 10, top: 10, bottom: 20 },
     xAxis: {
@@ -84,14 +90,32 @@ function buildGreekOption(greekName) {
   })
 }
 
-function initCharts() {
-  greekTypes.forEach(greek => {
-    const container = chartRefs.value[greek.name]
-    if (container && !chartInstances.value[greek.name]) {
-      chartInstances.value[greek.name] = echarts.init(container)
-      chartInstances.value[greek.name].setOption(buildGreekOption(greek.name))
+async function waitForContainer(name, timeout = 5000) {
+  const startTime = Date.now()
+  while (Date.now() - startTime < timeout) {
+    const size = containerSizes.value[name]
+    if (size && size.width.value > 0 && size.height.value > 0) {
+      return true
     }
-  })
+    await nextTick()
+  }
+  return false
+}
+
+async function initCharts() {
+  for (const greek of greekTypes) {
+    const container = chartRefs.value[greek.name]
+    if (!container || chartInstances.value[greek.name]) continue
+
+    const ready = await waitForContainer(greek.name)
+    if (!ready) {
+      console.warn(`[GreeksChart] Container not ready: ${greek.name}`)
+      continue
+    }
+
+    chartInstances.value[greek.name] = echarts.init(container)
+    chartInstances.value[greek.name].setOption(buildGreekOption(greek.name))
+  }
 }
 
 function updateCharts() {
@@ -104,9 +128,9 @@ function updateCharts() {
 
 watch(() => props.greeksData, updateCharts, { deep: true })
 
-onMounted(() => {
+onMounted(async () => {
   if (!isEmpty.value) {
-    setTimeout(initCharts, 100)
+    await initCharts()
   }
 })
 

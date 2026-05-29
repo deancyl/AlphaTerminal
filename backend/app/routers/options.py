@@ -10,14 +10,42 @@
 
 import logging
 import asyncio
+import re
 from datetime import datetime
 from fastapi import APIRouter, Query
 from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.fetchers.options_fetcher import options_fetcher
 from app.utils.error_decorator import handle_errors
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def validate_option_symbol(symbol: str) -> str:
+    """验证期权品种代码"""
+    if not symbol or len(symbol) > 10:
+        raise ValueError("无效的期权品种代码")
+    if not re.match(r'^[a-z]{2}\d{4}$', symbol.lower()):
+        raise ValueError("期权品种代码格式错误")
+    return symbol.lower()
+
+
+def validate_contract_code(code: str) -> str:
+    """验证合约代码"""
+    if not code or len(code) > 20:
+        raise ValueError("无效的合约代码")
+    if not re.match(r'^[a-zA-Z0-9]+$', code):
+        raise ValueError("合约代码格式错误")
+    return code
+
+
+def validate_exchange(exchange: str) -> str:
+    """验证交易所代码"""
+    allowed = {"CFFEX", "SSE"}
+    if exchange.upper() not in allowed:
+        raise ValueError("不支持的交易所")
+    return exchange.upper()
 
 
 @router.get("/options/cffex/chain")
@@ -38,6 +66,9 @@ async def get_cffex_chain(
       - update_time: 更新时间
     """
     try:
+        # 验证期权品种代码
+        symbol = validate_option_symbol(symbol)
+        
         result = await asyncio.wait_for(
             options_fetcher.get_cffex_chain(symbol), timeout=30.0
         )
@@ -55,12 +86,15 @@ async def get_cffex_chain(
             }
         )
 
+    except ValueError as e:
+        logger.warning(f"[Options] Invalid symbol: {e}")
+        return error_response(ErrorCode.INVALID_PARAMS, str(e))
     except asyncio.TimeoutError:
         logger.warning(f"[Options] CFFEX chain timeout: {symbol}", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
     except Exception as e:
         logger.error(f"[Options] CFFEX chain error: {symbol} - {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取期权链失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取期权链失败: {sanitize_error(e)}")
 
 
 @router.get("/options/greeks")
@@ -82,6 +116,9 @@ async def get_greeks(code: str = Query(..., description="合约代码，如 1000
       - expiry: 到期日
     """
     try:
+        # 验证合约代码
+        code = validate_contract_code(code)
+        
         result = await asyncio.wait_for(
             options_fetcher.get_sse_greeks(code), timeout=30.0
         )
@@ -103,12 +140,15 @@ async def get_greeks(code: str = Query(..., description="合约代码，如 1000
             }
         )
 
+    except ValueError as e:
+        logger.warning(f"[Options] Invalid contract code: {e}")
+        return error_response(ErrorCode.INVALID_PARAMS, str(e))
     except asyncio.TimeoutError:
         logger.warning(f"[Options] Greeks timeout: {code}", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
     except Exception as e:
         logger.error(f"[Options] Greeks error: {code} - {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取Greeks失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取Greeks失败: {sanitize_error(e)}")
 
 
 @router.get("/options/contracts")
@@ -124,7 +164,13 @@ async def get_contracts(
       - contracts: 合约列表 [{code, name, type, underlying}]
     """
     try:
-        result = await options_fetcher.get_contract_list(exchange)
+        # 验证交易所代码
+        exchange = validate_exchange(exchange)
+        
+        result = await asyncio.wait_for(
+            options_fetcher.get_contract_list(exchange),
+            timeout=30.0
+        )
 
         return success_response(
             {
@@ -134,9 +180,15 @@ async def get_contracts(
             }
         )
 
+    except ValueError as e:
+        logger.warning(f"[Options] Invalid exchange: {e}")
+        return error_response(ErrorCode.INVALID_PARAMS, str(e))
+    except asyncio.TimeoutError:
+        logger.warning(f"[Options] Contracts timeout: {exchange}", exc_info=True)
+        return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
     except Exception as e:
         logger.error(f"[Options] Contracts error: {exchange} - {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取合约列表失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取合约列表失败: {sanitize_error(e)}")
 
 
 @router.get("/options/health")
@@ -156,7 +208,7 @@ async def options_health():
             }
         )
     except Exception as e:
-        return error_response(ErrorCode.INTERNAL_ERROR, f"健康检查失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"健康检查失败: {sanitize_error(e)}")
 
 
 @router.post("/options/circuit_breaker/reset")
@@ -179,4 +231,4 @@ async def reset_options_circuit_breaker():
         )
     except Exception as e:
         logger.error(f"[Options] Circuit breaker reset error: {e}", exc_info=True)
-        return error_response(ErrorCode.INTERNAL_ERROR, f"重置熔断器失败: {str(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"重置熔断器失败: {sanitize_error(e)}")

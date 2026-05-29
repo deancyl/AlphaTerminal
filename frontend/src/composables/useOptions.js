@@ -36,6 +36,26 @@ export function useOptions(initialSymbol = 'io2506', autoRefreshMs = 60000) {
   
   const { createSignal, complete, abort } = useAbortableRequest()
   
+  // ==================== Validation ====================
+  
+  /**
+   * Validate chain data structure
+   */
+  function validateChainData(data) {
+    if (!data || typeof data !== 'object') return false
+    if (!Array.isArray(data.calls)) return false
+    if (!Array.isArray(data.puts)) return false
+    
+    // Validate array elements
+    for (const opt of [...data.calls, ...data.puts]) {
+      if (typeof opt !== 'object') return false
+      if (opt.strike == null) return false
+      if (opt.code == null) return false
+    }
+    
+    return true
+  }
+  
   // ==================== Computed Properties ====================
   
   /**
@@ -135,6 +155,7 @@ export function useOptions(initialSymbol = 'io2506', autoRefreshMs = 60000) {
   
   /**
    * T-Style Chain Rows (Call | Strike | Put)
+   * Each row has unique 'id' for VirtualizedTable
    */
   const chainRows = computed(() => {
     if (!chainData.value) return []
@@ -142,7 +163,7 @@ export function useOptions(initialSymbol = 'io2506', autoRefreshMs = 60000) {
     chainData.value.calls.forEach(c => {
       if (c.strike != null) {
         if (!strikeMap.has(c.strike)) {
-          strikeMap.set(c.strike, { strike: c.strike, call: null, put: null })
+          strikeMap.set(c.strike, { id: c.strike.toString(), strike: c.strike, call: null, put: null })
         }
         strikeMap.get(c.strike).call = { ...c, is_call: true }
       }
@@ -150,7 +171,7 @@ export function useOptions(initialSymbol = 'io2506', autoRefreshMs = 60000) {
     chainData.value.puts.forEach(p => {
       if (p.strike != null) {
         if (!strikeMap.has(p.strike)) {
-          strikeMap.set(p.strike, { strike: p.strike, call: null, put: null })
+          strikeMap.set(p.strike, { id: p.strike.toString(), strike: p.strike, call: null, put: null })
         }
         strikeMap.get(p.strike).put = { ...p, is_call: false }
       }
@@ -173,11 +194,13 @@ export function useOptions(initialSymbol = 'io2506', autoRefreshMs = 60000) {
         timeoutMs: 30000,
         signal
       })
-      // apiFetch already extracts data, so res IS the data object
-      if (res && (res.calls?.length > 0 || res.puts?.length > 0)) {
+      
+      // Validate before assignment
+      if (validateChainData(res)) {
         chainData.value = res
       } else {
-        error.value = '暂无期权链数据'
+        error.value = '数据格式异常，请稍后重试'
+        console.error('[Options] Invalid chain data structure:', res)
       }
       complete()
     } catch (e) {
