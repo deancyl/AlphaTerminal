@@ -885,7 +885,23 @@ async function retryFailed() {
   }
 }
 
-import { getDynamicThemeColors, getDynamicMarketColors } from '../utils/echartsTheme.js'
+import { getDynamicThemeColors, getDynamicMarketColors, getDynamicChartColors } from '../utils/echartsTheme.js'
+
+// Get chart colors with compatibility wrapper
+function getChartColors() {
+  const themeColors = getDynamicThemeColors()
+  const marketColors = getDynamicMarketColors()
+  const chartColors = getDynamicChartColors()
+  return {
+    primary: themeColors.primary,
+    text: chartColors.AXIS_LABEL,
+    up: marketColors.UP,
+    down: marketColors.DOWN,
+    warning: themeColors.warning,
+    success: themeColors.success,
+    tooltipText: themeColors.tooltipText,
+  }
+}
 
 function drawGDPChart(data) {
   if (!gdpChartInstance || !gdpChart.value) return
@@ -896,8 +912,7 @@ function drawGDPChart(data) {
     return
   }
 
-  const colors = getDynamicThemeColors()
-  const marketColors = getDynamicMarketColors()
+  const colors = getChartColors()
   const quarters = data.map(d => d.quarter)
   const yoyData = data.map(d => d.gdp_yoy)
 
@@ -906,7 +921,7 @@ function drawGDPChart(data) {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.95)',
       borderColor: colors.primary,
-      textStyle: { color: '#E5E7EB', fontSize: 12 }
+      textStyle: { color: colors.tooltipText, fontSize: 12 }
     },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: {
@@ -957,8 +972,7 @@ function drawCPIChart(data) {
     return
   }
 
-  const colors = getDynamicThemeColors()
-  const marketColors = getDynamicMarketColors()
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.nation_yoy)
   const momData = data.map(d => d.nation_mom)
@@ -968,7 +982,7 @@ function drawCPIChart(data) {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.95)',
       borderColor: colors.primary,
-      textStyle: { color: '#E5E7EB', fontSize: 12 }
+      textStyle: { color: colors.tooltipText, fontSize: 12 }
     },
     legend: {
       data: ['同比', '环比'],
@@ -1027,8 +1041,7 @@ function drawPMIChart(data) {
     return
   }
 
-  const colors = getDynamicThemeColors()
-  const marketColors = getDynamicMarketColors()
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const manufacturingData = data.map(d => d.manufacturing_index)
   const nonManufacturingData = data.map(d => d.non_manufacturing_index)
@@ -1038,7 +1051,7 @@ function drawPMIChart(data) {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.95)',
       borderColor: colors.primary,
-      textStyle: { color: '#E5E7EB', fontSize: 12 }
+      textStyle: { color: colors.tooltipText, fontSize: 12 }
     },
     legend: {
       data: ['制造业', '非制造业'],
@@ -1103,8 +1116,7 @@ function drawPPIChart(data) {
     return
   }
 
-  const colors = getDynamicThemeColors()
-  const marketColors = getDynamicMarketColors()
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.yoy)
 
@@ -1113,7 +1125,7 @@ function drawPPIChart(data) {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.95)',
       borderColor: colors.primary,
-      textStyle: { color: '#E5E7EB', fontSize: 12 }
+      textStyle: { color: colors.tooltipText, fontSize: 12 }
     },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: {
@@ -1164,8 +1176,7 @@ function drawM2Chart(data) {
     return
   }
 
-  const colors = getDynamicThemeColors()
-  const marketColors = getDynamicMarketColors()
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.m2_yoy)
 
@@ -1174,7 +1185,7 @@ function drawM2Chart(data) {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.95)',
       borderColor: colors.primary,
-      textStyle: { color: '#E5E7EB', fontSize: 12 }
+      textStyle: { color: colors.tooltipText, fontSize: 12 }
     },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: {
@@ -1225,8 +1236,7 @@ function drawSocialFinancingChart(data) {
     return
   }
 
-  const colors = getDynamicThemeColors()
-  const marketColors = getDynamicMarketColors()
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const totalData = data.map(d => d.total)
 
@@ -1235,7 +1245,7 @@ function drawSocialFinancingChart(data) {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.95)',
       borderColor: colors.primary,
-      textStyle: { color: '#E5E7EB', fontSize: 12 }
+      textStyle: { color: colors.tooltipText, fontSize: 12 }
     },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: {
@@ -1283,8 +1293,7 @@ function drawIndustrialProductionChart(data) {
     return
   }
 
-  const colors = getDynamicThemeColors()
-  const marketColors = getDynamicMarketColors()
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.yoy)
 
@@ -1293,7 +1302,7 @@ function drawIndustrialProductionChart(data) {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.95)',
       borderColor: colors.primary,
-      textStyle: { color: '#E5E7EB', fontSize: 12 }
+      textStyle: { color: colors.tooltipText, fontSize: 12 }
     },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: {
@@ -1344,8 +1353,7 @@ function drawUnemploymentChart(data) {
     return
   }
 
-  const colors = getDynamicThemeColors()
-  const marketColors = getDynamicMarketColors()
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const rateData = data.map(d => d.rate)
 
@@ -1354,7 +1362,7 @@ function drawUnemploymentChart(data) {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.95)',
       borderColor: colors.primary,
-      textStyle: { color: '#E5E7EB', fontSize: 12 }
+      textStyle: { color: colors.tooltipText, fontSize: 12 }
     },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: {

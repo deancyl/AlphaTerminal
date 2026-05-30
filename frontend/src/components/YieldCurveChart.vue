@@ -22,6 +22,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useLazyLoad } from '../composables/useLazyLoad.js'
 import { safeDispose } from '../utils/chartManager.js'
+import { getDynamicThemeColors } from '../utils/echartsTheme.js'
 
 const props = defineProps({
   yieldCurve: { type: Object, default: null },
@@ -67,21 +68,23 @@ function buildChart() {
   const has1m = curve1mData.some(v => v != null)
   const has1y = curve1yData.some(v => v != null)
 
+  const colors = getDynamicThemeColors()
+
   const series = [
     // 当前曲线（实线 + 面积）
     {
       type: 'line', name: '今日', data: yData, smooth: 0.4, symbol: 'circle', symbolSize: 6,
-      lineStyle: { color: '#60a5fa', width: 2 },
-      itemStyle: { color: '#60a5fa', borderWidth: 2, borderColor: '#0a0e17' },
+      lineStyle: { color: colors.primary, width: 2 },
+      itemStyle: { color: colors.primary, borderWidth: 2, borderColor: colors.bg },
       areaStyle: {
         color: new window.echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(96,165,250,0.25)' },
-          { offset: 1, color: 'rgba(96,165,250,0.02)' },
+          { offset: 0, color: colors.primary + '40' },
+          { offset: 1, color: colors.primary + '05' },
         ]),
       },
       label: {
         show: yData.length < 10, position: 'top', distance: 4,
-        color: '#9ca3af', fontSize: 9, fontFamily: 'monospace',
+        color: colors.textMuted, fontSize: 9, fontFamily: 'monospace',
         formatter: v => (v.value != null ? v.value.toFixed(3) + '%' : ''),
       },
     },
@@ -90,13 +93,13 @@ function buildChart() {
   if (has1m) {
     series.push({
       type: 'line', name: '1个月前', data: curve1mData, smooth: 0.3, symbol: 'none',
-      lineStyle: { color: '#fbbf24', width: 1.5, type: 'dashed', opacity: 0.75 },
+      lineStyle: { color: colors.warning, width: 1.5, type: 'dashed', opacity: 0.75 },
     })
   }
   if (has1y) {
     series.push({
       type: 'line', name: '1年前', data: curve1yData, smooth: 0.3, symbol: 'none',
-      lineStyle: { color: '#9ca3af', width: 1.2, type: 'dotted', opacity: 0.55 },
+      lineStyle: { color: colors.textMuted, width: 1.2, type: 'dotted', opacity: 0.55 },
     })
   }
 
@@ -105,32 +108,32 @@ function buildChart() {
     grid: { top: 12, right: 16, bottom: has1m || has1y ? 48 : 28, left: 52 },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(10,14,23,0.95)',
-      borderColor: 'rgba(50,50,50,0.8)',
-      textStyle: { color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' },
+      backgroundColor: colors.tooltipBg,
+      borderColor: colors.tooltipBorder,
+      textStyle: { color: colors.tooltipText, fontSize: 11, fontFamily: 'monospace' },
       formatter: (params) => {
         const lines = params.map(p =>
           `<span style="color:${p.color};font-family:monospace">${p.marker}${p.seriesName}: ${p.value != null ? p.value.toFixed(4) + '%' : '-'}</span>`
         )
-        return `<span style="color:#60a5fa;font-family:monospace">${params[0].name}</span><br/>${lines.join('<br/>')}`
+        return `<span style="color:${colors.primary};font-family:monospace">${params[0].name}</span><br/>${lines.join('<br/>')}`
       },
     },
     legend: (has1m || has1y) ? {
-      bottom: 4, textStyle: { color: '#6b7280', fontSize: 9, fontFamily: 'monospace' },
+      bottom: 4, textStyle: { color: colors.textMuted, fontSize: 9, fontFamily: 'monospace' },
       icon: 'roundRect', itemWidth: 12, itemHeight: 2,
     } : { show: false },
     xAxis: {
       type: 'category', data: xData,
-      axisLine: { lineStyle: { color: '#2d2d2d' } },
+      axisLine: { lineStyle: { color: colors.grid } },
       axisTick: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 10, fontFamily: 'monospace' },
+      axisLabel: { color: colors.textMuted, fontSize: 10, fontFamily: 'monospace' },
       splitLine: { show: false },
     },
     yAxis: {
       type: 'value', scale: true,
       axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 10, fontFamily: 'monospace', formatter: v => v + '%' },
-      splitLine: { lineStyle: { color: '#1f1f1f', type: 'dashed' } },
+      axisLabel: { color: colors.textMuted, fontSize: 10, fontFamily: 'monospace', formatter: v => v + '%' },
+      splitLine: { lineStyle: { color: colors.grid, type: 'dashed' } },
     },
     series,
   }

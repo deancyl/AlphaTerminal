@@ -46,6 +46,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, markRaw } f
 import { useLazyLoad } from '../composables/useLazyLoad.js'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
 import { safeDispose } from '../utils/chartManager.js'
+import { getDynamicThemeColors } from '../utils/echartsTheme.js'
 
 const props = defineProps({
   symbol:    { type: String, default: 'RB' },
@@ -91,6 +92,8 @@ function buildOption() {
 
   const oiMax = Math.max(...oiValues.filter(v => v > 0), 1)
 
+  const colors = getDynamicThemeColors()
+
   return {
     backgroundColor: 'transparent',
     animation: false,
@@ -100,30 +103,30 @@ function buildOption() {
     ],
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(10,14,23,0.95)',
-      borderColor: 'rgba(50,50,50,0.8)',
-      textStyle: { color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' },
+      backgroundColor: colors.tooltipBg,
+      borderColor: colors.tooltipBorder,
+      textStyle: { color: colors.tooltipText, fontSize: 11, fontFamily: 'monospace' },
       formatter: (params) => {
         const p = params.find(p => p.seriesName === '价格')
         const o = params.find(p => p.seriesName === '持仓量')
         if (!p) return ''
         const item = items[p.dataIndex]
-        return `<span style="color:#60a5fa;font-family:monospace">${item.contract}</span><br/>`
-          + `价格: <span style="color:#f3f4f6">${item.price.toFixed(2)}</span><br/>`
-          + `持仓量: <span style="color:#fbbf24">${item.oi.toLocaleString()}</span>`
+        return `<span style="color:${colors.primary};font-family:monospace">${item.contract}</span><br/>`
+          + `价格: <span style="color:${colors.textPrimary}">${item.price.toFixed(2)}</span><br/>`
+          + `持仓量: <span style="color:${colors.warning}">${item.oi.toLocaleString()}</span>`
       },
     },
     xAxis: [
       {
         type: 'category', data: months, gridIndex: 0,
-        axisLine: { lineStyle: { color: '#2d2d2d' } },
+        axisLine: { lineStyle: { color: colors.grid } },
         axisTick: { show: false },
-        axisLabel: { color: '#6b7280', fontSize: 9, fontFamily: 'monospace' },
+        axisLabel: { color: colors.textMuted, fontSize: 9, fontFamily: 'monospace' },
         splitLine: { show: false },
       },
       {
         type: 'category', data: months, gridIndex: 1,
-        axisLine: { lineStyle: { color: '#2d2d2d' } },
+        axisLine: { lineStyle: { color: colors.grid } },
         axisTick: { show: false },
         axisLabel: { show: false },
         splitLine: { show: false },
@@ -134,8 +137,8 @@ function buildOption() {
         type: 'value', scale: true, gridIndex: 0,
         min: priceMin - pricePad, max: priceMax + pricePad,
         axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: { color: '#6b7280', fontSize: 9, fontFamily: 'monospace', formatter: v => v.toFixed(0) },
-        splitLine: { lineStyle: { color: '#1f1f1f', type: 'dashed' } },
+        axisLabel: { color: colors.textMuted, fontSize: 9, fontFamily: 'monospace', formatter: v => v.toFixed(0) },
+        splitLine: { lineStyle: { color: colors.grid, type: 'dashed' } },
       },
       {
         type: 'value', scale: true, gridIndex: 1,
@@ -151,11 +154,11 @@ function buildOption() {
         data: prices,
         xAxisIndex: 0, yAxisIndex: 0,
         smooth: 0.3, symbol: 'circle', symbolSize: 7,
-        lineStyle: { color: '#60a5fa', width: 2 },
-        itemStyle: { color: '#60a5fa', borderWidth: 2, borderColor: '#0a0e17' },
+        lineStyle: { color: colors.primary, width: 2 },
+        itemStyle: { color: colors.primary, borderWidth: 2, borderColor: colors.bg },
         label: {
           show: true, position: 'top', distance: 4,
-          color: '#9ca3af', fontSize: 8, fontFamily: 'monospace',
+          color: colors.textMuted, fontSize: 8, fontFamily: 'monospace',
           formatter: v => v.value.toFixed(0),
         },
       },
@@ -164,7 +167,7 @@ function buildOption() {
         data: oiValues,
         xAxisIndex: 1, yAxisIndex: 1,
         barMaxWidth: 20,
-        itemStyle: { color: 'rgba(251,191,36,0.55)' },
+        itemStyle: { color: colors.warning + '8c' },  // 0.55 opacity as hex suffix
       },
     ],
   }

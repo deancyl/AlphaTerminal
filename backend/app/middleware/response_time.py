@@ -73,7 +73,14 @@ class ResponseTimeMiddleware(BaseHTTPMiddleware):
                 status_code=status_code
             )
         except Exception as e:
-            logger.warning(f"[ResponseTimeMiddleware] Failed to record metrics: {e}")
+            logger.warning(f"[ResponseTimeMiddleware] Failed to record Prometheus metrics: {e}")
+        
+        # Record to SQLite for historical queries
+        try:
+            from app.db.metrics_db import record_metric
+            record_metric(endpoint, method, duration_ms, status_code)
+        except Exception as e:
+            logger.warning(f"[ResponseTimeMiddleware] Failed to record SQLite metrics: {e}")
         
         # Add response time header
         response.headers['X-Response-Time'] = f"{duration_ms:.2f}ms"

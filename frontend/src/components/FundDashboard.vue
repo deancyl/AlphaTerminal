@@ -709,6 +709,7 @@ import { useToast } from '../composables/useToast.js'
 import { useChartManager, safeDispose, safeResize } from '../utils/chartManager.js'
 import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import ConfirmModal from './ConfirmModal.vue'
+import { getDynamicThemeColors, getDynamicMarketColors } from '../utils/echartsTheme.js'
 
 const fundStore = useFundStore()
 const { success, error, warning, info } = useToast()
@@ -1163,6 +1164,9 @@ function renderCompareChart() {
     return
   }
   
+  const colors = getDynamicThemeColors()
+  const lineColors = [colors.bull, colors.info, colors.success]
+  
   try {
     if (!compareChart.value || compareChart.value.getDom() !== compareChartRef.value) {
       chartManager.dispose('compareChart')
@@ -1186,7 +1190,7 @@ function renderCompareChart() {
         symbol: 'none',
         data,
         lineStyle: { width: 2 },
-        itemStyle: { color: ['#ef4444', '#3b82f6', '#22c55e'][idx] },
+        itemStyle: { color: lineColors[idx % lineColors.length] },
       }
     }).filter(Boolean)
     
@@ -1206,18 +1210,18 @@ function renderCompareChart() {
           return html
         }
       },
-      legend: { data: compareFunds.value.map(f => f.name), textStyle: { color: '#9ca3af', fontSize: 11 }, top: 0 },
+      legend: { data: compareFunds.value.map(f => f.name), textStyle: { color: colors.textMuted, fontSize: 11 }, top: 0 },
       grid: { left: '3%', right: '4%', bottom: '3%', top: '30', containLabel: true },
       xAxis: {
         type: 'time',
-        axisLine: { lineStyle: { color: '#374151' } },
-        axisLabel: { color: '#6b7280', fontSize: 10 },
+        axisLine: { lineStyle: { color: colors.borderBase } },
+        axisLabel: { color: colors.textMuted, fontSize: 10 },
       },
       yAxis: {
         type: 'value',
-        axisLine: { lineStyle: { color: '#374151' } },
-        axisLabel: { color: '#6b7280', fontSize: 10, formatter: v => v.toFixed(2) },
-        splitLine: { lineStyle: { color: '#1f2937' } },
+        axisLine: { lineStyle: { color: colors.borderBase } },
+        axisLabel: { color: colors.textMuted, fontSize: 10, formatter: v => v.toFixed(2) },
+        splitLine: { lineStyle: { color: colors.grid } },
       },
       series,
     }
@@ -1397,18 +1401,21 @@ async function loadPortfolio(code) {
         topHoldings.value = (data.stocks || []).slice(0, 10)
         fundInfo.value = { ...fundInfo.value, quarter: data.quarter || '' }
 
+        const colors = getDynamicThemeColors()
+        const pieColors = colors.pieColors
+
         if (data.assets && data.assets.length > 0) {
           assetAllocation.value = data.assets.map((a, i) => ({
             name: a.name,
             value: a.ratio,
-            color: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa'][i % 5]
+            color: pieColors[i % pieColors.length]
           }))
         } else {
           assetAllocation.value = [
-            { name: '股票', value: 85.5, color: '#60a5fa' },
-            { name: '债券', value: 5.2, color: '#34d399' },
-            { name: '现金', value: 8.3, color: '#fbbf24' },
-            { name: '其他', value: 1.0, color: '#a78bfa' }
+            { name: '股票', value: 85.5, color: pieColors[0] },
+            { name: '债券', value: 5.2, color: pieColors[1] },
+            { name: '现金', value: 8.3, color: pieColors[2] },
+            { name: '其他', value: 1.0, color: pieColors[3] }
           ]
         }
         portfolioTimestamp.value = Date.now()
@@ -1433,6 +1440,8 @@ function renderKlineChart() {
     klineError.value = '图表容器未就绪'
     return
   }
+  
+  const colors = getDynamicThemeColors()
   
   try {
     const echarts = window.echarts
@@ -1460,26 +1469,26 @@ function renderKlineChart() {
       xAxis: {
         type: 'category',
         data: data.map(d => d.date),
-        axisLine: { lineStyle: { color: '#4b5563' } },
-        axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
+        axisLine: { lineStyle: { color: colors.borderLight } },
+        axisLabel: { color: colors.textMuted, fontSize: 10, maxRotation: 45 }
       },
       yAxis: {
         type: 'value',
-        axisLine: { lineStyle: { color: '#4b5563' } },
-        axisLabel: { color: '#9ca3af', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#374151' } }
+        axisLine: { lineStyle: { color: colors.borderLight } },
+        axisLabel: { color: colors.textMuted, fontSize: 10 },
+        splitLine: { lineStyle: { color: colors.borderBase } }
       },
       series: [{
         type: 'line',
         data: data.map(d => d.value),
         smooth: false,
-        lineStyle: { color: '#60a5fa', width: 1.5 },
+        lineStyle: { color: colors.info, width: 1.5 },
         areaStyle: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(96, 165, 250, 0.3)' },
-              { offset: 1, color: 'rgba(96, 165, 250, 0)' }
+              { offset: 0, color: colors.info + '4d' },
+              { offset: 1, color: colors.info + '00' }
             ]
           }
         }
@@ -1504,6 +1513,8 @@ function renderNavChart() {
     return
   }
   
+  const colors = getDynamicThemeColors()
+  
   try {
     const echarts = window.echarts
 
@@ -1527,23 +1538,23 @@ function renderNavChart() {
     
     const option = {
       tooltip: { trigger: 'axis' },
-      legend: { data: ['单位净值', '累计净值'], textStyle: { color: '#9ca3af', fontSize: 10 } },
+      legend: { data: ['单位净值', '累计净值'], textStyle: { color: colors.textMuted, fontSize: 10 } },
       grid: { top: 30, right: 10, bottom: 20, left: 40 },
       xAxis: {
         type: 'category',
         data: data.map(d => d.date),
-        axisLine: { lineStyle: { color: '#4b5563' } },
-        axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
+        axisLine: { lineStyle: { color: colors.borderLight } },
+        axisLabel: { color: colors.textMuted, fontSize: 10, maxRotation: 45 }
       },
       yAxis: {
         type: 'value',
-        axisLine: { lineStyle: { color: '#4b5563' } },
-        axisLabel: { color: '#9ca3af', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#374151' } }
+        axisLine: { lineStyle: { color: colors.borderLight } },
+        axisLabel: { color: colors.textMuted, fontSize: 10 },
+        splitLine: { lineStyle: { color: colors.borderBase } }
       },
       series: [
-        { name: '单位净值', type: 'line', data: data.map(d => d.nav), smooth: true, lineStyle: { color: '#60a5fa', width: 2 } },
-        { name: '累计净值', type: 'line', data: data.map(d => d.accumulated), smooth: true, lineStyle: { color: '#34d399', width: 2, type: 'dashed' } }
+        { name: '单位净值', type: 'line', data: data.map(d => d.nav), smooth: true, lineStyle: { color: colors.info, width: 2 } },
+        { name: '累计净值', type: 'line', data: data.map(d => d.accumulated), smooth: true, lineStyle: { color: colors.success, width: 2, type: 'dashed' } }
       ]
     }
     navChart.value.setOption(markRaw(option))
@@ -1564,6 +1575,8 @@ function renderAssetChart() {
     assetChartError.value = '图表容器未就绪'
     return
   }
+  
+  const colors = getDynamicThemeColors()
   
   try {
     const echarts = window.echarts
@@ -1586,7 +1599,7 @@ function renderAssetChart() {
         type: 'pie',
         radius: ['40%', '70%'],
         center: ['50%', '50%'],
-        itemStyle: { borderRadius: 4, borderColor: '#1f2937', borderWidth: 2 },
+        itemStyle: { borderRadius: 4, borderColor: colors.grid, borderWidth: 2 },
         label: { show: false },
         data: assetAllocation.value.map(a => ({ name: a.name, value: a.value, itemStyle: { color: a.color } }))
       }]

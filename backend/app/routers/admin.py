@@ -2534,3 +2534,37 @@ async def get_sina_fetcher_status():
             },
         },
     }
+
+
+@router.get("/performance/metrics")
+@handle_errors(module="admin")
+async def get_performance_metrics(
+    endpoint: Optional[str] = Query(None, description="Filter by endpoint path"),
+    hours: int = Query(24, ge=1, le=168, description="Hours to look back (1-168)"),
+):
+    """
+    Get API response time metrics for performance monitoring.
+    
+    Args:
+        endpoint: Optional endpoint path filter (e.g., "/api/v1/market/quote")
+        hours: Number of hours to query (default: 24, max: 168 = 7 days)
+    
+    Returns:
+        - history: List of individual metric records
+        - stats: Aggregated statistics per endpoint
+    """
+    from app.db.metrics_db import get_metrics_history, get_endpoint_stats, cleanup_old_metrics
+    
+    # Auto-cleanup old metrics (7-day retention)
+    cleanup_old_metrics(days=7)
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "history": get_metrics_history(endpoint, hours),
+            "stats": get_endpoint_stats(hours),
+            "retention_days": 7,
+            "query_hours": hours,
+        },
+    }

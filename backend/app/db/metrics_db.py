@@ -11,25 +11,19 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from contextlib import contextmanager
 
-from app.db.database import get_db_path
+from app.db.database import _get_thread_conn, _lock
 
 
-# Thread-local storage for connections
-_local = threading.local()
-
-
-def _get_connection() -> sqlite3.Connection:
-    """Get thread-local database connection"""
-    if not hasattr(_local, 'conn'):
-        _db_path = get_db_path()
-        _local.conn = sqlite3.connect(_db_path, check_same_thread=False)
-        _local.conn.row_factory = sqlite3.Row
-        _init_table(_local.conn)
-    return _local.conn
+# Flag to track if table has been initialized
+_TABLE_INITIALIZED = False
 
 
 def _init_table(conn: sqlite3.Connection) -> None:
-    """Initialize metrics table with indexes"""
+    """Initialize metrics table with indexes (only once)"""
+    global _TABLE_INITIALIZED
+    if _TABLE_INITIALIZED:
+        return
+    
     conn.execute('''
         CREATE TABLE IF NOT EXISTS api_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +37,14 @@ def _init_table(conn: sqlite3.Connection) -> None:
     conn.execute('CREATE INDEX IF NOT EXISTS idx_metrics_endpoint ON api_metrics(endpoint, timestamp)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON api_metrics(timestamp)')
     conn.commit()
+    _TABLE_INITIALIZED = True
+
+
+def _get_connection() -> sqlite3.Connection:
+    """Get thread-local database connection from main database module"""
+    conn = _get_thread_conn()
+    _init_table(conn)
+    return conn
 
 
 def record_metric(endpoint: str, method: str, response_time_ms: float, status_code: int) -> None:
@@ -55,12 +57,13 @@ def record_metric(endpoint: str, method: str, response_time_ms: float, status_co
         response_time_ms: Response time in milliseconds
         status_code: HTTP status code (200, 404, 500, etc.)
     """
-    conn = _get_connection()
-    conn.execute(
-        'INSERT INTO api_metrics (timestamp, endpoint, method, response_time_ms, status_code) VALUES (?, ?, ?, ?, ?)',
-        (datetime.now().isoformat(), endpoint, method, response_time_ms, status_code)
-    )
-    conn.commit()
+    with _lock:
+        conn = _get_connection()
+        conn.execute(
+            'INSERT INTO api_metrics (timestamp, endpoint, method, response_time_ms, status_code) VALUES (?, ?, ?, ?, ?)',
+            (datetime.now().isoformat(), endpoint, method, response_time_ms, status_code)
+        )
+        conn.commit()
 
 
 def get_metrics_history(endpoint: Optional[str] = None, hours: int = 24) -> List[Dict]:
@@ -131,11 +134,12 @@ def cleanup_old_metrics(days: int = 7) -> int:
     Returns:
         Number of deleted rows
     """
-    conn = _get_connection()
-    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
-    cursor = conn.execute('DELETE FROM api_metrics WHERE timestamp < ?', (cutoff,))
-    conn.commit()
-    return cursor.rowcount
+    with _lock:
+        conn = _get_connection()
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        cursor = conn.execute('DELETE FROM api_metrics WHERE timestamp < ?', (cutoff,))
+        conn.commit()
+        return cursor.rowcount
 
 
 @contextmanager

@@ -39,6 +39,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick } from 'vue'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
 import { safeDispose } from '../utils/chartManager.js'
+import { getDynamicThemeColors, getDynamicMarketColors } from '../utils/echartsTheme.js'
 
 const props = defineProps({
   tenors10y: { type: Object, default: null },   // {date, yield}[]
@@ -79,6 +80,8 @@ function buildOption() {
   const data = spreadData.value
   if (!data || data.length === 0) return null
 
+  const colors = getDynamicThemeColors()
+
   const dates = data.map(d => d.date)
   const values = data.map(d => d.spread)
 
@@ -99,10 +102,10 @@ function buildOption() {
     grid: { top: 8, right: 14, bottom: 28, left: 52 },
     xAxis: {
       type: 'category', data: dates,
-      axisLine: { lineStyle: { color: '#2d2d2d' } },
+      axisLine: { lineStyle: { color: colors.grid } },
       axisTick: { show: false },
       axisLabel: {
-        color: '#6b7280', fontSize: 8, fontFamily: 'monospace',
+        color: colors.textMuted, fontSize: 8, fontFamily: 'monospace',
         formatter: v => {
           const d = new Date(v)
           return `${d.getMonth() + 1}/${d.getDate()}`
@@ -115,20 +118,20 @@ function buildOption() {
       type: 'value',
       min: minV - pad, max: maxV + pad,
       axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 9, fontFamily: 'monospace', formatter: v => v.toFixed(0) + 'bp' },
-      splitLine: { lineStyle: { color: '#1f1f1f', type: 'dashed' } },
+      axisLabel: { color: colors.textMuted, fontSize: 9, fontFamily: 'monospace', formatter: v => v.toFixed(0) + 'bp' },
+      splitLine: { lineStyle: { color: colors.grid, type: 'dashed' } },
     },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(10,14,23,0.95)',
-      borderColor: 'rgba(50,50,50,0.8)',
-      textStyle: { color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' },
+      backgroundColor: colors.tooltipBg,
+      borderColor: colors.tooltipBorder,
+      textStyle: { color: colors.tooltipText, fontSize: 11, fontFamily: 'monospace' },
       formatter: (params) => {
         const p = params[0]
         const v = p.value
         const sign = v >= 0 ? '+' : ''
-        const color = v >= 0 ? '#60a5fa' : '#f87171'
-        return `<span style="color:#60a5fa;font-family:monospace">${p.name}</span><br/>`
+        const color = v >= 0 ? colors.info : colors.error
+        return `<span style="color:${colors.info};font-family:monospace">${p.name}</span><br/>`
           + `<span style="color:${color}">利差: ${sign}${v.toFixed(1)} bp</span>`
       },
     },
@@ -137,15 +140,15 @@ function buildOption() {
         type: 'bar',
         data: values.map(v => ({
           value: v,
-          itemStyle: { color: v >= 0 ? 'rgba(96,165,250,0.7)' : 'rgba(248,113,113,0.7)' },
+          itemStyle: { color: v >= 0 ? colors.info + 'b3' : colors.error + 'b3' },
         })),
         barMaxWidth: 8,
         markLine: {
           silent: true,
           symbol: 'none',
-          lineStyle: { color: '#6b7280', width: 1, type: 'dashed' },
+          lineStyle: { color: colors.textMuted, width: 1, type: 'dashed' },
           data: [{ yAxis: 0 }],
-          label: { formatter: '0bp', color: '#6b7280', fontSize: 8, fontFamily: 'monospace' },
+          label: { formatter: '0bp', color: colors.textMuted, fontSize: 8, fontFamily: 'monospace' },
         },
       },
     ],

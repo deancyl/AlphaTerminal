@@ -57,7 +57,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { getECharts } from '../utils/lazyEcharts.js'
-import { MARKET_COLORS, CHART_COLORS } from '../utils/echartsTheme.js'
+import { MARKET_COLORS, CHART_COLORS, getDynamicThemeColors } from '../utils/echartsTheme.js'
 import { useUiStore } from '../composables/useUiStore.js'
 import { useIndicatorWorker } from '../composables/useIndicatorWorker.js'
 
@@ -317,15 +317,17 @@ async function buildKLineOption(hist) {
   }))
 
   // ── BOLL (using Web Worker)
+  const themeColors = getDynamicThemeColors()
+
   const bollSeries = showBOLL ? await (async () => {
     const { mid, upper, lower } = await calculate('BOLL', { closes }, { period: 20, stdDev: 2 })
     return [
-      { name: 'BOLL-M', data: mid,   color: MARKET_COLORS.MA20, width: 1.2, type: 'line', sampling: 'lttb', smooth: true, symbol: 'none',
-        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: MARKET_COLORS.MA20, width: 1.2 } },
-      { name: 'BOLL-U', data: upper, color: '#a78bfa', width: 1, type: 'line', sampling: 'lttb', smooth: true, symbol: 'none',
-        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: MARKET_COLORS.MA20, width: 1, type: 'dashed' } },
-      { name: 'BOLL-L', data: lower, color: '#a78bfa', width: 1, type: 'line', sampling: 'lttb', smooth: true, symbol: 'none',
-        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: MARKET_COLORS.MA20, width: 1, type: 'dashed' } },
+      { name: 'BOLL-M', data: mid,   color: themeColors.ma20, width: 1.2, type: 'line', sampling: 'lttb', smooth: true, symbol: 'none',
+        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: themeColors.ma20, width: 1.2 } },
+      { name: 'BOLL-U', data: upper, color: themeColors.ma20, width: 1, type: 'line', sampling: 'lttb', smooth: true, symbol: 'none',
+        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: themeColors.ma20, width: 1, type: 'dashed' } },
+      { name: 'BOLL-L', data: lower, color: themeColors.ma20, width: 1, type: 'line', sampling: 'lttb', smooth: true, symbol: 'none',
+        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: themeColors.ma20, width: 1, type: 'dashed' } },
     ]
   })() : []
 
@@ -368,7 +370,7 @@ async function buildKLineOption(hist) {
         { name: 'D', type: 'line', sampling: 'lttb', data: d, xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none', lineStyle: { color: MARKET_COLORS.MA10, width: 1.2 } },
         { name: 'J', type: 'line', sampling: 'lttb', data: j, xAxisIndex: xIdx, yAxisIndex: yIdx,
-          smooth: true, symbol: 'none', lineStyle: { color: '#fbbf24', width: 1.2 } },
+          smooth: true, symbol: 'none', lineStyle: { color: themeColors.warning, width: 1.2 } },
       )
     }
     if (subInd === 'WR') {
@@ -391,7 +393,7 @@ async function buildKLineOption(hist) {
           data: rsi.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
-          lineStyle: { color: '#f472b6', width: 1.2 },
+          lineStyle: { color: themeColors.ma60, width: 1.2 },
           markLine: { silent: true, symbol: 'none', lineStyle: { color: CHART_COLORS.GRID, type: 'dashed', width: 1 },
             data: [{ yAxis: 70 }, { yAxis: 30 }],
             label: { show: true, formatter: '{c}', fontSize: 8, color: CHART_COLORS.AXIS_LABEL } } },
@@ -404,7 +406,7 @@ async function buildKLineOption(hist) {
           data: obv.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
-          lineStyle: { color: '#22d3ee', width: 1.2 },
+          lineStyle: { color: themeColors.info, width: 1.2 },
           markLine: { silent: true, symbol: 'none', lineStyle: { color: CHART_COLORS.GRID, type: 'dashed', width: 1 },
             data: [{ yAxis: 0 }], label: { show: true, formatter: '{c}', fontSize: 8, color: CHART_COLORS.AXIS_LABEL } } },
       )
@@ -417,7 +419,7 @@ async function buildKLineOption(hist) {
           data: pdi.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
-          lineStyle: { color: '#22c55e', width: 1.2 } },
+          lineStyle: { color: themeColors.success, width: 1.2 } },
       )
       // MDI (-DI)
       series.push(
@@ -425,7 +427,7 @@ async function buildKLineOption(hist) {
           data: mdi.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
-          lineStyle: { color: '#ef4444', width: 1.2 } },
+          lineStyle: { color: themeColors.bull, width: 1.2 } },
       )
       // ADX
       series.push(
@@ -433,7 +435,7 @@ async function buildKLineOption(hist) {
           data: adx.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
-          lineStyle: { color: '#f59e0b', width: 1, type: 'dashed' },
+          lineStyle: { color: themeColors.oi, width: 1, type: 'dashed' },
           markLine: { silent: true, symbol: 'none', lineStyle: { color: CHART_COLORS.GRID, type: 'dotted', width: 1 },
             data: [{ yAxis: 25 }], label: { show: true, formatter: 'ADX=25', fontSize: 8, color: CHART_COLORS.AXIS_LABEL } } },
       )
@@ -495,10 +497,10 @@ async function buildKLineOption(hist) {
     dataZoom: [
       { type: 'inside', xAxisIndex: [...Array(xAxis.length).keys()], start: 70, end: 100, zoomOnMouseWheel: true },
       { type: 'slider', xAxisIndex: [0], start: 90, end: 100, height: 10, bottom: 1,
-        borderColor: CHART_COLORS.AXIS_LINE, fillerColor: 'rgba(59,130,246,0.15)',
+        borderColor: CHART_COLORS.AXIS_LINE, fillerColor: themeColors.primary + '26',
         handleStyle: { color: MARKET_COLORS.MA10, borderColor: MARKET_COLORS.MA10 },
         textStyle: { color: CHART_COLORS.AXIS_LABEL, fontSize: 9 },
-        dataBackground: { lineStyle: { color: CHART_COLORS.AXIS_LINE }, areaStyle: { color: 'rgba(59,130,246,0.08)' } } },
+        dataBackground: { lineStyle: { color: CHART_COLORS.AXIS_LINE }, areaStyle: { color: themeColors.primary + '14' } } },
     ],
   }
 }
@@ -508,6 +510,7 @@ async function buildKLineOption(hist) {
 // ─────────────────────────────────────────────────────────────────
 function buildLineOption(hist) {
   const { UP, DOWN } = getUpDown()
+  const themeColors = getDynamicThemeColors()
   const times   = hist.map(h => {
     if (h.time && h.time.length >= 16) return h.time.slice(0, 16)   // YYYY-MM-DD HH:mm
     if (h.date) return h.date.slice(0, 10)                           // YYYY-MM-DD
@@ -614,10 +617,10 @@ function buildLineOption(hist) {
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1], start: 70, end: 100, zoomOnMouseWheel: true },
       { type: 'slider', xAxisIndex: [0], start: 90, end: 100, height: 10, bottom: 1,
-        borderColor: CHART_COLORS.AXIS_LINE, fillerColor: 'rgba(59,130,246,0.15)',
+        borderColor: CHART_COLORS.AXIS_LINE, fillerColor: themeColors.primary + '26',
         handleStyle: { color: MARKET_COLORS.MA10, borderColor: MARKET_COLORS.MA10 },
         textStyle: { color: CHART_COLORS.AXIS_LABEL, fontSize: 9 },
-        dataBackground: { lineStyle: { color: CHART_COLORS.AXIS_LINE }, areaStyle: { color: 'rgba(59,130,246,0.08)' } } },
+        dataBackground: { lineStyle: { color: CHART_COLORS.AXIS_LINE }, areaStyle: { color: themeColors.primary + '14' } } },
     ],
   }
 }
