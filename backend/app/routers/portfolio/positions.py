@@ -77,7 +77,7 @@ router = APIRouter(tags=["portfolio"])
 # ── Position CRUD ─────────────────────────────────────────────────
 
 
-@router.get("/{portfolio_id}/positions")
+@router.get("/{portfolio_id}/positions", summary="获取持仓列表")
 @handle_errors(module="portfolio_positions")
 async def list_positions(
     portfolio_id: int,
@@ -217,7 +217,7 @@ async def list_positions(
         raise HTTPException(504, "List positions timeout")
 
 
-@router.post("/positions")
+@router.post("/positions", summary="添加持仓记录")
 @handle_errors(module="portfolio_positions")
 async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
     """

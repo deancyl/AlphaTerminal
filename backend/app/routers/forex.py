@@ -278,7 +278,7 @@ MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF"]
 # ==================== 新增端点 ====================
 
 
-@router.get("/spot")
+@router.get("/spot", summary="外汇实时报价")
 @handle_errors(module="forex")
 async def get_spot_quotes():
     """
@@ -523,7 +523,7 @@ async def _fetch_forex_spot_foreground():
     return result
 
 
-@router.post("/circuit_breaker/reset")
+@router.post("/circuit_breaker/reset", summary="重置熔断器")
 @handle_errors(module="forex")
 async def reset_circuit_breaker():
     """
@@ -540,6 +540,27 @@ async def reset_circuit_breaker():
     except Exception as e:
         logger.error(f"[Forex] 重置熔断器失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
+
+
+@router.get("/circuit_breaker/status", summary="熔断器状态")
+@handle_errors(module="forex")
+async def get_circuit_breaker_status_endpoint():
+    """
+    获取熔断器状态
+
+    返回当前熔断器的状态信息，包括：
+    - state: 状态 (closed/open/half_open)
+    - is_available: 是否可用
+    - consecutive_failures: 连续失败次数
+
+    Returns:
+        dict: 熔断器状态信息
+    """
+    return success_response({
+        "is_available": forex_fetcher.cb.is_available(),
+        "state": forex_fetcher.cb.state.value,
+        "consecutive_failures": forex_fetcher.cb._stats.consecutive_failures,
+    })
 
 
 @router.get("/cfets")
@@ -652,7 +673,7 @@ async def get_official_rates(
         return error_response(ErrorCode.INTERNAL_ERROR, sanitize_error(e))
 
 
-@router.get("/history/{symbol}")
+@router.get("/history/{symbol}", summary="外汇历史数据")
 @handle_errors(module="forex")
 async def get_forex_history_new(
     symbol: str,
@@ -845,7 +866,7 @@ async def _fetch_forex_history_background(
         logger.error(f"[HTTP] failed: {symbol} - {e}", exc_info=True)
 
 
-@router.get("/matrix")
+@router.get("/matrix", summary="交叉汇率矩阵")
 @handle_errors(module="forex")
 async def get_cross_rate_matrix(
     currencies: str = Query(
@@ -1364,7 +1385,7 @@ async def health_check():
     )
 
 
-@router.get("/convert")
+@router.get("/convert", summary="货币转换计算")
 @handle_errors(module="forex")
 async def convert_currency(
     amount: float = Query(..., gt=0, le=1000000000, description="转换金额"),

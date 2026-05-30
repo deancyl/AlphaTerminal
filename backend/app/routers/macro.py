@@ -121,7 +121,7 @@ _cache_ttl = {}
 
 
 # ── GDP数据 ────────────────────────────────────────────────────────
-@router.get("/gdp")
+@router.get("/gdp", summary="GDP数据")
 @handle_errors(module="macro")
 async def get_gdp_data(
     limit: int = Query(20, ge=1, le=100, description="返回最近N个季度，范围1-100"),
@@ -217,7 +217,7 @@ async def get_gdp_data(
 
 
 # ── CPI数据 ────────────────────────────────────────────────────────
-@router.get("/cpi")
+@router.get("/cpi", summary="CPI数据")
 @handle_errors(module="macro")
 async def get_cpi_data(
     limit: int = Query(24, ge=1, le=100),
@@ -311,7 +311,7 @@ async def get_cpi_data(
 
 
 # ── PPI数据 ────────────────────────────────────────────────────────
-@router.get("/ppi")
+@router.get("/ppi", summary="PPI数据")
 @handle_errors(module="macro")
 async def get_ppi_data(
     limit: int = Query(24, ge=1, le=100),
@@ -387,7 +387,7 @@ async def get_ppi_data(
 
 
 # ── PMI数据 ────────────────────────────────────────────────────────
-@router.get("/pmi")
+@router.get("/pmi", summary="PMI数据")
 @handle_errors(module="macro")
 async def get_pmi_data(
     limit: int = Query(24, ge=1, le=100),
@@ -480,7 +480,7 @@ async def get_pmi_data(
 
 
 # ── 综合宏观经济指标 ────────────────────────────────────────────────
-@router.get("/overview")
+@router.get("/overview", summary="宏观经济数据概览")
 @handle_errors(module="macro")
 async def get_macro_overview():
     """
@@ -949,7 +949,7 @@ def _generate_forecast(actual_value, indicator_type):
     return round(actual_value + deviation, 2)
 
 
-@router.get("/calendar")
+@router.get("/calendar", summary="经济日历")
 @handle_errors(module="macro")
 async def get_economic_calendar(
     country: Optional[str] = Query(None, description="国家/地区筛选: CN, US, EU, JP"),
@@ -1209,7 +1209,7 @@ async def get_economic_calendar(
 
 
 # ── M2货币供应量 ───────────────────────────────────────────────────
-@router.get("/m2")
+@router.get("/m2", summary="M2货币供应量")
 @handle_errors(module="macro")
 async def get_m2_data(
     limit: int = Query(24, ge=1, le=100),
@@ -1850,7 +1850,7 @@ async def get_macro_batch(
         return error_response("批量获取失败，请稍后重试")
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", summary="宏观仪表盘数据")
 @handle_errors(module="macro")
 async def get_macro_dashboard():
     """

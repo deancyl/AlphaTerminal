@@ -50,7 +50,7 @@ def validate_fund_code(code: str) -> str:
 # ══════════════════════════════════════════════════════════════════════
 
 
-@router.get("/etf/info")
+@router.get("/etf/info", summary="获取ETF信息")
 @handle_errors(module="fund")
 async def etf_info(code: str = Query(..., description="ETF 代码（6 位数字）")):
     """
@@ -117,6 +117,82 @@ async def etf_history(
         "code": 0,
         "message": "success",
         "data": data,
+        "timestamp": int(time.time() * 1000),
+        "_perf": {"elapsed_s": round(elapsed, 3)},
+    }
+
+
+@router.get("/etf/list", summary="获取ETF列表")
+@handle_errors(module="fund")
+async def etf_list(
+    type: str = Query("全部", description="ETF 类型：全部/股票型/债券型/货币型/商品型/跨境型"),
+    limit: int = Query(100, description="返回数量"),
+):
+    """获取 ETF 列表"""
+    logger.info(f"[ETF List] 请求 type={type}")
+    start = time.time()
+
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_etf_list(type),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[ETF List] timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
+
+    result = data[:limit] if data else []
+
+    elapsed = time.time() - start
+    logger.info(f"[ETF List] 完成 elapsed={elapsed:.3f}s count={len(result)}")
+
+    return {
+        "code": 0,
+        "message": "success",
+        "data": result,
+        "timestamp": int(time.time() * 1000),
+        "_perf": {"elapsed_s": round(elapsed, 3)},
+    }
+
+
+@router.get("/ranking", summary="基金收益排名")
+@handle_errors(module="fund")
+async def fund_ranking(
+    type: str = Query("全部", description="基金类型：全部/股票型/混合型/债券型/指数型"),
+    sort_by: str = Query("return_1y", description="排序字段：return_1y/return_3y/scale"),
+    limit: int = Query(50, description="返回数量"),
+):
+    """基金收益排名"""
+    logger.info(f"[Fund Ranking] 请求 type={type} sort_by={sort_by}")
+    start = time.time()
+
+    try:
+        data = await asyncio.wait_for(
+            fetcher.get_fund_rank(type),
+            timeout=FUND_API_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"[Fund Ranking] timeout after {FUND_API_TIMEOUT}s", exc_info=True)
+        raise HTTPException(status_code=504, detail="请求超时，请稍后重试")
+
+    # 根据排序字段排序
+    if data:
+        if sort_by == "return_1y":
+            data = sorted(data, key=lambda x: x.get("return_1y", 0), reverse=True)
+        elif sort_by == "return_3y":
+            data = sorted(data, key=lambda x: x.get("return_3y", 0), reverse=True)
+        elif sort_by == "scale":
+            data = sorted(data, key=lambda x: x.get("scale", 0), reverse=True)
+
+    result = data[:limit] if data else []
+
+    elapsed = time.time() - start
+    logger.info(f"[Fund Ranking] 完成 elapsed={elapsed:.3f}s count={len(result)}")
+
+    return {
+        "code": 0,
+        "message": "success",
+        "data": result,
         "timestamp": int(time.time() * 1000),
         "_perf": {"elapsed_s": round(elapsed, 3)},
     }
@@ -641,7 +717,7 @@ async def screener_statistics():
 # ══════════════════════════════════════════════════════════════════════
 
 
-@router.post("/compare")
+@router.post("/compare", summary="基金收益对比")
 @handle_errors(module="fund")
 async def fund_compare(
     codes: str = Query(..., description="基金代码列表，逗号分隔（最多15只）"),

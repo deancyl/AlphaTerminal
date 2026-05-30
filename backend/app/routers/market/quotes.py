@@ -192,7 +192,7 @@ async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@router.get("/market/quote/{symbol}")
+@router.get("/market/quote/{symbol}", summary="获取股票实时行情", description="返回指定股票的实时行情数据，包括最新价、涨跌额、涨跌幅、成交量、成交额、振幅、换手率等")
 @handle_errors(module="market_quotes")
 async def market_quote(symbol: str):
     """

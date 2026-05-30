@@ -43,16 +43,7 @@ _SINA_API_URL = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2
 
 
 def _get_proxies() -> Optional[Dict]:
-    """Get proxy configuration from settings."""
-    try:
-        from app.config.settings import get_settings
-
-        settings = get_settings()
-        proxy = settings.HTTP_PROXY or settings.http_proxy
-        if proxy:
-            return {"http": proxy, "https": proxy}
-    except Exception as e:
-        logger.debug(f"[SinaStockFetcher] Could not get proxy settings: {e}")
+    """Sina Finance是国内API，必须直连，不使用代理"""
     return None
 
 

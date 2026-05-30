@@ -207,7 +207,7 @@ async def _fetch_history_df_for_cache():
         return None
 
 
-@router.get("/bond/curve")
+@router.get("/bond/curve", summary="国债收益率曲线")
 @handle_errors(module="bond")
 async def bond_curve():
     """
@@ -301,7 +301,7 @@ async def bond_yield_curve():
         )
 
 
-@router.get("/bond/active")
+@router.get("/bond/active", summary="活跃债券列表")
 @handle_errors(module="bond")
 async def bond_active():
     """
@@ -318,7 +318,7 @@ async def bond_active():
     )
 
 
-@router.get("/bond/history")
+@router.get("/bond/history", summary="债券历史数据")
 @handle_errors(module="bond")
 async def bond_history(
     tenor: str = Query(
@@ -475,7 +475,7 @@ def _init_cache_warmup():
 _init_cache_warmup()
 
 
-@router.get("/bond/health")
+@router.get("/bond/health", summary="债券模块健康检查")
 @handle_errors(module="bond")
 async def bond_health():
     """Bond module health check endpoint."""

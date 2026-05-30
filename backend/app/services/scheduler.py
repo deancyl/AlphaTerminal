@@ -11,6 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from app.db import flush_buffer_to_realtime
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from app.routers.market_radar import warmup_market_radar_cache
 
 logger = logging.getLogger(__name__)
 
@@ -236,6 +237,20 @@ def broadcast_performance_metrics():
 
     except Exception as e:
         logger.warning(f"[Scheduler] 性能指标广播异常: {e}", exc_info=True)
+
+
+def _market_radar_refresh():
+    """每 5 分钟刷新 Market Radar 缓存"""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(warmup_market_radar_cache())
+        logger.info("[Scheduler] Market Radar 缓存刷新完成")
+    except Exception as e:
+        logger.error(f"[Scheduler] Market Radar 缓存刷新失败: {e}", exc_info=True)
+    finally:
+        loop.close()
 
 
 def backfill_daily_history():
@@ -791,6 +806,17 @@ def start_scheduler():
         replace_existing=True,
     )
     logger.info("[Scheduler] 性能指标广播任务已注册（每5秒）")
+
+    # Market Radar 缓存刷新（每 5 分钟）
+    scheduler.add_job(
+        _market_radar_refresh,
+        'interval',
+        minutes=5,
+        id='market_radar_refresh',
+        name='MarketRadarRefresh',
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] Market Radar 缓存刷新任务已注册（每5分钟）")
 
     scheduler.start()
     logger.info("[Scheduler] APScheduler 已启动")

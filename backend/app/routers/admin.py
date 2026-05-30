@@ -38,6 +38,7 @@ from app.db import session_db
 from app.utils.error_decorator import handle_errors
 from app.utils.executor import get_executor
 from app.utils.error_sanitizer import sanitize_error
+from app.utils.errors import success_response, error_response, ErrorCode
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 _DEFAULT_LOG_DIR = BASE_DIR / "logs"
@@ -1119,6 +1120,66 @@ async def warmup_cache(body: CacheWarmupRequest):
         return {"message": "行情缓存预热已启动"}
     else:
         raise HTTPException(status_code=400, detail=f"Unknown data type: {data_type}")
+
+
+@router.get("/cache/stats")
+@handle_errors(module="admin")
+async def get_cache_stats():
+    """获取缓存统计信息"""
+    import asyncio
+    from datetime import datetime
+    from app.services.data_cache import get_cache
+    from app.services.sectors_cache import get_sectors, is_ready as sectors_is_ready, _SECTORS_CACHE, _SECTORS_CACHE_TS
+    from app.services.quote_source import _source_status
+
+    async def _get_stats():
+        # DataCache (L1 内存缓存)
+        _cache = get_cache()
+        data_cache_stats = _cache.get_stats()
+
+        # Sectors cache
+        sectors_count = len(_SECTORS_CACHE) if _SECTORS_CACHE else 0
+        sectors_ready = sectors_is_ready()
+        sectors_last_update = datetime.fromtimestamp(_SECTORS_CACHE_TS).isoformat() if _SECTORS_CACHE_TS > 0 else None
+
+        # Quotes cache (data source status)
+        quotes_count = len(_source_status) if _source_status else 0
+
+        # Calculate total size
+        total_size_mb = data_cache_stats.get("memory_usage_mb", 0.0)
+
+        return {
+            "sectors_cache": {
+                "count": sectors_count,
+                "ready": sectors_ready,
+                "last_update": sectors_last_update,
+            },
+            "quotes_cache": {
+                "count": quotes_count,
+                "sources": _source_status if _source_status else {},
+            },
+            "data_cache": {
+                "entry_count": data_cache_stats.get("entry_count", 0),
+                "memory_usage_mb": data_cache_stats.get("memory_usage_mb", 0.0),
+                "hit_rate": data_cache_stats.get("hit_rate", 0.0),
+                "miss_rate": data_cache_stats.get("miss_rate", 0.0),
+                "total_requests": data_cache_stats.get("total_requests", 0),
+                "hits": data_cache_stats.get("hits", 0),
+                "misses": data_cache_stats.get("misses", 0),
+                "evictions": data_cache_stats.get("evictions", 0),
+                "expired_removals": data_cache_stats.get("expired_removals", 0),
+                "coalesced_requests": data_cache_stats.get("coalesced_requests", 0),
+            },
+            "total_size_mb": total_size_mb,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    try:
+        result = await asyncio.wait_for(_get_stats(), timeout=10.0)
+        return success_response(result)
+    except asyncio.TimeoutError:
+        logger.error("[CacheStats] Timeout after 10s")
+        return error_response(ErrorCode.TIMEOUT_ERROR, "获取缓存统计超时")
 
 
 # ═══════════════════════════════════════════════════════════════
