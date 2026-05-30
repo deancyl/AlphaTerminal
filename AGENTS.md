@@ -7916,3 +7916,182 @@ cd frontend && npm run build  # Expected: Success
 
 ---
 
+## v0.6.219 WebSocket Real-Time Performance Metrics Streaming (2026-05-30)
+
+### Overview
+
+Implemented WebSocket real-time performance metrics streaming with 5-second broadcast interval, incremental chart updates, and HTTP polling fallback.
+
+### Wave 1: Backend WebSocket Message Type
+
+**New Method in ws_manager.py**:
+```python
+async def broadcast_performance_metrics(self, metrics: dict):
+    """广播性能指标给所有连接（无需订阅，全局推送）"""
+    message = {
+        "type": "performance_metrics",
+        "data": metrics,
+        "timestamp": datetime.now().isoformat()
+    }
+    async with self._conn_lock:
+        for conn in self._conns:
+            try:
+                await conn.send_json(message)
+            except Exception:
+                pass  # Connection will be cleaned up by heartbeat
+```
+
+**Message Type Documentation** (websocket.py):
+```python
+# Performance metrics message:
+# {"type": "performance_metrics", "data": {
+#   "stats": {"total_requests": 150, "avg_latency_ms": 45.2, ...},
+#   "top_endpoints": [{"endpoint": "/api/v1/market/quote", "avg_ms": 35, ...}, ...],
+#   "timestamp": "2026-05-30T10:30:00"
+# }}
+```
+
+### Wave 2: Backend Scheduler + Frontend Stream Handler
+
+**5-Second Scheduler Job** (scheduler.py):
+```python
+def broadcast_performance_metrics():
+    """每 5 秒广播性能指标到所有 WebSocket 连接"""
+    endpoint_stats = get_endpoint_stats(hours=0.1)  # ~6 minutes
+    total_requests = sum(s.get('request_count', 0) for s in endpoint_stats)
+    avg_latency = sum(avg_latencies) / len(avg_latencies) if avg_latencies else 0
+    top_endpoints = sorted(endpoint_stats, key=lambda x: x.get('avg_ms', 0), reverse=True)[:10]
+    
+    metrics = {
+        "stats": {"total_requests": total_requests, "avg_latency_ms": avg_latency, ...},
+        "top_endpoints": top_endpoints,
+    }
+    
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(ws_manager.broadcast_performance_metrics(metrics))
+    loop.close()
+```
+
+**Frontend Stream Handler** (useMarketStream.js):
+```javascript
+const performanceMetrics = shallowRef(null)
+const metricsUpdateTime = ref(null)
+
+// Message handler (v0.6.219)
+if (data.type === 'performance_metrics') {
+  _dataVersion++
+  performanceMetrics.value = data.data
+  metricsUpdateTime.value = data.timestamp || new Date().toISOString()
+  triggerRef(performanceMetrics)
+  return
+}
+```
+
+### Wave 3: PerformancePanel Integration
+
+**WebSocket Real-Time Data**:
+```javascript
+const { performanceMetrics, metricsUpdateTime, wsStatus } = useMarketStream()
+
+// Merge WS data with local state
+const liveMetrics = computed(() => {
+  if (performanceMetrics.value) {
+    return {
+      stats: performanceMetrics.value.stats,
+      topEndpoints: performanceMetrics.value.top_endpoints || [],
+      lastUpdate: metricsUpdateTime.value,
+      source: 'websocket'
+    }
+  }
+  return null
+})
+
+// Incremental chart updates
+function updateChartsIncremental(data) {
+  if (latencyChart && data.stats.avg_latency_ms) {
+    const option = latencyChart.getOption()
+    option.series[0].data.push(data.stats.avg_latency_ms)
+    if (option.series[0].data.length > 60) {
+      option.series[0].data.shift()
+    }
+    latencyChart.setOption(option)
+  }
+}
+```
+
+**HTTP Polling Fallback**:
+```javascript
+watch(wsStatus, (status) => {
+  if (status !== 'connected') {
+    startPolling()  // 30-second interval
+  } else {
+    stopPolling()
+  }
+})
+```
+
+**Live Indicator**:
+```vue
+<span v-if="showLiveIndicator" class="flex items-center gap-1">
+  <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+  实时
+</span>
+<span v-else class="text-sm text-gray-500">离线模式</span>
+```
+
+### Wave 4: Integration Tests
+
+**Backend Unit Test** (`test_performance_broadcast.py`):
+- `test_broadcast_performance_metrics()` - Verify broadcast function
+- `test_broadcast_performance_metrics_empty()` - Verify empty data handling
+
+**Frontend E2E Test** (`performance-metrics.spec.js`):
+- `PerformancePanel displays real-time indicator` - Verify live indicator
+- `PerformancePanel shows metrics data` - Verify data display
+
+### Verification Commands
+
+```bash
+# Backend WebSocket method
+grep -c "broadcast_performance_metrics" backend/app/services/ws_manager.py  # Expected: 1
+
+# Backend scheduler job
+grep -c "performance_metrics_broadcast" backend/app/services/scheduler.py  # Expected: 1
+
+# Frontend stream handler
+grep -c "performanceMetrics" frontend/src/composables/useMarketStream.js  # Expected: 4
+
+# PerformancePanel integration
+grep -c "useMarketStream" frontend/src/components/admin/PerformancePanel.vue  # Expected: 2
+
+# Test files
+ls backend/tests/unit/test_services/test_performance_broadcast.py
+ls frontend/tests/e2e/performance-metrics.spec.js
+
+# Frontend build
+cd frontend && npm run build  # Expected: Success
+```
+
+### Files Modified
+
+| Category | Files | Changes |
+|----------|-------|---------|
+| Backend WebSocket | `ws_manager.py` | broadcast_performance_metrics() method |
+| Backend Router | `websocket.py` | Message type documentation |
+| Backend Scheduler | `scheduler.py` | 5-second broadcast job |
+| Frontend Composable | `useMarketStream.js` | performanceMetrics ref + handler |
+| Frontend Component | `PerformancePanel.vue` | WebSocket integration + fallback |
+| Backend Tests | `test_performance_broadcast.py` | Unit tests |
+| Frontend Tests | `performance-metrics.spec.js` | E2E tests |
+
+### Summary
+
+| Wave | Tasks | Status |
+|------|-------|--------|
+| Wave 1 | Backend WebSocket Message Type | ✅ Complete |
+| Wave 2 | Backend Scheduler + Frontend Handler | ✅ Complete |
+| Wave 3 | PerformancePanel Integration | ✅ Complete |
+| Wave 4 | Integration Tests | ✅ Complete |
+
+---
+
