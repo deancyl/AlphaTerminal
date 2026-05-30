@@ -7764,3 +7764,155 @@ cd frontend && npm run build  # Expected: Success
 
 ---
 
+## v0.6.218 CSS Color Migration + PerformancePanel Integration (2026-05-30)
+
+### Overview
+
+Comprehensive CSS hardcoded color migration and PerformancePanel integration for real-time performance monitoring.
+
+### Wave 1-2: CSS Color Migration
+
+**CSS Variables Added** (all 4 themes):
+
+| Variable | Value | Semantic |
+|----------|-------|----------|
+| `--color-ma5` | #F5A623 | MA5均线 (金色) |
+| `--color-ma10` | #0F52BA | MA10均线 (品牌蓝) |
+| `--color-ma20` | #A855F7 | MA20均线 (紫色) |
+| `--color-ma60` | #EC4899 | MA60均线 (粉色) |
+| `--color-macd-dif` | #60a5fa | MACD DIF (蓝色) |
+| `--color-macd-dea` | #f87171 | MACD DEA (红色) |
+| `--color-macd-hist` | #22c55e | MACD Histogram (绿色) |
+| `--color-overlay` | #f97316 | Overlay (橙色) |
+| `--color-oi` | #f59e0b | 持仓量 (琥珀色) |
+| `--color-flat` | #71717a | Flat (灰色) |
+
+**echartsTheme.js Extensions**:
+
+| Function | Purpose |
+|----------|---------|
+| `getIndicatorColors()` | Returns all indicator colors (MA/MACD) |
+| `pieColors` | 5-color palette for pie charts |
+| `lineColors` | 5-color palette for line charts |
+
+**Components Migrated** (13 files):
+
+| File | Hardcoded Colors Replaced |
+|------|--------------------------|
+| `ErrorBoundary.vue` | 28 colors → CSS vars |
+| `SentimentGauge.vue` | 18 colors → CSS vars |
+| `SubChart.vue` | 17 colors → CSS vars |
+| `ResearchDashboard.vue` | 16 colors → CSS vars |
+| `DashboardGrid.vue` | 15 colors → CSS vars |
+| `EsgDashboard.vue` | 15 colors → CSS vars |
+| `BondHistoryModal.vue` | 15 colors → CSS vars |
+| `DrawingCanvas.vue` | 14 colors → CSS vars |
+| `TokenMonitoringPanel.vue` | ECharts tooltip/pie colors |
+| `DataSourcePanel.vue` | SVG + ECharts colors |
+| `InstitutionalHoldings.vue` | Chart colors |
+| `MarginTrading.vue` | Chart colors |
+| `PeerComparison.vue` | Chart colors |
+
+**Color Mapping Applied**:
+
+| Hardcoded | CSS Variable | Semantic |
+|-----------|-------------|----------|
+| `#ef4444` | `var(--color-bull)` | 上涨/红色 |
+| `#f87171` | `var(--color-bull-light)` | 浅红 |
+| `#22c55e` | `var(--color-bear)` | 下跌/绿色 |
+| `#34d399` | `var(--color-success)` | 成功 |
+| `#60a5fa` | `var(--color-info)` | 信息/蓝色 |
+| `#fbbf24` | `var(--color-warning)` | 警告/橙色 |
+| `#a855f7` | `var(--color-ma20)` | MA20均线 |
+| `#f59e0b` | `var(--color-oi)` | 持仓量 |
+| `#9ca3af` | `var(--text-muted)` | 次要文本 |
+| `#374151` | `var(--border-base)` | 边框 |
+| `#1f2937` | `var(--bg-surface)` | 表面背景 |
+
+### Wave 3: PerformancePanel Integration
+
+**PerformancePanel.vue** (248 lines):
+
+| Feature | Description |
+|---------|-------------|
+| Response Time Overview | avg/p95/p99 metrics with color-coded latency |
+| Request Statistics | total/success rate/error rate/cache hit rate |
+| Top 10 Endpoints Table | endpoint/requests/avg/p95/error rate |
+| ECharts Visualization | Latency line chart + Request rate bar chart |
+| Time Range Selector | 1h/6h/24h/7d |
+
+**AdminDashboard Integration**:
+
+- Added `PerformancePanel` to `navGroups` business group
+- Added `defineAsyncComponent` import
+- Added `v-show="activeTab === 'performance'"` template
+
+### API Endpoint
+
+**GET** `/api/v1/admin/performance/metrics?hours=24`
+
+Returns:
+```json
+{
+  "history": [...],
+  "stats": {
+    "avg_latency_ms": 45.2,
+    "p95_latency_ms": 120.5,
+    "p99_latency_ms": 350.8,
+    "total_requests": 15420,
+    "success_rate": 98.5,
+    "error_rate": 1.5,
+    "cache_hit_rate": 45.2,
+    "endpoints": [...]
+  },
+  "retention_days": 7
+}
+```
+
+### Verification Commands
+
+```bash
+# CSS Variables
+grep -c "color-ma5" frontend/src/style.css  # Expected: 4
+
+# echartsTheme Extensions
+grep -c "getIndicatorColors" frontend/src/utils/echartsTheme.js  # Expected: 1
+
+# PerformancePanel
+ls frontend/src/components/admin/PerformancePanel.vue  # Should exist
+grep -c "PerformancePanel" frontend/src/components/AdminDashboard.vue  # Expected: 2
+
+# CSS Migration Progress
+grep -r "var(--color" frontend/src/components --include="*.vue" | wc -l  # Expected: 550+
+
+# Frontend Build
+cd frontend && npm run build  # Expected: Success
+```
+
+### Files Modified
+
+| Category | Files | Changes |
+|----------|-------|---------|
+| Frontend Theme | `style.css` | 10 indicator CSS variables × 4 themes |
+| Frontend Utils | `echartsTheme.js` | getIndicatorColors() + palettes |
+| Frontend Components | 13 Vue files | Hardcoded → CSS vars |
+| Frontend Admin | `PerformancePanel.vue` (new), `AdminDashboard.vue` | Performance monitoring |
+
+### Deferred to v0.6.219
+
+| Task | Priority | Reason |
+|------|----------|--------|
+| WebSocket performance_metrics | P1 | Non-blocking, requires scheduler integration |
+| Frontend onPerformanceMetrics | P1 | Depends on WebSocket message type |
+| Backend 5s scheduler | P1 | Requires APScheduler job addition |
+
+### Summary
+
+| Wave | Tasks | Status |
+|------|-------|--------|
+| Wave 1-2 | CSS Migration | ✅ Complete (13 files) |
+| Wave 3 | PerformancePanel | ✅ Complete |
+| Wave 4-5 | WebSocket Streaming | ⏳ Deferred to v0.6.219 |
+
+---
+
