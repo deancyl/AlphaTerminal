@@ -7606,14 +7606,48 @@ Infrastructure release focusing on performance monitoring, theme system enhancem
 | Response Time Middleware | ✅ Complete | `backend/app/middleware/response_time.py` |
 | CI/CD E2E Integration | ✅ Complete | E2E job in `ci-cd.yml` |
 
-### Wave 2: P2 Medium Priority (Partial)
+### Wave 2: P2 Medium Priority (Complete)
 
 | Task | Status | Deliverable |
 |------|--------|-------------|
-| Metrics SQLite DB | ✅ Complete | `backend/app/db/metrics_db.py` |
-| ECharts Color Migration | 🔄 Partial | MacroDashboard.vue migrated |
-| CSS Color Migration | ⏳ Pending | Deferred to v0.6.218 |
-| JS Color Migration | ⏳ Pending | Deferred to v0.6.218 |
+| Metrics SQLite DB | ✅ Complete | `backend/app/db/metrics_db.py` + API endpoint |
+| ECharts Color Migration | ✅ Complete | 6 components migrated (~90 colors) |
+| CSS Color Migration | ⏳ Deferred | Deferred to v0.6.218 (remaining ~250 locations) |
+| JS Color Migration | ⏳ Deferred | Deferred to v0.6.218 |
+
+#### ECharts Color Migration Details
+
+**Components Migrated:**
+
+| Component | Hardcoded Colors | Dynamic Colors |
+|-----------|-----------------|----------------|
+| MacroDashboard.vue | 24 → 0 | `getDynamicThemeColors()` |
+| FundDashboard.vue | 27 → 0 | `getDynamicThemeColors()` + `getDynamicChartColors()` |
+| IndexLineChart.vue | 10 → 0 | `getDynamicThemeColors()` |
+| YieldSpreadChart.vue | 15 → 0 | `getDynamicThemeColors()` |
+| TermStructureChart.vue | 18 → 0 | `getDynamicThemeColors()` |
+| YieldCurveChart.vue | 12 → 0 | `getDynamicThemeColors()` |
+
+**New Color Tokens Added to `echartsTheme.js`:**
+
+| Category | Tokens |
+|----------|--------|
+| Text | `textPrimary`, `textSecondary`, `textMuted` |
+| Border | `borderBase`, `borderLight` |
+| Semantic | `info`, `warning`, `success`, `error` |
+| Chart Palettes | `pieColors` (5), `lineColors` (5) |
+
+#### Metrics SQLite DB Details
+
+**API Endpoint:**
+- `GET /api/v1/admin/performance/metrics`
+- Query params: `endpoint` (optional), `hours` (default 24, max 168)
+- Returns: `history`, `stats`, `retention_days`, `query_hours`
+
+**Integration:**
+- Response time middleware now records to both Prometheus and SQLite
+- 7-day retention with auto-cleanup
+- Thread-safe with shared connection from `database.py`
 
 ### New Features
 
@@ -7689,6 +7723,13 @@ curl -I http://localhost:8002/api/v1/macro/overview | grep X-Response-Time
 # Prometheus Metrics
 curl http://localhost:8002/api/v1/metrics | grep api_endpoint_latency
 
+# Metrics SQLite DB
+curl http://localhost:60100/api/v1/admin/performance/metrics | jq '.data.stats'
+
+# ECharts Color Migration
+grep -c "getDynamicThemeColors" frontend/src/components/MacroDashboard.vue  # Expected: 2+
+grep -c "getDynamicThemeColors" frontend/src/components/FundDashboard.vue  # Expected: 2+
+
 # CI/CD Integration
 grep "workflow_call:" .github/workflows/e2e-test.yml  # Expected: 1
 grep -A5 "e2e:" .github/workflows/ci-cd.yml  # Expected: job definition
@@ -7704,18 +7745,22 @@ cd frontend && npm run build  # Expected: Success
 | Backend Middleware | `response_time.py`, `cache_metrics.py`, `main.py` | Response time tracking |
 | Backend DB | `metrics_db.py` | SQLite persistence |
 | Frontend Theme | `style.css`, `useTheme.js`, `echartsTheme.js` | CSS variables + dynamic colors |
+| Frontend Components | `MacroDashboard.vue`, `FundDashboard.vue`, etc. | ECharts color migration |
 | CI/CD | `e2e-test.yml`, `ci-cd.yml` | E2E integration |
 
 ### Known Issues
 
-- Wave 2 color migration incomplete (partial completion in v0.6.217)
+- CSS/JS color migration incomplete (deferred to v0.6.218 - ~250 locations remaining)
 - Performance dashboard panel not yet implemented
-- Some frontend components still have hardcoded colors
+- WebSocket streaming for real-time metrics not yet implemented
 
-### Next Steps
+### Next Steps (v0.6.218)
 
-1. Complete Wave 2 color migration (v0.6.218)
-2. Add PerformancePanel.vue to AdminDashboard
-3. WebSocket streaming for real-time metrics
-4. Integration tests for performance monitoring
+1. Complete CSS color migration (hardcoded colors to CSS variables)
+2. Complete JS color migration (use `useTheme()` composable)
+3. Add PerformancePanel.vue to AdminDashboard
+4. WebSocket streaming for real-time metrics
+5. Integration tests for performance monitoring
+
+---
 
