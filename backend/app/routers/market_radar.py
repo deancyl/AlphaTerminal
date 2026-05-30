@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/market_radar", tags=["market_radar"])
 
-TREEMAP_CACHE_TTL = 60
+TREEMAP_CACHE_TTL = 300  # 5 minutes for better performance
 ANOMALY_CACHE_TTL = 30
 TREEMAP_TIMEOUT = 60.0
 

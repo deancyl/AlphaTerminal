@@ -303,7 +303,7 @@ const navGroups = ref([
     id: 'data',
     label: '数据引擎',
     icon: '📡',
-    expanded: false,
+    expanded: true,
     items: [
       { id: 'sources', label: '数据源', icon: '📡' },
       { id: 'scheduler', label: '定时任务', icon: '⏱️' },
@@ -316,7 +316,7 @@ const navGroups = ref([
     id: 'intelligence',
     label: '智能引擎',
     icon: '🤖',
-    expanded: false,
+    expanded: true,
     items: [
       { id: 'llm', label: '模型配置', icon: '🤖' },
       { id: 'tokens', label: 'Token监控', icon: '📈' },
@@ -330,7 +330,7 @@ const navGroups = ref([
     id: 'business',
     label: '业务控制',
     icon: '📊',
-    expanded: false,
+    expanded: true,
     items: [
       { id: 'performance', label: '性能监控', icon: '📊' },
       { id: 'backtest', label: '回测监控', icon: '🔬' },

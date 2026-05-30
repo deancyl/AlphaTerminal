@@ -3,6 +3,7 @@
 import time
 import psutil
 import sqlite3
+from datetime import datetime
 from fastapi import APIRouter
 from app.utils.errors import success_response
 from app.db.database import _db_path
@@ -13,6 +14,17 @@ router = APIRouter(prefix="/health", tags=["health"])
 
 _backend_ready = False
 _start_time = time.time()
+
+
+@router.get("")
+@handle_errors(module="health")
+async def health_root():
+    """Root health check endpoint at /api/v1/health"""
+    return {
+        "status": "ok",
+        "timestamp": datetime.now().isoformat(),
+        "version": "v0.6.220"
+    }
 
 
 def set_backend_ready(ready: bool):
