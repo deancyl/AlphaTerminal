@@ -77,7 +77,7 @@
         <div class="relative h-4 rounded-sm bg-theme-secondary overflow-hidden mx-1">
           <div
             class="absolute top-0 bottom-0 rounded-sm"
-            :style="{ left: Math.max(0, Math.min(98, percentile ?? 0)) + '%', width: '2px', background: '#60a5fa' }"
+            :style="{ left: Math.max(0, Math.min(98, percentile ?? 0)) + '%', width: '2px', background: 'var(--color-info)' }"
           ></div>
           <div class="absolute inset-0 flex items-center">
             <div
@@ -228,30 +228,30 @@ async function renderChart() {
     grid: { top: 8, right: 12, bottom: 28, left: 52 },
     xAxis: {
       type: 'category', data: dates,
-      axisLine: { lineStyle: { color: '#2d2d2d' } },
+      axisLine: { lineStyle: { color: 'var(--border-base)' } },
       axisTick: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 8, fontFamily: 'monospace', rotate: 30,
+      axisLabel: { color: 'var(--text-muted)', fontSize: 8, fontFamily: 'monospace', rotate: 30,
         formatter: v => { const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()}` } },
       splitLine: { show: false },
     },
     yAxis: {
       type: 'value', min: minY - pad, max: maxY + pad,
       axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 8, fontFamily: 'monospace', formatter: v => v.toFixed(2) + '%' },
-      splitLine: { lineStyle: { color: '#1f1f1f', type: 'dashed' } },
+      axisLabel: { color: 'var(--text-muted)', fontSize: 8, fontFamily: 'monospace', formatter: v => v.toFixed(2) + '%' },
+      splitLine: { lineStyle: { color: 'var(--bg-surface)', type: 'dashed' } },
     },
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(10,14,23,0.95)',
       borderColor: 'rgba(50,50,50,0.8)',
-      textStyle: { color: '#9ca3af', fontSize: 10, fontFamily: 'monospace' },
-      formatter: p => `<span style="color:#60a5fa">${p[0].name}</span><br/>收益率: <span style="color:#f3f4f6">${p[0].value?.toFixed(4)}%</span>`,
+      textStyle: { color: 'var(--text-muted)', fontSize: 10, fontFamily: 'monospace' },
+      formatter: p => `<span style="color:var(--color-info)">${p[0].name}</span><br/>收益率: <span style="color:#f3f4f6">${p[0].value?.toFixed(4)}%</span>`,
     },
     series: [
       {
         type: 'line', data: yields,
         smooth: 0.3, symbol: 'none',
-        lineStyle: { color: '#60a5fa', width: 1.5 },
+        lineStyle: { color: 'var(--color-info)', width: 1.5 },
         areaStyle: {
           color: new window.echarts.graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: 'rgba(96,165,250,0.15)' },
@@ -260,8 +260,8 @@ async function renderChart() {
         },
         markLine: {
           silent: true, symbol: 'none',
-          lineStyle: { color: '#fbbf24', width: 1.5, type: 'dashed' },
-          data: cur != null ? [{ yAxis: cur, label: { formatter: `当前 ${cur.toFixed(3)}%`, color: '#fbbf24', fontSize: 8 } }] : [],
+          lineStyle: { color: 'var(--color-warning)', width: 1.5, type: 'dashed' },
+          data: cur != null ? [{ yAxis: cur, label: { formatter: `当前 ${cur.toFixed(3)}%`, color: 'var(--color-warning)', fontSize: 8 } }] : [],
         },
         // 历史高低点标注
         markPoint: {
@@ -270,13 +270,13 @@ async function renderChart() {
           data: [
             {
               type: 'max', name: '最高',
-              itemStyle: { color: '#f87171' },
-              label: { formatter: `最高 ${maxY.toFixed(3)}%`, color: '#f87171', fontSize: 9, position: 'top' },
+              itemStyle: { color: 'var(--color-bull-light)' },
+              label: { formatter: `最高 ${maxY.toFixed(3)}%`, color: 'var(--color-bull-light)', fontSize: 9, position: 'top' },
             },
             {
               type: 'min', name: '最低',
-              itemStyle: { color: '#60a5fa' },
-              label: { formatter: `最低 ${minY.toFixed(3)}%`, color: '#60a5fa', fontSize: 9, position: 'bottom' },
+              itemStyle: { color: 'var(--color-info)' },
+              label: { formatter: `最低 ${minY.toFixed(3)}%`, color: 'var(--color-info)', fontSize: 9, position: 'bottom' },
             },
           ],
         },

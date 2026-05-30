@@ -187,6 +187,10 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`
 }
 
+function getCSSVar(varName) {
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+}
+
 function buildIntradayOption(series) {
   if (!series || !series.length) return {}
   
@@ -203,18 +207,18 @@ function buildIntradayOption(series) {
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(26,30,46,0.96)',
-      borderColor: '#4b5563',
-      textStyle: { color: '#9ca3af', fontSize: 10 },
+      borderColor: getCSSVar('--border-base') || 'var(--border-base)',
+      textStyle: { color: getCSSVar('--text-muted') || 'var(--text-muted)', fontSize: 10 },
       formatter: (params) => {
         const p = params[0]
-        return `<span style="color:#6b7280;font-size:9px">${p.name}</span><br/>`
+        return `<span style="color:${getCSSVar('--text-muted') || 'var(--text-muted)'};font-size:9px">${p.name}</span><br/>`
           + params.map(s => `<span style="color:${s.color};font-size:10px">${s.seriesName}: <b>${s.value}</b>家</span>`).join('<br/>')
       },
     },
     legend: {
       data: ['上涨', '下跌'],
       top: 0, right: 4,
-      textStyle: { color: '#9ca3af', fontSize: 8 },
+      textStyle: { color: 'var(--text-muted)', fontSize: 8 },
       icon: 'roundRect',
       itemWidth: 12, itemHeight: 6,
     },
@@ -222,18 +226,18 @@ function buildIntradayOption(series) {
     xAxis: {
       type: 'category',
       data: times,
-      axisLabel: { color: '#4b5563', fontSize: 8, rotate: 0 },
-      axisLine: { lineStyle: { color: '#2d3748' } },
+      axisLabel: { color: 'var(--border-base)', fontSize: 8, rotate: 0 },
+      axisLine: { lineStyle: { color: 'var(--border-light)' } },
       splitLine: { show: false },
     },
     yAxis: {
       type: 'value',
       scale: true,
       axisLabel: {
-        color: '#4b5563', fontSize: 8,
+        color: 'var(--border-base)', fontSize: 8,
         formatter: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v,
       },
-      splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
+      splitLine: { lineStyle: { color: 'var(--bg-surface)', type: 'dashed' } },
       axisLine: { show: false },
     },
     series: [
@@ -320,7 +324,7 @@ function buildHistogramOption(buckets) {
   const colors  = buckets.map(b => {
     // 直接使用后端返回的颜色（后端已按 A 股颜色约定赋值）
     // 后端约定：绿色=#14b143(跌)，红色=#ef232a(涨)，灰色=#4b5563(平盘)
-    if (b.label === "平盘(0%)") return '#4b5563'
+    if (b.label === "平盘(0%)") return 'var(--border-base)'
     return b.color || (b.label.includes("涨") ? UP : DOWN)
   })
 
@@ -330,11 +334,11 @@ function buildHistogramOption(buckets) {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
       backgroundColor: 'rgba(26,30,46,0.96)',
-      borderColor: '#4b5563',
-      textStyle: { color: '#9ca3af', fontSize: 11 },
+      borderColor: getCSSVar('--border-base') || 'var(--border-base)',
+      textStyle: { color: 'var(--text-muted)', fontSize: 11 },
       formatter: (params) => {
         const p = params[0]
-        return `<span style="color:#6b7280;font-size:10px">${p.name}</span><br/>`
+        return `<span style="color:var(--text-muted);font-size:10px">${p.name}</span><br/>`
           + `<span style="color:${p.color};font-size:12px;font-weight:bold">${p.value} 家</span>`
       },
     },
@@ -343,20 +347,20 @@ function buildHistogramOption(buckets) {
       type: 'category',
       data: labels,
       axisLabel: {
-        color: '#6b7280', fontSize: 8,
+        color: 'var(--text-muted)', fontSize: 8,
         interval: 0,
         rotate: 30,
         formatter: v => v.replace('%', '').replace('~', '~'),
       },
-      axisLine: { lineStyle: { color: '#2d3748' } },
+      axisLine: { lineStyle: { color: 'var(--border-light)' } },
       splitLine: { show: false },
     },
     yAxis: {
       type: 'value',
       scale: true,
-      axisLabel: { color: '#6b7280', fontSize: 8,
+      axisLabel: { color: 'var(--text-muted)', fontSize: 8,
         formatter: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v },
-      splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
+      splitLine: { lineStyle: { color: 'var(--bg-surface)', type: 'dashed' } },
       axisLine: { show: false },
     },
     series: [{
@@ -364,7 +368,7 @@ function buildHistogramOption(buckets) {
       type: 'bar',
       data: counts.map((c, i) => ({ value: c, itemStyle: { color: colors[i], borderRadius: i === 5 ? [2,2,0,0] : (i < 5 ? [2,2,0,0] : [0,0,2,2]) } })),
       barMaxWidth: 28,
-      label: { show: counts.map(c => c > 0), position: 'top', fontSize: 8, color: '#9ca3af',
+      label: { show: counts.map(c => c > 0), position: 'top', fontSize: 8, color: 'var(--text-muted)',
         formatter: p => p.value > 0 ? p.value : '' },
     }],
   }

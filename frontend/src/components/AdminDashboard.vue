@@ -146,6 +146,11 @@
         v-show="activeTab === 'backtest'"
       />
 
+      <!-- 性能监控 -->
+      <PerformancePanel
+        v-show="activeTab === 'performance'"
+      />
+
       <!-- 布局设置 -->
       <LayoutPanel
         v-show="activeTab === 'layout'"
@@ -256,6 +261,7 @@ const BacktestMonitorPanel = defineAsyncComponent(() => import('./admin/Backtest
 const DataGapsPanel = defineAsyncComponent(() => import('./admin/DataGapsPanel.vue'))
 const CostAttributionPanel = defineAsyncComponent(() => import('./admin/CostAttributionPanel.vue'))
 const AuditPlaybackPanel = defineAsyncComponent(() => import('./admin/AuditPlaybackPanel.vue'))
+const PerformancePanel = defineAsyncComponent(() => import('./admin/PerformancePanel.vue'))
 import LoadingSpinner from './f9/LoadingSpinner.vue'
 import ErrorDisplay from './f9/ErrorDisplay.vue'
 
@@ -326,6 +332,7 @@ const navGroups = ref([
     icon: '📊',
     expanded: false,
     items: [
+      { id: 'performance', label: '性能监控', icon: '📊' },
       { id: 'backtest', label: '回测监控', icon: '🔬' },
     ]
   }

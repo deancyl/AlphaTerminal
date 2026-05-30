@@ -715,8 +715,8 @@ onBeforeUnmount(() => {
 .text-terminal-dim { color: var(--text-secondary, #8B949E); }
 .text-terminal-accent { color: var(--color-primary, #0F52BA); }
 .border-theme-secondary { border-color: var(--border-color, #2d3748); }
-.text-bullish { color: var(--color-up, #FF6B6B); }
-.text-bearish { color: var(--color-down, #51CF66); }
-.bg-bullish\/20 { background: rgba(255, 107, 107, 0.2); }
-.bg-bearish\/20 { background: rgba(81, 207, 102, 0.2); }
+.text-bullish { color: var(--color-bull, #ef4444); }
+.text-bearish { color: var(--color-bear, #22c55e); }
+.bg-bullish\/20 { background: rgba(var(--color-bull-rgb, 239, 68, 68), 0.2); }
+.bg-bearish\/20 { background: rgba(var(--color-bear-rgb, 34, 197, 94), 0.2); }
 </style>

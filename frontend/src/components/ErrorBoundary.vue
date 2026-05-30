@@ -174,7 +174,7 @@ function toggleDetails() {
   justify-content: center;
   min-height: 100vh;
   padding: 20px;
-  background-color: #f5f5f5;
+  background-color: var(--bg-base, #f5f5f5);
 }
 
 .error-fallback-inline {
@@ -205,7 +205,7 @@ function toggleDetails() {
   width: 80px;
   height: 80px;
   margin: 0 auto 24px;
-  color: #ef4444;
+  color: var(--color-bull);
 }
 
 .error-fallback-inline .error-icon {
@@ -222,7 +222,7 @@ function toggleDetails() {
 .error-title {
   font-size: 24px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary, #1f2937);
   margin-bottom: 12px;
 }
 
@@ -233,7 +233,7 @@ function toggleDetails() {
 
 .error-message {
   font-size: 16px;
-  color: #6b7280;
+  color: var(--text-muted);
   margin-bottom: 24px;
   line-height: 1.5;
 }
@@ -246,7 +246,7 @@ function toggleDetails() {
 .error-suggestions {
   margin: 16px 0;
   padding: 12px 16px;
-  background-color: #f0f9ff;
+  background-color: var(--color-info-bg, #f0f9ff);
   border-radius: 8px;
   text-align: left;
 }
@@ -258,7 +258,7 @@ function toggleDetails() {
 .suggestions-title {
   font-size: 14px;
   font-weight: 500;
-  color: #3b82f6;
+  color: var(--color-primary, #3b82f6);
   margin-bottom: 8px;
 }
 
@@ -274,7 +274,7 @@ function toggleDetails() {
 
 .suggestions-list li {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 
@@ -285,7 +285,7 @@ function toggleDetails() {
 .error-details {
   margin: 20px 0;
   padding: 16px;
-  background-color: #f9fafb;
+  background-color: var(--bg-surface-hover, #f9fafb);
   border-radius: 8px;
   text-align: left;
   overflow-x: auto;
@@ -297,7 +297,7 @@ function toggleDetails() {
 
 .error-details pre {
   font-size: 12px;
-  color: #374151;
+  color: var(--border-base, #374151);
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
@@ -321,7 +321,7 @@ function toggleDetails() {
 
 .btn-primary {
   padding: 10px 24px;
-  background-color: #3b82f6;
+  background-color: var(--color-primary, #3b82f6);
   color: white;
   border: none;
   border-radius: 6px;
@@ -332,14 +332,14 @@ function toggleDetails() {
 }
 
 .btn-primary:hover {
-  background-color: #2563eb;
+  background-color: var(--color-primary-hover, #2563eb);
 }
 
 .btn-secondary {
   padding: 10px 24px;
   background-color: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  color: var(--border-base, #374151);
+  border: 1px solid var(--border-light, #d1d5db);
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
@@ -354,7 +354,7 @@ function toggleDetails() {
 }
 
 .btn-secondary:hover {
-  background-color: #f9fafb;
+  background-color: var(--bg-surface-hover, #f9fafb);
 }
 
 .error-fallback-inline .btn-secondary:hover {
@@ -364,7 +364,7 @@ function toggleDetails() {
 .btn-text {
   padding: 10px 16px;
   background: none;
-  color: #6b7280;
+  color: var(--text-muted);
   border: none;
   font-size: 14px;
   cursor: pointer;
@@ -376,12 +376,12 @@ function toggleDetails() {
 }
 
 .btn-text:hover {
-  color: #374151;
+  color: var(--border-base, #374151);
 }
 
 .error-trace-id {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: monospace;
 }
 

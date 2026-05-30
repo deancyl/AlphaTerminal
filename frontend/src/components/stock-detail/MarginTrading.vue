@@ -133,15 +133,15 @@ async function renderChart() {
         type: 'shadow'
       },
       backgroundColor: 'rgba(15, 23, 42, 0.9)',
-      borderColor: '#3b82f6',
+      borderColor: 'var(--color-info)',
       textStyle: {
-        color: '#e2e8f0'
+        color: 'var(--text-secondary)'
       }
     },
     legend: {
       data: ['融资余额', '融券余额', '总余额'],
       textStyle: {
-        color: '#94a3b8'
+        color: 'var(--text-muted)'
       },
       top: 10
     },
@@ -156,11 +156,11 @@ async function renderChart() {
       data: dates,
       axisLine: {
         lineStyle: {
-          color: '#475569'
+          color: 'var(--border-base)'
         }
       },
       axisLabel: {
-        color: '#94a3b8',
+        color: 'var(--text-muted)',
         rotate: 45
       }
     },
@@ -168,11 +168,11 @@ async function renderChart() {
       type: 'value',
       axisLine: {
         lineStyle: {
-          color: '#475569'
+          color: 'var(--border-base)'
         }
       },
       axisLabel: {
-        color: '#94a3b8',
+        color: 'var(--text-muted)',
         formatter: function(value) {
           if (value >= 10000) {
             return (value / 10000).toFixed(0) + '万'
@@ -182,7 +182,7 @@ async function renderChart() {
       },
       splitLine: {
         lineStyle: {
-          color: '#334155'
+          color: 'var(--bg-surface)'
         }
       }
     },
@@ -192,7 +192,7 @@ async function renderChart() {
         type: 'bar',
         data: financingBalances,
         itemStyle: {
-          color: '#ef4444'
+          color: 'var(--color-bull)'
         }
       },
       {
@@ -200,7 +200,7 @@ async function renderChart() {
         type: 'bar',
         data: lendingBalances,
         itemStyle: {
-          color: '#22c55e'
+          color: 'var(--color-bear)'
         }
       },
       {
@@ -209,11 +209,11 @@ async function renderChart() {
         data: totalBalances,
         smooth: true,
         lineStyle: {
-          color: '#3b82f6',
+          color: 'var(--color-info)',
           width: 2
         },
         itemStyle: {
-          color: '#3b82f6'
+          color: 'var(--color-info)'
         },
         symbol: 'circle',
         symbolSize: 6

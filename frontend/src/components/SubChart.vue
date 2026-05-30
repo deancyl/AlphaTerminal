@@ -259,16 +259,16 @@ function buildOption() {
 
   const yAxisCfg = {
     type: 'value', position: 'right',
-    axisLine: { lineStyle: { color: '#374151' } },
+    axisLine: { lineStyle: { color: 'var(--border-base)' } },
     splitLine: { show: false },
-    axisLabel: { color: '#6b7280', fontSize: 9 },
+    axisLabel: { color: 'var(--text-muted)', fontSize: 9 },
   }
 
   if (tab === 'VOL') {
     return {
       grid: { top: 8, right: 55, left: 55, bottom: 4, containLabel: false },
-      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false }, axisLabel: { show: false } },
-      yAxis: { ...yAxisCfg, axisLabel: { formatter: v => (v / 1e8).toFixed(0) + '亿', color: '#6b7280', fontSize: 9 } },
+      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: 'var(--border-base)' } }, splitLine: { show: false }, axisLabel: { show: false } },
+      yAxis: { ...yAxisCfg, axisLabel: { formatter: v => (v / 1e8).toFixed(0) + '亿', color: 'var(--text-muted)', fontSize: 9 } },
       series: [{
         name: 'VOL', type: 'bar',
         data: hist.map(h => ({ value: h.volume, itemStyle: { color: h.close >= h.open ? UP + '44' : DOWN + '44' } })),
@@ -288,11 +288,11 @@ function buildOption() {
     const { dif, dea, macd } = calcMACD(closes, p.fast || 12, p.slow || 26, p.signal || 9)
     return {
       grid: { top: 8, right: 55, left: 55, bottom: 4, containLabel: false },
-      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false }, axisLabel: { show: false } },
+      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: 'var(--border-base)' } }, splitLine: { show: false }, axisLabel: { show: false } },
       yAxis: yAxisCfg,
       series: [
-        { name: 'DIF', type: 'line', data: dif, smooth: false, symbol: 'none', lineStyle: { color: '#60a5fa', width: 1.2 } },
-        { name: 'DEA', type: 'line', data: dea, smooth: false, symbol: 'none', lineStyle: { color: '#f87171', width: 1.2 } },
+        { name: 'DIF', type: 'line', data: dif, smooth: false, symbol: 'none', lineStyle: { color: 'var(--color-macd-dif)', width: 1.2 } },
+        { name: 'DEA', type: 'line', data: dea, smooth: false, symbol: 'none', lineStyle: { color: 'var(--color-macd-dea)', width: 1.2 } },
         { name: 'MACD', type: 'bar',
           data: macd.map(v => ({ value: Math.abs(v), itemStyle: { color: v >= 0 ? UP : DOWN } })),
           barMaxWidth: 3 },
@@ -306,12 +306,12 @@ function buildOption() {
     const { k, d, j } = calcKDJ(closes, hist.map(h => h.high), hist.map(h => h.low), p.n || 9)
     return {
       grid: { top: 8, right: 55, left: 55, bottom: 4, containLabel: false },
-      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false }, axisLabel: { show: false } },
+      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: 'var(--border-base)' } }, splitLine: { show: false }, axisLabel: { show: false } },
       yAxis: yAxisCfg,
       series: [
-        { name: 'K', type: 'line', data: k, smooth: false, symbol: 'none', lineStyle: { color: '#f87171', width: 1.2 } },
-        { name: 'D', type: 'line', data: d, smooth: false, symbol: 'none', lineStyle: { color: '#60a5fa', width: 1.2 } },
-        { name: 'J', type: 'line', data: j, smooth: false, symbol: 'none', lineStyle: { color: '#fbbf24', width: 1.2 } },
+        { name: 'K', type: 'line', data: k, smooth: false, symbol: 'none', lineStyle: { color: 'var(--color-bull-light)', width: 1.2 } },
+        { name: 'D', type: 'line', data: d, smooth: false, symbol: 'none', lineStyle: { color: 'var(--color-macd-dif)', width: 1.2 } },
+        { name: 'J', type: 'line', data: j, smooth: false, symbol: 'none', lineStyle: { color: 'var(--color-warning)', width: 1.2 } },
       ],
       tooltip: { trigger: 'axis' },
     }
@@ -322,9 +322,9 @@ function buildOption() {
     const rsi = calcRSI(closes, p.period || 14)
     return {
       grid: { top: 8, right: 55, left: 55, bottom: 4, containLabel: false },
-      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false }, axisLabel: { show: false } },
+      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: 'var(--border-base)' } }, splitLine: { show: false }, axisLabel: { show: false } },
       yAxis: { ...yAxisCfg, max: 100, min: 0 },
-      series: [{ name: 'RSI', type: 'line', data: rsi, smooth: false, symbol: 'none', lineStyle: { color: '#34d399', width: 1.5 } }],
+      series: [{ name: 'RSI', type: 'line', data: rsi, smooth: false, symbol: 'none', lineStyle: { color: 'var(--color-success)', width: 1.5 } }],
       tooltip: { trigger: 'axis' },
     }
   }
@@ -334,12 +334,12 @@ function buildOption() {
     const { mid, upper, lower } = calcBOLL(closes, p.period || 20, p.stdDev || 2)
     return {
       grid: { top: 8, right: 55, left: 55, bottom: 4, containLabel: false },
-      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false }, axisLabel: { show: false } },
+      xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: 'var(--border-base)' } }, splitLine: { show: false }, axisLabel: { show: false } },
       yAxis: yAxisCfg,
       series: [
-        { name: 'BOLL-M', type: 'line', data: mid, smooth: false, symbol: 'none', lineStyle: { color: '#a78bfa', width: 1.2 } },
-        { name: 'BOLL-U', type: 'line', data: upper, smooth: false, symbol: 'none', lineStyle: { color: '#a78bfa', width: 1, type: 'dashed' } },
-        { name: 'BOLL-L', type: 'line', data: lower, smooth: false, symbol: 'none', lineStyle: { color: '#a78bfa', width: 1, type: 'dashed' } },
+        { name: 'BOLL-M', type: 'line', data: mid, smooth: false, symbol: 'none', lineStyle: { color: 'var(--color-ma20)', width: 1.2 } },
+        { name: 'BOLL-U', type: 'line', data: upper, smooth: false, symbol: 'none', lineStyle: { color: 'var(--color-ma20)', width: 1, type: 'dashed' } },
+        { name: 'BOLL-L', type: 'line', data: lower, smooth: false, symbol: 'none', lineStyle: { color: 'var(--color-ma20)', width: 1, type: 'dashed' } },
       ],
       tooltip: { trigger: 'axis' },
     }

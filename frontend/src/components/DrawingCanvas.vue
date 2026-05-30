@@ -99,7 +99,7 @@ defineOptions({ inheritAttrs: false })
 const props = defineProps({
   chartInstance:  { type: Object,  default: null },
   activeTool:     { type: String,  default: '' },
-  activeColor:    { type: String,  default: '#fbbf24' },
+  activeColor:    { type: String,  default: 'var(--color-warning)' },
   magnetMode:     { type: Boolean, default: true },
   locked:         { type: Boolean, default: false },
   symbol:         { type: String,  default: '' },
@@ -227,7 +227,7 @@ function editSelected() {
     x: Math.min(ctxMenu.value.x || 200, window.innerWidth - 200),
     y: Math.min(ctxMenu.value.y || 200, window.innerHeight - 200),
     shape,
-    color: shape.color || '#fbbf24',
+    color: shape.color || 'var(--color-warning)',
     lineWidth: shape.lineWidth || 1.5,
     lineDash: shape.lineDash || '',
     text: shape.text || ''
@@ -415,7 +415,7 @@ defineExpose({
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 11px;
-  color: #e5e7eb;
+  color: var(--text-secondary);
   pointer-events: none;
   z-index: 1000;
   white-space: nowrap;
@@ -438,7 +438,7 @@ defineExpose({
   gap: 8px;
   padding: 8px 12px;
   font-size: 12px;
-  color: #e5e7eb;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -448,7 +448,7 @@ defineExpose({
 }
 
 .menu-item.delete {
-  color: #f87171;
+  color: var(--color-bull-light);
 }
 
 .menu-item.delete:hover {
@@ -479,7 +479,7 @@ defineExpose({
 .editor-title {
   font-size: 13px;
   font-weight: 600;
-  color: #f3f4f6;
+  color: var(--text-primary);
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(75, 85, 99, 0.3);
@@ -494,7 +494,7 @@ defineExpose({
 
 .editor-row label {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-muted);
   min-width: 40px;
 }
 
@@ -518,7 +518,7 @@ defineExpose({
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 11px;
-  color: #e5e7eb;
+  color: var(--text-secondary);
 }
 
 .editor-row select {
@@ -528,12 +528,12 @@ defineExpose({
   border-radius: 4px;
   padding: 4px;
   font-size: 11px;
-  color: #e5e7eb;
+  color: var(--text-secondary);
 }
 
 .editor-row span {
   font-size: 10px;
-  color: #6b7280;
+  color: var(--text-muted);
   min-width: 24px;
 }
 
@@ -551,7 +551,7 @@ defineExpose({
   border-radius: 4px;
   padding: 4px 12px;
   font-size: 11px;
-  color: #60a5fa;
+  color: var(--color-info);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -568,11 +568,11 @@ defineExpose({
 
 .inline-text-input {
   background: rgba(10, 14, 23, 0.95);
-  border: 1.5px solid #60a5fa;
+  border: 1.5px solid var(--color-info);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
-  color: #f3f4f6;
+  color: var(--text-primary);
   font-family: monospace;
   outline: none;
   min-width: 120px;
@@ -581,6 +581,6 @@ defineExpose({
 }
 
 .inline-text-input::placeholder {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 </style>

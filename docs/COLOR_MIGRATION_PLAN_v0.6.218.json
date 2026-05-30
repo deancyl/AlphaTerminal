@@ -1,0 +1,428 @@
+{
+  "audit_summary": {
+    "total_instances": 450,
+    "total_files": 63,
+    "audit_date": "2026-05-30",
+    "version": "v0.6.218-audit"
+  },
+  "priority_files": [
+    {
+      "rank": 1,
+      "file": "utils/echartsTheme.js",
+      "instances": 30,
+      "category": "core-utility",
+      "colors": ["#10b981", "#ef4444", "#71717a", "#ffffff", "#fbbf24", "#c084fc", "#22d3ee", "#60a5fa", "#f87171", "#f97316", "#f59e0b", "#6b7280", "#27272a", "#3f3f46", "#e4e4e7", "#52525b", "#22c55e"],
+      "migration": "Already has getCSSVar() but fallback colors remain hardcoded. Add CSS variables for all indicator colors.",
+      "priority": "P0"
+    },
+    {
+      "rank": 2,
+      "file": "components/ErrorBoundary.vue",
+      "instances": 28,
+      "category": "core-component",
+      "colors": ["#f5f5f5", "#1a1f2e", "#2d3748", "#ef4444", "#1f2937", "#E5E7EB", "#6b7280", "#8B949E", "#f0f9ff", "#3b82f6", "#0F52BA", "#f9fafb", "#374151", "#d1d5db", "#2563eb", "#9ca3af"],
+      "migration": "Most colors are CSS fallbacks. Remove hardcoded fallbacks, rely solely on CSS variables.",
+      "priority": "P1"
+    },
+    {
+      "rank": 3,
+      "file": "components/SubChart.vue",
+      "instances": 17,
+      "category": "chart-component",
+      "colors": ["#374151", "#6b7280", "#60a5fa", "#f87171", "#fbbf24", "#34d399", "#a78bfa"],
+      "migration": "Use getIndicatorColors() for MACD (DIF: #60a5fa, DEA: #f87171), KDJ (K: #f87171, D: #60a5fa, J: #fbbf24), RSI (#34d399), BOLL (#a78bfa). Axis colors use getDynamicThemeColors().",
+      "priority": "P0"
+    },
+    {
+      "rank": 4,
+      "file": "components/SentimentGauge.vue",
+      "instances": 16,
+      "category": "chart-component",
+      "colors": ["#4b5563", "#9ca3af", "#6b7280", "#2d3748", "#1f2937", "#14b143", "#ef232a"],
+      "migration": "Use getDynamicThemeColors() for axis, label, and splitLine colors. Sentiment colors (green/red/gray) should use getIndicatorColors().",
+      "priority": "P0"
+    },
+    {
+      "rank": 5,
+      "file": "components/ResearchDashboard.vue",
+      "instances": 16,
+      "category": "dashboard-component",
+      "colors": ["#0F52BA", "#8B949E", "#FF6B6B", "#51CF66", "#E5E7EB", "#1a1f2e", "#0f1419", "#262d3d", "#2d3748"],
+      "migration": "Already uses getComputedStyle() but fallbacks remain. Use useTheme() composable instead.",
+      "priority": "P1"
+    },
+    {
+      "rank": 6,
+      "file": "components/stock-detail/InstitutionalHoldings.vue",
+      "instances": 15,
+      "category": "stock-detail-component",
+      "colors": ["#9ca3af", "#1f2937", "#f3f4f6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1", "#374151"],
+      "migration": "Use getDynamicThemeColors() for axis/label colors. Pie chart colors use getDynamicChartColors().pieColors.",
+      "priority": "P0"
+    },
+    {
+      "rank": 7,
+      "file": "components/EsgDashboard.vue",
+      "instances": 15,
+      "category": "dashboard-component",
+      "colors": ["#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#1f2937", "#374151", "#6b7280", "#9ca3af"],
+      "migration": "Use getIndicatorColors() for ESG rating colors (A: #10b981, B: #f59e0b, C: #ef4444). Axis colors use getDynamicThemeColors().",
+      "priority": "P0"
+    },
+    {
+      "rank": 8,
+      "file": "components/DashboardGrid.vue",
+      "instances": 15,
+      "category": "core-component",
+      "colors": ["#f87171", "#60a5fa", "#fbbf24", "#a78bfa", "#00ff88", "#3b82f6"],
+      "migration": "Symbol colors should use getDynamicChartColors().lineColors. Outline colors use getDynamicThemeColors().borderBase.",
+      "priority": "P1"
+    },
+    {
+      "rank": 9,
+      "file": "components/DrawingCanvas.vue",
+      "instances": 14,
+      "category": "drawing-component",
+      "colors": ["#fbbf24", "#e5e7eb", "#f87171"],
+      "migration": "Default drawing color should use CSS variable --color-primary. UI colors use getDynamicThemeColors().",
+      "priority": "P2"
+    },
+    {
+      "rank": 10,
+      "file": "components/admin/DataSourcePanel.vue",
+      "instances": 14,
+      "category": "admin-component",
+      "colors": ["#6b7280", "#4b5563", "#9ca3af", "#374151", "#22c55e", "#eab308", "#ef4444", "#d1d5db"],
+      "migration": "Status colors (green/yellow/red) should use semantic colors. Use getDynamicThemeColors() for chart styling.",
+      "priority": "P0"
+    },
+    {
+      "rank": 11,
+      "file": "composables/useTheme.js",
+      "instances": 13,
+      "category": "core-utility",
+      "colors": ["#f87171", "#60a5fa", "#fbbf24", "#c084fc", "#22d3ee", "#10b981", "#ef4444", "#f97316", "#f59e0b"],
+      "migration": "CRITICAL: This file DEFINES the color tokens. Colors here are NOT violations - they are the source of truth. Ensure all are exported via getIndicatorColors().",
+      "priority": "N/A (source of truth)"
+    },
+    {
+      "rank": 12,
+      "file": "stores/market.js",
+      "instances": 12,
+      "category": "store",
+      "colors": ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1", "#22c55e", "#eab308"],
+      "migration": "Sector colors should use getDynamicChartColors().pieColors instead of hardcoded array.",
+      "priority": "P1"
+    },
+    {
+      "rank": 13,
+      "file": "components/stock-detail/MarginTrading.vue",
+      "instances": 12,
+      "category": "stock-detail-component",
+      "colors": ["#3b82f6", "#e2e8f0", "#94a3b8", "#475569", "#334155", "#ef4444", "#22c55e"],
+      "migration": "Use getDynamicThemeColors() for axis/label colors. Bull/bear colors use getMarketColors().",
+      "priority": "P0"
+    },
+    {
+      "rank": 14,
+      "file": "components/BondHistoryModal.vue",
+      "instances": 12,
+      "category": "bond-component",
+      "colors": ["#2d2d2d", "#6b7280", "#1f1f1f", "#9ca3af", "#60a5fa", "#fbbf24", "#f87171"],
+      "migration": "Use getDynamicThemeColors() for axis/label/splitLine colors. Mark point colors use getIndicatorColors().",
+      "priority": "P0"
+    },
+    {
+      "rank": 15,
+      "file": "components/options/PCRIndicator.vue",
+      "instances": 11,
+      "category": "options-component",
+      "colors": ["#22c55e", "#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6", "#ec4899", "#06b6d4"],
+      "migration": "PCR ratio colors (overbought/oversold/neutral) should use semantic colors from getIndicatorColors().",
+      "priority": "P0"
+    },
+    {
+      "rank": 16,
+      "file": "components/options/OptionsDashboard.vue",
+      "instances": 11,
+      "category": "options-component",
+      "colors": ["#3b82f6", "#1f2937", "#374151", "#6b7280", "#9ca3af", "#22c55e", "#ef4444", "#fbbf24", "#a855f7"],
+      "migration": "Use getDynamicThemeColors() for table styling. Greeks colors use getIndicatorColors().",
+      "priority": "P0"
+    },
+    {
+      "rank": 17,
+      "file": "components/stock-detail/PeerComparison.vue",
+      "instances": 10,
+      "category": "stock-detail-component",
+      "colors": ["#3b82f6", "#e2e8f0", "#94a3b8", "#334155", "#475569", "#10b981"],
+      "migration": "Use getDynamicThemeColors() for axis/label colors. Line colors use getDynamicChartColors().lineColors.",
+      "priority": "P0"
+    },
+    {
+      "rank": 18,
+      "file": "components/MacroDashboard.vue",
+      "instances": 10,
+      "category": "dashboard-component",
+      "colors": ["#10b981", "#ef4444", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"],
+      "migration": "Already migrated in v0.6.217. Colors should now use getDynamicThemeColors() and getDynamicChartColors().pieColors.",
+      "priority": "P1 (verify)"
+    },
+    {
+      "rank": 19,
+      "file": "components/forex/ForexQuotePanel.vue",
+      "instances": 10,
+      "category": "forex-component",
+      "colors": ["#ef4444", "#22c55e", "#6b7280", "#374151", "#9ca3af", "#1f2937"],
+      "migration": "Use getMarketColors() for bull/bear. Axis colors use getDynamicThemeColors().",
+      "priority": "P0"
+    },
+    {
+      "rank": 20,
+      "file": "components/admin/TokenMonitoringPanel.vue",
+      "instances": 10,
+      "category": "admin-component",
+      "colors": ["#0F52BA", "#E63946", "#1A936F", "#C9D1D9", "#1C2333", "#30363D", "#F0F6FC", "#F5A623", "#9B59B6", "#3498DB", "#1ABC9C", "#E74C3C"],
+      "migration": "Already uses getComputedStyle() but fallbacks remain. Use useTheme() composable instead.",
+      "priority": "P1"
+    }
+  ],
+  "all_files": [
+    {"file": "utils/echartsTheme.js", "instances": 30, "priority": "P0"},
+    {"file": "components/ErrorBoundary.vue", "instances": 28, "priority": "P1"},
+    {"file": "components/SubChart.vue", "instances": 17, "priority": "P0"},
+    {"file": "components/SentimentGauge.vue", "instances": 16, "priority": "P0"},
+    {"file": "components/ResearchDashboard.vue", "instances": 16, "priority": "P1"},
+    {"file": "components/stock-detail/InstitutionalHoldings.vue", "instances": 15, "priority": "P0"},
+    {"file": "components/EsgDashboard.vue", "instances": 15, "priority": "P0"},
+    {"file": "components/DashboardGrid.vue", "instances": 15, "priority": "P1"},
+    {"file": "components/DrawingCanvas.vue", "instances": 14, "priority": "P2"},
+    {"file": "components/admin/DataSourcePanel.vue", "instances": 14, "priority": "P0"},
+    {"file": "composables/useTheme.js", "instances": 13, "priority": "N/A"},
+    {"file": "stores/market.js", "instances": 12, "priority": "P1"},
+    {"file": "components/stock-detail/MarginTrading.vue", "instances": 12, "priority": "P0"},
+    {"file": "components/BondHistoryModal.vue", "instances": 12, "priority": "P0"},
+    {"file": "components/options/PCRIndicator.vue", "instances": 11, "priority": "P0"},
+    {"file": "components/options/OptionsDashboard.vue", "instances": 11, "priority": "P0"},
+    {"file": "components/stock-detail/PeerComparison.vue", "instances": 10, "priority": "P0"},
+    {"file": "components/MacroDashboard.vue", "instances": 10, "priority": "P1"},
+    {"file": "components/forex/ForexQuotePanel.vue", "instances": 10, "priority": "P0"},
+    {"file": "components/admin/TokenMonitoringPanel.vue", "instances": 10, "priority": "P1"},
+    {"file": "components/options/IVSmileChart.vue", "instances": 9, "priority": "P0"},
+    {"file": "components/options/GreeksChart.vue", "instances": 8, "priority": "P0"},
+    {"file": "components/ForexDashboard.vue", "instances": 8, "priority": "P0"},
+    {"file": "components/SimpleQuotePanel.vue", "instances": 7, "priority": "P0"},
+    {"file": "components/FuturesMainChart.vue", "instances": 7, "priority": "P0"},
+    {"file": "components/forex/ForexKLineChart.vue", "instances": 7, "priority": "P0"},
+    {"file": "components/forex/CrossRateMatrix.vue", "instances": 7, "priority": "P0"},
+    {"file": "components/attribution/FactorSandbox.vue", "instances": 7, "priority": "P0"},
+    {"file": "components/TourOverlay.vue", "instances": 6, "priority": "P2"},
+    {"file": "components/BenchmarkPanel.vue", "instances": 6, "priority": "P1"},
+    {"file": "components/AdvancedKlinePanel.vue", "instances": 6, "priority": "P1"},
+    {"file": "components/admin/DataGapsPanel.vue", "instances": 6, "priority": "P0"},
+    {"file": "composables/useDrawingRenderer.js", "instances": 5, "priority": "P2"},
+    {"file": "components/QuotePanel.vue", "instances": 5, "priority": "P1"},
+    {"file": "components/options/EducationalTooltip.vue", "instances": 5, "priority": "P0"},
+    {"file": "components/market/TemperatureGauge.vue", "instances": 5, "priority": "P0"},
+    {"file": "stores/drawing.js", "instances": 4, "priority": "P2"},
+    {"file": "components/PositionPieChart.vue", "instances": 4, "priority": "P1"},
+    {"file": "components/MultiAssetMatrix.vue", "instances": 4, "priority": "P1"},
+    {"file": "components/mobile/SwapButton.vue", "instances": 4, "priority": "P2"},
+    {"file": "components/GlobalIndex.vue", "instances": 4, "priority": "P1"},
+    {"file": "utils/chartDataBuilder.js", "instances": 3, "priority": "P1"},
+    {"file": "components/VersionChecker.vue", "instances": 3, "priority": "P2"},
+    {"file": "components/DrawingToolbar.vue", "instances": 3, "priority": "P2"},
+    {"file": "components/BaseKLineChart.vue", "instances": 3, "priority": "P1"},
+    {"file": "components/admin/CostAttributionPanel.vue", "instances": 3, "priority": "P1"},
+    {"file": "utils/indicators.js", "instances": 2, "priority": "P0"},
+    {"file": "composables/useMarketRadar.js", "instances": 2, "priority": "P1"},
+    {"file": "components/CrosshairOverlay.vue", "instances": 2, "priority": "P2"},
+    {"file": "stores/fund.js", "instances": 1, "priority": "P1"},
+    {"file": "components/f9/TrendChart.vue", "instances": 1, "priority": "P2"},
+    {"file": "components/f9/InfoCard.vue", "instances": 1, "priority": "P2"},
+    {"file": "components/CommandCenter.vue", "instances": 1, "priority": "P2"},
+    {"file": "components/ConfirmModal.vue", "instances": 1, "priority": "P2"},
+    {"file": "components/ConnectionStatus.vue", "instances": 1, "priority": "P2"},
+    {"file": "components/admin/BacktestMonitorPanel.vue", "instances": 1, "priority": "P1"},
+    {"file": "components/admin/AuditPlaybackPanel.vue", "instances": 1, "priority": "P1"},
+    {"file": "components/stock-detail/FinancialSummary.vue", "instances": 1, "priority": "P1"},
+    {"file": "components/stock-detail/Announcements.vue", "instances": 1, "priority": "P1"},
+    {"file": "components/stock-detail/ShareholderResearch.vue", "instances": 1, "priority": "P1"},
+    {"file": "components/stock-detail/EarningsForecast.vue", "instances": 1, "priority": "P1"},
+    {"file": "components/stock-detail/CompanyProfile.vue", "instances": 1, "priority": "P1"},
+    {"file": "components/stock-detail/StockDetail.vue", "instances": 1, "priority": "P1"}
+  ],
+  "migration_strategy": {
+    "phase1_core_utilities": {
+      "description": "Core utilities that define color tokens",
+      "files": ["utils/echartsTheme.js", "composables/useTheme.js", "utils/indicators.js"],
+      "estimated_effort": "2 hours",
+      "tasks": [
+        "Add CSS variables for all indicator colors (MA5, MA10, MA20, MA60, MACD, RSI, BOLL)",
+        "Ensure getIndicatorColors() exports all colors",
+        "Update getCSSVar() fallback chain"
+      ]
+    },
+    "phase2_chart_components": {
+      "description": "High-impact chart components with many colors",
+      "files": [
+        "components/SubChart.vue",
+        "components/SentimentGauge.vue",
+        "components/options/GreeksChart.vue",
+        "components/options/IVSmileChart.vue",
+        "components/options/PCRIndicator.vue"
+      ],
+      "estimated_effort": "4 hours",
+      "tasks": [
+        "Replace hardcoded indicator colors with getIndicatorColors()",
+        "Replace axis/label colors with getDynamicThemeColors()",
+        "Replace bull/bear colors with getMarketColors()"
+      ]
+    },
+    "phase3_stock_detail_components": {
+      "description": "Stock detail panel components",
+      "files": [
+        "components/stock-detail/InstitutionalHoldings.vue",
+        "components/stock-detail/MarginTrading.vue",
+        "components/stock-detail/PeerComparison.vue"
+      ],
+      "estimated_effort": "3 hours",
+      "tasks": [
+        "Replace pie chart colors with getDynamicChartColors().pieColors",
+        "Replace axis/label colors with getDynamicThemeColors()"
+      ]
+    },
+    "phase4_admin_components": {
+      "description": "Admin panel components",
+      "files": [
+        "components/admin/DataSourcePanel.vue",
+        "components/admin/DataGapsPanel.vue",
+        "components/admin/TokenMonitoringPanel.vue"
+      ],
+      "estimated_effort": "2 hours",
+      "tasks": [
+        "Replace status colors with semantic tokens",
+        "Replace chart colors with getDynamicThemeColors()"
+      ]
+    },
+    "phase5_dashboard_components": {
+      "description": "Dashboard and panel components",
+      "files": [
+        "components/ResearchDashboard.vue",
+        "components/EsgDashboard.vue",
+        "components/DashboardGrid.vue",
+        "components/ErrorBoundary.vue"
+      ],
+      "estimated_effort": "3 hours",
+      "tasks": [
+        "Remove hardcoded CSS fallbacks",
+        "Use useTheme() composable instead of getComputedStyle()",
+        "Replace symbol/sector colors with getDynamicChartColors()"
+      ]
+    },
+    "phase6_forex_components": {
+      "description": "Forex module components",
+      "files": [
+        "components/forex/ForexQuotePanel.vue",
+        "components/forex/ForexKLineChart.vue",
+        "components/forex/CrossRateMatrix.vue",
+        "components/ForexDashboard.vue"
+      ],
+      "estimated_effort": "2 hours",
+      "tasks": [
+        "Replace bull/bear colors with getMarketColors()",
+        "Replace axis/label colors with getDynamicThemeColors()"
+      ]
+    },
+    "phase7_remaining_components": {
+      "description": "Remaining components with <10 instances",
+      "files": "All other files with <10 instances",
+      "estimated_effort": "4 hours",
+      "tasks": [
+        "Replace hardcoded colors with appropriate utility functions",
+        "Add CSS variable fallbacks where needed"
+      ]
+    }
+  },
+  "color_categories": {
+    "indicator_colors": {
+      "description": "Technical indicator colors (MA, MACD, RSI, BOLL)",
+      "colors": {
+        "MA5": "#ffffff",
+        "MA10": "#fbbf24",
+        "MA20": "#c084fc",
+        "MA60": "#22d3ee",
+        "MACD_DIF": "#60a5fa",
+        "MACD_DEA": "#f87171",
+        "RSI": "#34d399",
+        "BOLL": "#a78bfa",
+        "KDJ_K": "#f87171",
+        "KDJ_D": "#60a5fa",
+        "KDJ_J": "#fbbf24"
+      },
+      "migration_function": "getIndicatorColors()"
+    },
+    "market_colors": {
+      "description": "Bull/bear colors for financial data",
+      "colors": {
+        "UP": "#10b981",
+        "DOWN": "#ef4444",
+        "FLAT": "#71717a"
+      },
+      "migration_function": "getMarketColors()"
+    },
+    "theme_colors": {
+      "description": "Axis, label, grid, and background colors",
+      "colors": {
+        "GRID": "#27272a",
+        "AXIS_LINE": "#27272a",
+        "AXIS_LABEL": "#71717a",
+        "SPLIT_LINE": "#27272a",
+        "TOOLTIP_BORDER": "#3f3f46",
+        "TOOLTIP_TEXT": "#e4e4e7",
+        "CROSSHAIR": "#52525b"
+      },
+      "migration_function": "getDynamicThemeColors()"
+    },
+    "semantic_colors": {
+      "description": "Status and sentiment colors",
+      "colors": {
+        "SUCCESS": "#22c55e",
+        "WARNING": "#eab308",
+        "ERROR": "#ef4444",
+        "INFO": "#3b82f6"
+      },
+      "migration_function": "getIndicatorColors() or CSS variables"
+    }
+  },
+  "css_variables_needed": {
+    "new_variables": [
+      "--color-macd-dif",
+      "--color-macd-dea",
+      "--color-rsi",
+      "--color-boll",
+      "--color-kdj-k",
+      "--color-kdj-d",
+      "--color-kdj-j",
+      "--color-chart-grid",
+      "--color-chart-axis-line",
+      "--color-chart-axis-label",
+      "--color-chart-split-line",
+      "--color-chart-tooltip-border",
+      "--color-chart-tooltip-text",
+      "--color-chart-crosshair"
+    ],
+    "existing_variables_to_verify": [
+      "--color-ma5",
+      "--color-ma10",
+      "--color-ma20",
+      "--color-ma60",
+      "--color-bull",
+      "--color-bear",
+      "--color-flat"
+    ]
+  },
+  "estimated_total_effort": "20 hours",
+  "breaking_changes": "None - all changes are internal to components",
+  "rollback_plan": "Each phase can be rolled back independently. Git revert commits per phase."
+}

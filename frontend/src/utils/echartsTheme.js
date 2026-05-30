@@ -78,6 +78,24 @@ export function getDynamicThemeColors() {
     deltaOiUp: getCSSVar('--color-bull', '#E63946'),
     deltaOiDown: getCSSVar('--color-bear', '#1A936F'),
     deltaOiFlat: getCSSVar('--color-flat', '#6b7280'),
+    
+    // MACD Colors (explicit aliases for clarity)
+    macdDif: getCSSVar('--color-macd-dif', '#60a5fa'),
+    macdDea: getCSSVar('--color-macd-dea', '#f87171'),
+    macdHist: getCSSVar('--color-macd-hist', '#22c55e'),
+  }
+}
+
+export function getIndicatorColors() {
+  const colors = getDynamicThemeColors()
+  return {
+    ma5: colors.ma5,
+    ma10: colors.ma10,
+    ma20: colors.ma20,
+    ma60: colors.ma60,
+    macdDif: colors.macdDif,
+    macdDea: colors.macdDea,
+    macdHist: colors.macdHist
   }
 }
 

@@ -1066,18 +1066,18 @@ onBeforeUnmount(() => {
 }
 
 .text-bearish {
-  color: var(--color-down, #FF6B6B);
+  color: var(--color-bear);
 }
 
 .bg-bearish\/10 {
-  background: rgba(255, 107, 107, 0.1);
+  background: rgba(34, 197, 94, 0.1);
 }
 
 .bg-bearish\/20 {
-  background: rgba(255, 107, 107, 0.2);
+  background: rgba(34, 197, 94, 0.2);
 }
 
 .border-bearish\/30 {
-  border-color: rgba(255, 107, 107, 0.3);
+  border-color: rgba(34, 197, 94, 0.3);
 }
 </style>

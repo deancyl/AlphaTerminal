@@ -347,8 +347,8 @@ async function updateCharts() {
       tooltip: {
         trigger: 'axis',
         backgroundColor: 'rgba(30, 30, 30, 0.9)',
-        borderColor: '#30363D',
-        textStyle: { color: '#F0F6FC' },
+        borderColor: 'var(--border-base)',
+        textStyle: { color: 'var(--text-primary)' },
       },
       legend: {
         data: ['请求数', 'Token数', '成本'],
@@ -415,8 +415,8 @@ async function updateCharts() {
       tooltip: {
         trigger: 'item',
         backgroundColor: 'rgba(30, 30, 30, 0.9)',
-        borderColor: '#30363D',
-        textStyle: { color: '#F0F6FC' },
+        borderColor: 'var(--border-base)',
+        textStyle: { color: 'var(--text-primary)' },
         formatter: '{b}: ${c} ({d}%)',
       },
       legend: {
@@ -455,7 +455,7 @@ async function updateCharts() {
           data: pieData,
         },
       ],
-      color: [primaryColor, bullColor, bearColor, '#F5A623', '#9B59B6', '#3498DB', '#1ABC9C', '#E74C3C'],
+      color: [primaryColor, bullColor, bearColor, 'var(--color-warning)', 'var(--color-ma20)', 'var(--color-info)', 'var(--color-success)', 'var(--color-bull)'],
     })
   }
 }

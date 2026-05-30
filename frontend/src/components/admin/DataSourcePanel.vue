@@ -21,7 +21,7 @@
           <!-- Edges (fallback arrows) -->
           <defs>
             <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280" />
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--text-muted)" />
             </marker>
           </defs>
           <g v-for="(edge, idx) in topologyEdges" :key="'edge-' + idx">
@@ -30,7 +30,7 @@
               :y1="getNodeY(edge.source)"
               :x2="getNodeX(edge.target)"
               :y2="getNodeY(edge.target)"
-              stroke="#4b5563"
+              stroke="var(--border-light)"
               stroke-width="2"
               stroke-dasharray="5,5"
               marker-end="url(#arrowhead)"
@@ -38,7 +38,7 @@
             <text
               :x="(getNodeX(edge.source) + getNodeX(edge.target)) / 2"
               :y="(getNodeY(edge.source) + getNodeY(edge.target)) / 2 - 5"
-              fill="#9ca3af"
+              fill="var(--text-muted)"
               font-size="10"
               text-anchor="middle"
             >fallback</text>
@@ -51,7 +51,7 @@
               :cy="getNodeY(node.id)"
               r="30"
               :fill="getNodeColor(node.status)"
-              stroke="#374151"
+              stroke="var(--border-base)"
               stroke-width="2"
               class="cursor-pointer hover:opacity-80 transition-opacity"
               @click="selectNode(node)"
@@ -69,7 +69,7 @@
             <text
               :x="getNodeX(node.id)"
               :y="getNodeY(node.id) + 45"
-              fill="#9ca3af"
+              fill="var(--text-muted)"
               font-size="10"
               text-anchor="middle"
             >{{ node.is_current ? '✓ 当前' : node.is_primary ? '⭐ 主源' : '' }}</text>
@@ -273,9 +273,9 @@ function getNodeY(nodeId) {
 }
 
 function getNodeColor(status) {
-  if (status === 'green') return '#22c55e'
-  if (status === 'yellow') return '#eab308'
-  return '#ef4444'
+  if (status === 'green') return getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || '#22c55e'
+  if (status === 'yellow') return getComputedStyle(document.documentElement).getPropertyValue('--color-warning').trim() || '#eab308'
+  return getComputedStyle(document.documentElement).getPropertyValue('--color-danger').trim() || '#ef4444'
 }
 
 function getStatusTextClass(status) {
@@ -320,21 +320,21 @@ function updateChart(sources) {
   const errorCount = Object.values(sources).filter(s => s.status === 'error').length
 
   const chartData = [
-    { value: fastCount, name: '<200ms 快速', itemStyle: { color: '#22c55e' } },
-    { value: mediumCount, name: '200-500ms 中等', itemStyle: { color: '#eab308' } },
-    { value: slowCount, name: '>500ms 慢速', itemStyle: { color: '#ef4444' } },
-    { value: errorCount, name: '连接异常', itemStyle: { color: '#6b7280' } },
+    { value: fastCount, name: '<200ms 快速',       itemStyle: { color: 'var(--color-success)' } },
+    { value: mediumCount, name: '200-500ms 中等',       itemStyle: { color: 'var(--color-warning)' } },
+    { value: slowCount, name: '>500ms 慢速',       itemStyle: { color: 'var(--color-danger)' } },
+    { value: errorCount, name: '连接异常',       itemStyle: { color: 'var(--text-muted)' } },
   ]
 
   const visibleData = chartData.filter(d => d.value > 0)
 
   chart.setOption({
     tooltip: { trigger: 'item', formatter: '{b}: {c} 个' },
-    legend: { bottom: 0, textStyle: { color: '#9ca3af', fontSize: 11 } },
+    legend: { bottom: 0,       textStyle: { color: 'var(--text-muted)', fontSize: 11 } },
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
-      label: { show: true, formatter: '{b} {c}', fontSize: 11, color: '#d1d5db' },
+      label: { show: true, formatter: '{b} {c}', fontSize: 11, color: 'var(--text-secondary)' },
       data: visibleData,
     }],
   })

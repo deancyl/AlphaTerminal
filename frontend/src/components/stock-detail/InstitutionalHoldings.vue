@@ -153,7 +153,7 @@ async function renderPieChart() {
       top: 20,
       bottom: 20,
       textStyle: {
-        color: '#9ca3af',
+        color: 'var(--text-muted)',
         fontSize: 11
       }
     },
@@ -164,7 +164,7 @@ async function renderPieChart() {
       avoidLabelOverlap: false,
       itemStyle: {
         borderRadius: 4,
-        borderColor: '#1f2937',
+        borderColor: 'var(--bg-surface)',
         borderWidth: 2
       },
       label: {
@@ -175,7 +175,7 @@ async function renderPieChart() {
           show: true,
           fontSize: 12,
           fontWeight: 'bold',
-          color: '#f3f4f6'
+          color: 'var(--text-primary)'
         }
       },
       labelLine: {
@@ -183,7 +183,7 @@ async function renderPieChart() {
       },
       data: pieData
     }],
-    color: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1']
+    color: ['var(--color-info)', 'var(--color-success)', 'var(--color-warning)', 'var(--color-bull)', 'var(--color-ma20)', 'var(--color-ma60)', 'var(--color-info)', 'var(--color-success)', 'var(--color-warning)', 'var(--color-primary)']
   }
   
   pieChartInstance.setOption(option)
@@ -213,7 +213,7 @@ async function renderTrendChart() {
     legend: {
       data: ['机构数量', '持股比例(%)'],
       textStyle: {
-        color: '#9ca3af'
+        color: 'var(--text-muted)'
       }
     },
     grid: {
@@ -226,12 +226,12 @@ async function renderTrendChart() {
       type: 'category',
       data: quarters,
       axisLabel: {
-        color: '#9ca3af',
+        color: 'var(--text-muted)',
         fontSize: 11
       },
       axisLine: {
         lineStyle: {
-          color: '#374151'
+          color: 'var(--border-base)'
         }
       }
     },
@@ -240,16 +240,16 @@ async function renderTrendChart() {
         type: 'value',
         name: '机构数量',
         axisLabel: {
-          color: '#9ca3af'
+          color: 'var(--text-muted)'
         },
         axisLine: {
           lineStyle: {
-            color: '#374151'
+            color: 'var(--border-base)'
           }
         },
         splitLine: {
           lineStyle: {
-            color: '#374151',
+            color: 'var(--border-base)',
             type: 'dashed'
           }
         }
@@ -258,11 +258,11 @@ async function renderTrendChart() {
         type: 'value',
         name: '持股比例(%)',
         axisLabel: {
-          color: '#9ca3af'
+          color: 'var(--text-muted)'
         },
         axisLine: {
           lineStyle: {
-            color: '#374151'
+            color: 'var(--border-base)'
           }
         },
         splitLine: {
@@ -276,7 +276,7 @@ async function renderTrendChart() {
         type: 'bar',
         data: counts,
         itemStyle: {
-          color: '#3b82f6'
+          color: 'var(--color-info)'
         }
       },
       {
@@ -286,11 +286,11 @@ async function renderTrendChart() {
         data: pcts,
         smooth: true,
         lineStyle: {
-          color: '#10b981',
+          color: 'var(--color-success)',
           width: 2
         },
         itemStyle: {
-          color: '#10b981'
+          color: 'var(--color-success)'
         },
         areaStyle: {
           color: {

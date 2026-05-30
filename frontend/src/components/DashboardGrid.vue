@@ -711,7 +711,7 @@ function handleWindClick(item) {
   }
   
   const norm = normalizeSymbol(sym)
-  setSymbol(norm, item.name || sym, '#f87171')
+  setSymbol(norm, item.name || sym, 'var(--color-bull-light)')
   queueMicrotask(() => {
     selectedIndex.value = norm
     currentIndexName.value = item.name || norm
@@ -721,7 +721,7 @@ function handleWindClick(item) {
 function handleGlobalClick(item) {
   // globalItems 可能有 usIXIC / usNDX / hkHSI 等前缀
   const norm = normalizeSymbol(item.symbol || item.name || item.key || '')
-  setSymbol(norm, item.name || norm, '#60a5fa')
+  setSymbol(norm, item.name || norm, 'var(--color-info)')
   // 同步更新本地 selectedIndex
   queueMicrotask(() => {
     selectedIndex.value = norm
@@ -731,7 +731,7 @@ function handleGlobalClick(item) {
 
 function handleChinaClick(item) {
   const norm = normalizeSymbol(item.symbol)
-  setSymbol(norm, item.name, '#f87171')
+  setSymbol(norm, item.name, 'var(--color-bull-light)')
   // 同步更新本地 selectedIndex
   queueMicrotask(() => {
     selectedIndex.value = norm
@@ -748,7 +748,7 @@ function handleSectorClick(sec) {
   // normalizeSymbol 规则：6/9/000开头→sh；其余(0/2/3)→sz
   const code = rawCode ? normalizeSymbol(rawCode) : 'sh000001'
   const displayName = topName ? `${sec.name}-${topName}` : sec.name
-  setSymbol(code, displayName, '#fbbf24')
+  setSymbol(code, displayName, 'var(--color-warning)')
   queueMicrotask(() => {
     selectedIndex.value = code
     currentIndexName.value = displayName
@@ -757,7 +757,7 @@ function handleSectorClick(sec) {
 
 function handleScreenerClick({ symbol, name }) {
   const norm = normalizeSymbol(symbol)
-  setSymbol(norm, name || symbol, '#00ff88')
+  setSymbol(norm, name || symbol, 'var(--color-success)')
   queueMicrotask(() => {
     selectedIndex.value = norm
     currentIndexName.value = name || symbol
@@ -769,10 +769,10 @@ let _fetchController = null  // AbortController：组件卸载时取消 pending 
 
 // ── 指数选项（K线切换）──────────────────────────────────────────
 const indexOptions = [
-  { symbol: '000001', name: '上证',   color: '#f87171' },
-  { symbol: '000300', name: '沪深300', color: '#60a5fa' },
-  { symbol: '399001', name: '深证',   color: '#fbbf24' },
-  { symbol: '399006', name: '创业板',  color: '#a78bfa' },
+  { symbol: '000001', name: '上证',   color: 'var(--color-bull-light)' },
+  { symbol: '000300', name: '沪深300', color: 'var(--color-info)' },
+  { symbol: '399001', name: '深证',   color: 'var(--color-warning)' },
+  { symbol: '399006', name: '创业板',  color: 'var(--color-ma20)' },
 ]
 // 注意：必须从本地 selectedIndex 查找，不能用 currentSymbol（全局面经 store）
 // 否则切换 K 线组件指数时 name 不跟随 selectedIndex 更新

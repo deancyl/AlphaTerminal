@@ -129,12 +129,12 @@ async function renderRadarChart() {
     tooltip: {
       trigger: 'item',
       backgroundColor: 'rgba(15, 23, 42, 0.9)',
-      borderColor: '#3b82f6',
-      textStyle: { color: '#e2e8f0' }
+      borderColor: 'var(--color-info)',
+      textStyle: { color: 'var(--text-secondary)' }
     },
     legend: {
       data: ['当前股票', '行业平均'],
-      textStyle: { color: '#94a3b8' },
+      textStyle: { color: 'var(--text-muted)' },
       top: 10
     },
     radar: {
@@ -147,17 +147,17 @@ async function renderRadarChart() {
       center: ['50%', '55%'],
       radius: '65%',
       axisName: {
-        color: '#94a3b8',
+        color: 'var(--text-muted)',
         fontSize: 12
       },
       splitLine: {
-        lineStyle: { color: '#334155' }
+        lineStyle: { color: 'var(--bg-surface)' }
       },
       splitArea: {
         areaStyle: { color: ['rgba(59, 130, 246, 0.05)', 'rgba(59, 130, 246, 0.1)'] }
       },
       axisLine: {
-        lineStyle: { color: '#475569' }
+        lineStyle: { color: 'var(--border-base)' }
       }
     },
     series: [{
@@ -171,16 +171,16 @@ async function renderRadarChart() {
             currentStock.revenue_growth || 0
           ],
           name: '当前股票',
-          lineStyle: { color: '#3b82f6', width: 2 },
-          areaStyle: { color: 'rgba(59, 130, 246, 0.3)' },
-          itemStyle: { color: '#3b82f6' }
+          lineStyle: { color: 'var(--color-info)', width: 2 },
+          areaStyle: { color: 'var(--color-info-bg)' },
+          itemStyle: { color: 'var(--color-info)' }
         },
         {
           value: [avgRoe, avgPe, avgPb, avgGrowth],
           name: '行业平均',
-          lineStyle: { color: '#10b981', width: 2, type: 'dashed' },
-          areaStyle: { color: 'rgba(16, 185, 129, 0.2)' },
-          itemStyle: { color: '#10b981' }
+          lineStyle: { color: 'var(--color-success)', width: 2, type: 'dashed' },
+          areaStyle: { color: 'var(--color-success-bg)' },
+          itemStyle: { color: 'var(--color-success)' }
         }
       ]
     }]
