@@ -72,6 +72,11 @@ async def ws_market(ws: WebSocket):
       心跳探测：
       {"type": "ping"}
 
+      性能指标广播（全局推送，无需订阅）：
+      {"type": "performance_metrics", "data": {...}, "timestamp": "2026-05-30T10:00:00"}
+      - data 包含 avg_latency_ms, p95_latency_ms, total_requests, success_rate 等指标
+      - 每 5 秒由 scheduler 推送给所有连接
+
     协议规范：
       - 所有服务端消息必须包含 "type" 字段
       - symbol 订阅匹配不区分大小写（后端统一转小写处理）

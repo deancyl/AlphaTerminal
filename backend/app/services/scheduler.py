@@ -194,6 +194,50 @@ def flush_write_buffer_and_broadcast():
     _broadcast_realtime_ticks()
 
 
+def broadcast_performance_metrics():
+    """
+    Task: 每 5 秒广播性能指标到所有 WebSocket 连接。
+    收集最近 5 分钟的 API 指标并推送给前端。
+    """
+    try:
+        from app.db.metrics_db import get_endpoint_stats
+        from app.services.ws_manager import ws_manager
+        from datetime import datetime
+        import asyncio
+
+        # Get last 5 minutes stats
+        endpoint_stats = get_endpoint_stats(hours=0.1)  # ~6 minutes
+
+        # Calculate aggregate stats
+        total_requests = sum(s.get('request_count', 0) for s in endpoint_stats)
+        avg_latencies = [s.get('avg_ms', 0) for s in endpoint_stats if s.get('avg_ms')]
+        avg_latency = sum(avg_latencies) / len(avg_latencies) if avg_latencies else 0
+        max_latency = max(s.get('max_ms', 0) for s in endpoint_stats) if endpoint_stats else 0
+
+        # Top 10 slowest endpoints
+        top_endpoints = sorted(endpoint_stats, key=lambda x: x.get('avg_ms', 0), reverse=True)[:10]
+
+        metrics = {
+            "stats": {
+                "total_requests": total_requests,
+                "avg_latency_ms": round(avg_latency, 2),
+                "max_latency_ms": round(max_latency, 2),
+                "endpoint_count": len(endpoint_stats),
+            },
+            "top_endpoints": top_endpoints,
+        }
+
+        # Broadcast in async context
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(ws_manager.broadcast_performance_metrics(metrics))
+        finally:
+            loop.close()
+
+    except Exception as e:
+        logger.warning(f"[Scheduler] 性能指标广播异常: {e}", exc_info=True)
+
+
 def backfill_daily_history():
     """每日一次：回填A股指数日K线历史（写入 market_data_daily）"""
     from app.services.data_fetcher import fetch_china_index_history
@@ -737,6 +781,16 @@ def start_scheduler():
         replace_existing=True,
     )
     logger.info("[Scheduler] Cache cleanup job registered (every 5 minutes)")
+
+    scheduler.add_job(
+        broadcast_performance_metrics,
+        "interval",
+        seconds=5,
+        id="performance_metrics_broadcast",
+        name="PerformanceMetricsBroadcast",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 性能指标广播任务已注册（每5秒）")
 
     scheduler.start()
     logger.info("[Scheduler] APScheduler 已启动")

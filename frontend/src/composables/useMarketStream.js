@@ -67,6 +67,10 @@ const globalConnectionAttempts = ref(0)
 const globalLatency = ref(null) // WebSocket latency in ms
 const globalLastSeq = shallowRef({})  // {symbol: last_seq} for recovery
 
+// Performance metrics (v0.6.219)
+const performanceMetrics = shallowRef(null)
+const metricsUpdateTime = ref(null)
+
 // P0-7: Recovery wait mechanism (prevent old data overwriting new data)
 const globalRecoveryPending = ref(false)
 const RECOVERY_TIMEOUT_MS = 2000
@@ -444,6 +448,14 @@ function _newConnection() {
       // If this tick's seq is less than or equal to the last received seq, skip it
       if (data.seq && globalLastSeq.value[sym] && data.seq <= globalLastSeq.value[sym]) {
         logger.debug(`[MarketStream] Ignoring stale tick for ${sym}: seq ${data.seq} <= ${globalLastSeq.value[sym]}`)
+        return
+      }
+
+      if (data.type === 'performance_metrics') {
+        _dataVersion++
+        performanceMetrics.value = data.data
+        metricsUpdateTime.value = data.timestamp || new Date().toISOString()
+        triggerRef(performanceMetrics)
         return
       }
 
@@ -972,7 +984,8 @@ export function useMarketStream(initialSymbol = '') {
     lastSeq: globalLastSeq,
     isPolling: globalPollingStatus,
     connectionState: computed(() => _connectionState),
-    // 增量渲染辅助函数
+    performanceMetrics,
+    metricsUpdateTime,
     appendChartData,
     updateChartIncremental,
     getStats: () => ({

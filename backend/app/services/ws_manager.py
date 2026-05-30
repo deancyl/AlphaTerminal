@@ -376,6 +376,22 @@ class ConnectionManager:
         """broadcast_tick 的别名，保持 API 兼容"""
         await self.broadcast_tick(symbol, tick)
 
+    async def broadcast_performance_metrics(self, metrics: dict):
+        """广播性能指标给所有连接（无需订阅，全局推送）"""
+        from datetime import datetime
+        message = {
+            "type": "performance_metrics",
+            "data": metrics,
+            "timestamp": datetime.now().isoformat()
+        }
+        # Broadcast to ALL connections (no subscription filter)
+        async with self._conn_lock:
+            for conn in self._conns:
+                try:
+                    await conn.ws.send_json(message)
+                except Exception:
+                    pass  # Connection will be cleaned up by heartbeat
+
     def total(self) -> int:
         return len(self._conns)
 

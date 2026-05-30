@@ -2,8 +2,22 @@
   <div class="performance-panel">
     <!-- Header -->
     <div class="panel-header">
-      <h2 class="text-xl font-bold text-theme-primary">📊 性能监控</h2>
-      <p class="text-sm text-theme-muted mt-1">API响应时间 + 请求统计</p>
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-theme-primary">📊 性能监控</h2>
+          <p class="text-sm text-theme-muted mt-1">API响应时间 + 请求统计</p>
+        </div>
+        <!-- 实时状态指示器 -->
+        <div class="flex items-center gap-2">
+          <span v-if="showLiveIndicator" class="flex items-center gap-1 text-sm text-green-400">
+            <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+            实时
+          </span>
+          <span v-else class="text-sm text-gray-500">
+            离线模式
+          </span>
+        </div>
+      </div>
     </div>
 
     <!-- Error State -->
@@ -133,12 +147,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, onUnmounted, computed, watch } from 'vue'
 import * as echarts from 'echarts'
 import { apiFetch } from '@/utils/api.js'
 import LoadingSpinner from '@/components/f9/LoadingSpinner.vue'
 import ErrorDisplay from '@/components/f9/ErrorDisplay.vue'
 import { getDynamicThemeColors } from '@/utils/echartsTheme.js'
+import { useMarketStream } from '@/composables/useMarketStream'
+
+// WebSocket实时数据
+const { performanceMetrics, metricsUpdateTime, wsStatus } = useMarketStream()
 
 // State
 const loading = ref(true)
@@ -161,6 +179,96 @@ const latencyChartRef = ref(null)
 const requestChartRef = ref(null)
 let latencyChart = null
 let requestChart = null
+
+// 合并WS数据和本地状态
+const liveMetrics = computed(() => {
+  if (performanceMetrics.value) {
+    return {
+      stats: performanceMetrics.value.stats,
+      topEndpoints: performanceMetrics.value.top_endpoints || [],
+      lastUpdate: metricsUpdateTime.value,
+      source: 'websocket'
+    }
+  }
+  return null
+})
+
+// 监听WS数据更新
+watch(performanceMetrics, (newData) => {
+  if (newData) {
+    // 增量更新图表（避免全量重绘）
+    updateChartsIncremental(newData)
+  }
+}, { deep: true })
+
+// WebSocket状态监听 - 显示实时指示器
+const showLiveIndicator = computed(() => wsStatus.value === 'connected')
+
+// HTTP轮询回退
+let pollingTimer = null
+
+function startPolling() {
+  if (pollingTimer) return  // 防止重复启动
+  pollingTimer = setInterval(() => {
+    fetchMetrics()
+  }, 30000) // 30秒轮询
+}
+
+function stopPolling() {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+}
+
+// 监听WS状态，自动启动/停止轮询
+watch(wsStatus, (status) => {
+  if (status !== 'connected') {
+    startPolling()
+  } else {
+    stopPolling()
+  }
+})
+
+// 增量更新函数（避免图表闪烁）
+function updateChartsIncremental(data) {
+  if (!data.stats) return
+  
+  // 更新统计卡片
+  metrics.value.avgResponseTime = data.stats.avg_latency_ms || 0
+  metrics.value.p95ResponseTime = data.stats.p95_latency_ms || 0
+  metrics.value.p99ResponseTime = data.stats.p99_latency_ms || 0
+  metrics.value.totalRequests = data.stats.total_requests || 0
+  metrics.value.successRate = data.stats.success_rate || 100
+  metrics.value.errorRate = data.stats.error_rate || 0
+  metrics.value.cacheHitRate = data.stats.cache_hit_rate || 0
+  
+  // 更新Top端点表格
+  if (data.top_endpoints && Array.isArray(data.top_endpoints)) {
+    topEndpoints.value = data.top_endpoints.slice(0, 10)
+  }
+  
+  // 增量更新图表（避免setOption全量更新）
+  if (latencyChart && !latencyChart.isDisposed() && data.stats.avg_latency_ms) {
+    const option = latencyChart.getOption()
+    if (option.series && option.series[0] && option.series[0].data) {
+      option.series[0].data.push(data.stats.avg_latency_ms)
+      // 保持最多60个数据点
+      if (option.series[0].data.length > 60) {
+        option.series[0].data.shift()
+      }
+      // 同步更新时间轴
+      if (option.xAxis && option.xAxis[0] && option.xAxis[0].data) {
+        const now = new Date().toLocaleTimeString()
+        option.xAxis[0].data.push(now)
+        if (option.xAxis[0].data.length > 60) {
+          option.xAxis[0].data.shift()
+        }
+      }
+      latencyChart.setOption(option)
+    }
+  }
+}
 
 // Fetch metrics from API
 async function fetchMetrics() {
@@ -335,10 +443,18 @@ onMounted(async () => {
   initCharts()
   await fetchMetrics()
   window.addEventListener('resize', handleResize)
+  
+  // 如果WebSocket未连接，启动HTTP轮询
+  if (wsStatus.value !== 'connected') {
+    startPolling()
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  // 停止HTTP轮询
+  stopPolling()
+  
   if (latencyChart) {
     latencyChart.dispose()
     latencyChart = null
@@ -347,6 +463,11 @@ onBeforeUnmount(() => {
     requestChart.dispose()
     requestChart = null
   }
+})
+
+onUnmounted(() => {
+  // 确保清理所有定时器
+  stopPolling()
 })
 </script>
 
