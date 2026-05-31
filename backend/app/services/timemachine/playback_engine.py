@@ -111,54 +111,66 @@ class DailyPlaybackEngine(PlaybackEngine):
     async def get_bars(
         self, symbol: str, start_date: date, end_date: date
     ) -> List[Bar]:
-        code = symbol[2:] if symbol.startswith(("sh", "sz")) else symbol
-
-        start_str = start_date.strftime("%Y%m%d")
-        end_str = end_date.strftime("%Y%m%d")
-
-        def _fetch():
-            try:
-                df = self.ak.stock_zh_a_hist(
-                    symbol=code,
-                    period="daily",
-                    adjust=self.adjust,
-                    start_date=start_str,
-                    end_date=end_str,
-                )
-
-                if df is None or df.empty:
-                    return []
-
-                bars = []
-                for _, row in df.iterrows():
-                    bars.append(
-                        Bar(
-                            date=str(row.get("日期", "")),
-                            open=float(row.get("开盘", 0) or 0),
-                            high=float(row.get("最高", 0) or 0),
-                            low=float(row.get("最低", 0) or 0),
-                            close=float(row.get("收盘", 0) or 0),
-                            volume=float(row.get("成交量", 0) or 0),
-                            amount=float(row.get("成交额", 0) or 0),
-                            change_pct=float(row.get("涨跌幅", 0) or 0),
-                            turnover=float(row.get("换手率", 0) or 0),
-                        )
-                    )
-                return bars
-
-            except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-                logger.error(f"[HTTP] bars for {symbol}: {e}", exc_info=True)
+        """
+        Fetch K-line data with 3-tier fallback chain.
+        
+        Uses timemachine_fetcher for:
+        - Level 1: market_data_daily table (local SQLite)
+        - Level 2: DataCache (memory + SQLite)
+        - Level 3: akshare (real-time)
+        - Fallback: Mock data generator
+        """
+        from app.services.timemachine.timemachine_fetcher import fetch_kline_with_fallback
+        from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+        
+        # Get or create circuit breaker
+        if not hasattr(self, '_cb'):
+            self._cb = CircuitBreaker(
+                "timemachine_playback",
+                CircuitBreakerConfig(failure_threshold=5, timeout=60, success_threshold=2)
+            )
+        
+        try:
+            # Use 3-tier fallback chain
+            result = await fetch_kline_with_fallback(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                circuit_breaker=self._cb
+            )
+            
+            bars_data = result.get("bars", [])
+            
+            if not bars_data:
+                logger.warning(f"[DailyPlaybackEngine] No bars for {symbol} from fallback chain")
                 return []
-
-        loop = asyncio.get_running_loop()
-        bars = await asyncio.wait_for(
-            loop.run_in_executor(_executor, _fetch), timeout=30.0
-        )
-
-        logger.info(
-            f"[DailyPlaybackEngine] Fetched {len(bars)} bars for {symbol} ({start_date} to {end_date})"
-        )
-        return bars
+            
+            # Convert to Bar objects
+            bars = []
+            for bar_dict in bars_data:
+                bars.append(
+                    Bar(
+                        date=str(bar_dict.get("date", "")),
+                        open=float(bar_dict.get("open", 0) or 0),
+                        high=float(bar_dict.get("high", 0) or 0),
+                        low=float(bar_dict.get("low", 0) or 0),
+                        close=float(bar_dict.get("close", 0) or 0),
+                        volume=float(bar_dict.get("volume", 0) or 0),
+                        amount=float(bar_dict.get("amount", 0) or 0),
+                        change_pct=float(bar_dict.get("change_pct", 0) or 0),
+                        turnover=float(bar_dict.get("turnover", 0) or 0),
+                    )
+                )
+            
+            logger.info(
+                f"[DailyPlaybackEngine] Fetched {len(bars)} bars for {symbol} "
+                f"({start_date} to {end_date}) via {result.get('source_type', 'unknown')}"
+            )
+            return bars
+            
+        except Exception as e:
+            logger.error(f"[DailyPlaybackEngine] Fallback chain failed for {symbol}: {e}", exc_info=True)
+            return []
 
 
 class MinutePlaybackEngine(PlaybackEngine):
