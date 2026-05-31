@@ -66,10 +66,13 @@
     --panel-width: 280px;
     --touch-min: 44px;
 
-    /* 字体系统 - 专业金融终端字体栈 */
-    --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
-    --font-mono: "JetBrains Mono", "Roboto Mono", "Consolas", ui-monospace, monospace;
-    --font-data: "JetBrains Mono", "Inter", ui-monospace, monospace; /* 金融数据专用 */
+    /* 字体系统 - 系统字体回退（跨平台兼容） */
+    /* macOS: PingFang SC, SF Pro, SF Mono */
+    /* Windows: Microsoft YaHei, Segoe UI, Consolas */
+    /* Linux: Noto Sans SC, Ubuntu, DejaVu Sans Mono */
+    --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Roboto Mono", "Consolas", "Liberation Mono", monospace;
+    --font-data: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", monospace; /* 金融数据专用 - 等宽数字 */
   }
 
   /* ============================================

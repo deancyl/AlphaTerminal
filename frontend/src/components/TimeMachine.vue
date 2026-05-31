@@ -40,21 +40,30 @@
       
       <!-- Date Range & Actions -->
       <div v-if="!isMobile" class="flex items-center gap-3">
-        <input
-          v-model="startDate"
-          type="date"
-          :disabled="!!session"
-          class="px-3 py-1.5 bg-base rounded-lg border border-border-base text-primary
-                 focus:border-primary focus:outline-none text-sm"
-        />
+        <div class="flex flex-col">
+          <input
+            v-model="startDate"
+            type="date"
+            :disabled="!!session"
+            class="px-3 py-1.5 bg-base rounded-lg border border-border-base text-primary
+                   focus:border-primary focus:outline-none text-sm"
+          />
+        </div>
         <span class="text-secondary text-sm">至</span>
-        <input
-          v-model="endDate"
-          type="date"
-          :disabled="!!session"
-          class="px-3 py-1.5 bg-base rounded-lg border border-border-base text-primary
-                 focus:border-primary focus:outline-none text-sm"
-        />
+        <div class="flex flex-col">
+          <input
+            v-model="endDate"
+            type="date"
+            :disabled="!!session"
+            class="px-3 py-1.5 bg-base rounded-lg border border-border-base text-primary
+                   focus:border-primary focus:outline-none text-sm"
+          />
+        </div>
+        
+        <!-- Date Error Display -->
+        <div v-if="dateError" class="text-danger text-xs whitespace-nowrap">
+          {{ dateError }}
+        </div>
         
         <!-- Action Buttons -->
         <button
@@ -114,22 +123,28 @@
     </button>
     
     <!-- Mobile: Date Range (shown below header when no session) -->
-    <div v-if="isMobile && !session" class="flex items-center gap-2 px-4 py-2 bg-surface border-b border-border-base">
-      <input
-        v-model="startDate"
-        type="date"
-        :disabled="!!session"
-        class="flex-1 px-2 py-2 bg-base rounded-lg border border-border-base text-primary
-               focus:border-primary focus:outline-none text-xs min-h-[44px]"
-      />
-      <span class="text-secondary text-xs">至</span>
-      <input
-        v-model="endDate"
-        type="date"
-        :disabled="!!session"
-        class="flex-1 px-2 py-2 bg-base rounded-lg border border-border-base text-primary
-               focus:border-primary focus:outline-none text-xs min-h-[44px]"
-      />
+    <div v-if="isMobile && !session" class="flex flex-col gap-2 px-4 py-2 bg-surface border-b border-border-base">
+      <div class="flex items-center gap-2">
+        <input
+          v-model="startDate"
+          type="date"
+          :disabled="!!session"
+          class="flex-1 px-2 py-2 bg-base rounded-lg border border-border-base text-primary
+                 focus:border-primary focus:outline-none text-xs min-h-[44px]"
+        />
+        <span class="text-secondary text-xs">至</span>
+        <input
+          v-model="endDate"
+          type="date"
+          :disabled="!!session"
+          class="flex-1 px-2 py-2 bg-base rounded-lg border border-border-base text-primary
+                 focus:border-primary focus:outline-none text-xs min-h-[44px]"
+        />
+      </div>
+      <!-- Date Error Display (Mobile) -->
+      <div v-if="dateError" class="text-danger text-xs px-1">
+        {{ dateError }}
+      </div>
     </div>
     
     <!-- Main Content -->
@@ -262,6 +277,7 @@ import { ref, computed, watch, onMounted, onDeactivated, onActivated } from 'vue
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { useOrientation } from '@/composables/useOrientation.js'
 import { useTimeMachine } from '@/composables/useTimeMachine.js'
+import { useToast } from '@/composables/useToast.js'
 import { buildChartData } from '@/utils/chartDataBuilder.js'
 import BaseKLineChart from '@/components/BaseKLineChart.vue'
 import PlaybackControls from '@/components/timemachine/PlaybackControls.vue'
@@ -272,11 +288,17 @@ import BottomSheet from '@/components/BottomSheet.vue'
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md') // < 768px
 
+// Toast notification system
+const toast = useToast()
+
 // Orientation detection for landscape immersive mode
 const { isLandscape, lockOrientation, unlockOrientation } = useOrientation()
 
 // Mobile-specific state
 const showTradePanel = ref(false)
+
+// Date validation state
+const dateError = ref(null)
 
 // TimeMachine composable
 const {
@@ -335,14 +357,78 @@ onMounted(() => {
   startDate.value = oneYearAgo.toISOString().split('T')[0]
 })
 
+// Date range validation
+function validateDateRange() {
+  const start = new Date(startDate.value)
+  const end = new Date(endDate.value)
+  const today = new Date()
+  today.setHours(23, 59, 59, 999) // End of today
+  const minDataDate = new Date('2000-01-01')
+  
+  // Rule 1: Start before end
+  if (start >= end) {
+    dateError.value = '开始日期必须早于结束日期'
+    toast.error('日期错误', dateError.value)
+    return false
+  }
+  
+  // Rule 2: Range <= 2 years
+  const diffDays = (end - start) / (1000 * 60 * 60 * 24)
+  if (diffDays > 730) {
+    dateError.value = '日期范围不能超过2年'
+    toast.error('日期错误', dateError.value)
+    return false
+  }
+  
+  // Rule 3: End <= today
+  if (end > today) {
+    dateError.value = '结束日期不能超过今天'
+    toast.error('日期错误', dateError.value)
+    return false
+  }
+  
+  // Rule 4: Start >= 2000
+  if (start < minDataDate) {
+    dateError.value = '开始日期不能早于2000年'
+    toast.error('日期错误', dateError.value)
+    return false
+  }
+  
+  dateError.value = null
+  return true
+}
+
 // Create session
 async function handleCreateSession() {
   if (!symbol.value || !startDate.value || !endDate.value) return
   
+  // Validate date range before creating session
+  if (!validateDateRange()) {
+    return
+  }
+  
   try {
+    loading.value = true
     await createSession(symbol.value, startDate.value, endDate.value, 1000000)
   } catch (e) {
     console.error('Failed to create session:', e)
+    
+    // User-friendly error messages based on error type
+    const errorMsg = e.message || ''
+    
+    if (errorMsg.includes('timeout') || errorMsg.includes('TimeoutError')) {
+      toast.error('加载超时', '历史数据加载超时，请尝试缩短日期范围')
+    } else if (errorMsg.includes('No data') || errorMsg.includes('Empty') || errorMsg.includes('empty')) {
+      toast.error('无数据', '该日期范围内无历史数据，请调整日期')
+    } else if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('ConnectionError')) {
+      toast.error('网络错误', '网络连接失败，请检查网络后重试')
+    } else if (errorMsg.includes('coroutine') || errorMsg.includes('Internal Server Error')) {
+      toast.error('系统错误', '服务暂时不可用，请稍后重试')
+    } else {
+      toast.error('创建失败', errorMsg || '复盘会话创建失败，请稍后重试')
+    }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -355,8 +441,19 @@ async function handleEndSession() {
 async function handleTrade({ action, quantity }) {
   try {
     await executeTrade(action, quantity)
+    toast.success('交易成功', `${action === 'buy' ? '买入' : '卖出'} ${quantity} 股`)
   } catch (e) {
     console.error('Trade failed:', e)
+    
+    const errorMsg = e.message || ''
+    
+    if (errorMsg.includes('insufficient')) {
+      toast.error('交易失败', '资金不足，无法完成交易')
+    } else if (errorMsg.includes('shares')) {
+      toast.error('交易失败', '持仓不足，无法卖出')
+    } else {
+      toast.error('交易失败', errorMsg || '交易执行失败，请重试')
+    }
   }
 }
 

@@ -7,6 +7,7 @@ Supports:
 """
 
 import asyncio
+import httpx
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

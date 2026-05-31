@@ -291,12 +291,26 @@ export function useTimeMachine() {
         body: JSON.stringify({ action, quantity })
       })
       
-if (response?.data?.success) {
-         tradesBuffer.push(response.data.trade)
-         portfolio.value = response?.data?.portfolio || portfolio.value
-         toast.success(`交易成功: ${action === 'buy' ? '买入' : '卖出'} ${quantity}股`)
-         logger.info('[TimeMachine] Trade executed:', action, quantity)
-       }
+      if (response?.data?.success) {
+        tradesBuffer.push(response.data.trade)
+        portfolio.value = response?.data?.portfolio || portfolio.value
+        
+        // Calculate portfolio impact for enhanced feedback
+        const trade = response.data.trade
+        const price = trade?.price || 0
+        const totalCost = quantity * price
+        const proceeds = quantity * price
+        
+        const newCash = portfolio.value.cash - (action === 'buy' ? totalCost : -proceeds)
+        const newPosition = portfolio.value.shares + (action === 'buy' ? quantity : -quantity)
+        
+        toast.success(
+          `交易成功`,
+          `${action === 'buy' ? '买入' : '卖出'} ${quantity}股 @ ¥${price.toFixed(2)}\n` +
+          `当前持仓: ${newPosition}股 | 可用资金: ¥${newCash.toFixed(2)}`
+        )
+        logger.info('[TimeMachine] Trade executed:', action, quantity)
+      }
       
       return response?.data
     } catch (e) {

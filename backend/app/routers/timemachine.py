@@ -23,7 +23,6 @@ from app.services.timemachine.playback_engine import (
 )
 from app.services.timemachine.paper_trading import PaperPortfolio, PaperTradingError
 from app.utils.error_decorator import handle_errors
-from app.utils.executor import get_executor
 from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
@@ -291,12 +290,9 @@ async def get_history(
         if not end_date:
             end_date = date.today().isoformat()
 
-        loop = asyncio.get_running_loop()
-        # P0: Timeout protection for blocking get_bars call
+        # P0: Timeout protection for async get_bars call
         bars = await asyncio.wait_for(
-            loop.run_in_executor(
-                get_executor(),
-                engine.get_bars,
+            engine.get_bars(
                 symbol.lower(),
                 date.fromisoformat(start_date),
                 date.fromisoformat(end_date),
@@ -358,12 +354,9 @@ async def create_session(request: SessionCreateRequest):
         else:
             raise HTTPException(400, "Minute-level playback not yet implemented")
 
-        loop = asyncio.get_running_loop()
-        # P0: Timeout protection for blocking get_bars call
+        # P0: Timeout protection for async get_bars call
         session.bars = await asyncio.wait_for(
-            loop.run_in_executor(
-                get_executor(),
-                session.engine.get_bars,
+            session.engine.get_bars(
                 request.symbol,
                 date.fromisoformat(request.start_date),
                 date.fromisoformat(request.end_date),

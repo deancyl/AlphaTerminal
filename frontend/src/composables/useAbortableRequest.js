@@ -1,6 +1,7 @@
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, onDeactivated } from 'vue'
 
-export function useAbortableRequest() {
+export function useAbortableRequest(options = {}) {
+  const { abortOnDeactivate = true } = options
   const controller = ref(null)
   const pending = ref(false)
 
@@ -29,6 +30,13 @@ export function useAbortableRequest() {
   onUnmounted(() => {
     abort('Component unmounted')
   })
+
+  // Handle KeepAlive deactivation
+  if (abortOnDeactivate) {
+    onDeactivated(() => {
+      abort('Component deactivated (KeepAlive)')
+    })
+  }
 
   return {
     createSignal,
