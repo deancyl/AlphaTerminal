@@ -1,0 +1,308 @@
+{
+  "testStrategy": {
+    "cacheStrategy": "cold",
+    "successCriteria": "all-data-rendered",
+    "repeatability": "median-of-3",
+    "dataSelection": "dynamic",
+    "description": "Performance test data specification for AlphaTerminal E2E tests. Cold cache strategy clears localStorage before each test. Dynamic data selection fetches available test data from API endpoints at runtime."
+  },
+  "apiEndpoints": {
+    "stockList": "/api/v1/market/china_all",
+    "fundList": "/api/v1/fund/open/info",
+    "bondList": "/api/v1/bond/active",
+    "forexList": "/api/v1/forex/spot",
+    "optionsList": "/api/v1/options/contracts"
+  },
+  "dynamicSelection": {
+    "stock": {
+      "api": "/api/v1/market/china_all",
+      "selector": "data[0].symbol",
+      "fallback": "sh600519",
+      "description": "贵州茅台 - 高流动性大盘股"
+    },
+    "fund": {
+      "api": "/api/v1/fund/open/info?code=000001",
+      "selector": "data.code",
+      "fallback": "000001",
+      "description": "华夏成长混合基金"
+    },
+    "bond": {
+      "api": "/api/v1/bond/active",
+      "selector": "data[0].symbol",
+      "fallback": "10Y",
+      "description": "10年期国债收益率"
+    },
+    "forex": {
+      "api": "/api/v1/forex/spot",
+      "selector": "data.quotes[0].symbol",
+      "fallback": "USDCNH",
+      "description": "美元人民币汇率"
+    },
+    "options": {
+      "api": "/api/v1/options/contracts?exchange=CFFEX",
+      "selector": "data[0].symbol",
+      "fallback": "io2506",
+      "description": "沪深300股指期权"
+    },
+    "index": {
+      "api": "/api/v1/market/quote/sh000001",
+      "selector": "data.symbol",
+      "fallback": "sh000001",
+      "description": "上证指数"
+    },
+    "etf": {
+      "api": "/api/v1/market/quote/sh510300",
+      "selector": "data.symbol",
+      "fallback": "sh510300",
+      "description": "沪深300ETF"
+    }
+  },
+  "pages": {
+    "stock": {
+      "route": "#view=stock",
+      "waitForSelector": ".grid-stack-item-content",
+      "dataLoadedSelector": ".stock-card",
+      "apiEndpoint": "/api/v1/market/quote/{symbol}",
+      "description": "股票行情面板"
+    },
+    "portfolio": {
+      "route": "#view=portfolio",
+      "waitForSelector": ".portfolio-dashboard",
+      "dataLoadedSelector": ".position-table",
+      "apiEndpoint": "/api/v1/portfolio/positions",
+      "description": "投资组合面板"
+    },
+    "macro": {
+      "route": "#view=macro",
+      "waitForSelector": ".macro-dashboard",
+      "dataLoadedSelector": ".macro-card",
+      "apiEndpoint": "/api/v1/macro/overview",
+      "description": "宏观经济面板"
+    },
+    "futures": {
+      "route": "#view=futures",
+      "waitForSelector": ".futures-dashboard",
+      "dataLoadedSelector": ".futures-card",
+      "apiEndpoint": "/api/v1/futures/indexes",
+      "description": "期货市场面板"
+    },
+    "forex": {
+      "route": "#view=forex",
+      "waitForSelector": ".forex-dashboard",
+      "dataLoadedSelector": ".forex-quote-panel",
+      "apiEndpoint": "/api/v1/forex/spot",
+      "description": "外汇市场面板"
+    },
+    "bond": {
+      "route": "#view=bond",
+      "waitForSelector": ".bond-dashboard",
+      "dataLoadedSelector": ".yield-curve-chart",
+      "apiEndpoint": "/api/v1/bond/curve",
+      "description": "债券市场面板"
+    },
+    "fund": {
+      "route": "#view=fund",
+      "waitForSelector": ".fund-dashboard",
+      "dataLoadedSelector": ".fund-chart",
+      "apiEndpoint": "/api/v1/fund/open/info",
+      "description": "基金市场面板"
+    },
+    "esg": {
+      "route": "#view=esg",
+      "waitForSelector": ".esg-dashboard",
+      "dataLoadedSelector": ".esg-card",
+      "apiEndpoint": "/api/v1/esg/ratings",
+      "description": "ESG评级面板"
+    },
+    "options": {
+      "route": "#view=options",
+      "waitForSelector": ".options-dashboard",
+      "dataLoadedSelector": ".options-chain-table",
+      "apiEndpoint": "/api/v1/options/cffex/chain",
+      "description": "期权链面板"
+    },
+    "news": {
+      "route": "#view=news",
+      "waitForSelector": ".news-feed",
+      "dataLoadedSelector": ".news-item",
+      "apiEndpoint": "/api/v1/news/flash",
+      "description": "新闻资讯面板"
+    },
+    "research": {
+      "route": "#view=research",
+      "waitForSelector": ".research-dashboard",
+      "dataLoadedSelector": ".research-card",
+      "apiEndpoint": "/api/v1/research/reports",
+      "description": "投研报告面板"
+    },
+    "strategy": {
+      "route": "#view=strategy",
+      "waitForSelector": ".strategy-center",
+      "dataLoadedSelector": ".strategy-tab",
+      "apiEndpoint": "/api/v1/strategy/list",
+      "description": "策略中心面板"
+    },
+    "backtest": {
+      "route": "#view=backtest",
+      "waitForSelector": ".backtest-dashboard",
+      "dataLoadedSelector": ".backtest-result",
+      "apiEndpoint": "/api/v1/backtest/run",
+      "description": "回测面板"
+    },
+    "walk-forward": {
+      "route": "#view=walk-forward",
+      "waitForSelector": ".walk-forward-panel",
+      "dataLoadedSelector": ".walk-forward-result",
+      "apiEndpoint": "/api/v1/walkforward/analyze",
+      "description": "Walk-Forward分析面板"
+    },
+    "global-indices": {
+      "route": "#view=global-indices",
+      "waitForSelector": ".global-index-panel",
+      "dataLoadedSelector": ".index-card",
+      "apiEndpoint": "/api/v1/market/global_indices",
+      "description": "全球指数面板"
+    },
+    "market-radar": {
+      "route": "#view=market-radar",
+      "waitForSelector": ".market-radar",
+      "dataLoadedSelector": ".treemap-chart",
+      "apiEndpoint": "/api/v1/market_radar/treemap",
+      "description": "市场雷达面板"
+    },
+    "factor-sandbox": {
+      "route": "#view=factor-sandbox",
+      "waitForSelector": ".factor-sandbox",
+      "dataLoadedSelector": ".factor-list",
+      "apiEndpoint": "/api/v1/factor_sandbox/factors",
+      "description": "因子沙盒面板"
+    },
+    "time-machine": {
+      "route": "#view=time-machine",
+      "waitForSelector": ".time-machine",
+      "dataLoadedSelector": ".playback-controls",
+      "apiEndpoint": "/api/v1/timemachine/session/create",
+      "description": "时光机面板"
+    },
+    "multi-asset-matrix": {
+      "route": "#view=multi-asset-matrix",
+      "waitForSelector": ".multi-asset-matrix",
+      "dataLoadedSelector": ".matrix-panel",
+      "apiEndpoint": null,
+      "description": "四屏矩阵面板"
+    },
+    "f9-deep": {
+      "route": "#view=stock&symbol={symbol}",
+      "waitForSelector": ".stock-detail-modal",
+      "dataLoadedSelector": ".f9-tabs",
+      "apiEndpoint": "/api/v1/f9/{symbol}/financial",
+      "description": "F9深度资料面板"
+    },
+    "copilot": {
+      "route": "#view=any",
+      "waitForSelector": ".copilot-sidebar",
+      "dataLoadedSelector": ".copilot-input",
+      "apiEndpoint": "/api/v1/copilot/chat",
+      "description": "AI投研助理"
+    },
+    "admin": {
+      "route": "#view=admin",
+      "waitForSelector": ".admin-dashboard",
+      "dataLoadedSelector": ".admin-tab",
+      "apiEndpoint": "/api/v1/admin/monitor",
+      "description": "管理面板"
+    }
+  },
+  "performanceThresholds": {
+    "apiResponse": {
+      "warning": 1000,
+      "critical": 3000,
+      "description": "API响应时间阈值（毫秒）"
+    },
+    "pageLoad": {
+      "warning": 3000,
+      "critical": 5000,
+      "description": "页面加载时间阈值（毫秒）"
+    },
+    "dataRender": {
+      "warning": 1000,
+      "critical": 2000,
+      "description": "数据渲染时间阈值（毫秒）"
+    },
+    "totalTime": {
+      "warning": 5000,
+      "critical": 8000,
+      "description": "总耗时阈值（毫秒）"
+    },
+    "webVitals": {
+      "LCP": {
+        "good": 2500,
+        "needsImprovement": 4000,
+        "description": "最大内容绘制时间（毫秒）"
+      },
+      "FID": {
+        "good": 100,
+        "needsImprovement": 300,
+        "description": "首次输入延迟（毫秒）"
+      },
+      "CLS": {
+        "good": 0.1,
+        "needsImprovement": 0.25,
+        "description": "累积布局偏移（无单位）"
+      },
+      "INP": {
+        "good": 200,
+        "needsImprovement": 500,
+        "description": "交互到下次绘制（毫秒）"
+      }
+    }
+  },
+  "testScenarios": {
+    "coldStart": {
+      "description": "冷启动测试 - 清除所有缓存后首次加载",
+      "setup": ["clearLocalStorage", "clearSessionStorage", "clearCookies"],
+      "measurements": ["apiResponse", "pageLoad", "dataRender", "totalTime"]
+    },
+    "warmStart": {
+      "description": "热启动测试 - 保留缓存后重复加载",
+      "setup": [],
+      "measurements": ["apiResponse", "pageLoad", "dataRender", "totalTime"]
+    },
+    "navigationFlow": {
+      "description": "导航流测试 - 连续访问多个页面",
+      "pages": ["stock", "macro", "futures", "forex", "bond"],
+      "measurements": ["navigationTime", "memoryUsage"]
+    },
+    "dataRefresh": {
+      "description": "数据刷新测试 - 页面数据自动刷新",
+      "interval": 5000,
+      "iterations": 3,
+      "measurements": ["refreshTime", "dataConsistency"]
+    }
+  },
+  "cacheStrategy": {
+    "cold": {
+      "description": "每次测试前清除localStorage",
+      "setup": [
+        "await page.evaluate(() => localStorage.clear())",
+        "await page.evaluate(() => sessionStorage.clear())"
+      ]
+    },
+    "warm": {
+      "description": "保留缓存状态",
+      "setup": []
+    }
+  },
+  "repeatability": {
+    "median-of-3": {
+      "description": "取3次测量的中位数",
+      "iterations": 3,
+      "aggregation": "median"
+    },
+    "average-of-5": {
+      "description": "取5次测量的平均值",
+      "iterations": 5,
+      "aggregation": "average"
+    }
+  }
+}

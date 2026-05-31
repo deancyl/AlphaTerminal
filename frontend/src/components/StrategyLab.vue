@@ -359,7 +359,7 @@ async function loadStrategy(s) {
   
   const signal = createLoadSignal()
   try {
-    const data = await apiFetch(`/api/v1/strategy/strategies/${s.id}`, { signal })
+    const data = await apiFetch(`/api/v1/backtest/strategies/${s.id}`, { signal })
     
     // Check if request is stale
     if (currentRequestId !== loadStrategyRequestId) return
@@ -394,7 +394,7 @@ async function fetchStrategies() {
   strategiesLoading.value = true
   const signal = createFetchSignal()
   try {
-    const data = await apiFetch('/api/v1/strategy/strategies', { signal })
+    const data = await apiFetch('/api/v1/backtest/strategies', { signal })
     
     // Check if request is stale
     if (currentRequestId !== fetchStrategiesRequestId) return
@@ -432,13 +432,13 @@ async function saveStrategy() {
     }
 
     if (selectedStrategy.value?.id) {
-      await apiFetch(`/api/v1/strategy/strategies/${selectedStrategy.value.id}`, {
+      await apiFetch(`/api/v1/backtest/strategies/${selectedStrategy.value.id}`, {
         method: 'PUT',
         body: payload
       })
       toastSuccess('更新成功', '策略已更新')
     } else {
-      const result = await apiFetch('/api/v1/strategy/strategies', {
+      const result = await apiFetch('/api/v1/backtest/strategies', {
         method: 'POST',
         body: payload
       })

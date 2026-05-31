@@ -1,0 +1,105 @@
+{
+  "pageId": "admin",
+  "timestamp": "2026-05-30T10:39:42.948Z",
+  "tabs": [
+    {
+      "tabId": "系统监控",
+      "switchTime": 0,
+      "status": "error",
+      "error": "locator.click: Element is not visible\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: '系统监控' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button data-v-7997d539=\"\" class=\"w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left pl-10 text-theme-secondary hover:bg-theme-hover hover:text-theme-primary\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n"
+    },
+    {
+      "tabId": "进程保活",
+      "switchTime": 0,
+      "status": "error",
+      "error": "locator.click: Element is not visible\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: '进程保活' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button data-v-7997d539=\"\" class=\"w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left pl-10 text-theme-secondary hover:bg-theme-hover hover:text-theme-primary\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n"
+    },
+    {
+      "tabId": "日志查看",
+      "switchTime": 0,
+      "status": "error",
+      "error": "locator.click: Element is not visible\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: '日志查看' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button data-v-7997d539=\"\" class=\"w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left pl-10 text-theme-secondary hover:bg-theme-hover hover:text-theme-primary\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n"
+    },
+    {
+      "tabId": "数据库",
+      "switchTime": 0,
+      "status": "error",
+      "error": "locator.click: Element is not visible\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: '数据库' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button data-v-7997d539=\"\" class=\"w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left pl-10 text-theme-secondary hover:bg-theme-hover hover:text-theme-primary\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n"
+    },
+    {
+      "tabId": "布局设置",
+      "switchTime": 0,
+      "status": "error",
+      "error": "locator.click: Element is not visible\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: '布局设置' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button data-v-7997d539=\"\" class=\"w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left pl-10 text-theme-secondary hover:bg-theme-hover hover:text-theme-primary\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n"
+    },
+    {
+      "tabId": "数据源控制",
+      "switchTime": 0,
+      "status": "skipped",
+      "reason": "Tab not found"
+    },
+    {
+      "tabId": "调度器",
+      "switchTime": 0,
+      "status": "skipped",
+      "reason": "Tab not found"
+    },
+    {
+      "tabId": "缓存管理",
+      "switchTime": 334,
+      "status": "success"
+    },
+    {
+      "tabId": "速率限制",
+      "switchTime": 322,
+      "status": "success"
+    },
+    {
+      "tabId": "数据缺口雷达",
+      "switchTime": 0,
+      "status": "skipped",
+      "reason": "Tab not found"
+    },
+    {
+      "tabId": "LLM 配置",
+      "switchTime": 0,
+      "status": "skipped",
+      "reason": "Tab not found"
+    },
+    {
+      "tabId": "Token监控",
+      "switchTime": 345,
+      "status": "success"
+    },
+    {
+      "tabId": "成本归属",
+      "switchTime": 0,
+      "status": "skipped",
+      "reason": "Tab not found"
+    },
+    {
+      "tabId": "Agent Token",
+      "switchTime": 0,
+      "status": "skipped",
+      "reason": "Tab not found"
+    },
+    {
+      "tabId": "MCP 状态",
+      "switchTime": 0,
+      "status": "skipped",
+      "reason": "Tab not found"
+    },
+    {
+      "tabId": "回测监控",
+      "switchTime": 342,
+      "status": "success"
+    },
+    {
+      "tabId": "性能监控",
+      "switchTime": 377,
+      "status": "success"
+    }
+  ],
+  "averageSwitchTime": 344,
+  "status": "partial"
+}

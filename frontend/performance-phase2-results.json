@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-05-30T10:09:57.797Z",
+  "summary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "passRate": "NaN%"
+  },
+  "thresholds": {
+    "stock": 1500,
+    "portfolio": 2000,
+    "fund": 2000,
+    "bond": 2000,
+    "futures": 2000,
+    "forex": 2000,
+    "macro": 3000
+  },
+  "results": []
+}

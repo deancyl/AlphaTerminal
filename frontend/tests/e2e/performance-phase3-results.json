@@ -1,0 +1,203 @@
+{
+  "testDate": "2026-05-30T10:12:40.304Z",
+  "phase": "Phase 3 - AI/Agent Features",
+  "pages": [
+    {
+      "pageId": "market-radar",
+      "pageName": "Market Radar",
+      "route": "#view=market-radar",
+      "iterations": [
+        {
+          "iteration": 1,
+          "loadTime": 12474,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "loadTime": 1020,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "loadTime": 1018,
+          "success": true
+        }
+      ],
+      "medianLoadTime": 1020,
+      "apiResults": [
+        {
+          "endpoint": "/api/v1/market_radar/treemap",
+          "responseTime": 30708,
+          "status": 200,
+          "success": true
+        }
+      ],
+      "success": true,
+      "status": "pass"
+    },
+    {
+      "pageId": "timemachine",
+      "pageName": "Time Machine",
+      "route": "#view=timemachine",
+      "iterations": [
+        {
+          "iteration": 1,
+          "loadTime": 9586,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "loadTime": 1072,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "loadTime": 1009,
+          "success": true
+        }
+      ],
+      "medianLoadTime": 1072,
+      "apiResults": [
+        {
+          "endpoint": "/api/v1/timemachine/health",
+          "responseTime": 17,
+          "status": 200,
+          "success": true
+        }
+      ],
+      "success": true,
+      "status": "pass"
+    },
+    {
+      "pageId": "strategy-center",
+      "pageName": "Strategy Center",
+      "route": "#view=strategy-center",
+      "iterations": [
+        {
+          "iteration": 1,
+          "loadTime": 11275,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "loadTime": 1006,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "loadTime": 1011,
+          "success": true
+        }
+      ],
+      "medianLoadTime": 1011,
+      "apiResults": [
+        {
+          "endpoint": "/api/v1/backtest/run",
+          "responseTime": 47,
+          "status": 404,
+          "success": false
+        }
+      ],
+      "success": true,
+      "status": "pass"
+    },
+    {
+      "pageId": "factor-sandbox",
+      "pageName": "Factor Sandbox",
+      "route": "#view=factor-sandbox",
+      "iterations": [
+        {
+          "iteration": 1,
+          "loadTime": 11224,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "loadTime": 1005,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "loadTime": 1007,
+          "success": true
+        }
+      ],
+      "medianLoadTime": 1007,
+      "apiResults": [
+        {
+          "endpoint": "/api/v1/factor_sandbox/factors",
+          "responseTime": 28,
+          "status": 200,
+          "success": true
+        }
+      ],
+      "success": true,
+      "status": "pass"
+    },
+    {
+      "pageId": "multi-asset-matrix",
+      "pageName": "Multi-Asset Matrix",
+      "route": "#view=multi-asset-matrix",
+      "iterations": [
+        {
+          "iteration": 1,
+          "loadTime": 6854,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "loadTime": 1006,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "loadTime": 1007,
+          "success": true
+        }
+      ],
+      "medianLoadTime": 1007,
+      "apiResults": [],
+      "success": true,
+      "status": "pass"
+    },
+    {
+      "pageId": "walk-forward",
+      "pageName": "Walk-Forward",
+      "route": "#view=walk-forward",
+      "iterations": [
+        {
+          "iteration": 1,
+          "loadTime": 7242,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "loadTime": 1018,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "loadTime": 1016,
+          "success": true
+        }
+      ],
+      "medianLoadTime": 1018,
+      "apiResults": [
+        {
+          "endpoint": "/api/v1/backtest/walk_forward",
+          "responseTime": 70,
+          "status": 404,
+          "success": false
+        }
+      ],
+      "success": true,
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "totalPages": 6,
+    "passedPages": 6,
+    "failedPages": 0,
+    "averageLoadTime": 1015
+  }
+}

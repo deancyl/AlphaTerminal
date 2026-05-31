@@ -51,6 +51,8 @@ async def ws_market(ws: WebSocket):
       {"action": "unsubscribe", "symbols": ["600519"]}
       {"action": "pong"}        → 客户端响应心跳
       {"action": "recover", "symbols": [{"symbol": "600519", "last_seq": 123}]} → 断连恢复
+      {"action": "subscribe", "channel": "timemachine:test123"} → 订阅回放事件
+      {"action": "unsubscribe", "channel": "timemachine:test123"} → 取消订阅回放事件
 
     服务端推送格式（由 scheduler 广播）：
       Tick 消息（实时行情）：
@@ -60,11 +62,22 @@ async def ws_market(ws: WebSocket):
        "market": "sh", "data_type": "realtime", "timestamp": 1712467200,
        "seq": 124}  # 序列号
 
+      TimeMachine Event message:
+      {"type": "timemachine_event", "session_id": "abc123", "data": {
+        "bar_index": 42,
+        "timestamp": "2024-01-15T10:30:00",
+        "bar": {"open": 1800, "high": 1810, "low": 1795, "close": 1805, "volume": 1000000}
+      }}
+      
+      Subscribe: {"action": "subscribe", "channel": "timemachine:{session_id}"}
+      Unsubscribe: {"action": "unsubscribe", "channel": "timemachine:{session_id}"}
+
       断连恢复消息：
       {"type": "tick", "symbol": "600519", ..., "seq": 123, "recovered": true}
 
       订阅确认：
       {"type": "subscribed", "symbols": ["600519", "000858"]}
+      {"type": "subscribed", "channel": "timemachine:abc123"}
 
       取消订阅确认：
       {"type": "unsubscribed", "symbols": ["600519"]}
@@ -112,21 +125,38 @@ async def ws_market(ws: WebSocket):
         msg_type = msg.get("type", "")
         action = msg.get("action", "")
         symbols = msg.get("symbols", [])
+        channel = msg.get("channel", "")
 
         if action == "subscribe":
-            success, error = await ws_manager.subscribe(conn, symbols)
-            if success:
-                await send_json(
-                    {"type": "subscribed", "symbols": list(await conn.get_symbols())}
-                )
-            else:
-                await send_json({"type": "error", "message": error})
+            if symbols:
+                success, error = await ws_manager.subscribe(conn, symbols)
+                if success:
+                    await send_json(
+                        {"type": "subscribed", "symbols": list(await conn.get_symbols())}
+                    )
+                else:
+                    await send_json({"type": "error", "message": error})
+            elif channel and channel.startswith("timemachine:"):
+                session_id = channel.split(":")[1]
+                async with ws_manager._conn_lock:
+                    if channel not in ws_manager._subscriptions:
+                        ws_manager._subscriptions[channel] = set()
+                    ws_manager._subscriptions[channel].add(conn)
+                await send_json({"type": "subscribed", "channel": channel})
 
         elif action == "unsubscribe":
-            await ws_manager.unsubscribe(conn, symbols)
-            await send_json(
-                {"type": "unsubscribed", "symbols": list(await conn.get_symbols())}
-            )
+            if symbols:
+                await ws_manager.unsubscribe(conn, symbols)
+                await send_json(
+                    {"type": "unsubscribed", "symbols": list(await conn.get_symbols())}
+                )
+            elif channel and channel.startswith("timemachine:"):
+                async with ws_manager._conn_lock:
+                    if channel in ws_manager._subscriptions:
+                        ws_manager._subscriptions[channel].discard(conn)
+                        if not ws_manager._subscriptions[channel]:
+                            del ws_manager._subscriptions[channel]
+                await send_json({"type": "unsubscribed", "channel": channel})
 
         elif action == "recover":
             # 断连恢复：发送缺失的 tick

@@ -147,6 +147,7 @@ class ConnectionManager:
     def __init__(self):
         self._conns: list[WSConnection] = []
         self._symbol_map: dict[str, set] = {}
+        self._subscriptions: dict[str, set] = {}
         self._conn_lock = asyncio.Lock()
         self._map_lock = asyncio.Lock()
         self._heartbeat_task = None
@@ -391,6 +392,29 @@ class ConnectionManager:
                     await conn.ws.send_json(message)
                 except Exception:
                     pass  # Connection will be cleaned up by heartbeat
+
+    async def broadcast_timemachine_event(self, session_id: str, event_data: dict):
+        """
+        广播回放事件给订阅者
+        event_data: {bar_index, timestamp, bar: {open, high, low, close, volume}}
+        """
+        from datetime import datetime
+        message = {
+            "type": "timemachine_event",
+            "session_id": session_id,
+            "data": event_data,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # 查找订阅了该session的连接
+        channel = f"timemachine:{session_id}"
+        async with self._conn_lock:
+            if channel in self._subscriptions:
+                for conn in self._subscriptions[channel]:
+                    try:
+                        await conn.ws.send_json(message)
+                    except Exception:
+                        pass  # 连接会在心跳检测中清理
 
     def total(self) -> int:
         return len(self._conns)

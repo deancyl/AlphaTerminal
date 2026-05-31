@@ -24,10 +24,22 @@ from app.services.timemachine.playback_engine import (
 from app.services.timemachine.paper_trading import PaperPortfolio, PaperTradingError
 from app.utils.error_decorator import handle_errors
 from app.utils.error_sanitizer import sanitize_error
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState, CircuitBreakerOpen
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/timemachine", tags=["timemachine"])
+
+# Circuit Breaker for TimeMachine module
+_timemachine_cb = CircuitBreaker(
+    "timemachine",
+    CircuitBreakerConfig(
+        failure_threshold=5,    # 5次失败触发熔断
+        timeout=60.0,           # 60秒后尝试恢复
+        success_threshold=2,    # 2次成功恢复
+    ),
+)
 
 
 class SessionStatus(str, Enum):
@@ -273,14 +285,51 @@ async def health_check():
     )
 
 
+@router.get("/circuit_breaker/status")
+@handle_errors(module="timemachine")
+async def get_circuit_breaker_status():
+    """获取熔断器状态"""
+    stats = _timemachine_cb.get_stats()
+    return success_response({
+        "state": stats["state"],
+        "failure_count": stats["consecutive_failures"],
+        "success_count": stats["consecutive_successes"],
+        "total_calls": stats["total_calls"],
+        "successful_calls": stats["successful_calls"],
+        "failed_calls": stats["failed_calls"],
+        "opened_at": stats.get("opened_at"),
+        "timeout": stats["timeout"],
+    })
+
+
+@router.post("/circuit_breaker/reset")
+@handle_errors(module="timemachine")
+async def reset_circuit_breaker():
+    """重置熔断器状态"""
+    _timemachine_cb.reset()
+    logger.info("[TimeMachine] Circuit breaker reset manually")
+    return success_response({
+        "message": "熔断器已重置",
+        "state": _timemachine_cb.state.value
+    })
+
+
 @router.get("/history/{symbol}")
 @handle_errors(module="timemachine")
 async def get_history(
     symbol: str, start_date: Optional[str] = None, end_date: Optional[str] = None
 ):
     """Get historical K-line data up to a date."""
-    # P0: Add 30s timeout protection
     TIMEMACHINE_TIMEOUT = 30.0
+    
+    # Check circuit breaker state
+    if _timemachine_cb.state == CircuitState.OPEN:
+        logger.warning(f"[TimeMachine] CB OPEN for {symbol}, rejecting request")
+        stats = _timemachine_cb.get_stats()
+        return error_response(
+            ErrorCode.SERVICE_UNAVAILABLE,
+            f"服务暂时不可用，请{stats['timeout']:.0f}秒后重试"
+        )
     
     try:
         engine = DailyPlaybackEngine()
@@ -290,7 +339,6 @@ async def get_history(
         if not end_date:
             end_date = date.today().isoformat()
 
-        # P0: Timeout protection for async get_bars call
         bars = await asyncio.wait_for(
             engine.get_bars(
                 symbol.lower(),
@@ -299,6 +347,8 @@ async def get_history(
             ),
             timeout=TIMEMACHINE_TIMEOUT
         )
+
+        _timemachine_cb.record_success()
 
         return success_response(
             {
@@ -323,19 +373,32 @@ async def get_history(
             }
         )
 
+    except asyncio.TimeoutError as e:
+        _timemachine_cb.record_failure()
+        logger.error(f"[TimeMachine] Timeout for {symbol}: {e}", exc_info=True)
+        return error_response(ErrorCode.TIMEOUT_ERROR, "请求超时，请稍后重试")
     except Exception as e:
+        _timemachine_cb.record_failure()
         logger.error(
             f"[TimeMachine] Failed to get history for {symbol}: {e}", exc_info=True
         )
-        return error_response(f"Failed to get history: {sanitize_error(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取历史数据失败: {sanitize_error(e)}")
 
 
 @router.post("/session/create")
 @handle_errors(module="timemachine")
 async def create_session(request: SessionCreateRequest):
     """Create a new time-machine replay session."""
-    # P0: Add 30s timeout protection
     TIMEMACHINE_TIMEOUT = 30.0
+    
+    # Check circuit breaker state
+    if _timemachine_cb.state == CircuitState.OPEN:
+        logger.warning(f"[TimeMachine] CB OPEN, rejecting session creation for {request.symbol}")
+        stats = _timemachine_cb.get_stats()
+        return error_response(
+            ErrorCode.SERVICE_UNAVAILABLE,
+            f"服务暂时不可用，请{stats['timeout']:.0f}秒后重试"
+        )
     
     try:
         _session_manager.cleanup_expired()
@@ -354,7 +417,6 @@ async def create_session(request: SessionCreateRequest):
         else:
             raise HTTPException(400, "Minute-level playback not yet implemented")
 
-        # P0: Timeout protection for async get_bars call
         session.bars = await asyncio.wait_for(
             session.engine.get_bars(
                 request.symbol,
@@ -366,8 +428,10 @@ async def create_session(request: SessionCreateRequest):
 
         if not session.bars:
             _session_manager.delete_session(session.session_id)
-            return error_response("No data available for the specified date range")
+            return error_response(ErrorCode.DATA_NOT_FOUND, "指定日期范围内无数据")
 
+        _timemachine_cb.record_success()
+        
         session.status = SessionStatus.PAUSED
         session.current_bar_index = 0
 
@@ -379,9 +443,14 @@ async def create_session(request: SessionCreateRequest):
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError as e:
+        _timemachine_cb.record_failure()
+        logger.error(f"[TimeMachine] Timeout creating session: {e}", exc_info=True)
+        return error_response(ErrorCode.TIMEOUT_ERROR, "请求超时，请稍后重试")
     except Exception as e:
+        _timemachine_cb.record_failure()
         logger.error(f"[TimeMachine] Failed to create session: {e}", exc_info=True)
-        return error_response(f"Failed to create session: {sanitize_error(e)}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"创建会话失败: {sanitize_error(e)}")
 
 
 @router.get("/session/{session_id}")
@@ -584,3 +653,66 @@ async def end_session(session_id: str):
     logger.info(f"[TimeMachine] Session {session_id} ended")
 
     return success_response({"message": "Session ended successfully"})
+
+
+async def warmup_timemachine_cache():
+    """
+    Pre-populate TimeMachine cache on server startup.
+    Fetches popular symbols for instant first-load.
+    
+    预热热门股票的K线数据，使用三级数据回退链：
+    Level 1: market_data_daily 表 (本地SQLite缓存)
+    Level 2: DataCache (内存缓存)
+    Level 3: akshare (实时数据源)
+    """
+    logger.info("[TimeMachine] Starting cache warmup...")
+    
+    # 热门股票列表（可配置）
+    POPULAR_SYMBOLS = [
+        ("sh600519", "贵州茅台"),
+        ("sz000001", "平安银行"),
+        ("sh601318", "中国平安"),
+        ("sh000001", "上证指数"),
+        ("sh000300", "沪深300"),
+    ]
+    
+    cache = get_cache()
+    
+    # 导入fetch_kline_with_fallback函数
+    from app.services.timemachine.timemachine_fetcher import fetch_kline_with_fallback
+    
+    async def warmup_symbol(symbol: str, name: str):
+        """预热单个股票的K线数据"""
+        try:
+            # 预热最近1年的数据
+            end_date = date.today()
+            start_date = end_date - timedelta(days=365)
+            
+            logger.info(f"[TimeMachine] Warming up {symbol} ({name})...")
+            
+            # 使用回退链获取数据
+            result = await fetch_kline_with_fallback(
+                symbol, start_date, end_date, _timemachine_cb
+            )
+            
+            if result.get("bars"):
+                cache_key = f"timemachine:{symbol}:{start_date}:{end_date}"
+                cache.set(cache_key, result, ttl=300)
+                logger.info(f"[TimeMachine] Warmed up {symbol}: {len(result['bars'])} bars")
+            else:
+                logger.warning(f"[TimeMachine] No data for {symbol}")
+                
+        except Exception as e:
+            logger.warning(f"[TimeMachine] Warmup failed for {symbol}: {e}", exc_info=True)
+    
+    # 并行预热所有热门股票
+    tasks = [
+        warmup_symbol(symbol, name)
+        for symbol, name in POPULAR_SYMBOLS
+    ]
+    
+    try:
+        await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info("[TimeMachine] Cache warmup completed")
+    except Exception as e:
+        logger.warning(f"[TimeMachine] Cache warmup failed: {e}", exc_info=True)

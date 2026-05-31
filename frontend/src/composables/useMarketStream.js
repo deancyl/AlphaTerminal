@@ -71,6 +71,10 @@ const globalLastSeq = shallowRef({})  // {symbol: last_seq} for recovery
 const performanceMetrics = shallowRef(null)
 const metricsUpdateTime = ref(null)
 
+// Timemachine events (v0.6.221)
+const _timemachineEvents = {}
+const timemachineEvents = shallowRef({})
+
 // P0-7: Recovery wait mechanism (prevent old data overwriting new data)
 const globalRecoveryPending = ref(false)
 const RECOVERY_TIMEOUT_MS = 2000
@@ -451,13 +455,32 @@ function _newConnection() {
         return
       }
 
-      if (data.type === 'performance_metrics') {
-        _dataVersion++
-        performanceMetrics.value = data.data
-        metricsUpdateTime.value = data.timestamp || new Date().toISOString()
-        triggerRef(performanceMetrics)
-        return
-      }
+if (data.type === 'performance_metrics') {
+          _dataVersion++
+          performanceMetrics.value = data.data
+          metricsUpdateTime.value = data.timestamp || new Date().toISOString()
+          triggerRef(performanceMetrics)
+          return
+        }
+
+        if (data.type === 'timemachine_event') {
+          _dataVersion++
+          const sessionId = data.session_id
+          const eventData = data.data
+          
+          if (!_timemachineEvents[sessionId]) {
+            _timemachineEvents[sessionId] = []
+          }
+          _timemachineEvents[sessionId].push(eventData)
+          
+          if (_timemachineEvents[sessionId].length > 100) {
+            _timemachineEvents[sessionId].shift()
+          }
+          
+          timemachineEvents.value = { ..._timemachineEvents }
+          triggerRef(timemachineEvents)
+          return
+        }
 
       if (globalRecoveryPending.value) {
         if (!tickBuffer[sym]) tickBuffer[sym] = []
@@ -751,12 +774,58 @@ function _startPolling(symbols) {
 }
 
 function _stopPolling() {
-  if (_pollingTimer) {
-    clearInterval(_pollingTimer)
-    _pollingTimer = null
+    if (_pollingTimer) {
+      clearInterval(_pollingTimer)
+      _pollingTimer = null
+    }
+    globalPollingStatus.value = false
   }
-  globalPollingStatus.value = false
-}
+
+  function subscribeTimemachine(sessionId) {
+    if (!_ws || _ws.readyState !== WebSocket.OPEN) {
+      logger.warn('[WS] Cannot subscribe to timemachine, connection not ready')
+      return
+    }
+    
+    const channel = `timemachine:${sessionId}`
+    try {
+      _ws.send(JSON.stringify({
+        action: 'subscribe',
+        channel: channel
+      }))
+      logger.info(`[WS] Subscribed to timemachine:${sessionId}`)
+    } catch (e) {
+      logger.warn('[WS] Failed to subscribe to timemachine:', e)
+    }
+  }
+
+  function unsubscribeTimemachine(sessionId) {
+    if (!_ws || _ws.readyState !== WebSocket.OPEN) {
+      if (_timemachineEvents[sessionId]) {
+        delete _timemachineEvents[sessionId]
+        timemachineEvents.value = { ..._timemachineEvents }
+        triggerRef(timemachineEvents)
+      }
+      return
+    }
+    
+    const channel = `timemachine:${sessionId}`
+    try {
+      _ws.send(JSON.stringify({
+        action: 'unsubscribe',
+        channel: channel
+      }))
+      logger.info(`[WS] Unsubscribed from timemachine:${sessionId}`)
+    } catch (e) {
+      logger.warn('[WS] Failed to unsubscribe from timemachine:', e)
+    }
+    
+    if (_timemachineEvents[sessionId]) {
+      delete _timemachineEvents[sessionId]
+      timemachineEvents.value = { ..._timemachineEvents }
+      triggerRef(timemachineEvents)
+    }
+  }
 
 // ── 导出给组件的 hook ──────────────────────────────────────────
 
@@ -986,6 +1055,9 @@ export function useMarketStream(initialSymbol = '') {
     connectionState: computed(() => _connectionState),
     performanceMetrics,
     metricsUpdateTime,
+    timemachineEvents,
+    subscribeTimemachine,
+    unsubscribeTimemachine,
     appendChartData,
     updateChartIncremental,
     getStats: () => ({

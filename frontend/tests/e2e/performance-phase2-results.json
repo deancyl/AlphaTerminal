@@ -1,0 +1,237 @@
+{
+  "timestamp": "2026-05-30T10:32:03.271Z",
+  "summary": {
+    "total": 7,
+    "passed": 7,
+    "failed": 0,
+    "passRate": "100.0%"
+  },
+  "thresholds": {
+    "stock": 15000,
+    "portfolio": 15000,
+    "fund": 15000,
+    "bond": 15000,
+    "futures": 15000,
+    "forex": 15000,
+    "macro": 15000
+  },
+  "results": [
+    {
+      "pageId": "stock",
+      "description": "DashboardGrid - HTTP polling + WebSocket",
+      "threshold": 15000,
+      "metrics": {
+        "apiResponseTimes": {},
+        "pageLoadTime": {
+          "domContentLoaded": 10354,
+          "loadComplete": 10377,
+          "domInteractive": 10057
+        },
+        "dataRenderTime": 137,
+        "totalTime": 161,
+        "apiRequestCount": 0
+      },
+      "status": "pass",
+      "iterations": [
+        {
+          "totalTime": 10548,
+          "dataRenderTime": 10491
+        },
+        {
+          "totalTime": 161,
+          "dataRenderTime": 66
+        },
+        {
+          "totalTime": 153,
+          "dataRenderTime": 137
+        }
+      ]
+    },
+    {
+      "pageId": "portfolio",
+      "description": "PortfolioDashboard - HTTP on-demand",
+      "threshold": 15000,
+      "metrics": {
+        "apiResponseTimes": {},
+        "pageLoadTime": {
+          "domContentLoaded": 10255,
+          "loadComplete": 10317,
+          "domInteractive": 10038
+        },
+        "dataRenderTime": 78,
+        "totalTime": 167,
+        "apiRequestCount": 0
+      },
+      "status": "pass",
+      "iterations": [
+        {
+          "totalTime": 10562,
+          "dataRenderTime": 10492
+        },
+        {
+          "totalTime": 167,
+          "dataRenderTime": 78
+        },
+        {
+          "totalTime": 102,
+          "dataRenderTime": 66
+        }
+      ]
+    },
+    {
+      "pageId": "fund",
+      "description": "FundDashboard - HTTP on-demand",
+      "threshold": 15000,
+      "metrics": {
+        "apiResponseTimes": {},
+        "pageLoadTime": {
+          "domContentLoaded": 10237,
+          "loadComplete": 10329,
+          "domInteractive": 10065
+        },
+        "dataRenderTime": 21,
+        "totalTime": 33,
+        "apiRequestCount": 0
+      },
+      "status": "pass",
+      "iterations": [
+        {
+          "totalTime": 10701,
+          "dataRenderTime": 10609
+        },
+        {
+          "totalTime": 33,
+          "dataRenderTime": 21
+        },
+        {
+          "totalTime": 18,
+          "dataRenderTime": 12
+        }
+      ]
+    },
+    {
+      "pageId": "bond",
+      "description": "BondDashboard - HTTP on-demand",
+      "threshold": 15000,
+      "metrics": {
+        "apiResponseTimes": {},
+        "pageLoadTime": {
+          "domContentLoaded": 10206,
+          "loadComplete": 10251,
+          "domInteractive": 10044
+        },
+        "dataRenderTime": 13,
+        "totalTime": 26,
+        "apiRequestCount": 0
+      },
+      "status": "pass",
+      "iterations": [
+        {
+          "totalTime": 10412,
+          "dataRenderTime": 10383
+        },
+        {
+          "totalTime": 26,
+          "dataRenderTime": 13
+        },
+        {
+          "totalTime": 16,
+          "dataRenderTime": 12
+        }
+      ]
+    },
+    {
+      "pageId": "futures",
+      "description": "FuturesDashboard - HTTP on-demand",
+      "threshold": 15000,
+      "metrics": {
+        "apiResponseTimes": {},
+        "pageLoadTime": {
+          "domContentLoaded": 10217,
+          "loadComplete": 10261,
+          "domInteractive": 10050
+        },
+        "dataRenderTime": 28,
+        "totalTime": 36,
+        "apiRequestCount": 0
+      },
+      "status": "pass",
+      "iterations": [
+        {
+          "totalTime": 10421,
+          "dataRenderTime": 10362
+        },
+        {
+          "totalTime": 19,
+          "dataRenderTime": 12
+        },
+        {
+          "totalTime": 36,
+          "dataRenderTime": 28
+        }
+      ]
+    },
+    {
+      "pageId": "forex",
+      "description": "ForexDashboard - HTTP on-demand",
+      "threshold": 15000,
+      "metrics": {
+        "apiResponseTimes": {},
+        "pageLoadTime": {
+          "domContentLoaded": 10240,
+          "loadComplete": 10295,
+          "domInteractive": 10067
+        },
+        "dataRenderTime": 16,
+        "totalTime": 24,
+        "apiRequestCount": 0
+      },
+      "status": "pass",
+      "iterations": [
+        {
+          "totalTime": 10490,
+          "dataRenderTime": 10446
+        },
+        {
+          "totalTime": 24,
+          "dataRenderTime": 16
+        },
+        {
+          "totalTime": 18,
+          "dataRenderTime": 12
+        }
+      ]
+    },
+    {
+      "pageId": "macro",
+      "description": "MacroDashboard - BFF aggregation",
+      "threshold": 15000,
+      "metrics": {
+        "apiResponseTimes": {},
+        "pageLoadTime": {
+          "domContentLoaded": 10339,
+          "loadComplete": 10425,
+          "domInteractive": 10046
+        },
+        "dataRenderTime": 100,
+        "totalTime": 126,
+        "apiRequestCount": 0
+      },
+      "status": "pass",
+      "iterations": [
+        {
+          "totalTime": 11267,
+          "dataRenderTime": 10942
+        },
+        {
+          "totalTime": 126,
+          "dataRenderTime": 100
+        },
+        {
+          "totalTime": 16,
+          "dataRenderTime": 10
+        }
+      ]
+    }
+  ]
+}

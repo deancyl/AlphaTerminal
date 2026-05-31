@@ -1,0 +1,695 @@
+/**
+ * Phase 5: Data Aggregation and Analysis
+ * 
+ * This test aggregates all Phase results and generates comprehensive statistics.
+ * 
+ * Input Files:
+ * - performance-phase1-results.json (基础连通性)
+ * - performance-phase2-results.json (核心页面)
+ * - performance-phase3-results.json (AI功能)
+ * - performance-phase4-results.json (系统管理)
+ * 
+ * Output:
+ * - performance-test-results.json (汇总报告)
+ */
+
+import { test, expect } from '@playwright/test';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+
+// Constants
+const THRESHOLD_TOTAL_TIME = 1000; // ms - 1秒内完成
+const THRESHOLD_API_TIME = 500;    // ms - API响应慢阈值
+const THRESHOLD_LOAD_TIME = 1000;  // ms - 页面加载慢阈值
+const THRESHOLD_RENDER_TIME = 500; // ms - 渲染慢阈值
+const THRESHOLD_WS_TIME = 1000;    // ms - WebSocket慢阈值
+
+const RESULTS_DIR = join(__dirname, '../tests/e2e');
+const OUTPUT_FILE = join(RESULTS_DIR, 'performance-test-results.json');
+
+// ============================================================
+// Data Loading Functions
+// ============================================================
+
+function loadPhaseResults(phase) {
+  const filePath = join(RESULTS_DIR, `performance-${phase}-results.json`);
+  
+  // Try alternate location in frontend/ directory
+  const alternatePath = join(__dirname, `../performance-${phase}-results.json`);
+  
+  if (existsSync(filePath)) {
+    return JSON.parse(readFileSync(filePath, 'utf-8'));
+  } else if (existsSync(alternatePath)) {
+    return JSON.parse(readFileSync(alternatePath, 'utf-8'));
+  }
+  
+  console.warn(`[Phase 5] Results file not found: ${phase}`);
+  return null;
+}
+
+function mergeAllPhaseResults() {
+  const phase1 = loadPhaseResults('phase1');
+  const phase2 = loadPhaseResults('phase2');
+  const phase3 = loadPhaseResults('phase3');
+  const phase4 = loadPhaseResults('phase4');
+  
+  return {
+    phase1: phase1 || { tests: [], summary: {} },
+    phase2: phase2 || { results: [], summary: {} },
+    phase3: phase3 || { pages: [], summary: {} },
+    phase4: phase4 || { tabs: [], summary: {} }
+  };
+}
+
+// ============================================================
+// Statistics Calculation Functions
+// ============================================================
+
+// Metrics structure (plain JS object)
+// {
+//   min: number,
+//   max: number,
+//   avg: number,
+//   median: number,
+//   p50: number,
+//   p95: number,
+//   p99: number
+// }
+
+function calculateTimeMetrics(times) {
+  if (times.length === 0) {
+    return { min: 0, max: 0, avg: 0, median: 0, p50: 0, p95: 0, p99: 0 };
+  }
+  
+  const sorted = [...times].sort((a, b) => a - b);
+  const sum = sorted.reduce((a, b) => a + b, 0);
+  
+  const percentile = (p) => {
+    const index = Math.floor(sorted.length * p);
+    return sorted[Math.min(index, sorted.length - 1)];
+  };
+  
+  return {
+    min: sorted[0],
+    max: sorted[sorted.length - 1],
+    avg: sum / sorted.length,
+    median: sorted[Math.floor(sorted.length / 2)],
+    p50: percentile(0.5),
+    p95: percentile(0.95),
+    p99: percentile(0.99)
+  };
+}
+
+function calculateStatistics(allResults) {
+  const stats = {
+    pages: {},
+    overall: {
+      totalTests: 0,
+      passedTests: 0,
+      failedTests: 0,
+      avgTotalTime: 0,
+      avgApiTime: 0,
+      avgLoadTime: 0,
+      avgRenderTime: 0,
+      avgWsTime: 0
+    },
+    distribution: {
+      p50: 0,
+      p95: 0,
+      p99: 0
+    },
+    slowPages: [],
+    phases: {
+      phase1: { total: 0, passed: 0, failed: 0 },
+      phase2: { total: 0, passed: 0, failed: 0 },
+      phase3: { total: 0, passed: 0, failed: 0 },
+      phase4: { total: 0, passed: 0, failed: 0 }
+    }
+  };
+
+  const allTimes = [];
+  const allApiTimes = [];
+  const allLoadTimes = [];
+  const allRenderTimes = [];
+  
+  // ============================================================
+  // Phase 1: 基础连通性 (tests array)
+  // ============================================================
+  if (allResults.phase1?.tests) {
+    allResults.phase1.tests.forEach((test) => {
+      const pageId = test.name?.toLowerCase().replace(/\s+/g, '-') || 'unknown';
+      const success = test.success !== false;
+      
+      stats.phases.phase1.total++;
+      if (success) stats.phases.phase1.passed++;
+      else stats.phases.phase1.failed++;
+      
+      const loadTime = test.loadTimeMs || 0;
+      const responseTime = test.responseTimeMs || 0;
+      const wsTime = test.connectionTimeMs || 0;
+      
+      if (loadTime > 0) allLoadTimes.push(loadTime);
+      if (responseTime > 0) allApiTimes.push(responseTime);
+      if (wsTime > 0) {
+        allTimes.push(wsTime);
+        allApiTimes.push(wsTime);
+      }
+      
+      stats.pages[`phase1-${pageId}`] = {
+        pageId,
+        phase: 'phase1',
+        name: test.name,
+        success,
+        loadTime: loadTime,
+        apiTime: responseTime,
+        wsTime: wsTime,
+        totalTime: Math.max(loadTime, responseTime, wsTime)
+      };
+    });
+  }
+  
+  // ============================================================
+  // Phase 2: 核心页面 (results array with iterations)
+  // ============================================================
+  if (allResults.phase2?.results) {
+    allResults.phase2.results.forEach((result: any) => {
+      const pageId = result.pageId || 'unknown';
+      const success = result.status === 'pass';
+      
+      stats.phases.phase2.total++;
+      if (success) stats.phases.phase2.passed++;
+      else stats.phases.phase2.failed++;
+      
+      // Extract times from iterations (skip first cold start)
+      const iterations = result.iterations || [];
+      const warmTimes = iterations.slice(1).map((i: any) => i.totalTime || 0);
+      const warmRenderTimes = iterations.slice(1).map((i: any) => i.dataRenderTime || 0);
+      
+      const totalTime = result.metrics?.totalTime || 0;
+      const renderTime = result.metrics?.dataRenderTime || 0;
+      const loadTime = result.metrics?.pageLoadTime?.loadComplete || 0;
+      
+      if (totalTime > 0) allTimes.push(totalTime);
+      if (warmTimes.length > 0) {
+        const avgWarm = warmTimes.reduce((a: number, b: number) => a + b, 0) / warmTimes.length;
+        if (avgWarm > 0) allTimes.push(avgWarm);
+      }
+      if (renderTime > 0) allRenderTimes.push(renderTime);
+      if (loadTime > 0) allLoadTimes.push(loadTime);
+      
+      stats.pages[`phase2-${pageId}`] = {
+        pageId,
+        phase: 'phase2',
+        description: result.description,
+        success,
+        totalTime,
+        renderTime,
+        loadTime,
+        iterations: iterations.length,
+        threshold: result.threshold
+      };
+    });
+  }
+  
+  // ============================================================
+  // Phase 3: AI功能 (pages array with iterations)
+  // ============================================================
+  if (allResults.phase3?.pages) {
+    allResults.phase3.pages.forEach((page: any) => {
+      const pageId = page.pageId || 'unknown';
+      const success = page.status === 'pass';
+      
+      stats.phases.phase3.total++;
+      if (success) stats.phases.phase3.passed++;
+      else stats.phases.phase3.failed++;
+      
+      // Extract times from iterations (skip first cold start)
+      const iterations = page.iterations || [];
+      const warmTimes = iterations.slice(1).map((i: any) => i.loadTime || 0);
+      
+      const medianLoadTime = page.medianLoadTime || 0;
+      const apiResults = page.apiResults || [];
+      const apiTime = apiResults.length > 0 
+        ? apiResults.reduce((sum: number, r: any) => sum + (r.responseTime || 0), 0) / apiResults.length
+        : 0;
+      
+      if (medianLoadTime > 0) allTimes.push(medianLoadTime);
+      if (warmTimes.length > 0) {
+        const avgWarm = warmTimes.reduce((a: number, b: number) => a + b, 0) / warmTimes.length;
+        if (avgWarm > 0) allTimes.push(avgWarm);
+      }
+      if (apiTime > 0) allApiTimes.push(apiTime);
+      
+      stats.pages[`phase3-${pageId}`] = {
+        pageId,
+        phase: 'phase3',
+        name: page.pageName,
+        success,
+        loadTime: medianLoadTime,
+        apiTime,
+        totalTime: medianLoadTime,
+        iterations: iterations.length
+      };
+    });
+  }
+  
+  // ============================================================
+  // Phase 4: 系统管理 (tabs array)
+  // ============================================================
+  if (allResults.phase4?.tabs) {
+    allResults.phase4.tabs.forEach((tab: any) => {
+      const tabId = tab.tabId?.toLowerCase().replace(/\s+/g, '-') || 'unknown';
+      const success = tab.status === 'success';
+      const failed = tab.status === 'error';
+      const skipped = tab.status === 'skipped';
+      
+      if (!skipped) {
+        stats.phases.phase4.total++;
+        if (success) stats.phases.phase4.passed++;
+        else stats.phases.phase4.failed++;
+      }
+      
+      const switchTime = tab.switchTime || 0;
+      
+      if (switchTime > 0) {
+        allTimes.push(switchTime);
+        allRenderTimes.push(switchTime);
+      }
+      
+      stats.pages[`phase4-${tabId}`] = {
+        pageId: tabId,
+        phase: 'phase4',
+        name: tab.tabId,
+        success,
+        failed,
+        skipped,
+        switchTime,
+        totalTime: switchTime,
+        error: tab.error || null
+      };
+    });
+  }
+  
+  // ============================================================
+  // Calculate Overall Statistics
+  // ============================================================
+  stats.overall.totalTests = stats.phases.phase1.total + stats.phases.phase2.total + 
+                             stats.phases.phase3.total + stats.phases.phase4.total;
+  stats.overall.passedTests = stats.phases.phase1.passed + stats.phases.phase2.passed + 
+                              stats.phases.phase3.passed + stats.phases.phase4.passed;
+  stats.overall.failedTests = stats.phases.phase1.failed + stats.phases.phase2.failed + 
+                              stats.phases.phase3.failed + stats.phases.phase4.failed;
+  
+  // Calculate averages
+  const timeMetrics = calculateTimeMetrics(allTimes);
+  const apiMetrics = calculateTimeMetrics(allApiTimes);
+  const loadMetrics = calculateTimeMetrics(allLoadTimes);
+  const renderMetrics = calculateTimeMetrics(allRenderTimes);
+  
+  stats.overall.avgTotalTime = timeMetrics.avg;
+  stats.overall.avgApiTime = apiMetrics.avg;
+  stats.overall.avgLoadTime = loadMetrics.avg;
+  stats.overall.avgRenderTime = renderMetrics.avg;
+  
+  // Distribution
+  stats.distribution.p50 = timeMetrics.p50 || 0;
+  stats.distribution.p95 = timeMetrics.p95 || 0;
+  stats.distribution.p99 = timeMetrics.p99 || 0;
+  
+  // ============================================================
+  // Identify Slow Pages
+  // ============================================================
+  Object.entries(stats.pages).forEach(([key, page]: [string, any]) => {
+    const totalTime = page.totalTime || 0;
+    
+    if (totalTime > THRESHOLD_TOTAL_TIME) {
+      stats.slowPages.push({
+        pageId: page.pageId,
+        phase: page.phase,
+        name: page.name || page.description || page.pageId,
+        totalTime,
+        excessMs: totalTime - THRESHOLD_TOTAL_TIME,
+        rootCause: analyzeRootCause(page),
+        priority: totalTime > 2000 ? 'P0' : totalTime > 1500 ? 'P1' : 'P2'
+      });
+    }
+  });
+  
+  // Sort slow pages by totalTime descending
+  stats.slowPages.sort((a, b) => b.totalTime - a.totalTime);
+  
+  return stats;
+}
+
+// ============================================================
+// Root Cause Analysis Functions
+// ============================================================
+
+function analyzeRootCause(page) {
+  const reasons: string[] = [];
+  
+  const apiTime = page.apiTime || 0;
+  const loadTime = page.loadTime || page.switchTime || 0;
+  const renderTime = page.renderTime || 0;
+  const wsTime = page.wsTime || 0;
+  const totalTime = page.totalTime || 0;
+  
+  // API慢
+  if (apiTime > THRESHOLD_API_TIME) {
+    reasons.push(`API响应慢(${apiTime}ms): 检查后端缓存和熔断器`);
+  }
+  
+  // 页面加载慢
+  if (loadTime > THRESHOLD_LOAD_TIME) {
+    reasons.push(`页面加载慢(${loadTime}ms): 检查前端bundle大小和懒加载`);
+  }
+  
+  // 数据渲染慢
+  if (renderTime > THRESHOLD_RENDER_TIME) {
+    reasons.push(`数据渲染慢(${renderTime}ms): 检查ECharts初始化和大数据处理`);
+  }
+  
+  // WebSocket慢
+  if (wsTime > THRESHOLD_WS_TIME) {
+    reasons.push(`WebSocket慢(${wsTime}ms): 检查网络连接和重连逻辑`);
+  }
+  
+  // 冷启动问题（首次加载特别慢）
+  if (totalTime > 5000 && loadTime < totalTime * 0.3) {
+    reasons.push(`冷启动问题(${totalTime}ms): 首次加载，考虑预加载或预热缓存`);
+  }
+  
+  if (reasons.length === 0) {
+    reasons.push(`总体时间慢(${totalTime}ms): 多因素综合影响，需要进一步分析`);
+  }
+  
+  return reasons;
+}
+
+// ============================================================
+// Report Generation Functions
+// ============================================================
+
+function generateReport(allResults, stats) {
+  const now = new Date().toISOString();
+  
+  return {
+    testDate: now,
+    version: 'v0.6.220',
+    summary: {
+      totalTests: stats.overall.totalTests,
+      passedTests: stats.overall.passedTests,
+      failedTests: stats.overall.failedTests,
+      successRate: stats.overall.totalTests > 0 
+        ? ((stats.overall.passedTests / stats.overall.totalTests) * 100).toFixed(2) + '%'
+        : '0%',
+      averageTimes: {
+        total: Math.round(stats.overall.avgTotalTime),
+        api: Math.round(stats.overall.avgApiTime),
+        load: Math.round(stats.overall.avgLoadTime),
+        render: Math.round(stats.overall.avgRenderTime)
+      },
+      distribution: {
+        p50: Math.round(stats.distribution.p50),
+        p95: Math.round(stats.distribution.p95),
+        p99: Math.round(stats.distribution.p99)
+      }
+    },
+    phases: {
+      phase1: {
+        name: '基础连通性',
+        ...stats.phases.phase1,
+        summary: allResults.phase1?.summary || {}
+      },
+      phase2: {
+        name: '核心页面',
+        ...stats.phases.phase2,
+        summary: allResults.phase2?.summary || {}
+      },
+      phase3: {
+        name: 'AI功能',
+        ...stats.phases.phase3,
+        summary: allResults.phase3?.summary || {}
+      },
+      phase4: {
+        name: '系统管理',
+        ...stats.phases.phase4,
+        summary: { averageSwitchTime: allResults.phase4?.averageSwitchTime || 0 }
+      }
+    },
+    slowPages: stats.slowPages,
+    pages: stats.pages,
+    recommendations: generateRecommendations(stats),
+    nextSteps: [
+      '优化慢页面（优先处理P0级别）',
+      '检查API响应时间是否在阈值内',
+      '验证WebSocket连接稳定性',
+      '测试页面加载性能（bundle大小、懒加载）',
+      '测试数据渲染性能（ECharts初始化、大数据处理）'
+    ]
+  };
+}
+
+function generateRecommendations(stats) {
+  const recommendations: any[] = [];
+  
+  // 慢页面优化建议
+  const p0SlowPages = stats.slowPages.filter((p: any) => p.priority === 'P0');
+  if (p0SlowPages.length > 0) {
+    recommendations.push({
+      priority: 'P0',
+      category: '性能',
+      issue: `${p0SlowPages.length}个页面总时间超过2秒`,
+      pages: p0SlowPages.map((p: any) => p.pageId),
+      recommendation: '优先优化这些页面的加载性能，检查API响应、前端bundle大小、ECharts初始化'
+    });
+  }
+  
+  const p1SlowPages = stats.slowPages.filter((p: any) => p.priority === 'P1');
+  if (p1SlowPages.length > 0) {
+    recommendations.push({
+      priority: 'P1',
+      category: '性能',
+      issue: `${p1SlowPages.length}个页面总时间在1.5-2秒之间`,
+      pages: p1SlowPages.map((p: any) => p.pageId),
+      recommendation: '考虑懒加载、代码分割、预加载等优化手段'
+    });
+  }
+  
+  // API响应时间
+  if (stats.overall.avgApiTime > THRESHOLD_API_TIME) {
+    recommendations.push({
+      priority: 'P1',
+      category: 'API',
+      issue: `平均API响应时间${Math.round(stats.overall.avgApiTime)}ms超过阈值${THRESHOLD_API_TIME}ms`,
+      recommendation: '检查后端缓存配置、熔断器状态、数据库查询优化'
+    });
+  }
+  
+  // 页面加载时间
+  if (stats.overall.avgLoadTime > THRESHOLD_LOAD_TIME) {
+    recommendations.push({
+      priority: 'P1',
+      category: '加载',
+      issue: `平均页面加载时间${Math.round(stats.overall.avgLoadTime)}ms超过阈值${THRESHOLD_LOAD_TIME}ms`,
+      recommendation: '检查前端bundle大小、懒加载配置、资源压缩'
+    });
+  }
+  
+  // 渲染时间
+  if (stats.overall.avgRenderTime > THRESHOLD_RENDER_TIME) {
+    recommendations.push({
+      priority: 'P2',
+      category: '渲染',
+      issue: `平均渲染时间${Math.round(stats.overall.avgRenderTime)}ms超过阈值${THRESHOLD_RENDER_TIME}ms`,
+      recommendation: '检查ECharts初始化、大数据处理、虚拟滚动实现'
+    });
+  }
+  
+  // 分布分析
+  if (stats.distribution.p99 > 2000) {
+    recommendations.push({
+      priority: 'P2',
+      category: '稳定性',
+      issue: `P99延迟${Math.round(stats.distribution.p99)}ms过高`,
+      recommendation: '优化长尾请求，考虑超时重试、降级策略'
+    });
+  }
+  
+  // 测试成功率
+  const successRate = stats.overall.totalTests > 0 
+    ? (stats.overall.passedTests / stats.overall.totalTests) * 100
+    : 0;
+  
+  if (successRate < 95) {
+    recommendations.push({
+      priority: 'P0',
+      category: '稳定性',
+      issue: `测试成功率${successRate.toFixed(2)}%低于95%`,
+      recommendation: '优先修复失败的测试用例，确保基础功能正常'
+    });
+  }
+  
+  return recommendations;
+}
+
+// ============================================================
+// Main Test
+// ============================================================
+
+test.describe('Phase 5: Data Aggregation and Analysis', () => {
+  
+  test('should aggregate all phase results and generate statistics', async () => {
+    // Step 1: Load all phase results
+    console.log('[Phase 5] Loading all phase results...');
+    const allResults = mergeAllPhaseResults();
+    
+    // Verify we have at least some results
+    expect(Object.keys(allResults).length).toBeGreaterThan(0);
+    console.log('[Phase 5] Loaded phases:', Object.keys(allResults));
+    
+    // Step 2: Calculate statistics
+    console.log('[Phase 5] Calculating statistics...');
+    const stats = calculateStatistics(allResults);
+    
+    // Verify statistics structure
+    expect(stats).toHaveProperty('overall');
+    expect(stats).toHaveProperty('distribution');
+    expect(stats).toHaveProperty('slowPages');
+    expect(stats).toHaveProperty('pages');
+    
+    console.log('[Phase 5] Overall statistics:', {
+      totalTests: stats.overall.totalTests,
+      passedTests: stats.overall.passedTests,
+      failedTests: stats.overall.failedTests,
+      avgTotalTime: Math.round(stats.overall.avgTotalTime),
+      p50: Math.round(stats.distribution.p50),
+      p95: Math.round(stats.distribution.p95),
+      p99: Math.round(stats.distribution.p99)
+    });
+    
+    // Step 3: Generate report
+    console.log('[Phase 5] Generating report...');
+    const report = generateReport(allResults, stats);
+    
+    // Verify report structure
+    expect(report).toHaveProperty('testDate');
+    expect(report).toHaveProperty('version');
+    expect(report).toHaveProperty('summary');
+    expect(report).toHaveProperty('phases');
+    expect(report).toHaveProperty('slowPages');
+    expect(report).toHaveProperty('recommendations');
+    
+    // Step 4: Save report to file
+    console.log('[Phase 5] Saving report to:', OUTPUT_FILE);
+    
+    // Ensure directory exists
+    const dir = dirname(OUTPUT_FILE);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    
+    writeFileSync(OUTPUT_FILE, JSON.stringify(report, null, 2), 'utf-8');
+    console.log('[Phase 5] Report saved successfully');
+    
+    // Verify file was created
+    expect(existsSync(OUTPUT_FILE)).toBe(true);
+  });
+  
+  test('should identify slow pages correctly', async () => {
+    const allResults = mergeAllPhaseResults();
+    const stats = calculateStatistics(allResults);
+    
+    console.log(`[Phase 5] Found ${stats.slowPages.length} slow pages (>${THRESHOLD_TOTAL_TIME}ms)`);
+    
+    // Log slow pages details
+    if (stats.slowPages.length > 0) {
+      console.log('\n[Phase 5] Slow Pages Analysis:');
+      stats.slowPages.forEach((page: any) => {
+        console.log(`  - [${page.priority}] ${page.pageId} (${page.phase}): ${page.totalTime}ms`);
+        console.log(`    Excess: +${page.excessMs}ms`);
+        page.rootCause.forEach((reason: string) => {
+          console.log(`    - ${reason}`);
+        });
+      });
+    }
+    
+    // We expect some slow pages in test environment
+    // (e.g., cold start issues, network latency)
+    expect(Array.isArray(stats.slowPages)).toBe(true);
+    
+    // Check that priorities are assigned correctly
+    stats.slowPages.forEach((page: any) => {
+      expect(['P0', 'P1', 'P2']).toContain(page.priority);
+      expect(page.totalTime).toBeGreaterThan(THRESHOLD_TOTAL_TIME);
+      expect(page.rootCause).toBeDefined();
+      expect(Array.isArray(page.rootCause)).toBe(true);
+      expect(page.rootCause.length).toBeGreaterThan(0);
+    });
+  });
+  
+  test('should calculate distribution percentiles correctly', async () => {
+    const allResults = mergeAllPhaseResults();
+    const stats = calculateStatistics(allResults);
+    
+    // Verify percentile ordering
+    expect(stats.distribution.p50).toBeLessThanOrEqual(stats.distribution.p95);
+    expect(stats.distribution.p95).toBeLessThanOrEqual(stats.distribution.p99);
+    
+    console.log('[Phase 5] Distribution percentiles:', {
+      p50: Math.round(stats.distribution.p50),
+      p95: Math.round(stats.distribution.p95),
+      p99: Math.round(stats.distribution.p99)
+    });
+    
+    // In test environment, we expect some variation
+    // but P50 should be reasonable (under 2s for warm loads)
+    expect(stats.distribution.p50).toBeLessThan(5000);
+  });
+  
+  test('should generate actionable recommendations', async () => {
+    const allResults = mergeAllPhaseResults();
+    const stats = calculateStatistics(allResults);
+    const report = generateReport(allResults, stats);
+    
+    console.log(`[Phase 5] Generated ${report.recommendations.length} recommendations`);
+    
+    // Verify recommendations structure
+    report.recommendations.forEach((rec: any) => {
+      expect(rec).toHaveProperty('priority');
+      expect(['P0', 'P1', 'P2', 'P3']).toContain(rec.priority);
+      expect(rec).toHaveProperty('category');
+      expect(rec).toHaveProperty('issue');
+      expect(rec).toHaveProperty('recommendation');
+    });
+    
+    // Log recommendations
+    console.log('\n[Phase 5] Recommendations:');
+    report.recommendations.forEach((rec: any) => {
+      console.log(`  - [${rec.priority}] ${rec.category}: ${rec.issue}`);
+      console.log(`    Recommendation: ${rec.recommendation}`);
+    });
+  });
+  
+  test('should handle missing phase results gracefully', async () => {
+    // This test verifies that the aggregation handles missing files
+    const partialResults = {
+      phase1: { tests: [{ name: 'test', success: true, loadTimeMs: 100 }], summary: {} },
+      phase2: null,
+      phase3: null,
+      phase4: null
+    };
+    
+    const stats = calculateStatistics(partialResults);
+    
+    // Should still calculate stats for available phases
+    expect(stats.phases.phase1.total).toBe(1);
+    expect(stats.phases.phase2.total).toBe(0);
+    expect(stats.phases.phase3.total).toBe(0);
+    expect(stats.phases.phase4.total).toBe(0);
+    
+    // Should have overall stats
+    expect(stats.overall.totalTests).toBe(1);
+    expect(stats.overall.passedTests).toBe(1);
+  });
+});

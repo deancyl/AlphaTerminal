@@ -389,7 +389,7 @@ async function loadModels() {
   loading.value = true
   error.value = null
   try {
-    const data = await apiFetch('/api/v1/admin/models/')
+    const data = await apiFetch('/api/v1/admin/models/all')
     modelsData.value = data.models || {}
 
     // Update provider counts

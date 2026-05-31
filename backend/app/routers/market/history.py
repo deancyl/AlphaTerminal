@@ -29,7 +29,7 @@ from .dependencies import (
 router = APIRouter()
 
 
-@router.get("/market/history/{symbol}")
+@router.get("/market/history/{symbol}", summary="获取股票历史K线", description="获取某标的历史行情，支持多周期切换（日K/周K/月K）和懒加载分页")
 @handle_errors(module="market_history")
 async def market_history(
     symbol: str,

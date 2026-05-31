@@ -1,0 +1,275 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "跳转到主内容" [ref=e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - generic [ref=e4]:
+      - navigation "主导航菜单" [ref=e5]:
+        - generic [ref=e6]:
+          - generic [ref=e7]:
+            - generic: AlphaTerminal
+            - generic [ref=e8]: A
+          - navigation "市场行情" [ref=e9]:
+            - generic [ref=e10]: 市场行情
+            - button "股票行情" [ref=e11] [cursor=pointer]:
+              - generic [ref=e12]: 📊
+              - generic: 股票行情
+            - button "投资组合" [ref=e13] [cursor=pointer]:
+              - generic [ref=e14]: 💰
+              - generic: 投资组合
+            - button "基金分析" [ref=e15] [cursor=pointer]:
+              - generic [ref=e16]: 📈
+              - generic: 基金分析
+            - button "债券行情" [ref=e17] [cursor=pointer]:
+              - generic [ref=e18]: 📉
+              - generic: 债券行情
+            - button "期货行情" [ref=e19] [cursor=pointer]:
+              - generic [ref=e20]: 🛢️
+              - generic: 期货行情
+            - button "外汇行情" [ref=e21] [cursor=pointer]:
+              - generic [ref=e22]: 💱
+              - generic: 外汇行情
+            - button "宏观经济" [ref=e23] [cursor=pointer]:
+              - generic [ref=e24]: 🌍
+              - generic: 宏观经济
+            - button "期权分析" [ref=e25] [cursor=pointer]:
+              - generic [ref=e26]: ⚡
+              - generic: 期权分析
+            - button "全球指数" [ref=e27] [cursor=pointer]:
+              - generic [ref=e28]: 🌐
+              - generic: 全球指数
+            - button "研报平台" [ref=e29] [cursor=pointer]:
+              - generic [ref=e30]: 📄
+              - generic: 研报平台
+            - generic [ref=e31]: AI & Agent
+            - button "策略中心" [ref=e32] [cursor=pointer]:
+              - generic [ref=e33]: 🎯
+              - generic: 策略中心
+            - button "因子沙盒" [ref=e34] [cursor=pointer]:
+              - generic [ref=e35]: 🔬
+              - generic: 因子沙盒
+            - button "市场雷达" [ref=e36] [cursor=pointer]:
+              - generic [ref=e37]: 📡
+              - generic: 市场雷达
+            - button "时光机" [ref=e38] [cursor=pointer]:
+              - generic [ref=e39]: ⏰
+              - generic: 时光机
+            - button "四屏矩阵" [ref=e40] [cursor=pointer]:
+              - generic [ref=e41]: 📺
+              - generic: 四屏矩阵
+            - button "策略稳定性测试" [ref=e42] [cursor=pointer]:
+              - generic [ref=e43]: 📊
+              - generic: 策略稳定性测试
+          - generic [ref=e44]:
+            - generic: 主题
+            - generic [ref=e45]:
+              - button "深色" [ref=e46] [cursor=pointer]:
+                - generic [ref=e47]: 🌙
+                - generic: 深色
+              - button "全黑" [ref=e48] [cursor=pointer]:
+                - generic [ref=e49]: ⚫
+                - generic: 全黑
+              - button "Wind" [ref=e50] [cursor=pointer]:
+                - generic [ref=e51]: 💼
+                - generic: Wind
+              - button "亮色" [pressed] [ref=e52] [cursor=pointer]:
+                - generic [ref=e53]: ☀️
+                - generic: 亮色
+          - button "系统管理" [ref=e55] [cursor=pointer]:
+            - generic [ref=e56]: ⚙️
+            - generic: 系统管理
+      - generic [ref=e57]:
+        - banner [ref=e58]:
+          - generic "搜索标的" [ref=e60] [cursor=pointer]:
+            - img [ref=e61]
+            - generic [ref=e63]: 搜索股票、指数、基金...
+            - generic [ref=e64]: Ctrl+K
+          - generic [ref=e65]:
+            - generic [ref=e66]: 08:54:10 CST
+            - generic [ref=e67]: ● LIVE
+            - button "锁定或解锁网格布局" [pressed] [ref=e68] [cursor=pointer]:
+              - generic [ref=e69]: 🔒
+              - text: 已锁定
+            - button "打开或关闭AI助手" [ref=e70] [cursor=pointer]:
+              - generic [ref=e71]: 🤖 AI
+        - main [ref=e72]:
+          - generic [ref=e73]:
+            - generic [ref=e84]: 正在加载市场数据...
+            - main "市场行情仪表盘" [ref=e85]:
+              - region "指标图表面板" [ref=e86]:
+                - generic [ref=e87]:
+                  - generic [ref=e88]:
+                    - generic [ref=e89]: 📈 指标图表
+                    - button "全屏显示图表" [ref=e90] [cursor=pointer]: 全屏
+                  - group "指数选择" [ref=e91]:
+                    - button "切换到上证" [ref=e92] [cursor=pointer]: 上证
+                    - button "切换到沪深300" [ref=e93] [cursor=pointer]: 沪深300
+                    - button "切换到深证" [ref=e94] [cursor=pointer]: 深证
+                    - button "切换到创业板" [ref=e95] [cursor=pointer]: 创业板
+                  - group "周期选择" [ref=e96]:
+                    - button "切换到分时" [ref=e97] [cursor=pointer]: 分时
+                    - button "切换到日K" [pressed] [ref=e98] [cursor=pointer]: 日K
+                    - button "切换到周K" [ref=e99] [cursor=pointer]: 周K
+                    - button "切换到月K" [ref=e100] [cursor=pointer]: 月K
+                    - generic [ref=e101]: "指标:"
+                    - button "显示MACD指标" [ref=e102] [cursor=pointer]: MACD
+                    - button "显示BOLL指标" [ref=e103] [cursor=pointer]: BOLL
+                    - button "显示KDJ指标" [ref=e104] [cursor=pointer]: KDJ
+                    - button "显示RSI指标" [ref=e105] [cursor=pointer]: RSI
+                    - button "显示WR指标" [ref=e106] [cursor=pointer]: WR
+                    - button "显示OBV指标" [ref=e107] [cursor=pointer]: OBV
+                    - button "显示DMI指标" [ref=e108] [cursor=pointer]: DMI
+                  - generic [ref=e111]:
+                    - generic [ref=e112]:
+                      - generic [ref=e113]: 指标图表
+                      - button "全屏" [ref=e114] [cursor=pointer]
+                      - generic [ref=e115]: 加载…
+                    - generic [ref=e116]:
+                      - generic [ref=e117]: "--"
+                      - generic [ref=e118]: "--%"
+                      - generic [ref=e119]: "--"
+              - region "市场情绪面板" [ref=e123]:
+                - generic [ref=e124]:
+                  - generic [ref=e125]:
+                    - generic [ref=e126]: 🌡️ A股市场情绪
+                    - generic "无数据" [ref=e127]:
+                      - generic [ref=e130]: 无数据
+                  - generic [ref=e131]:
+                    - generic [ref=e133]:
+                      - generic [ref=e134]: ⟳
+                      - text: 加载市场情绪数据...
+                    - table [ref=e136]:
+                      - rowgroup [ref=e137]:
+                        - row "指数 最新价 涨跌幅 状态" [ref=e138]:
+                          - columnheader "指数" [ref=e139]
+                          - columnheader "最新价" [ref=e140]
+                          - columnheader "涨跌幅" [ref=e141]
+                          - columnheader "状态" [ref=e142]
+                      - rowgroup [ref=e143]:
+                        - row "暂无数据" [ref=e144]:
+                          - cell "暂无数据" [ref=e145]
+              - region "新闻快讯面板" [ref=e146]:
+                - region "新闻快讯" [ref=e148]:
+                  - generic [ref=e149]:
+                    - generic [ref=e150]:
+                      - generic [ref=e151]: 快讯
+                      - status [ref=e152]: 0 条
+                    - generic [ref=e153]:
+                      - button "刷新快讯" [ref=e154] [cursor=pointer]:
+                        - img [ref=e155]
+                      - generic "数据状态" [ref=e157]
+                  - generic [ref=e159]:
+                    - button "全部" [ref=e160] [cursor=pointer]:
+                      - generic [ref=e161]: 全部
+                    - button "宏观 (0)" [ref=e162] [cursor=pointer]:
+                      - generic [ref=e163]: 宏观
+                      - generic [ref=e164]: (0)
+                    - button "股市 (0)" [ref=e165] [cursor=pointer]:
+                      - generic [ref=e166]: 股市
+                      - generic [ref=e167]: (0)
+                    - button "行业 (0)" [ref=e168] [cursor=pointer]:
+                      - generic [ref=e169]: 行业
+                      - generic [ref=e170]: (0)
+                    - button "债券 (0)" [ref=e171] [cursor=pointer]:
+                      - generic [ref=e172]: 债券
+                      - generic [ref=e173]: (0)
+                    - button "全部" [ref=e175] [cursor=pointer]
+                    - button "利好" [ref=e176] [cursor=pointer]
+                    - button "中性" [ref=e177] [cursor=pointer]
+                    - button "利空" [ref=e178] [cursor=pointer]
+                  - list "新闻列表" [ref=e179]:
+                    - generic [ref=e181]: 暂无符合条件的快讯
+              - region "市场风向标面板" [ref=e182]:
+                - generic [ref=e183]:
+                  - generic [ref=e184]:
+                    - generic [ref=e185]: 🌐 市场风向标
+                    - generic "无数据" [ref=e186]:
+                      - generic [ref=e189]: 无数据
+                  - status "正在加载市场风向标数据" [ref=e190]:
+                    - generic [ref=e191]: 正在加载市场风向标数据...
+              - region "资金流向面板" [ref=e240]:
+                - generic [ref=e243]: 资金流向 (近30日)
+              - region "行业板块面板" [ref=e251]:
+                - generic [ref=e255]:
+                  - generic [ref=e256]: 🔥 行业风口
+                  - generic "点击刷新" [ref=e257] [cursor=pointer]: ↻
+              - region "国内指数面板" [ref=e270]:
+                - generic [ref=e271]:
+                  - generic [ref=e272]:
+                    - generic [ref=e273]: 🇨🇳 国内指数
+                    - generic "无数据" [ref=e275]:
+                      - generic [ref=e278]: 无数据
+                  - table [ref=e280]:
+                    - rowgroup [ref=e281]:
+                      - row "指数 最新价 涨跌幅" [ref=e282]:
+                        - columnheader "指数" [ref=e283]
+                        - columnheader "最新价" [ref=e284]
+                        - columnheader "涨跌幅" [ref=e285]
+                    - rowgroup [ref=e286]:
+                      - row "暂无数据" [ref=e287]:
+                        - cell "暂无数据" [ref=e288]
+              - region "个股监测面板" [ref=e289]:
+                - region "股票筛选器" [ref=e291]:
+                  - generic [ref=e292]:
+                    - generic [ref=e293]:
+                      - generic [ref=e294]: 全市场个股
+                      - generic [ref=e295]:
+                        - generic [ref=e296]: 搜索股票
+                        - textbox "搜索股票" [ref=e297]:
+                          - /placeholder: 输入拼音/代码/名称
+                    - group "筛选条件" [ref=e298]:
+                      - generic [ref=e299]:
+                        - generic [ref=e300]: 涨跌幅 >
+                        - spinbutton "涨跌幅 >" [ref=e301]
+                        - generic [ref=e302]: "%"
+                      - generic [ref=e303]:
+                        - generic [ref=e304]: 换手率 >
+                        - spinbutton "换手率 >" [ref=e305]
+                        - generic [ref=e306]: "%"
+                      - generic [ref=e307]:
+                        - generic [ref=e308]: PE <
+                        - spinbutton "PE <" [ref=e309]
+                      - generic [ref=e310]:
+                        - generic [ref=e311]: PB <
+                        - spinbutton "PB <" [ref=e312]
+                      - generic [ref=e313]:
+                        - generic [ref=e314]: 价格区间
+                        - generic [ref=e315]: 最低价格
+                        - spinbutton "最低价格" [ref=e316]
+                        - generic [ref=e317]: ~
+                        - generic [ref=e318]: 最高价格
+                        - spinbutton "最高价格" [ref=e319]
+                      - generic [ref=e320]:
+                        - generic [ref=e321]: 市值(亿)
+                        - generic [ref=e322]: 最小市值
+                        - spinbutton "最小市值" [ref=e323]
+                        - generic [ref=e324]: ~
+                        - generic [ref=e325]: 最大市值
+                        - spinbutton "最大市值" [ref=e326]
+                  - generic [ref=e327]:
+                    - generic [ref=e329]:
+                      - generic [ref=e330]: "#"
+                      - generic [ref=e331] [cursor=pointer]: 名称
+                      - generic [ref=e332] [cursor=pointer]: 代码
+                      - generic [ref=e333] [cursor=pointer]: 最新价
+                      - generic [ref=e334] [cursor=pointer]: 涨跌幅
+                      - generic [ref=e335] [cursor=pointer]: 涨跌
+                      - generic [ref=e336] [cursor=pointer]: 换手率
+                      - generic [ref=e337] [cursor=pointer]: 成交额
+                      - generic [ref=e338] [cursor=pointer]: PE
+                      - generic [ref=e339] [cursor=pointer]: PB
+                    - generic [ref=e346]: 检索中...
+                  - generic [ref=e347]:
+                    - button "上一页" [disabled] [ref=e348]
+                    - generic [ref=e349]: 第 1 / 1 页
+                    - button "下一页" [disabled] [ref=e350]
+        - contentinfo [ref=e351]:
+          - generic [ref=e352]:
+            - 'status "WebSocket连接状态: 实时" [ref=e353]':
+              - generic [ref=e358]: 实时
+            - generic [ref=e359]: "|"
+            - generic [ref=e360]: "数据更新: 08:54:10"
+          - generic [ref=e361]:
+            - generic [ref=e362]: 已收盘
+            - generic [ref=e363]: Ctrl+K 命令面板
+            - generic [ref=e364]: F1 帮助
+  - region "通知消息"

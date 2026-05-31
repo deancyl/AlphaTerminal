@@ -52,6 +52,13 @@ export function useTimeMachine() {
   const loading = ref(false)
   const error = ref(null)
   
+  // Data source status (v0.6.220)
+  const dataSource = ref({
+    source_type: 'real',
+    timestamp: null,
+    is_mock: false
+  })
+  
   // K-line data (use CircularBuffer for memory safety)
   const klineBuffer = new CircularBuffer(MAX_KLINE_BARS)
   const currentBar = ref(0)
@@ -142,6 +149,13 @@ export function useTimeMachine() {
       
       currentBar.value = 0
       playbackStatus.value = 'paused'
+      
+      // Update data source status (v0.6.220)
+      dataSource.value = {
+        source_type: response?.data?.source_type || 'real',
+        timestamp: response?.data?.timestamp || new Date().toISOString(),
+        is_mock: response?.data?.is_mock || false
+      }
       
       portfolio.value = {
         cash: initialCapital,
@@ -396,6 +410,11 @@ export function useTimeMachine() {
     currentBar.value = 0
     playbackStatus.value = 'idle'
     tradesBuffer.clear()
+    dataSource.value = {
+      source_type: 'real',
+      timestamp: null,
+      is_mock: false
+    }
     portfolio.value = {
       cash: 1000000,
       position_value: 0,
@@ -466,6 +485,7 @@ export function useTimeMachine() {
     session,
     loading,
     error,
+    dataSource,
     klineData,
     currentBar,
     currentDate,

@@ -415,7 +415,7 @@ async def market_macro():
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取宏观数据失败: {str(e)}")
 
 
-@router.get("/market/overview")
+@router.get("/market/overview", summary="市场行情概览", description="市场概览 - 风向标视图，包含上证、沪深300、恒生、纳斯达克等主要指数的实时行情")
 @handle_errors(module="market_overview")
 def market_overview():
     """
@@ -925,7 +925,7 @@ async def market_derivatives():
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取期货数据失败: {str(e)}")
 
 
-@router.get("/north_flow_ranking")
+@router.get("/north_flow_ranking", summary="北向资金排名", description="获取北向资金排名数据，包括当日北向资金净买入TOP5、净卖出TOP5和汇总数据")
 @handle_errors(module="market_overview")
 async def get_north_flow_ranking():
     """
@@ -1061,7 +1061,7 @@ async def get_north_flow_ranking():
 
 
 # Alias for /market/north_flow_ranking - matches frontend API calls
-@router.get("/market/north_flow_ranking")
+@router.get("/market/north_flow_ranking", summary="北向资金排名", description="北向资金排名接口的别名路径，与 /north_flow_ranking 功能相同")
 @handle_errors(module="market_overview")
 async def market_north_flow_ranking():
     return await get_north_flow_ranking()

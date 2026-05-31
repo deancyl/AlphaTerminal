@@ -54,6 +54,7 @@ from app.routers import (
 )
 from app.routers.macro import warmup_macro_cache
 from app.routers.market_radar import warmup_market_radar_cache
+from app.routers.timemachine import warmup_timemachine_cache
 from app.services.scheduler import (
     start_scheduler,
     stop_scheduler,
@@ -119,6 +120,10 @@ async def lifespan(app: FastAPI):
         # Warmup market_radar cache in background
         asyncio.create_task(warmup_market_radar_cache())
         logger.info("[Lifespan] Market Radar cache warmup started in background")
+
+        # Warmup timemachine cache in background
+        asyncio.create_task(warmup_timemachine_cache())
+        logger.info("[Lifespan] TimeMachine cache warmup started in background")
 
         start_scheduler()
 

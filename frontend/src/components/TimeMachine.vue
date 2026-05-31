@@ -65,6 +65,17 @@
           {{ dateError }}
         </div>
         
+        <!-- Data Source Indicator (v0.6.220) -->
+        <div v-if="session" class="flex items-center gap-2 text-xs">
+          <span :class="dataSourceStatusColor" class="text-sm">●</span>
+          <span class="text-theme-muted">{{ dataSourceLabel }}</span>
+          <span v-if="dataSourceFreshness && dataSourceFreshness.ageMs > 0" class="text-theme-tertiary">
+            {{ dataSourceFreshness.ageText }}
+          </span>
+          <span v-if="wsStatus === 'connected'" class="text-green-400 ml-2">● 实时</span>
+          <span v-else class="text-yellow-500 ml-2">○ 离线</span>
+        </div>
+        
         <!-- Action Buttons -->
         <button
           v-if="!session"
@@ -87,6 +98,16 @@
       
       <!-- Mobile: Action buttons only -->
       <div v-else class="flex items-center gap-2">
+        <!-- Data Source Indicator (v0.6.220) -->
+        <div v-if="session" class="flex items-center gap-1 text-[10px]">
+          <span :class="dataSourceStatusColor">●</span>
+          <span class="text-theme-muted">{{ dataSourceLabel }}</span>
+          <span v-if="dataSourceFreshness && dataSourceFreshness.ageMs > 0" class="text-theme-tertiary">
+            {{ dataSourceFreshness.ageText }}
+          </span>
+          <span v-if="wsStatus === 'connected'" class="text-green-400 ml-1">●</span>
+          <span v-else class="text-yellow-500 ml-1">○</span>
+        </div>
         <button
           v-if="!session"
           @click="handleCreateSession"
@@ -261,9 +282,53 @@
       </div>
     </div>
     
-    <!-- Error Toast -->
+    <!-- Error State with Retry -->
     <div
-      v-if="error"
+      v-if="error && !session"
+      class="fixed inset-0 flex items-center justify-center bg-glass z-50"
+    >
+      <div class="text-center max-w-md px-4">
+        <svg class="w-16 h-16 text-danger mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        
+        <h3 class="text-lg font-semibold text-primary mb-2">加载失败</h3>
+        <p class="text-secondary text-sm mb-4">{{ error }}</p>
+        
+        <!-- Retry button with countdown -->
+        <button
+          v-if="canRetry"
+          @click="handleRetry"
+          :disabled="loading"
+          class="px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-medium
+                 hover:bg-primary-hover transition-colors duration-200
+                 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+        >
+          <span v-if="loading" class="flex items-center gap-2">
+            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            重试中...
+          </span>
+          <span v-else>
+            重试 (剩余 {{ 3 - retryCount }} 次)
+          </span>
+        </button>
+        
+        <!-- Max retries reached -->
+        <p v-else class="text-yellow-400 text-sm">
+          已达最大重试次数，请稍后手动刷新
+        </p>
+        
+        <!-- Network status indicator -->
+        <p v-if="!isOnline" class="text-danger text-xs mt-3">
+          ⚠️ 当前处于离线状态
+        </p>
+      </div>
+    </div>
+    
+    <!-- Error Toast (for non-critical errors during session) -->
+    <div
+      v-if="error && session"
       class="fixed bottom-4 right-4 px-4 py-3 bg-danger text-white rounded-lg shadow-theme-lg z-50"
     >
       {{ error }}
@@ -273,12 +338,15 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onDeactivated, onActivated } from 'vue'
+import { ref, computed, watch, onMounted, onDeactivated, onActivated, onUnmounted } from 'vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { useOrientation } from '@/composables/useOrientation.js'
 import { useTimeMachine } from '@/composables/useTimeMachine.js'
+import { useTimemachineNetwork } from '@/composables/useTimemachineNetwork.js'
 import { useToast } from '@/composables/useToast.js'
+import { useMarketStream } from '@/composables/useMarketStream.js'
 import { buildChartData } from '@/utils/chartDataBuilder.js'
+import { getFreshness } from '@/utils/freshness.js'
 import BaseKLineChart from '@/components/BaseKLineChart.vue'
 import PlaybackControls from '@/components/timemachine/PlaybackControls.vue'
 import PaperTradingPanel from '@/components/timemachine/PaperTradingPanel.vue'
@@ -305,6 +373,7 @@ const {
   session,
   loading,
   error,
+  dataSource,
   klineData,
   currentBar,
   currentDate,
@@ -324,6 +393,60 @@ const {
   endSession,
   formatDate
 } = useTimeMachine()
+
+// Network status & retry mechanism
+const {
+  canRetry,
+  retryCount,
+  retryMessage,
+  isOnline,
+  incrementRetry,
+  resetRetry,
+  checkConnectivity
+} = useTimemachineNetwork()
+
+// WebSocket stream for real-time updates
+const {
+  timemachineEvents,
+  subscribeTimemachine,
+  unsubscribeTimemachine,
+  wsStatus
+} = useMarketStream()
+
+// Current session ID for WebSocket subscription
+const currentSessionId = computed(() => session.value?.id || null)
+
+// Subscribe to session events when session changes
+watch(currentSessionId, (newId, oldId) => {
+  if (oldId) {
+    unsubscribeTimemachine(oldId)
+  }
+  if (newId) {
+    subscribeTimemachine(newId)
+  }
+}, { immediate: true })
+
+// Handle real-time playback events
+watch(() => timemachineEvents.value[currentSessionId.value], (events) => {
+  if (!events || events.length === 0) return
+  
+  const latestEvent = events[events.length - 1]
+  
+  if (latestEvent.bar_index !== undefined) {
+    currentBar.value = latestEvent.bar_index
+  }
+  
+  if (latestEvent.bar) {
+    klineData.value.push(latestEvent.bar)
+  }
+}, { deep: true })
+
+// Cleanup on unmount
+onUnmounted(() => {
+  if (currentSessionId.value) {
+    unsubscribeTimemachine(currentSessionId.value)
+  }
+})
 
 // Local state
 const symbol = ref('sh600519')
@@ -345,6 +468,30 @@ const chartData = computed(() => {
     MA: { periods: [5, 10, 20] },
     BOLL: { period: 20, stdDev: 2 }
   })
+})
+
+// Data source status indicator (v0.6.220)
+const dataSourceStatusColor = computed(() => {
+  const type = dataSource.value?.source_type
+  if (type === 'real') return 'text-bull'
+  if (type === 'cache') return 'text-yellow-500'
+  if (type === 'mock') return 'text-bear'
+  return 'text-muted'
+})
+
+const dataSourceLabel = computed(() => {
+  const type = dataSource.value?.source_type
+  const labels = {
+    real: '实时',
+    cache: '缓存',
+    mock: '模拟'
+  }
+  return labels[type] || '未知'
+})
+
+const dataSourceFreshness = computed(() => {
+  if (!dataSource.value?.timestamp) return null
+  return getFreshness(dataSource.value.timestamp)
 })
 
 // Initialize dates
@@ -398,7 +545,7 @@ function validateDateRange() {
   return true
 }
 
-// Create session
+// Create session with retry support
 async function handleCreateSession() {
   if (!symbol.value || !startDate.value || !endDate.value) return
   
@@ -407,29 +554,80 @@ async function handleCreateSession() {
     return
   }
   
+  // Check network connectivity
+  if (!isOnline.value) {
+    toast.error('网络错误', '当前处于离线状态，请检查网络连接')
+    return
+  }
+  
   try {
     loading.value = true
+    error.value = null
+    
+    // Reset retry count on new session creation
+    resetRetry()
+    
     await createSession(symbol.value, startDate.value, endDate.value, 1000000)
+    
+    // Success toast
+    toast.success('创建成功', '复盘会话已创建，开始历史回放')
+    
   } catch (e) {
     console.error('Failed to create session:', e)
     
     // User-friendly error messages based on error type
     const errorMsg = e.message || ''
+    let userMessage = ''
     
     if (errorMsg.includes('timeout') || errorMsg.includes('TimeoutError')) {
-      toast.error('加载超时', '历史数据加载超时，请尝试缩短日期范围')
+      userMessage = '历史数据加载超时，请尝试缩短日期范围'
     } else if (errorMsg.includes('No data') || errorMsg.includes('Empty') || errorMsg.includes('empty')) {
-      toast.error('无数据', '该日期范围内无历史数据，请调整日期')
+      userMessage = '该日期范围内无历史数据，请调整日期'
     } else if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('ConnectionError')) {
-      toast.error('网络错误', '网络连接失败，请检查网络后重试')
+      userMessage = '网络连接失败，请检查网络后重试'
     } else if (errorMsg.includes('coroutine') || errorMsg.includes('Internal Server Error')) {
-      toast.error('系统错误', '服务暂时不可用，请稍后重试')
+      userMessage = '服务暂时不可用，请稍后重试'
     } else {
-      toast.error('创建失败', errorMsg || '复盘会话创建失败，请稍后重试')
+      userMessage = errorMsg || '复盘会话创建失败，请稍后重试'
+    }
+    
+    error.value = userMessage
+    
+    // Auto retry with exponential backoff (if can retry and not network error)
+    if (canRetry.value && !errorMsg.includes('network') && !errorMsg.includes('fetch') && !errorMsg.includes('NetworkError')) {
+      const delayMs = 1000 * Math.pow(2, retryCount.value) // 1s, 2s, 4s
+      
+      toast.info('自动重试', `将在 ${delayMs / 1000}秒后自动重试...`)
+      
+      setTimeout(async () => {
+        if (!canRetry.value) return
+        
+        incrementRetry()
+        await handleRetry()
+      }, delayMs)
+    } else {
+      toast.error('创建失败', userMessage)
     }
   } finally {
     loading.value = false
   }
+}
+
+// Manual retry handler
+async function handleRetry() {
+  if (!canRetry.value || loading.value) return
+  
+  incrementRetry()
+  
+  // Check connectivity first
+  const connected = await checkConnectivity()
+  if (!connected) {
+    toast.error('连接失败', '服务仍然不可用，请稍后重试')
+    return
+  }
+  
+  // Attempt to create session again
+  await handleCreateSession()
 }
 
 // End session

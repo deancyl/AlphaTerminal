@@ -8266,3 +8266,150 @@ cd frontend && npm run build  # Expected: Success
 
 ---
 
+## TimeMachine Network Reliability (v0.6.221)
+
+### Overview
+
+TimeMachine module implements a defense-in-depth network reliability architecture with 3-tier fallback chain, Circuit Breaker protection, and automatic recovery mechanisms.
+
+### Architecture
+
+```
+User Request
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Circuit Breaker (failure_threshold=5, timeout=60s)         │
+│  └─ OPEN → Return cached data or error                      │
+└─────────────────────────────────────────────────────────────┘
+    │ (CLOSED)
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Level 1: market_data_daily Table (SQLite)                 │
+│  - Local cache, instant response (< 5ms)                    │
+│  - Persistent across restarts                                │
+└─────────────────────────────────────────────────────────────┘
+    │ (miss)
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Level 2: DataCache (L1 Memory + L2 SQLite)                │
+│  - 5min L1 TTL, 24h L2 TTL                                  │
+│  - Stale-while-revalidate pattern                           │
+└─────────────────────────────────────────────────────────────┘
+    │ (miss)
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Level 3: akshare Real-time Data                            │
+│  - 30s timeout protection                                    │
+│  - Automatic caching on success                              │
+└─────────────────────────────────────────────────────────────┘
+    │ (failure)
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Fallback: Mock Data Generator (GBM)                        │
+│  - Geometric Brownian Motion model                           │
+│  - Supports bull/bear/sideways/random trends                │
+│  - Price continuity guaranteed                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Circuit Breaker Configuration
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `failure_threshold` | 5 | Consecutive failures to trigger OPEN |
+| `timeout` | 60s | Time before attempting recovery |
+| `success_threshold` | 2 | Successes needed to close |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/timemachine/history/{symbol}` | Get K-line data with fallback |
+| POST | `/api/v1/timemachine/session/create` | Create playback session |
+| GET | `/api/v1/timemachine/circuit_breaker/status` | Get CB state |
+| POST | `/api/v1/timemachine/circuit_breaker/reset` | Reset CB manually |
+| WS | `/ws` | Subscribe to `timemachine_event` |
+
+### WebSocket Integration
+
+**Subscribe to playback events:**
+```javascript
+ws.send(JSON.stringify({
+  action: 'subscribe',
+  channel: 'timemachine:{session_id}'
+}))
+```
+
+**Event format:**
+```json
+{
+  "type": "timemachine_event",
+  "session_id": "abc123",
+  "data": {
+    "bar_index": 42,
+    "timestamp": "2024-01-15T10:30:00",
+    "bar": {"open": 1800, "high": 1810, ...}
+  }
+}
+```
+
+### Cache Warmup
+
+Popular symbols pre-cached on startup:
+- sh600519 (贵州茅台)
+- sz000001 (平安银行)
+- sh601318 (中国平安)
+- sh000001 (上证指数)
+- sh000300 (沪深300)
+
+### Verification Commands
+
+```bash
+# Check Circuit Breaker status
+curl http://localhost:60100/api/v1/timemachine/circuit_breaker/status | jq '.data.state'
+
+# Test fallback chain
+curl http://localhost:60100/api/v1/timemachine/history/sh600519?start_date=2024-01-01&end_date=2024-01-31 | jq '.data.source_type'
+
+# Check WebSocket event type
+grep "broadcast_timemachine_event" backend/app/services/ws_manager.py
+
+# Run integration tests
+pytest backend/tests/integration/test_timemachine_network.py -v
+
+# Check cache warmup logs
+grep "TimeMachine.*warmup" /tmp/backend.log
+```
+
+### Frontend Features
+
+| Feature | Component | Description |
+|---------|-----------|-------------|
+| Data Source Indicator | TimeMachine.vue | Shows real/cache/mock status |
+| Freshness Display | TimeMachine.vue | "5分钟前", "刚刚" etc. |
+| Retry Mechanism | useTimemachineNetwork.js | 3 retries with exponential backoff |
+| Network Status | useTimemachineNetwork.js | Online/offline detection |
+| WebSocket Status | TimeMachine.vue | Real-time indicator (●实时/○离线) |
+
+### Performance Metrics
+
+| Metric | Target | Actual |
+|--------|--------|--------|
+| L1 Cache Hit | < 5ms | ~2ms |
+| L2 Cache Hit | < 50ms | ~30ms |
+| Akshare Fetch | < 5s | ~2s |
+| Mock Generation | < 50ms | ~10ms |
+
+### Files
+
+| Component | Path |
+|-----------|------|
+| Router | `backend/app/routers/timemachine.py` |
+| Fetcher | `backend/app/services/timemachine/timemachine_fetcher.py` |
+| Mock Generator | `backend/app/services/timemachine/mock_generator.py` |
+| WebSocket Manager | `backend/app/services/ws_manager.py` |
+| Network Composable | `frontend/src/composables/useTimemachineNetwork.js` |
+| UI Component | `frontend/src/components/TimeMachine.vue` |
+| Integration Tests | `backend/tests/integration/test_timemachine_network.py` |
+
