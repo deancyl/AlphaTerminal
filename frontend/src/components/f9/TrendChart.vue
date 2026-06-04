@@ -260,7 +260,7 @@ let unsubscribeTheme = null
 onMounted(async () => {
   if (chartRef.value) {
     chartInstance = await initChart(chartRef.value)
-    resizeObserver = createResizeObserver(chartInstance)
+    resizeObserver = createResizeObserver(chartInstance).observer
     resizeObserver.observe(chartRef.value)
     renderChart()
   }

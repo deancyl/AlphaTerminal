@@ -8413,3 +8413,39 @@ grep "TimeMachine.*warmup" /tmp/backend.log
 | UI Component | `frontend/src/components/TimeMachine.vue` |
 | Integration Tests | `backend/tests/integration/test_timemachine_network.py` |
 
+---
+
+## ResizeObserver API 使用错误修复 (v0.6.222)
+
+### 概述
+
+修复 `createResizeObserver()` API 解包错误，该错误导致 BaseKLineChart 等 3 个组件的 ResizeObserver 从未生效，图表 auto-resize 完全失效。
+
+### Root Cause
+
+`createResizeObserver()` 返回 `{ observer: ResizeObserver, cleanup: Function }`，但 3 个组件直接将返回对象赋给变量，随后调用 `.observe()` / `.disconnect()` — 这些方法在 ResizeObserver 实例上，而非在 `{ observer, cleanup }` 对象上，运行时抛出 `TypeError: _ro.observe is not a function`。
+
+### 修复文件
+
+| 文件 | 行号 | 修复 |
+|------|------|------|
+| `frontend/src/components/BaseKLineChart.vue` | 555 | `createResizeObserver(chart)` → `createResizeObserver(chart).observer` |
+| `frontend/src/components/SubChart.vue` | 361 | `createResizeObserver(chartInstance)` → `createResizeObserver(chartInstance).observer` |
+| `frontend/src/components/f9/TrendChart.vue` | 263 | `createResizeObserver(chartInstance)` → `createResizeObserver(chartInstance).observer` |
+
+### 影响范围
+
+- BaseKLineChart.vue — 所有K线图表
+- SubChart.vue — 副图指标图表
+- TrendChart.vue — F9深度资料趋势图
+- **所有 ECharts 图表在容器尺寸变化时不再响应**（修复后恢复正常）
+
+### 验证
+
+```bash
+# LSP 诊断通过（无错误）
+lsp_diagnostics frontend/src/components/BaseKLineChart.vue        # No diagnostics
+lsp_diagnostics frontend/src/components/SubChart.vue              # No diagnostics
+lsp_diagnostics frontend/src/components/f9/TrendChart.vue         # No diagnostics
+```
+

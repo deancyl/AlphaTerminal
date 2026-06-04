@@ -552,7 +552,7 @@ onMounted(async () => {
     })
 
     // ResizeObserver for resize only (not init)
-    _ro = createResizeObserver(chart)
+    _ro = createResizeObserver(chart).observer
     _ro.observe(chartEl.value)
 
   } catch (e) {

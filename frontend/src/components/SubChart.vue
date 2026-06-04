@@ -358,7 +358,7 @@ function render() {
 onMounted(() => {
   if (!chartRef.value || !window.echarts) return
   chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-  resizeObserver = createResizeObserver(chartInstance)
+  resizeObserver = createResizeObserver(chartInstance).observer
   resizeObserver.observe(chartRef.value)
   render()
 })
