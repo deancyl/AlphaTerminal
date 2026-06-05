@@ -532,12 +532,16 @@ async def get_macro_overview():
             )
 
         async def fetch_m2():
-            return await fetch_with_timeout(
-                loop.run_in_executor(
-                    get_executor(), lambda: _get_ak().macro_china_supply_of_money()
-                ),
-                "M2",
-            )
+            try:
+                return await fetch_with_timeout(
+                    loop.run_in_executor(
+                        get_executor(), lambda: _get_ak().macro_china_supply_of_money()
+                    ),
+                    "M2",
+                )
+            except Exception as e:
+                logger.error(f"[Macro] M2 fetch exception: {type(e).__name__}: {e}", exc_info=True)
+                return None
 
         async def fetch_sf():
             return await fetch_with_timeout(
@@ -561,8 +565,7 @@ async def get_macro_overview():
                 "Unemployment",
             )
 
-        gdp_df, cpi_df, ppi_df, pmi_df, m2_df, sf_df, ind_df, unemp_df = (
-            await asyncio.gather(
+        fetch_results = await asyncio.gather(
                 fetch_gdp(),
                 fetch_cpi(),
                 fetch_ppi(),
@@ -571,43 +574,36 @@ async def get_macro_overview():
                 fetch_sf(),
                 fetch_ind(),
                 fetch_unemp(),
+                return_exceptions=True,
             )
-        )
 
-        gdp_latest = gdp_df.iloc[0] if len(gdp_df) > 0 else None
-        cpi_latest = cpi_df.iloc[0] if len(cpi_df) > 0 else None
-        ppi_latest = ppi_df.iloc[0] if len(ppi_df) > 0 else None
-        pmi_latest = pmi_df.iloc[0] if len(pmi_df) > 0 else None
-        m2_latest = m2_df.iloc[0] if len(m2_df) > 0 else None
-        sf_latest = sf_df.iloc[-1] if len(sf_df) > 0 else None
+        gdp_df, cpi_df, ppi_df, pmi_df, m2_df, sf_df, ind_df, unemp_df = [
+            None if isinstance(r, Exception) else r for r in fetch_results
+        ]
 
-        ind_df_valid = (
-            ind_df[
-                _get_pd().notna(
-                    ind_df.get(
-                        "今值",
-                        ind_df.get("今值(%)", _get_pd().Series([None] * len(ind_df))),
-                    )
-                )
-            ]
-            if len(ind_df) > 0
-            and ("今值" in ind_df.columns or "今值(%)" in ind_df.columns)
-            else None
-        )
+        gdp_latest = gdp_df.iloc[0] if gdp_df is not None and len(gdp_df) > 0 else None
+        cpi_latest = cpi_df.iloc[0] if cpi_df is not None and len(cpi_df) > 0 else None
+        ppi_latest = ppi_df.iloc[0] if ppi_df is not None and len(ppi_df) > 0 else None
+        pmi_latest = pmi_df.iloc[0] if pmi_df is not None and len(pmi_df) > 0 else None
+        m2_latest = m2_df.iloc[0] if m2_df is not None and len(m2_df) > 0 else None
+        sf_latest = sf_df.iloc[-1] if sf_df is not None and len(sf_df) > 0 else None
+
+        ind_df_valid = None
+        if ind_df is not None and len(ind_df) > 0:
+            value_col = "今值" if "今值" in ind_df.columns else ("今值(%)" if "今值(%)" in ind_df.columns else None)
+            if value_col:
+                ind_df_valid = ind_df[_get_pd().notna(ind_df[value_col])]
+
         ind_latest = (
             ind_df_valid.iloc[-1]
             if ind_df_valid is not None and len(ind_df_valid) > 0
             else None
         )
 
-        unemp_df_filtered = (
-            unemp_df[
-                unemp_df.get("item", _get_pd().Series([""] * len(unemp_df))).str.strip()
-                == "全国城镇调查失业率"
-            ]
-            if len(unemp_df) > 0 and "item" in unemp_df.columns
-            else None
-        )
+        unemp_df_filtered = None
+        if unemp_df is not None and len(unemp_df) > 0 and "item" in unemp_df.columns:
+            unemp_df_filtered = unemp_df[unemp_df["item"].str.strip() == "全国城镇调查失业率"]
+
         unemp_latest = (
             unemp_df_filtered.iloc[-1]
             if unemp_df_filtered is not None and len(unemp_df_filtered) > 0
@@ -1932,14 +1928,20 @@ async def get_macro_dashboard():
 
         # Map results to names
         indicator_names = list(fetch_funcs.keys())
-        for i, (data, from_cache) in enumerate(fetch_results):
-            if isinstance(data, Exception):
-                logger.warning(
-                    f"[Macro Dashboard] {indicator_names[i]} fetch exception: {data}"
+        for i, fetch_result in enumerate(fetch_results):
+            # Check if fetch_result is Exception or tuple
+            if isinstance(fetch_result, Exception):
+                logger.error(
+                    f"[Macro Dashboard] {indicator_names[i]} fetch exception: {type(fetch_result).__name__}: {fetch_result}",
+                    exc_info=True
                 )
                 raw_data[indicator_names[i]] = None
-            else:
+            elif isinstance(fetch_result, tuple) and len(fetch_result) == 2:
+                data, from_cache = fetch_result
                 raw_data[indicator_names[i]] = data
+            else:
+                logger.warning(f"[Macro Dashboard] {indicator_names[i]} unexpected result format: {type(fetch_result)}")
+                raw_data[indicator_names[i]] = None
 
         gdp_df = raw_data.get("gdp")
         cpi_df = raw_data.get("cpi")
@@ -2055,33 +2057,20 @@ async def get_macro_dashboard():
         m2_latest = m2_df.iloc[0] if m2_df is not None and len(m2_df) > 0 else None
         sf_latest = sf_df.iloc[-1] if sf_df is not None and len(sf_df) > 0 else None
 
-        ind_df_valid = (
-            ind_df[
-                pd.notna(
-                    ind_df.get(
-                        "今值", ind_df.get("今值(%)", pd.Series([None] * len(ind_df)))
-                    )
-                )
-            ]
-            if ind_df is not None
-            and len(ind_df) > 0
-            and ("今值" in ind_df.columns or "今值(%)" in ind_df.columns)
-            else None
-        )
+        ind_df_valid = None
+        if ind_df is not None and len(ind_df) > 0:
+            value_col = "今值" if "今值" in ind_df.columns else ("今值(%)" if "今值(%)" in ind_df.columns else None)
+            if value_col:
+                ind_df_valid = ind_df[pd.notna(ind_df[value_col])]
         ind_latest = (
             ind_df_valid.iloc[-1]
             if ind_df_valid is not None and len(ind_df_valid) > 0
             else None
         )
 
-        unemp_df_filtered = (
-            unemp_df[
-                unemp_df.get("item", pd.Series([""] * len(unemp_df))).str.strip()
-                == "全国城镇调查失业率"
-            ]
-            if unemp_df is not None and len(unemp_df) > 0 and "item" in unemp_df.columns
-            else None
-        )
+        unemp_df_filtered = None
+        if unemp_df is not None and len(unemp_df) > 0 and "item" in unemp_df.columns:
+            unemp_df_filtered = unemp_df[unemp_df["item"].str.strip() == "全国城镇调查失业率"]
         unemp_latest = (
             unemp_df_filtered.iloc[-1]
             if unemp_df_filtered is not None and len(unemp_df_filtered) > 0

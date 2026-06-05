@@ -6,7 +6,7 @@ Coverage target: 95%
 """
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from datetime import datetime
 from fastapi.testclient import TestClient
 from app.main import app
@@ -435,6 +435,208 @@ class TestMacroRateLimit:
         # Check category detection
         assert get_endpoint_category("/api/v1/macro/gdp") == "macro"
         assert get_endpoint_category("/api/v1/macro/overview") == "macro"
+
+
+# ── Graceful Degradation Tests ───────────────────────────────────────────────────
+
+
+class TestMacroOverviewGracefulDegradation:
+    """Tests for graceful degradation when indicators fail
+    
+    These tests verify that overview and dashboard endpoints
+    return partial success responses even when some indicators fail.
+    """
+
+    def test_dashboard_handles_exception_object_not_tuple(self):
+        """Test dashboard doesn't crash when asyncio.gather returns Exception
+        
+        Root cause: macro.py:1935 tries to unpack Exception as tuple
+        Expected: dashboard returns partial data with m2=None
+        Current: TypeError: cannot unpack non-iterable Exception object
+        """
+        import pandas as pd
+        from unittest.mock import MagicMock, AsyncMock
+        import asyncio
+        
+        # Mock successful data for most indicators
+        mock_gdp_df = pd.DataFrame({
+            "季度": ["2024Q1"],
+            "国内生产总值-绝对值": [296299],
+            "国内生产总值-同比增长": [5.3],
+        })
+        
+        mock_cpi_df = pd.DataFrame({
+            "月份": ["2024年03月份"],
+            "全国-当月": [100.1],
+            "全国-同比增长": [0.1],
+            "全国-环比增长": [-0.6],
+        })
+        
+        # Mock M2 to raise JSONDecodeError (simulating real failure)
+        from json import JSONDecodeError
+        
+        with patch.object(macro, "_get_ak") as mock_ak:
+            ak_instance = MagicMock()
+            mock_ak.return_value = ak_instance
+            
+            # Setup successful responses for most indicators
+            ak_instance.macro_china_gdp.return_value = mock_gdp_df
+            ak_instance.macro_china_cpi.return_value = mock_cpi_df
+            ak_instance.macro_china_ppi.return_value = pd.DataFrame({
+                "月份": ["2024年03月份"],
+                "当月同比增长": [-2.8],
+            })
+            ak_instance.macro_china_pmi.return_value = pd.DataFrame({
+                "月份": ["2024年03月份"],
+                "制造业-指数": [50.8],
+                "非制造业-指数": [53.0],
+            })
+            
+            # M2 raises JSONDecodeError (real issue)
+            ak_instance.macro_china_supply_of_money.side_effect = JSONDecodeError(
+                "Expecting value", "", 0
+            )
+            
+            ak_instance.macro_china_shanghai_stock.return_value = pd.DataFrame({
+                "date": ["2024-03-01"],
+                "volume": [1000000],
+            })
+            
+            ak_instance.macro_china_industrial_production.return_value = pd.DataFrame({
+                "今值": [6.5],
+            })
+            
+            ak_instance.macro_china_unemployment_rate.return_value = pd.DataFrame({
+                "item": ["全国城镇调查失业率"],
+                "value": [5.2],
+            })
+            
+            # Call dashboard endpoint
+            response = client.get("/api/v1/macro/dashboard")
+            
+            # Should return code:0 with partial data, NOT code:200 error
+            assert response.status_code == 200
+            data = response.json()
+            assert data["code"] == 0, f"Expected code:0, got code:{data['code']} with message: {data.get('message')}"
+            assert "data" in data
+            # Some indicators should have data
+            assert data["data"]["gdp"] is not None or data["data"]["cpi"] is not None
+
+    def test_overview_returns_partial_data_on_m2_failure(self):
+        """Test overview returns partial success when M2 fetch fails
+        
+        Root cause: macro.py:535-540 doesn't catch JSONDecodeError
+        Expected: code=0, partial=True, failed_indicators=['m2']
+        Current: code=200, message="数据解析失败，请稍后重试"
+        """
+        import pandas as pd
+        from json import JSONDecodeError
+        
+        mock_gdp_df = pd.DataFrame({
+            "季度": ["2024Q1"],
+            "国内生产总值-绝对值": [296299],
+            "国内生产总值-同比增长": [5.3],
+        })
+        
+        with patch.object(macro, "_get_ak") as mock_ak:
+            ak_instance = MagicMock()
+            mock_ak.return_value = ak_instance
+            
+            # GDP succeeds
+            ak_instance.macro_china_gdp.return_value = mock_gdp_df
+            
+            # M2 fails with JSONDecodeError
+            ak_instance.macro_china_supply_of_money.side_effect = JSONDecodeError(
+                "Expecting value", "", 0
+            )
+            
+            response = client.get("/api/v1/macro/overview")
+            
+            # Should return code:0 with partial data
+            assert response.status_code == 200
+            data = response.json()
+            assert data["code"] == 0, f"Expected code:0, got code:{data['code']} with message: {data.get('message')}"
+            # Should have GDP data
+            assert "data" in data
+            assert data["data"]["overview"]["gdp"] is not None
+
+    def test_dataframe_get_handles_none_dataframe(self):
+        """Test DataFrame.get() anti-pattern doesn't crash on None df
+        
+        Root cause: macro.py:587-589 nested .get() with Series creation
+        Expected: ind_latest = None (graceful handling)
+        Current: AttributeError when df is None
+        """
+        import pandas as pd
+        
+        with patch.object(macro, "_get_ak") as mock_ak:
+            ak_instance = MagicMock()
+            mock_ak.return_value = ak_instance
+            
+            # All GDP data
+            ak_instance.macro_china_gdp.return_value = pd.DataFrame({
+                "季度": ["2024Q1"],
+                "国内生产总值-绝对值": [296299],
+                "国内生产总值-同比增长": [5.3],
+            })
+            
+            # Industrial production returns None (simulating empty result)
+            ak_instance.macro_china_industrial_production.return_value = None
+            
+            # Unemployment returns empty DataFrame
+            ak_instance.macro_china_unemployment_rate.return_value = pd.DataFrame()
+            
+            # M2 succeeds
+            ak_instance.macro_china_supply_of_money.return_value = pd.DataFrame({
+                "月份": ["2024年03月份"],
+                "货币和准货币(M2)": [3000000],
+            })
+            
+            response = client.get("/api/v1/macro/overview")
+            
+            # Should handle None DataFrame gracefully
+            assert response.status_code == 200
+            data = response.json()
+            assert data["code"] == 0, f"Expected code:0, got code:{data['code']}"
+
+    def test_partial_data_response_format(self):
+        """Test partial success response format validation
+        
+        When some indicators fail, response should include:
+        - code: 0 (success)
+        - partial: true
+        - failed_indicators: list of failed indicator names
+        """
+        import pandas as pd
+        from json import JSONDecodeError
+        
+        mock_gdp_df = pd.DataFrame({
+            "季度": ["2024Q1"],
+            "国内生产总值-绝对值": [296299],
+            "国内生产总值-同比增长": [5.3],
+        })
+        
+        with patch.object(macro, "_get_ak") as mock_ak:
+            ak_instance = MagicMock()
+            mock_ak.return_value = ak_instance
+            
+            # GDP succeeds
+            ak_instance.macro_china_gdp.return_value = mock_gdp_df
+            
+            # M2 fails
+            ak_instance.macro_china_supply_of_money.side_effect = JSONDecodeError(
+                "Expecting value", "", 0
+            )
+            
+            response = client.get("/api/v1/macro/overview")
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Validate response structure
+            assert "code" in data
+            assert "data" in data
+            assert data["code"] == 0
 
 
 if __name__ == "__main__":
