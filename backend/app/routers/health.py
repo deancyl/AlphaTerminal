@@ -23,7 +23,7 @@ async def health_root():
     return {
         "status": "ok",
         "timestamp": datetime.now().isoformat(),
-        "version": "v0.6.220"
+        "version": "v0.6.223"
     }
 
 
@@ -92,7 +92,7 @@ async def health_detailed():
             "uptime_seconds": round(time.time() - _start_time, 2),
             "database": _get_db_status(),
             "memory": _get_memory_status(),
-            "backend_version": "0.6.39",
+            "backend_version": "0.6.223",
         }
     )
 

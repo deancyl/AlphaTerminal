@@ -198,7 +198,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AlphaTerminal API",
-    version="0.6.101",
+    version="0.6.223",
     lifespan=lifespan,
     default_response_class=ORJSONResponse,
 )
