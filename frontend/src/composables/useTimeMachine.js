@@ -3,7 +3,7 @@
  * API 基础路径: /api/v1/timemachine
  * 功能：历史K线回放 + 模拟交易
  */
-import { ref, computed, shallowRef, watch, onUnmounted } from 'vue'
+import { ref, computed, shallowRef, triggerRef, watch, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { TIMEOUTS } from '../utils/constants.js'
@@ -60,12 +60,16 @@ export function useTimeMachine() {
   })
   
   // K-line data (use CircularBuffer for memory safety)
-  const klineBuffer = new CircularBuffer(MAX_KLINE_BARS)
+  // P0: Use shallowRef + triggerRef for Vue reactivity (CircularBuffer is not reactive)
+  const klineBufferWrapper = shallowRef({
+    buffer: new CircularBuffer(MAX_KLINE_BARS),
+    version: 0
+  })
   const currentBar = ref(0)
   
   // Computed for backward compatibility
-  const klineData = computed(() => klineBuffer.toArray())
-  const totalBars = computed(() => klineBuffer.length)
+  const klineData = computed(() => klineBufferWrapper.value.buffer.toArray())
+  const totalBars = computed(() => klineBufferWrapper.value.buffer.length)
   
   // Playback state
   const playbackStatus = ref('idle') // 'idle' | 'playing' | 'paused'
@@ -139,22 +143,24 @@ export function useTimeMachine() {
       // Check if request is stale
       if (currentRequestId !== createSessionRequestId) return
       
-      session.value = response?.data?.session_id
-      
-      klineBuffer.clear()
-      const bars = response?.data?.bars || []
+      session.value = response?.session_id
+
+      klineBufferWrapper.value.buffer.clear()
+      const bars = response?.bars || []
       for (const bar of bars) {
-        klineBuffer.push(bar)
+        klineBufferWrapper.value.buffer.push(bar)
       }
-      
+      klineBufferWrapper.value.version++
+      triggerRef(klineBufferWrapper)
+
       currentBar.value = 0
       playbackStatus.value = 'paused'
-      
+
       // Update data source status (v0.6.220)
       dataSource.value = {
-        source_type: response?.data?.source_type || 'real',
-        timestamp: response?.data?.timestamp || new Date().toISOString(),
-        is_mock: response?.data?.is_mock || false
+        source_type: response?.source_type || 'real',
+        timestamp: response?.timestamp || new Date().toISOString(),
+        is_mock: response?.is_mock || false
       }
       
       portfolio.value = {
@@ -169,7 +175,7 @@ export function useTimeMachine() {
       tradesBuffer.clear()
       
       logger.info('[TimeMachine] Session created:', session.value)
-      return response?.data
+      return response
     } catch (e) {
       if (e.name === 'AbortError') return
       
@@ -213,16 +219,16 @@ export function useTimeMachine() {
       // Check if request is stale
       if (currentRequestId !== stepForwardRequestId) return
       
-      currentBar.value = response?.data?.current_bar ?? 0
-      portfolio.value = response?.data?.portfolio || portfolio.value
+      currentBar.value = response?.current_bar ?? 0
+      portfolio.value = response?.portfolio || portfolio.value
       
-      if (response?.data?.new_trades?.length) {
-        for (const trade of response.data.new_trades) {
+      if (response?.new_trades?.length) {
+        for (const trade of response.new_trades) {
           tradesBuffer.push(trade)
         }
       }
       
-      return response?.data
+      return response
     } catch (e) {
       if (e.name === 'AbortError') return
       toast.error('前进失败，请重试')
@@ -245,7 +251,7 @@ export function useTimeMachine() {
         body: JSON.stringify({ action })
       })
       
-      playbackStatus.value = response?.data?.status || 'paused'
+      playbackStatus.value = response?.status || 'paused'
       
       // Start local playback timer if playing
       if (playbackStatus.value === 'playing') {
@@ -254,7 +260,7 @@ export function useTimeMachine() {
         stopPlaybackTimer()
       }
       
-      return response?.data
+      return response
     } catch (e) {
       toast.error('播放控制失败，请重试')
       logger.error('[TimeMachine] Toggle play failed:', e)
@@ -283,7 +289,7 @@ export function useTimeMachine() {
         startPlaybackTimer()
       }
       
-      return response.data
+      return response
     } catch (e) {
       logger.error('[TimeMachine] Set speed failed:', e)
       toast.error('设置速度失败')
@@ -305,12 +311,12 @@ export function useTimeMachine() {
         body: JSON.stringify({ action, quantity })
       })
       
-      if (response?.data?.success) {
-        tradesBuffer.push(response.data.trade)
-        portfolio.value = response?.data?.portfolio || portfolio.value
+      if (response?.success) {
+        tradesBuffer.push(response.trade)
+        portfolio.value = response?.portfolio || portfolio.value
         
         // Calculate portfolio impact for enhanced feedback
-        const trade = response.data.trade
+        const trade = response.trade
         const price = trade?.price || 0
         const totalCost = quantity * price
         const proceeds = quantity * price
@@ -326,7 +332,7 @@ export function useTimeMachine() {
         logger.info('[TimeMachine] Trade executed:', action, quantity)
       }
       
-      return response?.data
+      return response
     } catch (e) {
       toast.error('交易执行失败，请检查资金或持仓')
       logger.error('[TimeMachine] Trade failed:', e)
@@ -355,10 +361,10 @@ export function useTimeMachine() {
       // Check if request is stale
       if (currentRequestId !== seekToRequestId) return
       
-      currentBar.value = response?.data?.current_bar ?? 0
-      portfolio.value = response?.data?.portfolio || portfolio.value
+      currentBar.value = response?.current_bar ?? 0
+      portfolio.value = response?.portfolio || portfolio.value
       
-      return response?.data
+      return response
     } catch (e) {
       if (e.name === 'AbortError') return
       toast.error('跳转失败，请重试')
@@ -378,7 +384,7 @@ export function useTimeMachine() {
         timeoutMs: TIMEOUTS.API_DEFAULT
       })
       
-      return response.data
+      return response
     } catch (e) {
       logger.error('[TimeMachine] Get status failed:', e)
       return null
@@ -406,7 +412,9 @@ export function useTimeMachine() {
     
     // Reset state
     session.value = null
-    klineBuffer.clear()
+    klineBufferWrapper.value.buffer.clear()
+    klineBufferWrapper.value.version++
+    triggerRef(klineBufferWrapper)
     currentBar.value = 0
     playbackStatus.value = 'idle'
     tradesBuffer.clear()
@@ -453,7 +461,9 @@ export function useTimeMachine() {
   // ── Cleanup ─────────────────────────────────────────────────────
   
   function clear() {
-    klineBuffer.clear()
+    klineBufferWrapper.value.buffer.clear()
+    klineBufferWrapper.value.version++
+    triggerRef(klineBufferWrapper)
     tradesBuffer.clear()
     currentBar.value = 0
     session.value = null
