@@ -1,7 +1,7 @@
 fastapi==0.136.1
 uvicorn[standard]==0.30.6
 akshare==1.18.49
-requests==2.33.1
+requests==2.34.2
 python-dotenv==1.0.1
 apscheduler==3.10.4
 pydantic==2.9.2
